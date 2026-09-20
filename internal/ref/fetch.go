@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -11,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"strings"
 )
@@ -181,54 +183,16 @@ func (f *Fetcher) fetchGit(
 	commit string,
 	t Target,
 ) (Fetched, error) {
-	if _, err := exec.LookPath("git"); err != nil {
-		return Fetched{}, fmt.Errorf("%s: git+ refs need git on PATH", r)
-	}
-
-	sum := sha256.Sum256([]byte(r.Location))
-	dir := filepath.Join(f.GitCache, hex.EncodeToString(sum[:])[:16])
-
-	if _, err := os.Stat(filepath.Join(dir, ".git")); errors.Is(err, fs.ErrNotExist) {
-		if err := os.MkdirAll(dir, 0o755); err != nil {
-			return Fetched{}, err
-		}
-
-		if err := git(ctx, dir, "init", "--quiet"); err != nil {
-			return Fetched{}, err
-		}
-	}
-
-	target := commit
-	if target == "" {
-		target = "HEAD"
-	}
-
-	if err := git(
-		ctx,
-		dir,
-		"fetch",
-		"--quiet",
-		"--depth",
-		"1",
-		"--",
-		r.Location,
-		target,
-	); err != nil {
-		return Fetched{}, fmt.Errorf("fetch %s: %w", r, err)
-	}
-
-	if err := git(ctx, dir, "checkout", "--quiet", "--force", "FETCH_HEAD"); err != nil {
-		return Fetched{}, fmt.Errorf("fetch %s: %w", r, err)
-	}
-
-	head, err := gitOutput(ctx, dir, "rev-parse", "HEAD")
+	dir, head, err := f.checkout(ctx, r, commit)
 	if err != nil {
-		return Fetched{}, fmt.Errorf("fetch %s: %w", r, err)
+		return Fetched{}, err
 	}
 
-	path := r.Fragment
-	if path == "" {
-		path = t.Default
+	// A fragment is a path. fetchGit looks up a bare name, such as "ripgrep", the
+	// way fetchGitHub does.
+	paths := []string{r.Fragment}
+	if !strings.ContainsAny(r.Fragment, "/.") {
+		paths = t.paths(r.Fragment)
 	}
 
 	// os.Root refuses to follow a symlink in the repository that points outside it.
@@ -238,16 +202,20 @@ func (f *Fetcher) fetchGit(
 	}
 	defer root.Close()
 
-	data, err := root.ReadFile(path)
-	if errors.Is(err, fs.ErrNotExist) {
-		return Fetched{}, fmt.Errorf("%s: read %s: %w", r, path, ErrNotFound)
+	for _, path := range paths {
+		data, err := root.ReadFile(path)
+		if errors.Is(err, fs.ErrNotExist) {
+			continue
+		}
+
+		if err != nil {
+			return Fetched{}, fmt.Errorf("%s: read %s: %w", r, path, err)
+		}
+
+		return Fetched{Data: data, Commit: head, Path: path}, nil
 	}
 
-	if err != nil {
-		return Fetched{}, fmt.Errorf("%s: read %s: %w", r, path, err)
-	}
-
-	return Fetched{Data: data, Commit: head, Path: path}, nil
+	return Fetched{}, fmt.Errorf("%s: no %s: %w", r, strings.Join(paths, " or "), ErrNotFound)
 }
 
 func git(ctx context.Context, dir string, args ...string) error {
@@ -293,4 +261,152 @@ func (f *Fetcher) FetchBeside(
 	}
 
 	return f.Fetch(ctx, r, got.Commit, Target{Default: at})
+}
+
+// checkout fetches one commit of a git ref into the cache and returns the
+// directory and the commit.
+func (f *Fetcher) checkout(ctx context.Context, r Ref, commit string) (string, string, error) {
+	if _, err := exec.LookPath("git"); err != nil {
+		return "", "", fmt.Errorf("%s: git+ refs need git on PATH", r)
+	}
+
+	sum := sha256.Sum256([]byte(r.Location))
+	dir := filepath.Join(f.GitCache, hex.EncodeToString(sum[:])[:16])
+
+	if _, err := os.Stat(filepath.Join(dir, ".git")); errors.Is(err, fs.ErrNotExist) {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			return "", "", err
+		}
+
+		if err := git(ctx, dir, "init", "--quiet"); err != nil {
+			return "", "", err
+		}
+	}
+
+	target := commit
+	if target == "" {
+		target = "HEAD"
+	}
+
+	if err := git(
+		ctx,
+		dir,
+		"fetch",
+		"--quiet",
+		"--depth",
+		"1",
+		"--",
+		r.Location,
+		target,
+	); err != nil {
+		return "", "", fmt.Errorf("fetch %s: %w", r, err)
+	}
+
+	if err := git(ctx, dir, "checkout", "--quiet", "--force", "FETCH_HEAD"); err != nil {
+		return "", "", fmt.Errorf("fetch %s: %w", r, err)
+	}
+
+	head, err := gitOutput(ctx, dir, "rev-parse", "HEAD")
+	if err != nil {
+		return "", "", fmt.Errorf("fetch %s: %w", r, err)
+	}
+
+	return dir, head, nil
+}
+
+// ListManifests returns the manifest files of the collection at r, keyed by
+// package name. A collection keeps them as "<name>.toml" at its root or under
+// "packages/". A URL cannot be listed.
+func (f *Fetcher) ListManifests(ctx context.Context, r Ref) (map[string][]byte, error) {
+	switch r.Kind {
+	case File:
+		return readCollection(r.Location)
+	case Git:
+		dir, _, err := f.checkout(ctx, r, "")
+		if err != nil {
+			return nil, err
+		}
+
+		return readCollection(dir)
+	case GitHub:
+		return f.listGitHub(ctx, r)
+	default:
+		return nil, fmt.Errorf("%s: a URL cannot be listed, so it cannot be searched", r)
+	}
+}
+
+func readCollection(dir string) (map[string][]byte, error) {
+	found := map[string][]byte{}
+
+	for _, sub := range []string{Manifest.Dir, ""} {
+		paths, err := filepath.Glob(filepath.Join(dir, sub, "*.toml"))
+		if err != nil {
+			return nil, err
+		}
+
+		for _, path := range paths {
+			data, err := os.ReadFile(path)
+			if err != nil {
+				return nil, err
+			}
+
+			found[strings.TrimSuffix(filepath.Base(path), ".toml")] = data
+		}
+	}
+
+	return found, nil
+}
+
+func (f *Fetcher) listGitHub(ctx context.Context, r Ref) (map[string][]byte, error) {
+	sha, err := f.get(
+		ctx, f.GitHubAPI+"/repos/"+r.Location+"/commits/HEAD",
+		map[string]string{"Accept": "application/vnd.github.sha"},
+	)
+	if err != nil {
+		return nil, fmt.Errorf("resolve %s: %w", r, err)
+	}
+
+	commit := strings.TrimSpace(string(sha))
+
+	body, err := f.get(
+		ctx,
+		f.GitHubAPI+"/repos/"+r.Location+"/git/trees/"+commit+"?recursive=1",
+		nil,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("list %s: %w", r, err)
+	}
+
+	var tree struct {
+		Tree []struct {
+			Path string `json:"path"`
+			Type string `json:"type"`
+		} `json:"tree"`
+	}
+
+	if err := json.Unmarshal(body, &tree); err != nil {
+		return nil, fmt.Errorf("list %s: %w", r, err)
+	}
+
+	found := map[string][]byte{}
+
+	for _, item := range tree.Tree {
+		dir, file := path.Split(item.Path)
+		if item.Type != "blob" || !strings.HasSuffix(file, ".toml") ||
+			dir != "" && dir != Manifest.Dir+"/" {
+			continue
+		}
+
+		data, err := f.get(ctx, f.GitHubRaw+"/"+r.Location+"/"+commit+"/"+item.Path, nil)
+		if err != nil {
+			return nil, fmt.Errorf("fetch %s: %w", item.Path, err)
+		}
+
+		name := strings.TrimSuffix(file, ".toml")
+		if _, taken := found[name]; !taken || dir == "" {
+			found[name] = data
+		}
+	}
+
+	return found, nil
 }

@@ -5,6 +5,11 @@ A manifest is one TOML file that describes one package. Put it in your repo as
 manifests for many packages names them `<name>.toml` or
 `packages/<name>.toml`, and users add `github:you/repo#<name>`.
 
+A repo or directory that holds many manifests is a collection. Users can give
+it a short name with `oku source add` and search it, see
+[Sources](refs.md#sources). Add a `description` to each manifest, because
+`oku search` matches it.
+
 You may not need one. A GitHub repo whose releases follow common naming is
 installable with no manifest, see [Inferred manifests](#inferred-manifests).
 

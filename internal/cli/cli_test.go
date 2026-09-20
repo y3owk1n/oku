@@ -1410,3 +1410,132 @@ func TestB27ManifestInitWritesTheInferredManifest(t *testing.T) {
 		t.Fatal("manifest init replaced an existing file without --force")
 	}
 }
+
+// collectionServer fakes the GitHub repo someone/recipes, a collection that
+// holds the given manifest files by path.
+func collectionServer(t *testing.T, m *machine, files map[string][]byte) {
+	t.Helper()
+
+	const commit = "6666666666666666666666666666666666666666"
+
+	var items []string
+	for path := range files {
+		items = append(items, fmt.Sprintf(`{"path": %q, "type": "blob"}`, path))
+	}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		file, isFile := files[strings.TrimPrefix(r.URL.Path, "/raw/someone/recipes/"+commit+"/")]
+
+		switch {
+		case r.URL.Path == "/api/repos/someone/recipes/commits/HEAD":
+			_, _ = w.Write([]byte(commit))
+		case r.URL.Path == "/api/repos/someone/recipes/git/trees/"+commit:
+			_, _ = w.Write([]byte(`{"tree": [` + strings.Join(items, ",") + `]}`))
+		case isFile:
+			_, _ = w.Write(file)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(server.Close)
+
+	m.opts.GitHubAPI = server.URL + "/api"
+	m.opts.GitHubRaw = server.URL + "/raw"
+}
+
+func (m machine) describedManifest(t *testing.T, name, description string) []byte {
+	t.Helper()
+
+	body, err := os.ReadFile(m.namedManifest(t, name, name, name))
+	must(t, err)
+
+	return bytes.Replace(
+		body,
+		[]byte("[version]"),
+		[]byte(fmt.Sprintf("description = %q\n[version]", description)),
+		1,
+	)
+}
+
+func TestB30SourceAliasResolvesToAManifestInTheCollection(t *testing.T) {
+	m := newMachine(t)
+	collectionServer(t, &m, map[string][]byte{
+		"packages/tool.toml": m.describedManifest(t, "tool", "a tool"),
+	})
+
+	if _, err := m.run(t, "", "add", "core/tool"); err == nil {
+		t.Fatal("an alias that is not defined resolved")
+	}
+
+	_, err := m.run(t, "", "source", "add", "core", "github:someone/recipes")
+	must(t, err)
+
+	out, err := m.run(t, "", "source", "list")
+	must(t, err)
+
+	if !strings.Contains(out, "core") || !strings.Contains(out, "github:someone/recipes") {
+		t.Fatalf("source list:\n%s", out)
+	}
+
+	_, err = m.run(t, "", "add", "core/tool")
+	must(t, err)
+
+	if !exists(m.profile("bin", "tool")) {
+		t.Fatal("tool is not in the profile")
+	}
+
+	// The list holds the full ref, so it works without the alias.
+	listed, err := os.ReadFile(filepath.Join(m.config, "oku.toml"))
+	must(t, err)
+
+	if !strings.Contains(string(listed), `tool = "github:someone/recipes#tool"`) {
+		t.Fatalf("oku.toml does not hold the expanded ref:\n%s", listed)
+	}
+
+	_, err = m.run(t, "", "source", "remove", "core")
+	must(t, err)
+
+	if out, err := m.run(t, "", "sync"); err != nil {
+		t.Fatalf("sync after the alias was removed: %v\n%s", err, out)
+	}
+}
+
+func TestB31SearchMatchesNamesAndDescriptionsInSourcesOnly(t *testing.T) {
+	m := newMachine(t)
+	collectionServer(t, &m, map[string][]byte{
+		"packages/grepper.toml": m.describedManifest(t, "grepper", "searches text"),
+		"finder.toml":           m.describedManifest(t, "finder", "a GREP for file names"),
+		"packages/other.toml":   m.describedManifest(t, "other", "unrelated"),
+		"oku.toml":              []byte("[packages]\ngrep-list = \"github:x/y\"\n"),
+		"deep/nested/grep.toml": m.describedManifest(t, "deepgrep", "too deep to be a member"),
+	})
+
+	if _, err := m.run(t, "", "search", "grep"); err == nil {
+		t.Fatal("search without sources succeeded")
+	}
+
+	_, err := m.run(t, "", "source", "add", "core", "github:someone/recipes")
+	must(t, err)
+
+	out, err := m.run(t, "", "search", "grep")
+	must(t, err)
+
+	for _, want := range []string{"core/grepper", "searches text", "core/finder"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("search lacks %q:\n%s", want, out)
+		}
+	}
+
+	for _, reject := range []string{"other", "grep-list", "deepgrep"} {
+		if strings.Contains(out, reject) {
+			t.Fatalf("search shows %q:\n%s", reject, out)
+		}
+	}
+
+	out, err = m.run(t, "", "search", "zzz")
+	must(t, err)
+
+	if !strings.Contains(out, "nothing in your sources") {
+		t.Fatalf("search for a term with no match:\n%s", out)
+	}
+}

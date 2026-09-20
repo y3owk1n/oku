@@ -7,7 +7,7 @@ in [`../prd/`](../prd/).
 |---|---|
 | [Getting started](getting-started.md) | Build oku, install a first package, put it on `PATH`, uninstall |
 | [Commands](commands.md) | Every command, its flags, and what it prints |
-| [Refs](refs.md) | The ways to point oku at a manifest |
+| [Refs](refs.md) | The ways to point oku at a manifest, and sources |
 | [Manifest reference](manifest.md) | Every key a package manifest accepts, for people publishing software |
 | [List and lock](list-and-lock.md) | `oku.toml`, `oku.lock`, and moving a setup to another machine |
 | [Trust and checksums](trust.md) | What oku verifies, what it pins, and when it stops |
@@ -21,6 +21,8 @@ in [`../prd/`](../prd/).
   single binary.
 - `oku add github:owner/repo` for a repo that has no oku manifest, by reading
   its newest release.
+- Sources: `oku source add core github:someone/recipes`, then
+  `oku add core/ripgrep` and `oku search grep`.
 - Manifests with a fixed version, or with versions discovered from GitHub
   releases or git tags.
 - One `oku.toml` for several machines, with `include` and per-platform `when`.
@@ -32,7 +34,6 @@ in [`../prd/`](../prd/).
 
 - Building from source. A `[build]` table in a manifest is recognised and
   refused.
-- Source aliases (`alias/name` refs), `oku search`, `oku manifest lint` and
-  `oku manifest bump`.
+- `oku manifest lint` and `oku manifest bump`.
 - Per-project lists and the shell hook.
 - `.tar.xz` and `.tar.zst` archives.
