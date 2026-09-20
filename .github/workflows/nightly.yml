@@ -1,8 +1,11 @@
 name: nightly
 
-# Every push to main moves the tag "nightly" and replaces the files of the
-# prerelease with that name. "oku self update --nightly" and
+# Every push to main replaces the files of the prerelease "nightly" and then
+# moves the tag with that name. "oku self update --nightly" and
 # OKU_VERSION=nightly in the install scripts read it.
+#
+# The files come first. Whoever reads the tag's commit then gets files of that
+# commit, apart from the seconds between the upload and the moved tag.
 on:
   push:
     branches: [main]
@@ -20,13 +23,37 @@ jobs:
     outputs:
       version_override: ${{ steps.meta.outputs.version_override }}
     steps:
-      - uses: actions/checkout@v7
-
       # "oku self update --nightly" compares the last seven characters with the
       # commit of the release, so the version has to end with them.
       - name: Compute the version
         id: meta
         run: echo "version_override=nightly-$(date -u +'%Y%m%d%H%M%S')-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+
+      # The upload needs a release. Only the first run has none.
+      - name: Make the release when there is none
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view nightly --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 ||
+            gh release create nightly --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+              --title "oku nightly" --notes "" --prerelease --latest=false
+
+  publish-nightly-artifacts:
+    needs: prepare-nightly-release
+    uses: ./.github/workflows/publish-artifacts.yml
+    with:
+      release_tag: nightly
+      ref: ${{ github.sha }}
+      version_override: ${{ needs.prepare-nightly-release.outputs.version_override }}
+    secrets:
+      upload_token: ${{ github.token }}
+      minisign_secret_key: ${{ secrets.MINISIGN_SECRET_KEY }}
+
+  move-nightly-tag:
+    needs: publish-nightly-artifacts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
 
       - name: Move the tag and the release to this commit
         env:
@@ -45,19 +72,4 @@ jobs:
           git tag -f nightly "$GITHUB_SHA"
           git push origin refs/tags/nightly:refs/tags/nightly --force
 
-          if gh release view nightly >/dev/null 2>&1; then
-            gh release edit nightly --target "$GITHUB_SHA" --notes-file "$notes" --prerelease --latest=false
-          else
-            gh release create nightly --target "$GITHUB_SHA" --title "oku nightly" \
-              --notes-file "$notes" --prerelease --latest=false
-          fi
-
-  publish-nightly-artifacts:
-    needs: prepare-nightly-release
-    uses: ./.github/workflows/publish-artifacts.yml
-    with:
-      release_tag: nightly
-      version_override: ${{ needs.prepare-nightly-release.outputs.version_override }}
-    secrets:
-      upload_token: ${{ github.token }}
-      minisign_secret_key: ${{ secrets.MINISIGN_SECRET_KEY }}
+          gh release edit nightly --target "$GITHUB_SHA" --notes-file "$notes" --prerelease --latest=false

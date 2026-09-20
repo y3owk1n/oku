@@ -9,6 +9,12 @@ on:
       release_tag:
         required: true
         type: string
+      # The commit to build. Default is the tag. nightly.yml builds before it
+      # moves the tag, so it names the commit.
+      ref:
+        required: false
+        type: string
+        default: ""
       # The version the binaries report. Default is the tag without its "v".
       version_override:
         required: false
@@ -29,7 +35,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ inputs.release_tag }}
+          ref: ${{ inputs.ref || inputs.release_tag }}
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod

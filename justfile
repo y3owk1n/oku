@@ -1,4 +1,6 @@
-version := `git describe --tags --always --dirty 2>/dev/null || echo dev`
+# Only release tags count. The tag "nightly" moves, so it would name every local
+# build "nightly".
+version := `git describe --tags --match 'v*' --always --dirty 2>/dev/null || echo dev`
 
 default:
     @just --list
