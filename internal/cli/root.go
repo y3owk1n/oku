@@ -6,25 +6,36 @@ import (
 
 	"github.com/y3owk1n/oku/internal/dirs"
 	"github.com/y3owk1n/oku/internal/profile"
+	"github.com/y3owk1n/oku/internal/ref"
 	"github.com/y3owk1n/oku/internal/store"
 )
 
-// NewRootCmd builds the oku command tree. executable is the path of the running
-// binary, which "self uninstall" deletes.
-func NewRootCmd(version, executable string) *cobra.Command {
+// Options are the values main and the tests pass to the command tree.
+type Options struct {
+	Version string
+	// Executable is the path of the running binary, which "self uninstall"
+	// deletes.
+	Executable string
+	// GitHubAPI and GitHubRaw replace the github.com URLs when set.
+	GitHubAPI string
+	GitHubRaw string
+}
+
+// NewRootCmd builds the oku command tree.
+func NewRootCmd(opts Options) *cobra.Command {
 	root := &cobra.Command{
 		Use:           "oku",
 		Short:         "A cross-platform package manager with no central registry",
-		Version:       version,
+		Version:       opts.Version,
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
 
 	root.AddCommand(
-		newAddCmd(),
+		newAddCmd(opts),
 		newRemoveCmd(),
 		newListCmd(),
-		newSelfCmd(executable),
+		newSelfCmd(opts.Executable),
 	)
 
 	return root
@@ -58,6 +69,20 @@ func loadEnv() (env, error) {
 
 func (e env) store() *store.Store {
 	return store.New(e.data, e.cache)
+}
+
+func (e env) fetcher(opts Options) *ref.Fetcher {
+	f := ref.NewFetcher(e.cache)
+
+	if opts.GitHubAPI != "" {
+		f.GitHubAPI = opts.GitHubAPI
+	}
+
+	if opts.GitHubRaw != "" {
+		f.GitHubRaw = opts.GitHubRaw
+	}
+
+	return f
 }
 
 func (e env) globalProfile() *profile.Profile {

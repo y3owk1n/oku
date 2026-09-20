@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"os"
 	"regexp"
 
 	"github.com/pelletier/go-toml/v2"
@@ -21,7 +20,7 @@ type Manifest struct {
 	Artifacts []Artifact     `toml:"artifact"`
 	Build     map[string]any `toml:"build"`
 
-	// SHA256 is the hex digest of the manifest file. The store hash includes it.
+	// SHA256 is the hex digest of the manifest data. The store hash includes it.
 	SHA256 string `toml:"-"`
 }
 
@@ -54,20 +53,15 @@ var (
 	templateRe = regexp.MustCompile(`\{\{\s*([a-zA-Z0-9_.]+)\s*\}\}`)
 )
 
-// Load reads and validates the manifest at path.
-func Load(path string) (*Manifest, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, fmt.Errorf("read manifest: %w", err)
-	}
-
+// Parse validates manifest data. origin names the data in error messages.
+func Parse(data []byte, origin string) (*Manifest, error) {
 	var m Manifest
 	if err := toml.Unmarshal(data, &m); err != nil {
-		return nil, fmt.Errorf("parse manifest %s: %w", path, err)
+		return nil, fmt.Errorf("parse manifest %s: %w", origin, err)
 	}
 
 	if err := m.validate(); err != nil {
-		return nil, fmt.Errorf("invalid manifest %s: %w", path, err)
+		return nil, fmt.Errorf("invalid manifest %s: %w", origin, err)
 	}
 
 	sum := sha256.Sum256(data)

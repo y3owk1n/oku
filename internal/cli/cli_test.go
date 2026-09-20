@@ -7,6 +7,8 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -23,6 +25,7 @@ const script = "#!/bin/sh\necho hello from tool\n"
 // machine is a throwaway set of oku directories plus a stand-in oku binary.
 type machine struct {
 	config, data, cache, exe, fixtures string
+	opts                               cli.Options
 }
 
 func newMachine(t *testing.T) machine {
@@ -41,6 +44,8 @@ func newMachine(t *testing.T) machine {
 		fixtures: filepath.Join(root, "fixtures"),
 	}
 
+	m.opts = cli.Options{Version: "test", Executable: m.exe}
+
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(root, "config"))
 	t.Setenv("XDG_DATA_HOME", filepath.Join(root, "data"))
 	t.Setenv("XDG_CACHE_HOME", filepath.Join(root, "cache"))
@@ -56,7 +61,7 @@ func (m machine) run(t *testing.T, stdin string, args ...string) (string, error)
 
 	var out bytes.Buffer
 
-	cmd := cli.NewRootCmd("test", m.exe)
+	cmd := cli.NewRootCmd(m.opts)
 	cmd.SetArgs(args)
 	cmd.SetIn(strings.NewReader(stdin))
 	cmd.SetOut(&out)
@@ -413,5 +418,83 @@ func TestB102UninstallPrintsPathEntryToRemove(t *testing.T) {
 
 	if !strings.Contains(out, "remove "+bin+" from PATH") {
 		t.Fatalf("output does not name the PATH entry:\n%s", out)
+	}
+}
+
+func TestB10AddAcceptsEveryRefKind(t *testing.T) {
+	const commit = "0123456789abcdef0123456789abcdef01234567"
+
+	m := newMachine(t)
+	manifestPath := m.manifest(t, "tool", map[string]string{"tool": script}, `bin = ["tool"]`)
+
+	body, err := os.ReadFile(manifestPath)
+	must(t, err)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/plain/tool.toml",
+			"/raw/owner/repo/" + commit + "/oku.pkg.toml",
+			"/raw/owner/recipes/" + commit + "/packages/tool.toml":
+			_, _ = w.Write(body)
+		case "/api/repos/owner/repo/commits/HEAD", "/api/repos/owner/recipes/commits/HEAD":
+			_, _ = w.Write([]byte(commit))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	m.opts.GitHubAPI = server.URL + "/api"
+	m.opts.GitHubRaw = server.URL + "/raw"
+
+	refs := []string{
+		manifestPath,
+		server.URL + "/plain/tool.toml",
+		"github:owner/repo",
+		"github:owner/recipes#tool",
+	}
+
+	if _, err := exec.LookPath("git"); err == nil {
+		repo := filepath.Join(m.fixtures, "repo")
+		must(t, os.MkdirAll(filepath.Join(repo, "recipes"), 0o755))
+		must(t, os.WriteFile(filepath.Join(repo, "recipes", "tool.toml"), body, 0o644))
+
+		for _, args := range [][]string{
+			{"init", "--quiet"},
+			{"add", "."},
+			{
+				"-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false",
+				"commit", "--quiet", "-m", "add",
+			},
+		} {
+			cmd := exec.Command("git", append([]string{"-C", repo}, args...)...)
+			cmd.Env = append(os.Environ(), "GIT_CONFIG_GLOBAL="+os.DevNull)
+
+			if out, err := cmd.CombinedOutput(); err != nil {
+				t.Fatalf("git %v: %v\n%s", args, err, out)
+			}
+		}
+
+		refs = append(refs, "git+file://"+repo+"#recipes/tool.toml")
+	}
+
+	for _, ref := range refs {
+		if out, err := m.run(t, "", "add", ref); err != nil {
+			t.Fatalf("add %s: %v\n%s", ref, err, out)
+		}
+
+		out, err := m.run(t, "", "list")
+		must(t, err)
+
+		if !strings.Contains(out, strings.TrimPrefix(ref, m.fixtures)) {
+			t.Fatalf("list does not show %s:\n%s", ref, out)
+		}
+
+		_, err = m.run(t, "", "remove", "tool")
+		must(t, err)
+	}
+
+	if _, err := m.run(t, "", "add", "github:owner/missing"); err == nil {
+		t.Fatal("adding a repo that does not exist succeeded")
 	}
 }

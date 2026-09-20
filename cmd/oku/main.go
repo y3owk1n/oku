@@ -22,7 +22,8 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := cli.NewRootCmd(version, executable).Execute(); err != nil {
+	if err := cli.NewRootCmd(cli.Options{Version: version, Executable: executable}).
+		Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, "oku:", err)
 		os.Exit(1)
 	}
