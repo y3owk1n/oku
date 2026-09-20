@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.1](https://github.com/y3owk1n/oku/compare/v0.2.0...v0.2.1) (2026-09-20)
+
+
+### Bug Fixes
+
+* **refs:** store a file inside the project as a relative ref ([#70](https://github.com/y3owk1n/oku/issues/70)) ([28a3d14](https://github.com/y3owk1n/oku/commit/28a3d149b8fb838e933b9adfa0ce0d7905b5123c))
+
 ## [0.2.0](https://github.com/y3owk1n/oku/compare/v0.1.0...v0.2.0) (2026-09-20)
 
 
