@@ -13,10 +13,9 @@ it a short name with `oku source add` and search it, see
 You may not need one. A GitHub repo whose releases follow common naming is
 installable with no manifest, see [Inferred manifests](#inferred-manifests).
 
-This page lists the keys oku reads today. `oku add` ignores other keys, so a
-manifest may already hold sections from the full design in
-[`prd/architecture.md`](../prd/architecture.md). `oku manifest lint` checks a
-manifest against that full design.
+This page lists every key. `oku add` ignores a key it does not know, so an older
+oku still installs a manifest that was written for a newer one.
+`oku manifest lint` is strict and reports unknown keys.
 
 ## Example
 

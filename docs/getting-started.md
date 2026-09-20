@@ -2,8 +2,7 @@
 
 ## Install oku
 
-oku has no release yet. Until the first one, [build it from source](#build-oku).
-After that, one line installs it for your user, with no root:
+One line installs oku for your user, with no root:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/y3owk1n/oku/main/install.sh | sh
@@ -26,9 +25,12 @@ shell.
 | `OKU_VERSION` | A release tag such as `v0.1.0`. Default is the newest release. |
 
 `oku self update` replaces the binary later, see
-[Commands](commands.md#oku-self-update).
+[Commands](commands.md#oku-self-update). `oku doctor` checks the whole setup
+and says what to fix, see [Commands](commands.md#oku-doctor).
 
 ## Build oku
+
+You only need this to work on oku, or for a platform without a release.
 
 You need Go 1.26.4 or newer.
 
@@ -125,9 +127,15 @@ export PATH="$HOME/.local/share/oku/profiles/global/current/bin:$PATH"
 fish_add_path ~/.local/share/oku/profiles/global/current/bin
 ```
 
-To use [projects](projects.md), also load the oku hook there. For fish that is
-`command -q oku; and oku hook fish | source`, and `oku hook --help` shows the
-line for bash and zsh.
+```powershell
+# PowerShell on Windows, once
+$bin = "$env:LOCALAPPDATA\oku\profiles\global\current\bin"
+[Environment]::SetEnvironmentVariable('Path', "$bin;" + [Environment]::GetEnvironmentVariable('Path', 'User'), 'User')
+```
+
+To use [projects](projects.md), also load the oku hook there.
+[Projects](projects.md#using-the-projects-programs) has the line for bash, zsh,
+fish and PowerShell.
 
 If you set `XDG_DATA_HOME`, the directory is
 `$XDG_DATA_HOME/oku/profiles/global/current/bin`. `oku add` prints the exact
