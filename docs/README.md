@@ -29,7 +29,8 @@ in [`../prd/`](../prd/).
   deps' headers and libraries with no flags in the manifest.
 - `oku add github:owner/repo` for a repo that has no oku manifest, by reading
   its newest release.
-- `oku manifest init`, `lint` and `bump` for people who publish a manifest.
+- `oku manifest init`, `lint`, `test` and `bump` for people who publish a
+  manifest.
 - Sources: `oku source add core github:someone/recipes`, then
   `oku add core/ripgrep` and `oku search grep`.
 - Manifests with a fixed version, or with versions discovered from GitHub

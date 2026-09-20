@@ -99,6 +99,33 @@ oku list
 Prints one line per installed package: name, version, ref. With nothing
 installed it prints `no packages installed`.
 
+## oku info
+
+```
+oku info <name>
+```
+
+Shows what oku knows about an installed package.
+
+```
+$ oku info hey
+name       hey
+version    0.1.5
+ref        github:you/recipes#hey
+commit     3fce3b5bb0236da2df6d99672afb8a719642eca7
+installed  build
+store      /home/you/.local/share/oku/store/hey-0.1.5-e7d0aa74a6f65b35
+vendored   sha256 9a7aaff0...
+programs   hey
+```
+
+`installed` is `artifact` or `build`. oku leaves out a line that does not apply.
+`manifest` appears for a package whose manifest oku inferred. `impure` appears
+for a build that used `network = true`, which means it is not reproducible.
+`deps` lists the packages in its closure.
+
+It fails for a name that is not in your list. For a dep, use `oku why`.
+
 ## oku why
 
 ```
@@ -390,6 +417,44 @@ Warnings, which do not fail the run:
 
 - an artifact with neither `sha256` nor `sha256_url`
 - an empty `description`
+
+## oku manifest test
+
+```
+oku manifest test [file] [--yes] [--verbose] [--keep]
+```
+
+Installs a manifest into a throwaway store, to show that it works on this
+machine before you publish it. Without a file it tests `oku.pkg.toml`.
+
+- A manifest with a `[build]` is built from source, deps included, in the same
+  sandbox a user gets. It prints each step as it finishes.
+- A manifest with only artifacts installs the artifact for this machine.
+- It ends with the files that would be linked into a profile.
+
+```
+$ oku manifest test
+[1/3] vendor   ok
+[2/3] run      ok
+[3/3] install  ok
+hey 0.1.5 works on darwin-arm64 (build)
+  bin/hey
+```
+
+A failing step prints `FAILED`, then the usual build error with the end of the
+step's output, and the command exits with status 1.
+
+Your own store, profile, `oku.toml` and `oku.lock` are not touched. Downloads go
+to your normal cache. The build commands need approval like any other build, so
+pass `--yes` when you test your own manifest repeatedly.
+
+| Flag | Effect |
+|---|---|
+| `--yes`, `-y` | Approves the build commands without asking. |
+| `--verbose`, `-v` | Shows the output of build commands as they run. |
+| `--keep` | Keeps the throwaway store and prints the package's path, so you can run what was built. |
+
+It tests one platform, the one you run it on.
 
 ## oku manifest bump
 

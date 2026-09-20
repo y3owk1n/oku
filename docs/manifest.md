@@ -223,10 +223,15 @@ again. `oku update` infers again.
 
 ## Checking and updating a manifest
 
-Run `oku manifest lint` before you publish. It is stricter than `oku add`. It
-knows the whole schema and rejects a misspelt key. If your manifest fixes a
-version with inline `sha256` values, `oku manifest bump` moves it to the newest
-release and recomputes them. See [Commands](commands.md#oku-manifest-lint).
+Run `oku manifest lint` and `oku manifest test` before you publish.
+
+`lint` is stricter than `oku add`. It knows the whole schema and rejects a
+misspelt key. `test` installs the manifest into a throwaway store on your
+machine, and builds it from source when it has a `[build]`.
+
+If your manifest fixes a version with inline `sha256` values,
+`oku manifest bump` moves it to the newest release and recomputes them. See
+[Commands](commands.md#oku-manifest-lint).
 
 ## [build]
 
@@ -422,7 +427,7 @@ a [`vendor` step](#vendoring). oku checks all three against a digest.
 
 `network = true` on a `run` step gives that step the network and nothing else.
 oku shows it in the approval prompt as `(wants network)`, and marks the package
-`impure` in the store and in `oku.lock`. Use it only when a checksummed `fetch`
+`impure` in the store, in `oku.lock` and in `oku info`. Use it only when a checksummed `fetch`
 is not enough.
 
 ```toml

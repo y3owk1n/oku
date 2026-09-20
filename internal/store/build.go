@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path"
@@ -64,7 +65,7 @@ func (s *Store) Build(
 	if err != nil {
 		return Realized{}, err
 	}
-	defer os.RemoveAll(work)
+	defer removeTree(work)
 
 	src := filepath.Join(work, "src")
 
@@ -144,6 +145,10 @@ func (s *Store) Build(
 			err = s.runStep(ctx, step, src, prefix, vars)
 		}
 
+		if opts.Progress != nil {
+			opts.Progress(i, len(build.Steps), strings.Join(step.Kinds(), ","), err)
+		}
+
 		if err != nil {
 			os.RemoveAll(prefix)
 
@@ -211,6 +216,20 @@ func rustupHome(needs []string, home string) string {
 	}
 
 	return dir
+}
+
+// removeTree deletes dir even when it holds read-only directories. Go marks its
+// module cache read-only, and os.RemoveAll cannot delete inside such a directory.
+func removeTree(dir string) {
+	_ = filepath.WalkDir(dir, func(path string, entry fs.DirEntry, err error) error {
+		if err == nil && entry.IsDir() {
+			_ = os.Chmod(path, 0o700)
+		}
+
+		return nil
+	})
+
+	os.RemoveAll(dir)
 }
 
 // findNeeds returns the directories of the needed tools, and fails on the first
@@ -483,6 +502,9 @@ type BuildOptions struct {
 	Log io.Writer
 	// PinnedVendor is the vendor digest oku.lock recorded, or empty.
 	PinnedVendor string
+	// Progress is called after each step that ran, with its position, the number
+	// of steps, its kind and its error. It may be nil.
+	Progress func(step, total int, kind string, err error)
 }
 
 // ErrVendorChanged reports vendor steps that downloaded something other than
