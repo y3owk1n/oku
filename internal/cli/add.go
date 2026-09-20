@@ -15,7 +15,12 @@ import (
 )
 
 func newAddCmd(opts Options) *cobra.Command {
-	return &cobra.Command{
+	var (
+		flags      buildFlags
+		fromSource bool
+	)
+
+	cmd := &cobra.Command{
 		Use:   "add <ref>[@version]",
 		Short: "Install a package from a manifest",
 		Long: `Install a package from a manifest. A ref is one of:
@@ -28,12 +33,24 @@ func newAddCmd(opts Options) *cobra.Command {
   alias/name                          a package in a source, see "oku source"`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runAdd(cmd, opts, args[0])
+			return runAdd(cmd, opts, args[0], &flags, fromSource)
 		},
 	}
+
+	flags.register(cmd)
+	cmd.Flags().
+		BoolVar(&fromSource, "from-source", false, "build from source even when a prebuilt download fits")
+
+	return cmd
 }
 
-func runAdd(cmd *cobra.Command, opts Options, arg string) error {
+func runAdd(
+	cmd *cobra.Command,
+	opts Options,
+	arg string,
+	flags *buildFlags,
+	fromSource bool,
+) error {
 	e, err := loadEnv()
 	if err != nil {
 		return err
@@ -70,7 +87,13 @@ func runAdd(cmd *cobra.Command, opts Options, arg string) error {
 		}
 	}
 
-	got, err := e.install(cmd.Context(), opts, request{ref: r, previous: previous})
+	got, err := e.install(cmd.Context(), opts, request{
+		ref:        r,
+		previous:   previous,
+		fromSource: fromSource,
+		approve:    e.approver(cmd, opts, flags),
+		log:        buildLog(cmd, flags),
+	})
 	if err != nil {
 		return err
 	}

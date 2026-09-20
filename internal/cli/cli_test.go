@@ -1690,3 +1690,197 @@ func TestB29ManifestBumpMovesVersionAndChecksums(t *testing.T) {
 		t.Fatalf("a second bump:\n%s", out)
 	}
 }
+
+// buildManifest writes a manifest for "tool" that has a prebuilt artifact
+// printing "prebuilt" and a [build] made of steps. extra goes into [build].
+func (m machine) buildManifest(t *testing.T, withArtifact bool, extra, steps string) string {
+	t.Helper()
+
+	artifact := ""
+
+	if withArtifact {
+		archive, sum := m.archive(
+			t,
+			"prebuilt",
+			map[string]string{"tool": "#!/bin/sh\necho prebuilt\n"},
+		)
+		artifact = fmt.Sprintf(
+			"[[artifact]]\nurl = \"file://%s\"\nsha256 = %q\nbin = [\"tool\"]\n",
+			archive,
+			sum,
+		)
+	}
+
+	path := filepath.Join(m.fixtures, "built.toml")
+	must(t, os.WriteFile(path, []byte(
+		"[package]\nname = \"tool\"\n[version]\nvalue = \"1.0.0\"\n"+artifact+
+			"[build]\n"+extra+"\n"+steps,
+	), 0o644))
+
+	return path
+}
+
+const (
+	writeTool   = "[[build.step]]\nrun = \"printf '#!/bin/sh\\\\necho built {{version}}\\\\n' > tool\"\nshell = \"sh\"\n"
+	installTool = "[[build.step]]\ninstall = { bin = [\"tool\"] }\n"
+)
+
+func yes() *bool {
+	v := true
+
+	return &v
+}
+
+func TestB35BuildRunsStepsInOrderAndFromSourceForcesIt(t *testing.T) {
+	m := newMachine(t)
+	ref := m.buildManifest(t, true, `needs = ["sh"]`, writeTool+installTool)
+
+	_, err := m.run(t, "", "add", ref)
+	must(t, err)
+
+	if got := m.toolOutput(t); got != "prebuilt" {
+		t.Fatalf("add used %q, want the prebuilt artifact", got)
+	}
+
+	out, err := m.run(t, "", "add", ref, "--from-source", "--yes")
+	if err != nil {
+		t.Fatalf("add --from-source: %v\n%s", err, out)
+	}
+
+	if got := m.toolOutput(t); got != "built 1.0.0" {
+		t.Fatalf("add --from-source installed %q", got)
+	}
+
+	// The lock remembers the strategy, so a new machine builds too.
+	must(t, os.RemoveAll(m.data))
+
+	_, err = m.run(t, "", "sync", "--yes")
+	must(t, err)
+
+	if got := m.toolOutput(t); got != "built 1.0.0" {
+		t.Fatalf("sync installed %q, want the build", got)
+	}
+
+	noArtifact := m.buildManifest(t, false, "", writeTool+installTool)
+
+	_, err = m.run(t, "", "add", noArtifact, "--yes")
+	must(t, err)
+
+	if got := m.toolOutput(t); got != "built 1.0.0" {
+		t.Fatalf("a manifest with no artifact installed %q", got)
+	}
+}
+
+func TestB36MissingNeedsToolFailsBeforeAnyStep(t *testing.T) {
+	m := newMachine(t)
+	marker := filepath.Join(m.fixtures, "ran")
+	ref := m.buildManifest(t, false, `needs = ["sh", "no-such-tool-xyz"]`,
+		fmt.Sprintf("[[build.step]]\nrun = \"touch %s\"\nshell = \"sh\"\n", marker)+installTool)
+
+	_, err := m.run(t, "", "add", ref, "--yes")
+	if err == nil || !strings.Contains(err.Error(), "no-such-tool-xyz") {
+		t.Fatalf("want an error naming the missing tool, got %v", err)
+	}
+
+	if exists(marker) {
+		t.Fatal("a step ran before the needs check")
+	}
+}
+
+func TestB41RunStepsNeedApprovalOncePerManifestHash(t *testing.T) {
+	m := newMachine(t)
+	m.opts.Interactive = yes()
+
+	ref := m.buildManifest(t, false, "", writeTool+installTool)
+
+	out, err := m.run(t, "n\n", "add", ref)
+	if err == nil || !strings.Contains(out, "printf") {
+		t.Fatalf("want the commands shown and the build refused, got %v\n%s", err, out)
+	}
+
+	if len(m.storeEntries(t)) != 0 {
+		t.Fatal("something was built without approval")
+	}
+
+	out, err = m.run(t, "y\n", "add", ref)
+	if err != nil {
+		t.Fatalf("add after approving: %v\n%s", err, out)
+	}
+
+	must(t, os.RemoveAll(filepath.Join(m.data, "store")))
+	must(t, os.RemoveAll(filepath.Join(m.data, "profiles")))
+
+	out, err = m.run(t, "", "add", ref)
+	if err != nil || strings.Contains(out, "[y/N]") {
+		t.Fatalf("the same manifest hash was asked twice: %v\n%s", err, out)
+	}
+
+	body, err := os.ReadFile(ref)
+	must(t, err)
+	must(t, os.WriteFile(ref, append(body, []byte("\n# changed\n")...), 0o644))
+
+	out, _ = m.run(t, "n\n", "add", ref)
+	if !strings.Contains(out, "[y/N]") {
+		t.Fatalf("a changed manifest was not asked again:\n%s", out)
+	}
+}
+
+func TestB42NonInteractiveRunsRefuseUnapprovedStepsUnlessYes(t *testing.T) {
+	m := newMachine(t)
+	ref := m.buildManifest(t, false, "", writeTool+installTool)
+
+	_, err := m.run(t, "y\n", "add", ref)
+	if err == nil || !strings.Contains(err.Error(), "--yes") {
+		t.Fatalf("want a refusal that names --yes, got %v", err)
+	}
+
+	if _, err := m.run(t, "", "add", ref, "--yes"); err != nil {
+		t.Fatalf("add --yes: %v", err)
+	}
+}
+
+func TestB43StepWithNonMatchingWhenIsSkipped(t *testing.T) {
+	m := newMachine(t)
+	ref := m.buildManifest(
+		t,
+		false,
+		"",
+		"[[build.step]]\nrun = \"exit 7\"\nshell = \"sh\"\nwhen = { os = \"plan9\" }\n"+writeTool+installTool,
+	)
+
+	if out, err := m.run(t, "", "add", ref, "--yes"); err != nil {
+		t.Fatalf("a step for another OS ran: %v\n%s", err, out)
+	}
+}
+
+func TestB44FailingStepAbortsAndLeavesStoreAndProfileUnchanged(t *testing.T) {
+	m := newMachine(t)
+	good := m.namedManifest(t, "good", "good", "good")
+
+	_, err := m.run(t, "", "add", good)
+	must(t, err)
+
+	before := m.storeEntries(t)
+	generation, err := os.Readlink(m.profile())
+	must(t, err)
+
+	ref := m.buildManifest(
+		t,
+		false,
+		"",
+		writeTool+"[[build.step]]\nrun = \"echo compiler exploded; exit 3\"\nshell = \"sh\"\n"+installTool,
+	)
+
+	_, err = m.run(t, "", "add", ref, "--yes")
+	if err == nil || !strings.Contains(err.Error(), "build.step[1]") ||
+		!strings.Contains(err.Error(), "compiler exploded") {
+		t.Fatalf("want the step index and its output, got %v", err)
+	}
+
+	after, err := os.Readlink(m.profile())
+	must(t, err)
+
+	if got := m.storeEntries(t); !slices.Equal(got, before) || after != generation {
+		t.Fatalf("store %v or generation %s changed", got, after)
+	}
+}

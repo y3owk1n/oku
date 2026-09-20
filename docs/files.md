@@ -44,6 +44,8 @@ export XDG_CACHE_HOME=/tmp/oku-try/cache
         oku-gen.toml           when it was written and the packages in it
         oku.lock               a copy of oku.lock as it was at that time
       current -> gen-2         the active generation
+  trust/
+    approvals.toml             manifests you allowed to run build commands
 
 <cache>/oku/
   downloads/<sha256>           verified downloads, reused on reinstall
@@ -56,8 +58,15 @@ A store path is named `<name>-<version>-<hash>`. The hash covers the manifest
 content, the version, the platform and the artifact's sha256, so a changed
 manifest gets a new path and never overwrites an old one.
 
-oku builds a package in a temporary directory inside the store and renames it
-into place as the last step. A failed install leaves no files in the store.
+oku unpacks a download in a temporary directory inside the store and renames
+it into place as the last step. A failed install leaves no files in the store.
+
+A package built from source is different, because build systems write the
+final path into the files they install. oku builds the source in a temporary
+directory outside the store, installs straight into the final store path, and
+writes `oku-meta.toml` last. A store path without that file is a crashed build,
+and oku deletes it before it builds again. Such a package has no `pkg/`
+directory.
 
 `oku remove` leaves store paths in place, because older generations still use
 them. `oku gc` deletes the store paths that no generation uses, see
