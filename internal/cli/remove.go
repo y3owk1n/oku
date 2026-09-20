@@ -47,7 +47,7 @@ func newRemoveCmd(opts Options) *cobra.Command {
 
 			locked.Delete(name)
 
-			lockData, err := locked.Bytes()
+			lockData, err := locked.Bytes(e.lockPath())
 			if err != nil {
 				return err
 			}

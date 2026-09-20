@@ -1132,6 +1132,16 @@ func TestB19AddStoresAFileInsideTheProjectRelativeToIt(t *testing.T) {
 		}
 	}
 
+	// The hook compares the lock with the copy in the profile.
+	_, err = m.run(t, "", "allow")
+	must(t, err)
+
+	t.Setenv("PATH", "/usr/bin:/bin")
+
+	if out := m.apply(t); !strings.Contains(os.Getenv("PATH"), filepath.Dir(m.projectBin(t, "tool"))) {
+		t.Fatalf("the hook did not apply the project right after add:\n%s", out)
+	}
+
 	// Another checkout is the same project at another path.
 	moved := filepath.Join(m.fixtures, "elsewhere")
 	must(t, os.Rename(project, moved))

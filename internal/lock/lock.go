@@ -157,12 +157,16 @@ func (l *Lock) Delete(name string) {
 	l.Packages = slices.DeleteFunc(l.Packages, func(p Package) bool { return p.Name == name })
 }
 
-// Bytes renders the lock with packages sorted by name, so the same state always
-// produces the same bytes.
-func (l *Lock) Bytes() ([]byte, error) {
+// Bytes renders the lock as Write saves it to path. It sorts packages by name,
+// so the same state always produces the same bytes. It renders a ref to a file
+// inside the lock's directory relative to it, so a committed lock works in
+// another checkout.
+func (l *Lock) Bytes(path string) ([]byte, error) {
 	slices.SortFunc(l.Packages, func(a, b Package) int { return strings.Compare(a.Name, b.Name) })
 
-	data, err := toml.Marshal(l)
+	portable := l.mapRefs(func(s string) string { return ref.InDir(filepath.Dir(path), s) })
+
+	data, err := toml.Marshal(portable)
 	if err != nil {
 		return nil, fmt.Errorf("render %s: %w", FileName, err)
 	}
@@ -170,12 +174,9 @@ func (l *Lock) Bytes() ([]byte, error) {
 	return append([]byte(header), data...), nil
 }
 
-// Write saves the lock to path. It stores a ref to a file inside the lock's
-// directory relative to it, so a committed lock works in another checkout.
+// Write saves the lock to path.
 func (l *Lock) Write(path string) error {
-	portable := l.mapRefs(func(s string) string { return ref.InDir(filepath.Dir(path), s) })
-
-	data, err := portable.Bytes()
+	data, err := l.Bytes(path)
 	if err != nil {
 		return err
 	}

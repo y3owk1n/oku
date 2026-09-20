@@ -113,7 +113,7 @@ func runAdd(
 
 	locked.Set(got.lock)
 
-	lockData, err := locked.Bytes()
+	lockData, err := locked.Bytes(e.lockPath())
 	if err != nil {
 		return err
 	}
