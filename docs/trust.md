@@ -84,6 +84,14 @@ its build commands could use the network and read your files
 The sandbox limits what an approved command can reach. It is not a reason to
 approve commands you have not read.
 
+## Projects and the shell hook
+
+The shell hook changes `PATH` when you enter a directory, so it only acts for a
+project you allowed with `oku allow`, and only while its `oku.toml` is unchanged.
+It never installs, never uses the network, and never runs anything from a
+manifest. A package's `[env]` cannot set `PATH`, `LD_PRELOAD` or similar
+variables. See [Projects](projects.md#why-a-project-has-to-be-allowed).
+
 ## What the lock pins
 
 | Pinned | Effect |

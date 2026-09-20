@@ -9,7 +9,7 @@ guarantees, unlike nix in what it asks you to learn.
 > records packages in `oku.toml` and `oku.lock`, and
 > `oku sync github:you/machines` sets up another machine from those two files.
 > Build commands run in a sandbox. A repo can carry its own list, lock and
-> profile.
+> profile, and a shell hook activates it when you enter the directory.
 
 Start with [Getting started](docs/getting-started.md). All user documentation
 is in [`docs/`](docs/README.md).

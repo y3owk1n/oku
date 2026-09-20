@@ -166,6 +166,26 @@ linked into the user's profile:
 oku refuses an archive entry that is absolute or contains `..`, and a symlink
 whose target is absolute or resolves outside the package.
 
+## [env]
+
+Variables the package needs in the user's shell. The user's
+[shell hook](projects.md#using-the-projects-programs) exports them while the
+package is installed: in every shell for a globally installed package, and
+inside the project for a project package.
+
+```toml
+[env]
+JAVA_HOME = "{{prefix}}/lib/jvm"
+```
+
+Values expand `{{prefix}}`, which is the package's directory in the store,
+`{{version}}` and `{{tag}}`.
+
+A package may not set a variable that changes how other programs load or run.
+oku rejects `PATH`, `HOME`, `SHELL`, `USER`, `IFS`, `ENV`, `BASH_ENV`, `PS1`,
+`PROMPT_COMMAND`, and any name that starts with `LD_`, `DYLD_` or `OKU_`. When
+two packages set the same variable, the one whose name sorts last is used.
+
 ## Inferred manifests
 
 `oku add github:owner/repo` on a repo with no `oku.pkg.toml` writes a manifest

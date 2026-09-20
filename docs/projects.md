@@ -69,12 +69,65 @@ pins and relative refs, which start at the project directory. See
 
 ## Using the project's programs
 
-oku does not put a project's programs on your `PATH` yet. The shell hook that
-does it when you enter the directory is not built. Until then, add the `bin`
-directory that `oku add` prints yourself, for example from a direnv `.envrc`:
+Load the oku hook in your shell once. Add one line to the startup file:
+
+| Shell | File | Line |
+|---|---|---|
+| bash | `~/.bashrc` | `command -v oku >/dev/null 2>&1 && eval "$(oku hook bash)"` |
+| zsh | `~/.zshrc` | `command -v oku >/dev/null 2>&1 && eval "$(oku hook zsh)"` |
+| fish | `~/.config/fish/config.fish` | `command -q oku; and oku hook fish \| source` |
+
+oku never edits that file. The line does nothing when oku is not installed, so
+it is safe to leave in a dotfiles repo.
+
+Then allow the project, once:
+
+```
+$ cd ~/work/api
+oku: /home/you/work/api/oku.toml is not allowed, run `oku allow` to use its programs here
+$ oku allow
+allowed /home/you/work/api
+$ which rg
+/home/you/.local/share/oku/profiles/project-2d27013d8c67/current/bin/rg
+$ cd ~ && which rg
+/home/you/.local/share/oku/profiles/global/current/bin/rg
+```
+
+Inside the project, in any subdirectory, the hook puts the project's `bin` first
+on `PATH` and exports the [`[env]`](manifest.md#env) of its packages. A project
+program therefore runs instead of a global one with the same name. When you
+leave, the hook removes both again.
+
+### Why a project has to be allowed
+
+A cloned repo could contain an `oku.toml` that puts its own `make` or `git`
+ahead of yours. So the hook does nothing for a project until you run
+`oku allow`.
+
+- The allow belongs to the `oku.toml` as it is at that moment. After any edit,
+  including a `git pull` that changes it, the hook stops and asks again.
+- `oku deny` removes the allow.
+- `oku allow` and `oku deny` take a directory, and default to the project you
+  are in.
+
+### When the hook does nothing
+
+The hook prints one line, once per directory, and changes nothing when:
+
+- the project is not allowed, or its `oku.toml` changed. Run `oku allow`.
+- the project's profile is behind its `oku.lock`, for example after a teammate's
+  commit. Run `oku sync`.
+
+The hook reads local files only. It never uses the network, never installs, and
+never runs anything from a manifest. One run takes a few milliseconds.
+
+### direnv
+
+If you use direnv, `oku env` prints what the hook would apply:
 
 ```sh
-PATH_add "$HOME/.local/share/oku/profiles/project-2d27013d8c67/current/bin"
+# .envrc
+eval "$(oku env --shell bash)"
 ```
 
 ## A teammate's first run

@@ -20,6 +20,7 @@ import (
 	"github.com/y3owk1n/oku/internal/cli"
 	"github.com/y3owk1n/oku/internal/platform"
 	"github.com/y3owk1n/oku/internal/sandbox"
+	"github.com/y3owk1n/oku/internal/shellhook"
 )
 
 const script = "#!/bin/sh\necho hello from tool\n"
@@ -2464,5 +2465,324 @@ func TestB60CommandsActOnTheProjectListUnlessGlobal(t *testing.T) {
 
 	if !strings.Contains(out, "second") || strings.Contains(out, "first ") {
 		t.Fatalf("list outside the project:\n%s", out)
+	}
+}
+
+// envManifest writes a package that ships one program and sets one variable.
+func (m machine) envManifest(t *testing.T, name, variable string) string {
+	t.Helper()
+
+	path := m.namedManifest(t, name, name, name)
+
+	body, err := os.ReadFile(path)
+	must(t, err)
+	must(t, os.WriteFile(path, append(body, []byte(fmt.Sprintf(
+		"\n[env]\n%s = \"{{prefix}}/share/%s\"\n", variable, name,
+	))...), 0o644))
+
+	return path
+}
+
+// hookProject makes a project that holds one package and returns its directory.
+func (m *machine) hookProject(t *testing.T) string {
+	t.Helper()
+
+	project := filepath.Join(m.fixtures, "proj")
+	must(t, os.MkdirAll(project, 0o755))
+	must(t, os.WriteFile(filepath.Join(project, "oku.toml"), nil, 0o644))
+
+	m.opts.WorkDir = project
+
+	_, err := m.run(t, "", "add", m.envManifest(t, "ptool", "PTOOL_HOME"))
+	must(t, err)
+
+	return project
+}
+
+// apply feeds the exports of an "oku env" run back into the test's environment,
+// the way a shell would, and returns the text oku printed.
+func (m machine) apply(t *testing.T) string {
+	t.Helper()
+
+	out, err := m.run(t, "", "env", "--shell", "bash")
+	must(t, err)
+
+	for _, line := range strings.Split(out, "\n") {
+		switch {
+		case strings.HasPrefix(line, "export "):
+			name, value, _ := strings.Cut(strings.TrimPrefix(line, "export "), "=")
+			t.Setenv(name, strings.Trim(value, "'"))
+		case strings.HasPrefix(line, "unset "):
+			must(t, os.Unsetenv(strings.TrimPrefix(line, "unset ")))
+		}
+	}
+
+	return out
+}
+
+func TestB61EnteringAnAllowedSyncedProjectAppliesItAndLeavingRestores(t *testing.T) {
+	m := newMachine(t)
+	t.Setenv("PATH", "/usr/bin:/bin")
+
+	project := m.hookProject(t)
+
+	_, err := m.run(t, "", "allow")
+	must(t, err)
+
+	m.apply(t)
+
+	bin := filepath.Dir(m.projectBin(t, "ptool"))
+	if got := os.Getenv("PATH"); got != bin+":/usr/bin:/bin" {
+		t.Fatalf("PATH inside the project is %s", got)
+	}
+
+	if !strings.HasSuffix(os.Getenv("PTOOL_HOME"), "/share/ptool") {
+		t.Fatalf("PTOOL_HOME inside the project is %q", os.Getenv("PTOOL_HOME"))
+	}
+
+	if out := m.apply(t); strings.TrimSpace(out) != "" {
+		t.Fatalf("a second prompt in the same directory changed something:\n%s", out)
+	}
+
+	m.opts.WorkDir = filepath.Dir(project)
+	m.apply(t)
+
+	if got := os.Getenv("PATH"); got != "/usr/bin:/bin" {
+		t.Fatalf("PATH after leaving is %s", got)
+	}
+
+	if _, set := os.LookupEnv("PTOOL_HOME"); set {
+		t.Fatal("PTOOL_HOME survived leaving the project")
+	}
+}
+
+// projectBin returns the path of a program in the project profile.
+func (m machine) projectBin(t *testing.T, name string) string {
+	t.Helper()
+
+	found, err := filepath.Glob(
+		filepath.Join(m.data, "profiles", "project-*", "current", "bin", name),
+	)
+	must(t, err)
+
+	if len(found) != 1 {
+		t.Fatalf("want one project profile with %s, found %v", name, found)
+	}
+
+	return found[0]
+}
+
+func TestB62ProjectThatIsNotAllowedChangesNothingAndHints(t *testing.T) {
+	m := newMachine(t)
+	t.Setenv("PATH", "/usr/bin:/bin")
+	m.hookProject(t)
+
+	out := m.apply(t)
+	if !strings.Contains(out, "oku allow") {
+		t.Fatalf("no hint to run oku allow:\n%s", out)
+	}
+
+	if os.Getenv("PATH") != "/usr/bin:/bin" || os.Getenv("PTOOL_HOME") != "" {
+		t.Fatal("a project that is not allowed changed the environment")
+	}
+
+	if out := m.apply(t); strings.Contains(out, "oku allow") {
+		t.Fatalf("the hint is repeated before every prompt:\n%s", out)
+	}
+}
+
+func TestB63EditingAnAllowedListRevokesTheAllow(t *testing.T) {
+	m := newMachine(t)
+	t.Setenv("PATH", "/usr/bin:/bin")
+
+	project := m.hookProject(t)
+
+	_, err := m.run(t, "", "allow")
+	must(t, err)
+
+	m.apply(t)
+
+	list := filepath.Join(project, "oku.toml")
+	body, err := os.ReadFile(list)
+	must(t, err)
+	must(t, os.WriteFile(list, append(body, []byte("# edited\n")...), 0o644))
+
+	out := m.apply(t)
+	if !strings.Contains(out, "oku allow") || os.Getenv("PATH") != "/usr/bin:/bin" {
+		t.Fatalf("an edited list stayed active, PATH=%s:\n%s", os.Getenv("PATH"), out)
+	}
+
+	_, err = m.run(t, "", "allow")
+	must(t, err)
+
+	m.apply(t)
+
+	if !strings.Contains(os.Getenv("PATH"), "project-") {
+		t.Fatalf("allowing again did not activate the project, PATH=%s", os.Getenv("PATH"))
+	}
+
+	_, err = m.run(t, "", "deny")
+	must(t, err)
+
+	m.apply(t)
+
+	if os.Getenv("PATH") != "/usr/bin:/bin" {
+		t.Fatalf("deny left the project active, PATH=%s", os.Getenv("PATH"))
+	}
+}
+
+func TestB64ProfileBehindItsLockChangesNothingAndHints(t *testing.T) {
+	m := newMachine(t)
+	t.Setenv("PATH", "/usr/bin:/bin")
+
+	project := m.hookProject(t)
+
+	_, err := m.run(t, "", "allow")
+	must(t, err)
+
+	// A teammate's commit changed the lock, and nobody ran sync here yet.
+	lockPath := filepath.Join(project, "oku.lock")
+	locked, err := os.ReadFile(lockPath)
+	must(t, err)
+	must(t, os.WriteFile(lockPath, append(locked, []byte("\n# newer\n")...), 0o644))
+
+	out := m.apply(t)
+	if !strings.Contains(out, "oku sync") || os.Getenv("PATH") != "/usr/bin:/bin" {
+		t.Fatalf("a profile behind its lock was applied, PATH=%s:\n%s", os.Getenv("PATH"), out)
+	}
+}
+
+func TestB65HookUsesNoNetworkAndRunsNoManifestCode(t *testing.T) {
+	m := newMachine(t)
+	hits := 0
+
+	server := httptest.NewServer(
+		http.HandlerFunc(func(http.ResponseWriter, *http.Request) { hits++ }),
+	)
+	defer server.Close()
+
+	m.opts.GitHubAPI, m.opts.GitHubRaw = server.URL, server.URL
+
+	project := m.hookProject(t)
+
+	_, err := m.run(t, "", "allow")
+	must(t, err)
+
+	// The manifest the project came from is gone, and so is the cache.
+	must(t, os.RemoveAll(m.cache))
+	must(t, os.Remove(filepath.Join(m.fixtures, "ptool.toml")))
+
+	m.opts.WorkDir = project
+
+	if out := m.apply(t); !strings.Contains(out, "PTOOL_HOME") {
+		t.Fatalf("the hook needed more than local state:\n%s", out)
+	}
+
+	if hits != 0 {
+		t.Fatalf("the hook made %d network requests", hits)
+	}
+}
+
+func TestB66EnvPrintsTheExportsForEachShell(t *testing.T) {
+	m := newMachine(t)
+	t.Setenv("PATH", "/usr/bin:/bin")
+	m.hookProject(t)
+
+	_, err := m.run(t, "", "allow")
+	must(t, err)
+
+	for shell, want := range map[string]string{"bash": "export PTOOL_HOME='", "zsh": "export PTOOL_HOME='", "fish": "set -gx PTOOL_HOME '"} {
+		out, err := m.run(t, "", "env", "--shell", shell)
+		must(t, err)
+
+		if !strings.Contains(out, want) || !strings.Contains(out, "PATH") {
+			t.Fatalf("env --shell %s:\n%s", shell, out)
+		}
+	}
+
+	if _, err := m.run(t, "", "env", "--shell", "tcsh"); err == nil {
+		t.Fatal("env accepted a shell it cannot write for")
+	}
+}
+
+func TestB67ProjectProgramsShadowGlobalOnes(t *testing.T) {
+	m := newMachine(t)
+
+	_, err := m.run(t, "", "add", m.namedManifest(t, "gtool", "gtool", "gtool"))
+	must(t, err)
+
+	t.Setenv("PATH", m.profile("bin")+":/usr/bin:/bin")
+	m.hookProject(t)
+
+	_, err = m.run(t, "", "allow")
+	must(t, err)
+
+	m.apply(t)
+
+	entries := filepath.SplitList(os.Getenv("PATH"))
+	if !strings.Contains(entries[0], "project-") || entries[1] != m.profile("bin") {
+		t.Fatalf("the project is not ahead of the global profile: %v", entries)
+	}
+}
+
+func TestB68GlobalPackageEnvIsExportedInEveryShell(t *testing.T) {
+	m := newMachine(t)
+	t.Setenv("PATH", "/usr/bin:/bin")
+
+	_, err := m.run(t, "", "add", m.envManifest(t, "gtool", "GTOOL_HOME"))
+	must(t, err)
+
+	m.apply(t)
+
+	if !strings.HasSuffix(os.Getenv("GTOOL_HOME"), "/share/gtool") {
+		t.Fatalf("GTOOL_HOME is %q outside any project", os.Getenv("GTOOL_HOME"))
+	}
+
+	_, err = m.run(t, "", "remove", "gtool")
+	must(t, err)
+
+	m.apply(t)
+
+	if _, set := os.LookupEnv("GTOOL_HOME"); set {
+		t.Fatal("GTOOL_HOME stayed after the package was removed")
+	}
+}
+
+func TestB99UninstallPrintsTheHookLineToDelete(t *testing.T) {
+	m := newMachine(t)
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	must(
+		t,
+		os.WriteFile(
+			filepath.Join(home, ".zshrc"),
+			[]byte("# mine\n"+shellhook.Line("zsh")+"\n"),
+			0o644,
+		),
+	)
+
+	out, err := m.run(t, "", "self", "uninstall", "--yes")
+	must(t, err)
+
+	if !strings.Contains(out, ".zshrc") || !strings.Contains(out, "oku hook zsh") {
+		t.Fatalf("uninstall did not name the hook line:\n%s", out)
+	}
+}
+
+func TestB100StaleHookLineWithoutOkuStartsCleanly(t *testing.T) {
+	for shell, line := range map[string]string{"bash": shellhook.Line("bash"), "zsh": shellhook.Line("zsh"), "fish": shellhook.Line("fish")} {
+		path, err := exec.LookPath(shell)
+		if err != nil {
+			continue
+		}
+
+		cmd := exec.Command(path, "-c", line+"; echo started")
+		cmd.Env = []string{"PATH=/usr/bin:/bin", "HOME=" + t.TempDir()}
+
+		out, err := cmd.CombinedOutput()
+		if err != nil || strings.TrimSpace(string(out)) != "started" {
+			t.Fatalf("%s with a stale hook line: %v\n%s", shell, err, out)
+		}
 	}
 }

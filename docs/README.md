@@ -37,7 +37,9 @@ in [`../prd/`](../prd/).
 - Manifests with a fixed version, or with versions discovered from GitHub
   releases or git tags.
 - One `oku.toml` for several machines, with `include` and per-platform `when`.
-- Per-project lists: a repo with its own `oku.toml`, `oku.lock` and profile.
+- Per-project lists: a repo with its own `oku.toml`, `oku.lock` and profile. A
+  shell hook for bash, zsh and fish puts an allowed project's programs on `PATH`
+  while you are inside it.
 - `oku generations`, `oku rollback` and `oku gc`.
 - Setting up a new machine from a published list and lock with
   `oku sync <list-ref>`.
@@ -45,5 +47,4 @@ in [`../prd/`](../prd/).
 ## What does not work yet
 
 - `patch` build steps.
-- The shell hook that puts a project's programs on `PATH` when you enter it.
 - `.tar.xz` and `.tar.zst` archives.

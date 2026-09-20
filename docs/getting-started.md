@@ -97,6 +97,10 @@ export PATH="$HOME/.local/share/oku/profiles/global/current/bin:$PATH"
 fish_add_path ~/.local/share/oku/profiles/global/current/bin
 ```
 
+To use [projects](projects.md), also load the oku hook there. For fish that is
+`command -q oku; and oku hook fish | source`, and `oku hook --help` shows the
+line for bash and zsh.
+
 If you set `XDG_DATA_HOME`, the directory is
 `$XDG_DATA_HOME/oku/profiles/global/current/bin`. `oku add` prints the exact
 path whenever it is missing from `PATH`.
