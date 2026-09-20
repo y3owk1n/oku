@@ -92,6 +92,8 @@ func NewRootCmd(opts Options) *cobra.Command {
 		newSelfCmd(opts),
 	)
 
+	root.AddCommand(platformCommands()...)
+
 	// The Linux sandbox re-runs oku inside new namespaces to finish the setup.
 	root.AddCommand(&cobra.Command{
 		Use:    sandbox.InitCommand,
