@@ -77,9 +77,15 @@ The sandbox is not available everywhere. On Windows, and on a Linux host that
 forbids unprivileged user namespaces, oku builds without it and says so:
 
 ```
-tree was built without the sandbox, because this host does not allow unprivileged user namespaces (...)
+tree was built without the sandbox, because this host does not let an unprivileged user set up namespaces (...)
 its build commands could use the network and read your files
 ```
+
+Ubuntu 24.04 and later are such hosts by default. Their AppArmor policy lets a
+program create a user namespace and then denies it every mount inside it. To
+allow the sandbox there, run
+`sudo sysctl kernel.apparmor_restrict_unprivileged_userns=0`, and put the same
+setting in a file under `/etc/sysctl.d/` to keep it after a reboot.
 
 The sandbox limits what an approved command can reach. It is not a reason to
 approve commands you have not read.

@@ -602,7 +602,8 @@ install.
 
 oku uses `sandbox-exec` on macOS and user, mount and network namespaces on
 Linux. On a Linux host that forbids unprivileged user namespaces, which
-includes a default Docker container, and on Windows, the step runs with the
+includes a default Docker container and a default Ubuntu 24.04, and on Windows,
+the step runs with the
 scrubbed environment only. oku then prints a warning that the build could use
 the network and read the user's files.
 
