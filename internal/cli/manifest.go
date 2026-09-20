@@ -393,6 +393,7 @@ func runManifestTest(
 	}
 
 	reportUnsandboxed(cmd.ErrOrStderr(), got)
+	reportCache(cmd.ErrOrStderr(), got)
 
 	strategy := got.lock.Platforms[platform.Host().String()].Strategy
 	fmt.Fprintf(

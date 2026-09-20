@@ -49,6 +49,7 @@ completions = { fish = "complete/rg.fish", zsh = "complete/_rg" }
 | `description` | no | One line. |
 | `homepage` | no | URL. |
 | `license` | no | SPDX identifier. |
+| `relocatable` | no | `true` when the built files contain no store path. A [cache](caches.md) then offers the package to machines with any store root. Default `false`. Only matters for `[build]`. |
 
 ## [version]
 

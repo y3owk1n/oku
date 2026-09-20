@@ -137,6 +137,7 @@ func runAdd(
 	reportInferred(cmd.OutOrStdout(), got)
 	e.reportFirstUse(cmd.ErrOrStderr(), got)
 	reportUnsandboxed(cmd.ErrOrStderr(), got)
+	reportCache(cmd.ErrOrStderr(), got)
 	fmt.Fprintf(cmd.OutOrStdout(), "added %s %s\n", got.lock.Name, got.lock.Version)
 
 	switch {

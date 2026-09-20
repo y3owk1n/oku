@@ -3612,3 +3612,135 @@ func TestB98UninstallLeavesSystemItemsWhenElevationIsDeclined(t *testing.T) {
 		t.Fatal("accepting left the system font behind")
 	}
 }
+
+// cachedManifest writes a manifest that only builds from source. Its text is the
+// same on every machine, so its store hash is too.
+func (m machine) cachedManifest(t *testing.T, relocatable bool, step string) string {
+	t.Helper()
+
+	path := filepath.Join(m.fixtures, "cached.toml")
+	must(t, os.WriteFile(path, fmt.Appendf(
+		nil,
+		"[package]\nname = \"tool\"\nrelocatable = %t\n[version]\nvalue = \"1.0.0\"\n[build]\n%s%s",
+		relocatable, step, installTool,
+	), 0o644))
+
+	return path
+}
+
+// publisher builds the manifest on its own machine and pushes it to a cache
+// directory. It returns the directory and the public key.
+func publisher(t *testing.T, relocatable bool) (dir, key string) {
+	t.Helper()
+
+	m := newMachine(t)
+	dir = filepath.Join(filepath.Dir(m.fixtures), "served")
+
+	out, err := m.run(t, "", "key", "generate")
+	must(t, err)
+
+	key = strings.TrimSpace(out[strings.LastIndex(out, "oku key trust ")+len("oku key trust "):])
+
+	_, err = m.run(t, "", "add", m.cachedManifest(t, relocatable, writeTool), "--yes")
+	must(t, err)
+
+	if listed, _ := m.run(t, "", "key", "list"); !strings.Contains(listed, key) {
+		t.Fatalf("key list does not show the generated key:\n%s", listed)
+	}
+
+	out, err = m.run(t, "", "cache", "push", dir)
+	must(t, err)
+
+	if !strings.Contains(out, "pushed tool-1.0.0-") {
+		t.Fatalf("push did not report the entry:\n%s", out)
+	}
+
+	return dir, key
+}
+
+func TestB85TrustedCacheEntryIsUsedAndNothingIsBuilt(t *testing.T) {
+	dir, key := publisher(t, true)
+	m := newMachine(t)
+
+	_, err := m.run(t, "", "cache", "add", dir)
+	must(t, err)
+	_, err = m.run(t, "", "key", "trust", key)
+	must(t, err)
+
+	// Without --yes a non-interactive add refuses to build, so success means
+	// that no build step ran.
+	out, err := m.run(t, "", "add", m.cachedManifest(t, true, writeTool))
+	if err != nil {
+		t.Fatalf("add from the cache: %v\n%s", err, out)
+	}
+
+	if !strings.Contains(out, "came from a cache") || m.toolOutput(t) != "built 1.0.0" {
+		t.Fatalf("the package did not come from the cache:\n%s", out)
+	}
+}
+
+func TestB86UnsignedOrUntrustedCacheEntryIsIgnoredAndThePackageBuilds(t *testing.T) {
+	dir, key := publisher(t, true)
+
+	untrusting := newMachine(t)
+	_, err := untrusting.run(t, "", "cache", "add", dir)
+	must(t, err)
+
+	out, err := untrusting.run(t, "", "add", untrusting.cachedManifest(t, true, writeTool), "--yes")
+	must(t, err)
+
+	if !strings.Contains(out, "no trusted key signed it") || strings.Contains(out, "came from") {
+		t.Fatalf("an entry from an untrusted key was not ignored:\n%s", out)
+	}
+
+	signatures, err := filepath.Glob(filepath.Join(dir, "*.minisig"))
+	must(t, err)
+	must(t, os.Remove(signatures[0]))
+
+	unsigned := newMachine(t)
+	_, err = unsigned.run(t, "", "cache", "add", dir)
+	must(t, err)
+	_, err = unsigned.run(t, "", "key", "trust", key)
+	must(t, err)
+
+	out, err = unsigned.run(t, "", "add", unsigned.cachedManifest(t, true, writeTool), "--yes")
+	must(t, err)
+
+	if !strings.Contains(out, "has no signature") || unsigned.toolOutput(t) != "built 1.0.0" {
+		t.Fatalf("an unsigned entry was not ignored:\n%s", out)
+	}
+}
+
+func TestB87PushRefusesAnImpurePackage(t *testing.T) {
+	m := newMachine(t)
+	m.opts.Interactive = yes()
+
+	_, err := m.run(t, "", "key", "generate")
+	must(t, err)
+
+	impure := strings.Replace(writeTool, "shell = ", "network = true\nshell = ", 1)
+	_, err = m.run(t, "y\n", "add", m.cachedManifest(t, true, impure))
+	must(t, err)
+
+	_, err = m.run(t, "", "cache", "push", filepath.Join(m.fixtures, "served"))
+	if err == nil || !strings.Contains(err.Error(), "network access") {
+		t.Fatalf("want a refusal for the impure package, got %v", err)
+	}
+}
+
+func TestB88NonRelocatableEntryFromAnotherStoreRootIsNotUsed(t *testing.T) {
+	dir, key := publisher(t, false)
+	m := newMachine(t)
+
+	_, err := m.run(t, "", "cache", "add", dir)
+	must(t, err)
+	_, err = m.run(t, "", "key", "trust", key)
+	must(t, err)
+
+	out, err := m.run(t, "", "add", m.cachedManifest(t, false, writeTool), "--yes")
+	must(t, err)
+
+	if strings.Contains(out, "came from a cache") {
+		t.Fatalf("a package built under another store root was substituted:\n%s", out)
+	}
+}

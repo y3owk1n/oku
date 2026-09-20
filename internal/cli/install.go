@@ -36,6 +36,10 @@ type installed struct {
 	inferred string
 	// unsandboxed says why the build ran without the sandbox, or is empty.
 	unsandboxed string
+	// substituted reports that the package came from a cache, and cacheNotes
+	// lists the cache entries oku ignored. Both cover the deps too.
+	substituted []string
+	cacheNotes  []string
 }
 
 // request says what install should fetch and what it must match.
@@ -158,16 +162,35 @@ func (e env) install(ctx context.Context, opts Options, req request) (installed,
 		entry    lock.Platform
 	)
 
+	var cached bool
+
+	// A locked build must download the same packages again. Update drops the pin.
+	pinnedVendor := ""
+	if at := previous.Platforms[host.String()]; req.keepVersion &&
+		previous.ManifestSHA256 == m.SHA256 {
+		pinnedVendor = at.VendorSHA256
+	}
+
 	if build {
-		if err := req.approve(m, host); err != nil {
-			return installed{}, err
+		realized.Path = e.store().BuildPath(m, host, deps.prefixes)
+
+		var notes []string
+		if cached, notes, err = e.substitute(ctx, realized.Path); err != nil {
+			return installed{}, fmt.Errorf("%s: %w", m.Package.Name, err)
 		}
 
-		// A locked build must download the same packages again. Update drops the pin.
-		pinnedVendor := ""
-		if at := previous.Platforms[host.String()]; req.keepVersion &&
-			previous.ManifestSHA256 == m.SHA256 {
-			pinnedVendor = at.VendorSHA256
+		deps.cacheNotes = append(deps.cacheNotes, notes...)
+	}
+
+	switch {
+	case cached:
+		// A package from a cache runs none of the manifest's commands, so it needs
+		// no approval. A cache never holds an impure package.
+		deps.substituted = append(deps.substituted, m.Package.Name)
+		entry = lock.Platform{Strategy: strategyBuild, VendorSHA256: pinnedVendor}
+	case build:
+		if err := req.approve(m, host); err != nil {
+			return installed{}, err
 		}
 
 		realized, err = e.store().Build(ctx, m, host, store.BuildOptions{
@@ -180,7 +203,7 @@ func (e env) install(ctx context.Context, opts Options, req request) (installed,
 		entry = lock.Platform{
 			Strategy: strategyBuild, Impure: realized.Impure, VendorSHA256: realized.VendorSHA256,
 		}
-	} else {
+	default:
 		// A digest that oku.lock pinned for this version and URL still applies,
 		// even when the manifest gives none.
 		pinned := ""
@@ -256,6 +279,8 @@ func (e env) install(ctx context.Context, opts Options, req request) (installed,
 		firstUse:    realized.FirstUse,
 		inferred:    inferred,
 		unsandboxed: realized.Unsandboxed,
+		substituted: deps.substituted,
+		cacheNotes:  deps.cacheNotes,
 	}, nil
 }
 
@@ -307,6 +332,17 @@ func reportUnsandboxed(w io.Writer, got installed) {
 	}
 }
 
+// reportCache says which packages came from a cache and which entries oku ignored.
+func reportCache(w io.Writer, got installed) {
+	for _, note := range got.cacheNotes {
+		fmt.Fprintln(w, note)
+	}
+
+	for _, name := range got.substituted {
+		fmt.Fprintf(w, "%s came from a cache, nothing was built\n", name)
+	}
+}
+
 // reportInferred prints a manifest that oku just inferred.
 func reportInferred(w io.Writer, got installed) {
 	if got.inferred == "" {
@@ -346,6 +382,9 @@ type depSet struct {
 	prefixes []store.Dep
 	locks    []lock.Package
 	closure  []string
+	// substituted and cacheNotes collect what the deps report, see installed.
+	substituted []string
+	cacheNotes  []string
 }
 
 // installDeps installs the deps of the package in parent, each through the same
@@ -413,6 +452,8 @@ func (e env) installDeps(
 			store.Dep{Name: got.lock.Name, Prefix: got.profile.StorePath},
 		)
 		set.locks = append(set.locks, got.lock)
+		set.substituted = append(set.substituted, got.substituted...)
+		set.cacheNotes = append(set.cacheNotes, got.cacheNotes...)
 
 		for _, path := range got.closure {
 			if !slices.Contains(set.closure, path) {

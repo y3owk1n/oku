@@ -144,3 +144,11 @@ oku unpacks archives and installers itself and never runs anything a package
 ships during install. That includes the maintainer scripts of a `.deb`, the
 scriptlets of an `.rpm`, and the install scripts of a macOS `.pkg`. It refuses entries that are absolute or contain `..`, and symlinks
 that resolve outside the package.
+
+## Packages from a cache
+
+A [build cache](caches.md) serves packages that someone else built. oku accepts
+an entry only when its minisign signature comes from a key you added with
+`oku key trust`. It ignores every other entry and builds the package itself. A
+trusted entry skips the build approval, because oku runs no command of the
+manifest.

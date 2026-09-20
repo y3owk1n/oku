@@ -29,6 +29,26 @@ import (
 // outputTail is how many lines of a failed step's output the error shows.
 const outputTail = 40
 
+// BuildPath names the store path that building m against deps produces.
+//
+// The deps are part of the hash, so a package rebuilt against another dep
+// version gets another store path. A dep counts by its store name, which is the
+// same under every store root. A build that is not relocatable can contain its
+// own path, so its hash covers the store root too, and a cache never offers it
+// to a machine with another root.
+func (s *Store) BuildPath(m *manifest.Manifest, p platform.Platform, deps []Dep) string {
+	extra := []string{"build"}
+	for _, dep := range deps {
+		extra = append(extra, filepath.Base(dep.Prefix))
+	}
+
+	if !m.Package.Relocatable {
+		extra = append(extra, "root", s.dir)
+	}
+
+	return s.pathFor(m, p, extra...)
+}
+
 // Build produces the package of m from source and returns its store path. It
 // returns an existing store path untouched, and it removes a half-built one on
 // any failure.
@@ -44,14 +64,7 @@ func (s *Store) Build(
 	build := m.Build
 	deps, log := opts.Deps, opts.Log
 
-	// The deps are part of the hash, so a package rebuilt against another dep
-	// version gets another store path.
-	depPaths := []string{"build"}
-	for _, dep := range deps {
-		depPaths = append(depPaths, dep.Prefix)
-	}
-
-	prefix := s.pathFor(m, p, depPaths...)
+	prefix := s.BuildPath(m, p, deps)
 
 	if exists(filepath.Join(prefix, metaFile)) {
 		return Realized{Path: prefix}, nil

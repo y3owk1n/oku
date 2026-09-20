@@ -3,6 +3,7 @@ module github.com/y3owk1n/oku
 go 1.26.4
 
 require (
+	aead.dev/minisign v0.3.0
 	github.com/cavaliergopher/cpio v1.0.1
 	github.com/cavaliergopher/rpm v1.3.0
 	github.com/klauspost/compress v1.20.0

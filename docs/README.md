@@ -10,6 +10,7 @@ in [`../prd/`](../prd/).
 | [Refs](refs.md) | The ways to point oku at a manifest, and sources |
 | [Manifest reference](manifest.md) | Every key a package manifest accepts, for people publishing software |
 | [Services](services.md) | Running a package's daemon with launchd or systemd |
+| [Build caches](caches.md) | Downloading built packages from a signed cache, and filling one |
 | [System scope](system-scope.md) | Apps, fonts and services for every user of the machine, with `sudo` |
 | [Projects](projects.md) | A list, a lock and a profile that belong to one repo |
 | [List and lock](list-and-lock.md) | `oku.toml`, `oku.lock`, and moving a setup to another machine |
@@ -28,6 +29,8 @@ in [`../prd/`](../prd/).
   uninstall.
 - Services: a package's daemon runs under launchd or systemd for your user,
   enabled with `service = true` in your list.
+- Build caches: `oku cache` and `oku key` share built packages through any
+  directory or static web host, signed with minisign.
 - System scope: `--system` installs a package's apps, fonts and services for the
   whole machine, after listing the files and asking.
 - A shared store root at `/opt/oku` with `oku setup --system`.
