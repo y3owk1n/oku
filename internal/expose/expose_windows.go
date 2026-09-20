@@ -36,13 +36,14 @@ func registerFont(path string) error {
 	return reg("add", fontsKey, "/v", fontValue(path), "/t", "REG_SZ", "/d", path, "/f")
 }
 
+// unregisterFont asks first whether the value exists. reg reports a missing value
+// only in the language of the Windows install, so its text is no test.
 func unregisterFont(path string) error {
-	err := reg("delete", fontsKey, "/v", fontValue(path), "/f")
-	if err != nil && strings.Contains(err.Error(), "unable to find") {
+	if reg("query", fontsKey, "/v", fontValue(path)) != nil {
 		return nil
 	}
 
-	return err
+	return reg("delete", fontsKey, "/v", fontValue(path), "/f")
 }
 
 func reg(args ...string) error {
