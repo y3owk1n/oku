@@ -154,6 +154,20 @@ func main() {
 '@
 $mainGo = (Join-Path $fixtures 'main.go') -replace '\\', '/'
 
+# A patch step changes what the program prints.
+Set-Content (Join-Path $fixtures 'greet.patch') @'
+diff --git a/main.go b/main.go
+--- a/main.go
++++ b/main.go
+@@ -8,3 +8,3 @@
+ func main() {
+ 	text, _ := os.ReadFile(os.Args[1])
+-	fmt.Print(string(text))
++	fmt.Print("patched: " + string(text))
+ }
+'@
+$patchFile = (Join-Path $fixtures 'greet.patch') -replace '\\', '/'
+
 Set-Content (Join-Path $fixtures 'hello.toml') @"
 [package]
 name = "hello"
@@ -165,6 +179,11 @@ deps = [{ ref = "$greetRef" }]
 [[build.step]]
 run = "Copy-Item '$mainGo' main.go; Set-Content go.mod 'module hello'; Copy-Item (Join-Path `$env:SystemRoot 'Fonts/arial.ttf') OkuLive.ttf"
 shell = "pwsh"
+[[build.step]]
+run = "Copy-Item '$patchFile' greet.patch"
+shell = "pwsh"
+[[build.step]]
+patch = { file = "greet.patch" }
 [[build.step]]
 run = "echo home=%USERPROFILE% > where.txt && go build -o hello.exe ."
 shell = "cmd"
@@ -184,7 +203,9 @@ Check 'the shim lists the bin directory of the dep' {
 
 $greeting = Get-ChildItem "$env:XDG_DATA_HOME\oku\store\greet-*\share\greeting.txt"
 $said = & "$bin\hello.exe" $greeting.FullName
-Check 'the built program runs and reads the dep' { ($said -join ' ') -match 'hello from a dep' }
+Check 'the built program runs, reads the dep, and has the patch' {
+    ($said -join ' ') -match 'patched: hello from a dep'
+}
 
 $where = Get-Content (Get-ChildItem "$env:XDG_DATA_HOME\oku\store\hello-*\share\where.txt").FullName
 Check 'the build saw a scratch home, not the real profile' {

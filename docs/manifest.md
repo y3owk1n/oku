@@ -431,11 +431,35 @@ one of these keys:
 | `run = "..."` | Runs a command string in a shell. |
 | `install = { bin, lib, include, man, share, completions, app, font }` | Copies files from the source directory into the package. `bin` files become executable. `man` and `completions` go where an artifact's would. |
 | `copy = { from, to }` | Copies one file. `from` is relative to the source directory and `to` to the package. |
+| `patch = { file, strip }` | Applies a unified diff to the source, see below. |
 | `fetch = { url, sha256, to }` | Downloads a file into the source directory. `sha256` is required. |
 | `extract = { file, to, strip }` | Unpacks an archive that is in the source directory. |
 | `vendor = "go"` | Downloads the language's packages with the network on, see [Vendoring](#vendoring). |
 
-`patch` is in the schema and not supported yet.
+A `patch` step applies a unified diff to the source:
+
+```toml
+[[build.step]]
+fetch = { url = "https://example.com/fix-build.patch", sha256 = "...", to = "fix.patch" }
+[[build.step]]
+patch = { file = "fix.patch" }
+```
+
+`file` is a path in the source directory, so a `fetch` step or the source itself
+provides it. `strip` removes that many leading directories from the file names
+in the diff, as `-p` does for the `patch` program. It defaults to 0:
+
+| The diff comes from | `strip` |
+|---|---|
+| `git diff` or `git format-patch` | 0. oku leaves out the `a/` and `b/` prefixes of a diff with a `diff --git` line. |
+| `diff -ur old new` | 1, which removes `old/` and `new/`. |
+| a diff with `a/` and `b/` prefixes but no `diff --git` line | 1 |
+
+A patch can change, create, delete and rename files, and change a file's mode.
+oku applies it in Go and never calls the `patch` program, so the step works the
+same on Windows. Every hunk has to fit exactly. oku does not apply a hunk at an
+offset or with fuzz, and a hunk that does not fit fails the build and names the
+file.
 
 Any step may also set:
 

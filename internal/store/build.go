@@ -330,6 +330,8 @@ func (s *Store) runStep(
 		return installFiles(*step.Install, src, prefix)
 	case step.Copy != nil:
 		return copyInto(src, step.Copy.From, prefix, step.Copy.To, 0)
+	case step.Patch != nil:
+		return applyPatch(src, *step.Patch)
 	case step.Fetch != nil:
 		url, err := manifest.Expand(step.Fetch.URL, vars)
 		if err != nil {
