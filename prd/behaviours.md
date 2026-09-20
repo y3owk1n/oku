@@ -91,20 +91,21 @@ order step in `prd/product.md`.
 ## Builds
 
 - B35 [5] With no matching artifact, or with `--from-source`, oku runs
-  `[build]` steps in order and installs what `install` steps name.
+  `[build]` steps in order and installs what `install` steps name. The lock
+  records the strategy, so `sync` builds on that platform too.
 - B36 [5] A missing `needs` tool fails before any step runs, naming the tool.
 - B37 [5] Deps are realized first. The build finds their headers, libraries
   and pkg-config files with no manifest-side flags, and the built binary finds
   their shared libraries at runtime from any working directory.
 - B38 [5] Deps are absent from the profile. `oku why <name>` names the
-  packages that pull a dep in.
+  packages that pull a dep in. `gc` keeps a dep while a generation uses it.
 - B39 [5] Two packages depending on different versions of one dep both install
-  and both run.
+  and both run, and `sync` restores both versions from the lock.
 - B40 [5] An unsatisfiable dep version constraint fails, naming the constraint
   and the versions found.
 - B41 [5] The first install of a manifest with `run` steps prints them and
   asks for approval. The same manifest hash is never asked twice. A changed
-  manifest asks again.
+  manifest asks again. A dep that builds asks for itself.
 - B42 [5] Non-interactive runs refuse unapproved `run` steps unless `--yes`.
 - B43 [5] A step with a non-matching `when` is skipped.
 - B44 [5] A failing step aborts the build, reports the step index and its
