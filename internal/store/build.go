@@ -34,17 +34,22 @@ func (s *Store) Build(
 	ctx context.Context,
 	m *manifest.Manifest,
 	p platform.Platform,
+	deps []Dep,
 	log io.Writer,
 ) (Realized, error) {
 	build := m.Build
-	prefix := s.pathFor(m, p, "build")
+
+	// The deps are part of the hash, so a package rebuilt against another dep
+	// version gets another store path.
+	depPaths := []string{"build"}
+	for _, dep := range deps {
+		depPaths = append(depPaths, dep.Prefix)
+	}
+
+	prefix := s.pathFor(m, p, depPaths...)
 
 	if exists(filepath.Join(prefix, metaFile)) {
 		return Realized{Path: prefix}, nil
-	}
-
-	if len(build.Deps) > 0 {
-		return Realized{}, errors.New("build.deps are not supported yet")
 	}
 
 	toolDirs, err := findNeeds(build.Needs)
@@ -85,12 +90,16 @@ func (s *Store) Build(
 		return Realized{}, fmt.Errorf("create store: %w", err)
 	}
 
-	env := []string{
-		"PATH=" + strings.Join(append(toolDirs, "/usr/bin", "/bin"), string(os.PathListSeparator)),
+	for _, dep := range deps {
+		vars["dep."+dep.Name+".prefix"] = dep.Prefix
+	}
+
+	env := append(linkEnv(deps), []string{
+		"PATH=" + joinPaths(append(append(depDirs(deps, "bin"), toolDirs...), "/usr/bin", "/bin")),
 		"HOME=" + filepath.Join(work, "home"),
 		"TMPDIR=" + filepath.Join(work, "tmp"),
 		"OKU_PREFIX=" + prefix, "OKU_SRC=" + src, "OKU_JOBS=" + vars["jobs"],
-	}
+	}...)
 
 	for i, step := range build.Steps {
 		if !step.When.Matches(p) {
@@ -388,4 +397,45 @@ func copyInto(fromDir, from, toDir, to string, mode os.FileMode) error {
 	}
 
 	return os.Chmod(dest, mode)
+}
+
+// Dep is a realized package that a build uses.
+type Dep struct {
+	Name   string
+	Prefix string
+}
+
+// linkEnv returns the variables that let compilers, linkers, pkg-config and
+// cmake find the deps without flags in the manifest. LD_RUN_PATH makes the GNU
+// linker record the deps' lib directories in what it links, so the result finds
+// its shared libraries at runtime. On macOS a library records its own absolute
+// install name, which does the same.
+func linkEnv(deps []Dep) []string {
+	if len(deps) == 0 {
+		return nil
+	}
+
+	lib, include := depDirs(deps, "lib"), depDirs(deps, "include")
+	pkgconfig := append(depDirs(deps, "lib/pkgconfig"), depDirs(deps, "share/pkgconfig")...)
+
+	return []string{
+		"PKG_CONFIG_PATH=" + joinPaths(pkgconfig),
+		"CPATH=" + joinPaths(include),
+		"LIBRARY_PATH=" + joinPaths(lib),
+		"LD_RUN_PATH=" + joinPaths(lib),
+		"CMAKE_PREFIX_PATH=" + joinPaths(depDirs(deps, "")),
+	}
+}
+
+func depDirs(deps []Dep, sub string) []string {
+	dirs := make([]string, len(deps))
+	for i, dep := range deps {
+		dirs[i] = filepath.Join(dep.Prefix, filepath.FromSlash(sub))
+	}
+
+	return dirs
+}
+
+func joinPaths(dirs []string) string {
+	return strings.Join(dirs, string(os.PathListSeparator))
 }

@@ -163,9 +163,11 @@ func (s *Store) Realize(
 	return realized, nil
 }
 
-func (s *Store) pathFor(m *manifest.Manifest, p platform.Platform, artifactSHA string) string {
+// pathFor names the store path of m. extra is the artifact digest, or "build"
+// followed by the store paths of the deps the build links against.
+func (s *Store) pathFor(m *manifest.Manifest, p platform.Platform, extra ...string) string {
 	sum := sha256.Sum256([]byte(strings.Join(
-		[]string{m.SHA256, m.Version.Value, p.String(), "artifact", artifactSHA}, "\n",
+		append([]string{m.SHA256, m.Version.Value, p.String(), "artifact"}, extra...), "\n",
 	)))
 
 	return filepath.Join(s.dir, fmt.Sprintf(
@@ -421,4 +423,16 @@ func (s *Store) Digest(ctx context.Context, url string) (string, error) {
 	_, sum, err := s.fetch(ctx, url, "")
 
 	return sum, err
+}
+
+// ReadMeta reads the description of the package at storePath.
+func ReadMeta(storePath string) (Meta, error) {
+	var meta Meta
+
+	data, err := os.ReadFile(filepath.Join(storePath, metaFile))
+	if err != nil {
+		return meta, err
+	}
+
+	return meta, toml.Unmarshal(data, &meta)
 }

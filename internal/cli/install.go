@@ -5,6 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"path/filepath"
+	"slices"
+	"strings"
 
 	"github.com/y3owk1n/oku/internal/lock"
 	"github.com/y3owk1n/oku/internal/manifest"
@@ -24,8 +27,10 @@ var errManifestChanged = errors.New("the manifest changed since oku.lock was wri
 
 // installed is one package after oku fetched its manifest and realized it.
 type installed struct {
-	profile  profile.Package
-	lock     lock.Package
+	profile profile.Package
+	lock    lock.Package
+	// closure holds the store paths of every dep, direct and indirect.
+	closure  []string
 	firstUse bool
 	// inferred is the manifest text when oku inferred it during this install.
 	inferred string
@@ -53,6 +58,12 @@ type request struct {
 	approve func(m *manifest.Manifest, host platform.Platform) error
 	// log receives the output of build commands, or is nil.
 	log io.Writer
+	// constraint limits the version of a dep, such as ">=3". A version pin in ref
+	// overrides it.
+	constraint string
+	// stack holds the refs being installed above this one. A ref that is already
+	// in it is a dependency cycle.
+	stack []string
 }
 
 // install fetches the manifest, realizes the host's artifact and returns the
@@ -80,11 +91,16 @@ func (e env) install(ctx context.Context, opts Options, req request) (installed,
 
 	keep := req.keepVersion && previous.Version != "" &&
 		(r.Version == "" || r.Version == previous.Version)
-	if !keep {
+	switch {
+	case keep:
+	case r.Version == "" && req.constraint != "":
+		release, err = e.resolver(opts).PickWithin(ctx, m.Version, req.constraint)
+	default:
 		release, err = e.resolver(opts).Pick(ctx, m.Version, r.Version)
-		if err != nil {
-			return installed{}, fmt.Errorf("%s: %w", r, err)
-		}
+	}
+
+	if err != nil {
+		return installed{}, fmt.Errorf("%s: %w", r, err)
 	}
 
 	if release.Tag == "" {
@@ -116,6 +132,18 @@ func (e env) install(ctx context.Context, opts Options, req request) (installed,
 		return installed{}, fmt.Errorf("%s has no artifact for %s", m.Package.Name, host)
 	}
 
+	// oku installs deps first. A build links against its build deps, and every dep
+	// stays in the closure so that gc keeps it.
+	wanted := m.Runtime.Deps
+	if build {
+		wanted = append(slices.Clone(m.Build.Deps), wanted...)
+	}
+
+	deps, err := e.installDeps(ctx, opts, req, wanted)
+	if err != nil {
+		return installed{}, err
+	}
+
 	var (
 		realized store.Realized
 		entry    lock.Platform
@@ -126,7 +154,7 @@ func (e env) install(ctx context.Context, opts Options, req request) (installed,
 			return installed{}, err
 		}
 
-		if realized, err = e.store().Build(ctx, m, host, req.log); err != nil {
+		if realized, err = e.store().Build(ctx, m, host, deps.prefixes, req.log); err != nil {
 			return installed{}, fmt.Errorf("%s: %w", m.Package.Name, err)
 		}
 
@@ -173,6 +201,7 @@ func (e env) install(ctx context.Context, opts Options, req request) (installed,
 			Version:   m.Version.Value,
 			Ref:       r.String(),
 			StorePath: realized.Path,
+			Closure:   deps.closure,
 		},
 		lock: lock.Package{
 			Name:           m.Package.Name,
@@ -184,7 +213,9 @@ func (e env) install(ctx context.Context, opts Options, req request) (installed,
 			Inferred:       inferred != "" || req.previous.Inferred && req.keepVersion,
 			Manifest:       inferredText(inferred, req),
 			Platforms:      platforms,
+			Deps:           deps.locks,
 		},
+		closure:  append([]string{realized.Path}, deps.closure...),
 		firstUse: realized.FirstUse,
 		inferred: inferred,
 	}, nil
@@ -259,4 +290,87 @@ func tagFor(m *manifest.Manifest) string {
 	}
 
 	return m.Tag
+}
+
+// depSet is what installing a package's deps produced.
+type depSet struct {
+	prefixes []store.Dep
+	locks    []lock.Package
+	closure  []string
+}
+
+// installDeps installs the deps of the package in parent, each through the same
+// pipeline, so a dep may be an artifact or a build and may have deps of its own.
+func (e env) installDeps(
+	ctx context.Context,
+	opts Options,
+	parent request,
+	wanted []manifest.Dep,
+) (depSet, error) {
+	var set depSet
+
+	base := ""
+	if parent.ref.Kind == ref.File {
+		base = filepath.Dir(parent.ref.Location)
+	}
+
+	for _, dep := range wanted {
+		r, err := ref.ParseIn(base, dep.Ref)
+		if err != nil {
+			return set, fmt.Errorf("dep %s: %w", dep.Ref, err)
+		}
+
+		if base == "" && r.Kind == ref.File {
+			return set, fmt.Errorf(
+				"dep %s: a remote manifest cannot depend on a local path",
+				dep.Ref,
+			)
+		}
+
+		stack := append(slices.Clone(parent.stack), parent.ref.String())
+		if slices.Contains(stack, r.String()) {
+			return set, fmt.Errorf(
+				"dependency cycle: %s",
+				strings.Join(append(stack, r.String()), " -> "),
+			)
+		}
+
+		previous := parent.previous.FindDep(r.String())
+		keep := parent.keepVersion && previous.Ref != ""
+
+		commit, wantManifest := "", ""
+		if keep {
+			commit, wantManifest = previous.Commit, previous.ManifestSHA256
+		}
+
+		got, err := e.install(ctx, opts, request{
+			ref:          r,
+			commit:       commit,
+			previous:     previous,
+			wantManifest: wantManifest,
+			acceptDigest: parent.acceptDigest,
+			keepVersion:  keep,
+			approve:      parent.approve,
+			log:          parent.log,
+			constraint:   dep.Version,
+			stack:        stack,
+		})
+		if err != nil {
+			return set, fmt.Errorf("dep %s: %w", r, err)
+		}
+
+		set.prefixes = append(
+			set.prefixes,
+			store.Dep{Name: got.lock.Name, Prefix: got.profile.StorePath},
+		)
+		set.locks = append(set.locks, got.lock)
+
+		for _, path := range got.closure {
+			if !slices.Contains(set.closure, path) {
+				set.closure = append(set.closure, path)
+			}
+		}
+	}
+
+	return set, nil
 }

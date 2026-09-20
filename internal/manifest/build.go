@@ -1,16 +1,22 @@
 package manifest
 
-import "github.com/y3owk1n/oku/internal/platform"
+import (
+	"fmt"
+
+	"github.com/y3owk1n/oku/internal/platform"
+)
 
 // Build is how a package is produced from source.
 type Build struct {
 	// Needs are host tools the build requires. oku checks them and never installs
 	// them.
 	Needs []string `toml:"needs"`
-	// Deps are other oku packages. oku does not resolve them yet.
-	Deps   []any  `toml:"deps"`
-	Source Source `toml:"source"`
-	Steps  []Step `toml:"step"`
+	// RawDeps is "deps" as TOML gives it. Parse converts it into Deps, the other
+	// oku packages the build uses.
+	RawDeps []any  `toml:"deps"`
+	Deps    []Dep  `toml:"-"`
+	Source  Source `toml:"source"`
+	Steps   []Step `toml:"step"`
 }
 
 // Source is where the code comes from: a git tag, or an archive with a digest.
@@ -107,4 +113,50 @@ func (b *Build) RunSteps(p platform.Platform) map[int]Step {
 	}
 
 	return found
+}
+
+// Runtime holds what the package needs after it is installed.
+type Runtime struct {
+	RawDeps []any `toml:"deps"`
+	Deps    []Dep `toml:"-"`
+}
+
+// Dep is another oku package, as a ref with an optional version constraint such
+// as ">=3" or ">=1.2, <2". TOML writes it as a ref string or as { ref, version }.
+type Dep struct {
+	Ref     string
+	Version string
+}
+
+// parseDeps converts the two TOML forms of a dep.
+func parseDeps(raw []any) ([]Dep, error) {
+	deps := make([]Dep, 0, len(raw))
+
+	for i, value := range raw {
+		var d Dep
+
+		switch v := value.(type) {
+		case string:
+			d.Ref = v
+		case map[string]any:
+			d.Ref, _ = v["ref"].(string)
+			d.Version, _ = v["version"].(string)
+
+			for key := range v {
+				if key != "ref" && key != "version" {
+					return nil, fmt.Errorf("deps[%d]: unknown key %q, use ref and version", i, key)
+				}
+			}
+		default:
+			return nil, fmt.Errorf("deps[%d]: want a ref string or a table with ref and version", i)
+		}
+
+		if d.Ref == "" {
+			return nil, fmt.Errorf("deps[%d]: ref is required", i)
+		}
+
+		deps = append(deps, d)
+	}
+
+	return deps, nil
 }

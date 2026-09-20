@@ -19,6 +19,7 @@ type Manifest struct {
 	Version   Version    `toml:"version"`
 	Artifacts []Artifact `toml:"artifact"`
 	Build     *Build     `toml:"build"`
+	Runtime   Runtime    `toml:"runtime"`
 
 	// SHA256 is the hex digest of the manifest data. The store hash includes it.
 	SHA256 string `toml:"-"`
@@ -88,6 +89,22 @@ func Parse(data []byte, origin string) (*Manifest, error) {
 
 func (m *Manifest) validate() error {
 	var errs []error
+
+	if m.Build != nil {
+		deps, err := parseDeps(m.Build.RawDeps)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("build.%w", err))
+		}
+
+		m.Build.Deps = deps
+	}
+
+	deps, err := parseDeps(m.Runtime.RawDeps)
+	if err != nil {
+		errs = append(errs, fmt.Errorf("runtime.%w", err))
+	}
+
+	m.Runtime.Deps = deps
 
 	if !nameRe.MatchString(m.Package.Name) {
 		errs = append(errs, fmt.Errorf(

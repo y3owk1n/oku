@@ -51,6 +51,7 @@ func NewRootCmd(opts Options) *cobra.Command {
 		newSourceCmd(),
 		newSearchCmd(opts),
 		newListCmd(),
+		newWhyCmd(),
 		newSelfCmd(opts.Executable),
 	)
 

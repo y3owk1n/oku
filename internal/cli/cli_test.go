@@ -1884,3 +1884,206 @@ func TestB44FailingStepAbortsAndLeavesStoreAndProfileUnchanged(t *testing.T) {
 		t.Fatalf("store %v or generation %s changed", got, after)
 	}
 }
+
+// dataDep writes a discovered-version package "data" whose build installs
+// share/data.txt holding its version.
+func (m machine) dataDep(t *testing.T) string {
+	t.Helper()
+
+	path := filepath.Join(m.fixtures, "data.toml")
+	must(t, os.WriteFile(path, []byte(
+		"[package]\nname = \"data\"\n"+
+			"[version]\nfrom = \"github-releases\"\nrepo = \"owner/tool\"\nstrip_prefix = \"v\"\n"+
+			"[build]\n[[build.step]]\nrun = \"echo {{version}} > data.txt\"\nshell = \"sh\"\n"+
+			"[[build.step]]\ninstall = { share = [\"data.txt\"], bin = [\"data.txt\"] }\n",
+	), 0o644))
+
+	return path
+}
+
+// dataUser writes a package whose program prints the data dep's file, read at
+// build time from {{dep.data.prefix}}.
+func (m machine) dataUser(t *testing.T, name, constraint string) string {
+	t.Helper()
+
+	path := filepath.Join(m.fixtures, name+".toml")
+	must(t, os.WriteFile(path, []byte(fmt.Sprintf(
+		"[package]\nname = %q\n[version]\nvalue = \"1.0.0\"\n"+
+			"[build]\ndeps = [{ ref = \"./data.toml\", version = %q }]\n"+
+			"[[build.step]]\nrun = \"printf '#!/bin/sh\\\\ncat %%s\\\\n' {{dep.data.prefix}}/share/data.txt > %s\"\nshell = \"sh\"\n"+
+			"[[build.step]]\ninstall = { bin = [%q] }\n",
+		name, constraint, name, name,
+	)), 0o644))
+
+	return path
+}
+
+func (m machine) output(t *testing.T, bin string) string {
+	t.Helper()
+
+	out, err := exec.Command(m.profile("bin", bin)).Output()
+	must(t, err)
+
+	return strings.TrimSpace(string(out))
+}
+
+func TestB37BuildFindsDepHeadersAndLibrariesAndTheResultRunsAnywhere(t *testing.T) {
+	if _, err := exec.LookPath("cc"); err != nil {
+		t.Skip("needs a C compiler")
+	}
+
+	m := newMachine(t)
+
+	shared := "cc -shared -fPIC -o libgreet.so greet.c"
+	if runtime.GOOS == "darwin" {
+		shared = "cc -dynamiclib -o libgreet.dylib -install_name {{prefix}}/lib/libgreet.dylib greet.c"
+	}
+
+	libFile := map[string]string{"darwin": "libgreet.dylib"}[runtime.GOOS]
+	if libFile == "" {
+		libFile = "libgreet.so"
+	}
+
+	must(t, os.WriteFile(filepath.Join(m.fixtures, "greet.toml"), []byte(fmt.Sprintf(`[package]
+name = "greet"
+[version]
+value = "1.0.0"
+[build]
+needs = ["cc"]
+[[build.step]]
+run = """
+printf 'const char *greet(void);\\n' > greet.h
+printf 'const char *greet(void) { return "hello from libgreet"; }\\n' > greet.c
+printf 'Name: greet\\nVersion: 1.0.0\\nDescription: d\\nLibs: -lgreet\\n' > greet.pc
+%s
+"""
+shell = "sh"
+[[build.step]]
+install = { lib = [%q], include = ["greet.h"] }
+[[build.step]]
+copy = { from = "greet.pc", to = "lib/pkgconfig/greet.pc" }
+`, shared, libFile)), 0o644))
+
+	app := filepath.Join(m.fixtures, "app.toml")
+	must(t, os.WriteFile(app, []byte(`[package]
+name = "app"
+[version]
+value = "1.0.0"
+[build]
+needs = ["cc"]
+deps = ["./greet.toml"]
+[[build.step]]
+run = """
+printf '#include <stdio.h>\\n#include <greet.h>\\nint main(void) { puts(greet()); return 0; }\\n' > main.c
+test -f "${PKG_CONFIG_PATH%%:*}/greet.pc"
+cc -o app main.c -lgreet
+"""
+shell = "sh"
+[[build.step]]
+install = { bin = ["app"] }
+`), 0o644))
+
+	out, err := m.run(t, "", "add", app, "--yes")
+	if err != nil {
+		t.Fatalf("add: %v\n%s", err, out)
+	}
+
+	cmd := exec.Command(m.profile("bin", "app"))
+	cmd.Dir = t.TempDir()
+	cmd.Env = []string{}
+
+	got, err := cmd.CombinedOutput()
+	if err != nil || strings.TrimSpace(string(got)) != "hello from libgreet" {
+		t.Fatalf("app from another directory: %v\n%s", err, got)
+	}
+}
+
+func TestB38DepsStayOutOfTheProfileAndWhyNamesTheirUsers(t *testing.T) {
+	m := newMachine(t)
+	server := newReleaseServer(t, "v1.0.0")
+	m.opts.GitHubAPI = server.URL + "/api"
+
+	m.dataDep(t)
+
+	_, err := m.run(t, "", "add", m.dataUser(t, "reader", ""), "--yes")
+	must(t, err)
+
+	if exists(m.profile("bin", "data.txt")) {
+		t.Fatal("the dep's bin is linked into the profile")
+	}
+
+	out, err := m.run(t, "", "list")
+	must(t, err)
+
+	if strings.Contains(out, "data ") {
+		t.Fatalf("list shows the dep:\n%s", out)
+	}
+
+	out, err = m.run(t, "", "why", "data")
+	must(t, err)
+
+	if !strings.Contains(out, "data 1.0.0 is needed by reader") {
+		t.Fatalf("why data:\n%s", out)
+	}
+
+	if _, err := m.run(t, "", "why", "nothing"); err == nil {
+		t.Fatal("why succeeded for a package nothing uses")
+	}
+
+	// gc keeps a dep that a generation's package still uses.
+	_, err = m.run(t, "", "gc")
+	must(t, err)
+
+	if got := m.output(t, "reader"); got != "1.0.0" {
+		t.Fatalf("reader after gc printed %q", got)
+	}
+}
+
+func TestB39TwoPackagesUseDifferentVersionsOfOneDep(t *testing.T) {
+	m := newMachine(t)
+	server := newReleaseServer(t, "v1.0.0", "v2.0.0")
+	m.opts.GitHubAPI = server.URL + "/api"
+
+	m.dataDep(t)
+
+	for _, ref := range []string{m.dataUser(t, "old", "<2"), m.dataUser(t, "new", ">=2")} {
+		if out, err := m.run(t, "", "add", ref, "--yes"); err != nil {
+			t.Fatalf("add %s: %v\n%s", ref, err, out)
+		}
+	}
+
+	if old, latest := m.output(t, "old"), m.output(t, "new"); old != "1.0.0" || latest != "2.0.0" {
+		t.Fatalf("old uses %s and new uses %s", old, latest)
+	}
+
+	// A new machine gets the same two dep versions from the lock.
+	server.tags = append(server.tags, "v1.5.0", "v3.0.0")
+
+	must(t, os.RemoveAll(m.data))
+
+	_, err := m.run(t, "", "sync", "--yes")
+	must(t, err)
+
+	if old, latest := m.output(t, "old"), m.output(t, "new"); old != "1.0.0" || latest != "2.0.0" {
+		t.Fatalf("after sync old uses %s and new uses %s", old, latest)
+	}
+}
+
+func TestB40UnsatisfiableDepConstraintNamesItAndTheVersionsFound(t *testing.T) {
+	m := newMachine(t)
+	server := newReleaseServer(t, "v1.0.0", "v2.0.0")
+	m.opts.GitHubAPI = server.URL + "/api"
+
+	m.dataDep(t)
+
+	_, err := m.run(t, "", "add", m.dataUser(t, "picky", ">=9"), "--yes")
+	if err == nil {
+		t.Fatal("add succeeded with a constraint nothing satisfies")
+	}
+
+	for _, want := range []string{">=9", "2.0.0", "1.0.0"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("error lacks %q: %v", want, err)
+		}
+	}
+}
