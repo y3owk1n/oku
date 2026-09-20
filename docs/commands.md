@@ -17,7 +17,7 @@ place of text. Messages and errors still go to stderr as text.
 |---|---|
 | `oku list` | a list of `name`, `version`, `ref`, `store_path`, `service`, `system` |
 | `oku info <name>` | one object: `name`, `version`, `ref`, `commit`, `installed`, `store_path`, `inferred`, `impure`, `vendor_sha256`, `signing_key` |
-| `oku why <name>` | `name`, `in_list` (the ref, or empty), and `needed_by`, a list of `name`, `version`, `dep_versions` |
+| `oku why <name>` | `name`, `version` and `in_list` (the listed version and ref, or empty for a package that is only a dep), and `needed_by`, a list of `name`, `version`, `dep_versions` |
 | `oku generations` | a list of `number`, `current`, `created`, `packages` |
 | `oku search <term>` | a list of `ref`, `description` |
 | `oku source list` | a list of `alias`, `ref` |
