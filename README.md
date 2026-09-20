@@ -6,8 +6,7 @@ guarantees, unlike nix in what it asks you to learn.
 > **Status: early.** oku installs prebuilt packages from local files, URLs,
 > GitHub repos and git repos on Linux and macOS, and records them in `oku.toml`
 > and `oku.lock`. `oku sync github:you/machines` sets up another machine from
-> those two files. Building from source, version discovery and per-project
-> lists do not work yet.
+> those two files. Building from source and per-project lists do not work yet.
 
 Start with [Getting started](docs/getting-started.md). All user documentation
 is in [`docs/`](docs/README.md).

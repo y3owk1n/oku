@@ -120,6 +120,7 @@ func reconcile(cmd *cobra.Command, opts Options, names []string, update bool) er
 			previous:     previous,
 			wantManifest: wantManifest,
 			acceptDigest: fresh,
+			keepVersion:  !fresh && previous.Ref == r.String(),
 		})
 
 		switch {

@@ -19,7 +19,8 @@ in [`../prd/`](../prd/).
   so treat it as not supported yet.
 - Packages that ship a prebuilt download: tar, tar.gz, tar.bz2, zip, or a
   single binary.
-- Manifests with a fixed version.
+- Manifests with a fixed version, or with versions discovered from GitHub
+  releases or git tags.
 - One `oku.toml` for several machines, with `include` and per-platform `when`.
 - Setting up a new machine from a published list and lock with
   `oku sync <list-ref>`.
@@ -28,7 +29,7 @@ in [`../prd/`](../prd/).
 
 - Building from source. A `[build]` table in a manifest is recognised and
   refused.
-- Version discovery (`[version] from = ...`), `oku rollback`, `oku gc`.
+- `oku rollback` and `oku gc`.
 - Installing from a repo that has no manifest.
 - Source aliases (`alias/name` refs) and `oku search`.
 - Per-project lists and the shell hook.

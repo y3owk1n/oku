@@ -142,6 +142,7 @@ Keys of a `[[package]]` entry:
 | `commit` | The commit the manifest was read at. Only for `github:` and `git+` refs. |
 | `manifest_sha256` | Digest of the manifest file. |
 | `version` | The version installed. |
+| `tag` | The upstream tag of that version, when it differs, such as `v10.2.0`. |
 | `platform.<name>` | One entry per platform that has resolved this package. |
 
 Platform names are `os-arch`, plus `-glibc` or `-musl` on Linux.

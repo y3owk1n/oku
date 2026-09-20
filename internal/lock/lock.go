@@ -49,6 +49,9 @@ type Package struct {
 	Commit         string `toml:"commit,omitempty"`
 	ManifestSHA256 string `toml:"manifest_sha256"`
 	Version        string `toml:"version"`
+	// Tag is the upstream tag of Version, kept so sync can expand {{tag}} without
+	// listing versions again.
+	Tag string `toml:"tag,omitempty"`
 	// Platforms is keyed by platform.Platform.String(), such as "linux-amd64-musl".
 	Platforms map[string]Platform `toml:"platform"`
 }

@@ -27,19 +27,20 @@ downloads are. Save this as `ripgrep.toml`:
 name = "ripgrep"
 
 [version]
-value = "14.1.1"
+from = "github-releases"
+repo = "BurntSushi/ripgrep"
 
 [[artifact]]
 match = { os = "darwin", arch = "arm64" }
-url = "https://github.com/BurntSushi/ripgrep/releases/download/{{version}}/ripgrep-{{version}}-aarch64-apple-darwin.tar.gz"
-sha256_url = "https://github.com/BurntSushi/ripgrep/releases/download/{{version}}/ripgrep-{{version}}-aarch64-apple-darwin.tar.gz.sha256"
+url = "https://github.com/BurntSushi/ripgrep/releases/download/{{tag}}/ripgrep-{{version}}-aarch64-apple-darwin.tar.gz"
+sha256_url = "https://github.com/BurntSushi/ripgrep/releases/download/{{tag}}/ripgrep-{{version}}-aarch64-apple-darwin.tar.gz.sha256"
 strip = 1
 bin = ["rg"]
 
 [[artifact]]
 match = { os = "linux", arch = "amd64" }
-url = "https://github.com/BurntSushi/ripgrep/releases/download/{{version}}/ripgrep-{{version}}-x86_64-unknown-linux-musl.tar.gz"
-sha256_url = "https://github.com/BurntSushi/ripgrep/releases/download/{{version}}/ripgrep-{{version}}-x86_64-unknown-linux-musl.tar.gz.sha256"
+url = "https://github.com/BurntSushi/ripgrep/releases/download/{{tag}}/ripgrep-{{version}}-x86_64-unknown-linux-musl.tar.gz"
+sha256_url = "https://github.com/BurntSushi/ripgrep/releases/download/{{tag}}/ripgrep-{{version}}-x86_64-unknown-linux-musl.tar.gz.sha256"
 strip = 1
 bin = ["rg"]
 ```
@@ -48,8 +49,14 @@ Then:
 
 ```
 $ oku add ./ripgrep.toml
-added ripgrep 14.1.1
+added ripgrep 15.2.0
 add /home/you/.local/share/oku/profiles/global/current/bin to PATH to run it
+```
+
+oku installed the newest ripgrep release. To pick one, add `@version`:
+
+```
+$ oku add ./ripgrep.toml@14.1.1
 ```
 
 ## Put the profile on PATH
@@ -73,14 +80,14 @@ path whenever it is missing from `PATH`.
 
 ```
 $ rg --version
-ripgrep 14.1.1
+ripgrep 15.2.0
 ```
 
 ## See and remove what is installed
 
 ```
 $ oku list
-ripgrep  14.1.1  /home/you/ripgrep.toml
+ripgrep  15.2.0  /home/you/ripgrep.toml
 
 $ oku remove ripgrep
 removed ripgrep

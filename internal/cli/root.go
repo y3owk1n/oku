@@ -11,6 +11,7 @@ import (
 	"github.com/y3owk1n/oku/internal/lock"
 	"github.com/y3owk1n/oku/internal/profile"
 	"github.com/y3owk1n/oku/internal/ref"
+	"github.com/y3owk1n/oku/internal/resolve"
 	"github.com/y3owk1n/oku/internal/store"
 )
 
@@ -97,6 +98,12 @@ func (e env) fetcher(opts Options) *ref.Fetcher {
 	}
 
 	return f
+}
+
+func (e env) resolver(opts Options) *resolve.Resolver {
+	f := e.fetcher(opts)
+
+	return &resolve.Resolver{HTTP: f.HTTP, GitHubAPI: f.GitHubAPI, Token: f.Token}
 }
 
 func (e env) globalProfile() *profile.Profile {

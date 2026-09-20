@@ -22,6 +22,8 @@ type Manifest struct {
 
 	// SHA256 is the hex digest of the manifest data. The store hash includes it.
 	SHA256 string `toml:"-"`
+	// Tag is the upstream tag of the chosen version. {{tag}} expands to it.
+	Tag string `toml:"-"`
 }
 
 type Package struct {
@@ -31,10 +33,22 @@ type Package struct {
 	License     string `toml:"license"`
 }
 
+// Version is either fixed by Value or discovered from From.
 type Version struct {
 	Value string `toml:"value"`
-	From  string `toml:"from"`
+	// From is FromGitHubReleases or FromGitTags.
+	From string `toml:"from"`
+	// Repo is "owner/repo" for GitHub releases and a git URL for git tags.
+	Repo string `toml:"repo"`
+	// StripPrefix is cut off a tag to get the version, such as "v". A tag
+	// without it is ignored.
+	StripPrefix string `toml:"strip_prefix"`
 }
+
+const (
+	FromGitHubReleases = "github-releases"
+	FromGitTags        = "git-tags"
+)
 
 // Artifact is a prebuilt download for the platforms its selector matches.
 type Artifact struct {
@@ -50,6 +64,7 @@ type Artifact struct {
 
 var (
 	nameRe     = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]*$`)
+	repoRe     = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9._-]+$`)
 	sha256Re   = regexp.MustCompile(`^[0-9a-f]{64}$`)
 	templateRe = regexp.MustCompile(`\{\{\s*([a-zA-Z0-9_.]+)\s*\}\}`)
 )
@@ -82,13 +97,20 @@ func (m *Manifest) validate() error {
 	}
 
 	switch {
-	case m.Version.From != "":
+	case m.Version.From == "" && m.Version.Value == "":
+		errs = append(errs, errors.New("set version.value or version.from"))
+	case m.Version.From != "" && m.Version.Value != "":
+		errs = append(errs, errors.New("set version.value or version.from, not both"))
+	case m.Version.From == FromGitHubReleases && !repoRe.MatchString(m.Version.Repo):
+		errs = append(errs, errors.New(`version.repo must be "owner/repo" for github-releases`))
+	case m.Version.From == FromGitTags && m.Version.Repo == "":
+		errs = append(errs, errors.New("version.repo must be a git URL for git-tags"))
+	case m.Version.From != "" && m.Version.From != FromGitHubReleases &&
+		m.Version.From != FromGitTags:
 		errs = append(errs, fmt.Errorf(
-			"version.from %q is not supported yet, set version.value",
-			m.Version.From,
+			"version.from %q must be %q or %q",
+			m.Version.From, FromGitHubReleases, FromGitTags,
 		))
-	case m.Version.Value == "":
-		errs = append(errs, errors.New("version.value is required"))
 	}
 
 	for i, a := range m.Artifacts {
@@ -137,6 +159,7 @@ func (m *Manifest) Select(p platform.Platform) (Artifact, bool, error) {
 
 		vars := map[string]string{
 			"version": m.Version.Value,
+			"tag":     m.Tag,
 			"os":      p.OS,
 			"arch":    p.Arch,
 			"libc":    p.Libc,
