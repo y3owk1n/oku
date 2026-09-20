@@ -277,6 +277,56 @@ environment, oku's variables and the step's `env`. Why: it makes a missing
 and `/bin` stay because `sh`, `make` and the system compiler driver are there
 on most hosts. Step 6 replaces this with the sandbox and revisits B54.
 
+## D33. Manifest commands are sandboxed, and a host with no sandbox still builds
+
+`run` and `vendor` steps run in the sandbox. `source`, `fetch` and artifact
+downloads are made by oku itself, outside it, and checked against a digest.
+macOS uses a `sandbox-exec` profile that denies the network, file contents and
+directory listings under the home directory, and every write outside the
+build's own directories. Linux uses user, mount and network namespaces, and a
+hidden `oku sandbox-init` command that mounts a tmpfs over the home directory
+and binds the store and tool directories back. The step sees uid 0, mapped to
+the real user. Where no sandbox exists, oku builds with the scrubbed
+environment and prints a warning that names the reason. Why: the user already
+approved the commands, so refusing to build would only make oku unusable in
+containers and on Windows. The warning tells the user that the build had fewer
+protections. This completes D11 and replaces the interim state in D32, except
+that `/usr/bin` and `/bin` stay on `PATH`.
+
+Known limit: the Linux sandbox hides the home directory and the network. It
+does not make the rest of the filesystem read-only, which the macOS profile
+does.
+
+## D34. Vendor output is pinned per platform and checked after the build
+
+A `vendor` step runs the language's own tool with the network on, and oku
+hashes the directory it fills. The lock pins one digest per platform. `sync`
+runs the vendor steps again, and a different digest deletes the package and
+fails. `update` accepts the new digest. A vendor step needs approval and does
+not make the package impure. Why: what `pip` and `npm` download depends on the
+platform. The check runs after the build because the vendored files decide what
+was compiled, so a package built from other files must not be kept. Checked
+output is what separates a vendor step from `network = true`, which oku cannot
+check.
+
+## D35. A build may read rustup files in the home directory, and nothing else
+
+When a build needs `cargo` or `rustc` and a rustup directory exists, oku passes
+`RUSTUP_HOME` and `RUSTUP_TOOLCHAIN` through and makes that directory readable
+in the sandbox. `CARGO_HOME` stays in the build's temporary home. Why: rustup is
+the installer the Rust project recommends. It makes `cargo` a proxy whose
+toolchain is in `~/.rustup`, which the sandbox hides, so without this a Rust
+build fails for those users. The general
+answer is a toolchain package as a dep, and this exception exists until such
+packages are common.
+
+## D36. manifest test uses a throwaway store and the real cache
+
+`oku manifest test` installs into a temporary data directory and deletes it
+afterwards. It shares the user's download cache. It tests the platform it runs
+on. Why: the author's store, profile, list and lock must not change. The cache
+is content-addressed, so sharing it cannot change a result and saves downloads.
+
 ## D16. Installers are unpacked, never executed
 
 `extract` understands tar, zip, 7z, dmg, pkg, msi, deb, rpm and AppImage. Why:

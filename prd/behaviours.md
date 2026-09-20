@@ -114,16 +114,20 @@ order step in `prd/product.md`.
 ## Sandbox
 
 - B50 [6] On Linux and macOS a `run` step cannot reach the network and cannot
-  read the user's home directory.
+  read the user's home directory. On a host with no sandbox oku builds and
+  prints a warning that names the reason.
 - B51 [6] A `fetch` step without sha256 fails lint. With one, it may download.
 - B52 [6] A `vendor` step's output hash is pinned in the lock. A later
-  mismatch fails the build.
+  mismatch fails the build and keeps nothing in the store. `update` accepts
+  the new hash.
 - B53 [6] `network = true` on a `run` step is shown in the approval prompt and
   marks the package impure in `oku info`.
 - B54 [6] Build env contains only oku's variables, the link environment, step
-  `env`, and a PATH of `needs` and `deps`.
+  `env`, and a PATH of `deps`, `needs`, `/usr/bin` and `/bin`. A rustup-managed
+  toolchain adds `RUSTUP_HOME`.
 - B55 [6] `oku manifest test` builds into a throwaway store and reports
-  success or the failing step.
+  success or the failing step. It leaves the user's store, profile, list and
+  lock untouched, and it leaves no build directory behind.
 
 ## Projects and activation
 
