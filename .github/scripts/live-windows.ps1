@@ -112,9 +112,9 @@ Check 'doctor says that the profile is not on PATH, and exits with 1' {
 }
 $env:PATH = "$bin;$env:PATH"
 $diagnosis = (& $oku doctor) -join "`n"
-Check 'doctor is content once the profile is on PATH' {
+Check 'doctor finds no problem once the profile is on PATH' {
     ($LASTEXITCODE -eq 0) -and ($diagnosis -match 'is on PATH') -and
-    ($diagnosis -match 'leads into the store')
+    ($diagnosis -match 'points at a file in the store')
 }
 
 # A build from source: a dep, a needs tool, pwsh and cmd steps, and an install.

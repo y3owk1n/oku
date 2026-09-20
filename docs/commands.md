@@ -625,7 +625,7 @@ note     builds from source run without a sandbox, because this host does not le
 ok       the shell hook is loaded from /home/you/.zshrc: command -v oku >/dev/null 2>&1 && eval "$(oku hook zsh)"
 ok       /home/you/.local/share/oku/profiles/global/current/bin is on PATH
 problem  /usr/bin/rg runs in place of oku's rg, because /usr/bin is earlier on PATH
-ok       every link in 3 profiles leads into the store
+ok       every link in 3 profiles points at a file in the store
 oku: doctor found 1 problem
 ```
 
@@ -635,7 +635,7 @@ oku: doctor found 1 problem
 | Sandbox | Never. A host without a sandbox gets a `note` with the reason, see [Trust](trust.md#build-commands). |
 | Shell hook | Never. Without a hook line in a startup file you get a `note` with the line to add, because only [projects](projects.md) need the hook. |
 | `PATH` | The global profile's `bin` is not on `PATH`, or a program earlier on `PATH` has the name of an oku program and runs in its place. |
-| Profiles | A package's store path is missing, or an entry in a profile's `bin` leads nowhere. `oku sync` installs a missing package again. |
+| Profiles | A package's store path is missing, or an entry in a profile's `bin` points at a file that does not exist. `oku sync` installs a missing package again. |
 
 ## oku setup
 

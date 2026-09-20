@@ -4003,7 +4003,7 @@ func TestB91DoctorReportsTheSetupAndItsProblems(t *testing.T) {
 		t.Fatalf("doctor found a problem on a healthy machine: %v\n%s", err, out)
 	}
 
-	for _, want := range []string{filepath.Join(m.data, "store"), "sandbox", "shell hook", "is on PATH", "leads into the store"} {
+	for _, want := range []string{filepath.Join(m.data, "store"), "sandbox", "shell hook", "is on PATH", "points at a file in the store"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("doctor does not report %q:\n%s", want, out)
 		}
@@ -4024,7 +4024,7 @@ func TestB91DoctorReportsTheSetupAndItsProblems(t *testing.T) {
 		t.Fatalf("doctor found nothing wrong:\n%s", out)
 	}
 
-	for _, want := range []string{"runs in place of oku's tool", "is missing", "leads nowhere"} {
+	for _, want := range []string{"runs in place of oku's tool", "is missing", "does not exist"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("doctor does not report %q:\n%s", want, out)
 		}

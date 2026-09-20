@@ -178,7 +178,7 @@ func checkPath(r *report, e env) {
 }
 
 // checkProfiles looks for packages whose store path is gone and for links in a
-// profile's bin that lead nowhere.
+// profile's bin that point at a file that does not exist.
 func checkProfiles(r *report, e env) error {
 	profiles, err := profile.All(e.data)
 	if err != nil {
@@ -213,7 +213,11 @@ func checkProfiles(r *report, e env) error {
 			if _, err := os.Stat(filepath.Join(prof.BinDir(), entry.Name())); err != nil {
 				broken++
 
-				r.problem("profile %s: %s leads nowhere", prof.Name(), entry.Name())
+				r.problem(
+					"profile %s: %s points at a file that does not exist",
+					prof.Name(),
+					entry.Name(),
+				)
 			}
 		}
 	}
@@ -224,7 +228,7 @@ func checkProfiles(r *report, e env) error {
 			noun = "profile"
 		}
 
-		r.ok("every link in %d %s leads into the store", len(profiles), noun)
+		r.ok("every link in %d %s points at a file in the store", len(profiles), noun)
 	}
 
 	return nil
