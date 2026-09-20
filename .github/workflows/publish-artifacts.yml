@@ -1,8 +1,18 @@
-name: release
+name: publish-artifacts
 
+# release-please makes the tag and the release. This workflow builds the files
+# for it, signs them and uploads them.
 on:
-  push:
-    tags: ["v*"]
+  workflow_call:
+    inputs:
+      release_tag:
+        required: true
+        type: string
+    secrets:
+      upload_token:
+        required: false
+      minisign_secret_key:
+        required: false
 
 permissions:
   contents: write
@@ -12,13 +22,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.release_tag }}
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
 
       - name: Build a static binary for every OS and CPU
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag }}
         run: |
-          version="${GITHUB_REF_NAME#v}"
+          version="${RELEASE_TAG#v}"
           mkdir dist
           for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64 windows/arm64; do
             os="${target%/*}"
@@ -29,13 +43,14 @@ jobs:
               go build -trimpath -ldflags "-s -w -X main.version=$version" -o "dist/$name" ./cmd/oku
           done
           cp install.sh install.ps1 dist/
-          (cd dist && sha256sum * > checksums.txt)
+          (cd dist && sha256sum -- * > checksums.txt)
 
       # "oku self update" refuses a file that the release key did not sign, so
       # nobody could update from a release that was made without the secret.
       - name: Sign every file with the release key
         env:
-          MINISIGN_SECRET_KEY: ${{ secrets.MINISIGN_SECRET_KEY }}
+          MINISIGN_SECRET_KEY: ${{ secrets.minisign_secret_key }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
         run: |
           if [ -z "$MINISIGN_SECRET_KEY" ]; then
             echo "the MINISIGN_SECRET_KEY secret is not set" >&2
@@ -46,11 +61,12 @@ jobs:
           key="$RUNNER_TEMP/release.key"
           printf '%s\n' "$MINISIGN_SECRET_KEY" > "$key"
           for file in dist/*; do
-            minisign -S -s "$key" -m "$file" -t "oku $GITHUB_REF_NAME"
+            minisign -S -s "$key" -m "$file" -t "oku $RELEASE_TAG"
           done
           rm -f "$key"
 
-      - name: Publish the release
+      - name: Upload the files to the release
         env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" dist/* --title "$GITHUB_REF_NAME" --generate-notes
+          GH_TOKEN: ${{ secrets.upload_token || github.token }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: gh release upload "$RELEASE_TAG" dist/* --clobber

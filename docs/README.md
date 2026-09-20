@@ -16,6 +16,7 @@ in [`../prd/`](../prd/).
 | [Projects](projects.md) | A list, a lock and a profile that belong to one repo |
 | [List and lock](list-and-lock.md) | `oku.toml`, `oku.lock`, and moving a setup to another machine |
 | [Trust and checksums](trust.md) | What oku verifies, what it pins, and when it stops |
+| [Releasing](releasing.md) | For the maintainer: release-please, the signing key, the secrets |
 | [Files and directories](files.md) | Where oku keeps things on disk |
 
 ## What works today
