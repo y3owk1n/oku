@@ -22,13 +22,33 @@ var (
 
 // unavailable tries to start a process in new user, mount and network
 // namespaces. Kernels and container runtimes can forbid that.
+// unavailable runs the real sandbox setup once with a command that does nothing.
+// A host that lets oku create the namespaces can still refuse the setup. Ubuntu
+// 24.04 lets an unprivileged process create a user namespace and then denies it
+// every mount inside it.
 func unavailable() string {
 	probeOnce.Do(func() {
-		cmd := exec.Command("/bin/true")
-		cmd.SysProcAttr = namespaces()
+		self, err := os.Executable()
+		if err != nil {
+			probeWhy = "oku cannot find its own binary: " + err.Error()
 
-		if err := cmd.Run(); err != nil {
-			probeWhy = "this host does not allow unprivileged user namespaces (" + err.Error() + ")"
+			return
+		}
+
+		encoded, err := json.Marshal(Spec{Argv: []string{"/bin/true"}, Dir: "/"})
+		if err != nil {
+			probeWhy = err.Error()
+
+			return
+		}
+
+		cmd := exec.Command(self, InitCommand)
+		cmd.SysProcAttr = namespaces()
+		cmd.Env = []string{specEnv + "=" + string(encoded)}
+
+		if out, err := cmd.CombinedOutput(); err != nil {
+			probeWhy = "this host does not let an unprivileged user set up namespaces (" +
+				strings.TrimSpace(err.Error()+" "+string(out)) + ")"
 		}
 	})
 
