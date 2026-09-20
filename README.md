@@ -3,8 +3,10 @@
 A cross-platform package manager with no central registry. Like nix in what it
 guarantees, unlike nix in what it asks you to learn.
 
-> **Status: design phase.** Nothing is installable yet. The spec lives in
-> [`prd/`](prd/).
+> **Status: early.** Build step 1 of 11 works. `oku add ./manifest.toml`
+> installs a prebuilt artifact from a local manifest file on Linux and macOS.
+> Remote refs such as `github:you/tool` do not work yet. The spec lives in
+> [`prd/`](prd/), and the build order is in [`prd/product.md`](prd/product.md).
 
 ## The idea
 
