@@ -102,6 +102,24 @@ func (p *Profile) Remove(name string) error {
 	return p.activate(kept)
 }
 
+// Replace activates a new generation holding exactly pkgs. It does nothing when
+// the active generation already holds them, and reports whether it changed.
+func (p *Profile) Replace(pkgs []Package) (bool, error) {
+	have, err := p.Packages()
+	if err != nil {
+		return false, err
+	}
+
+	pkgs = slices.Clone(pkgs)
+	slices.SortFunc(pkgs, func(a, b Package) int { return strings.Compare(a.Name, b.Name) })
+
+	if slices.Equal(have, pkgs) {
+		return false, nil
+	}
+
+	return true, p.activate(pkgs)
+}
+
 // activate builds the next generation from pkgs and points "current" at it. A
 // failure deletes the half-built generation and leaves "current" unchanged.
 func (p *Profile) activate(pkgs []Package) error {

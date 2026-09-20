@@ -625,3 +625,160 @@ func TestArtifactChecksumComesFromSHA256URL(t *testing.T) {
 		t.Fatal("a download that differs from the published checksum was accepted")
 	}
 }
+
+func TestB12SyncMakesProfileMatchListAtLockedVersions(t *testing.T) {
+	const first, second = "1111111111111111111111111111111111111111", "2222222222222222222222222222222222222222"
+
+	m := newMachine(t)
+	keep := m.manifest(t, "keep", map[string]string{"keep": script}, `bin = ["keep"]`)
+	drop := m.manifest(t, "drop", map[string]string{"drop": script}, `bin = ["drop"]`)
+
+	v1, err := os.ReadFile(
+		m.manifest(t, "tool", map[string]string{"tool": script}, `bin = ["tool"]`),
+	)
+	must(t, err)
+
+	v2 := bytes.ReplaceAll(v1, []byte("1.2.3"), []byte("2.0.0"))
+	head := first
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/repos/owner/repo/commits/HEAD":
+			_, _ = w.Write([]byte(head))
+		case "/raw/owner/repo/" + first + "/oku.pkg.toml":
+			_, _ = w.Write(v1)
+		case "/raw/owner/repo/" + second + "/oku.pkg.toml":
+			_, _ = w.Write(v2)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	m.opts.GitHubAPI = server.URL + "/api"
+	m.opts.GitHubRaw = server.URL + "/raw"
+
+	for _, ref := range []string{keep, drop, "github:owner/repo"} {
+		_, err := m.run(t, "", "add", ref)
+		must(t, err)
+	}
+
+	// Upstream moves on, the user drops a package by hand, and the machine is new.
+	head = second
+
+	listPath := filepath.Join(m.config, "oku.toml")
+	listed, err := os.ReadFile(listPath)
+	must(t, err)
+
+	var kept []string
+
+	for _, line := range strings.Split(string(listed), "\n") {
+		if !strings.HasPrefix(line, "drop =") {
+			kept = append(kept, line)
+		}
+	}
+
+	must(t, os.WriteFile(listPath, []byte(strings.Join(kept, "\n")), 0o644))
+	must(t, os.RemoveAll(m.data))
+
+	out, err := m.run(t, "", "sync")
+	if err != nil {
+		t.Fatalf("sync: %v\n%s", err, out)
+	}
+
+	out, err = m.run(t, "", "list")
+	must(t, err)
+
+	if !strings.Contains(out, "keep") || strings.Contains(out, "drop") {
+		t.Fatalf("list after sync:\n%s", out)
+	}
+
+	if !strings.Contains(out, "1.2.3") || strings.Contains(out, "2.0.0") {
+		t.Fatalf("sync did not use the locked version:\n%s", out)
+	}
+
+	if !exists(m.profile("bin", "tool")) || exists(m.profile("bin", "drop")) {
+		t.Fatal("profile bin does not match the list")
+	}
+
+	locked, err := os.ReadFile(filepath.Join(m.config, "oku.lock"))
+	must(t, err)
+
+	if strings.Contains(string(locked), "'drop'") {
+		t.Fatalf("oku.lock still pins drop:\n%s", locked)
+	}
+
+	out, err = m.run(t, "", "update")
+	must(t, err)
+
+	if !strings.Contains(out, "1.2.3 -> 2.0.0") {
+		t.Fatalf("update did not move tool to 2.0.0:\n%s", out)
+	}
+}
+
+func TestB13SyncStopsOnChangedManifestUntilUpdate(t *testing.T) {
+	m := newMachine(t)
+	ref := m.manifest(t, "tool", map[string]string{"tool": script}, `bin = ["tool"]`)
+
+	_, err := m.run(t, "", "add", ref)
+	must(t, err)
+
+	body, err := os.ReadFile(ref)
+	must(t, err)
+	must(t, os.WriteFile(ref, append(body, []byte("\n# changed upstream\n")...), 0o644))
+
+	_, err = m.run(t, "", "sync")
+	if err == nil || !strings.Contains(err.Error(), "oku update tool") {
+		t.Fatalf("want sync to stop and name oku update, got %v", err)
+	}
+
+	if _, err := m.run(t, "", "update", "tool"); err != nil {
+		t.Fatalf("update: %v", err)
+	}
+
+	if out, err := m.run(t, "", "sync"); err != nil {
+		t.Fatalf("sync after update: %v\n%s", err, out)
+	}
+}
+
+func TestB15SyncAppendsMissingPlatformAndKeepsOthers(t *testing.T) {
+	m := newMachine(t)
+	ref := m.manifest(t, "tool", map[string]string{"tool": script}, `bin = ["tool"]`)
+
+	_, err := m.run(t, "", "add", ref)
+	must(t, err)
+
+	lockPath := filepath.Join(m.config, "oku.lock")
+	host := platform.Host().String()
+
+	locked, err := os.ReadFile(lockPath)
+	must(t, err)
+
+	// The lock now looks as if another machine wrote it.
+	foreign := strings.ReplaceAll(string(locked), host, "plan9-mips")
+	must(t, os.WriteFile(lockPath, []byte(foreign), 0o644))
+
+	if out, err := m.run(t, "", "sync"); err != nil {
+		t.Fatalf("sync: %v\n%s", err, out)
+	}
+
+	locked, err = os.ReadFile(lockPath)
+	must(t, err)
+
+	for _, want := range []string{"platform.plan9-mips]", "platform." + host + "]"} {
+		if !strings.Contains(string(locked), want) {
+			t.Fatalf("oku.lock lacks %s:\n%s", want, locked)
+		}
+	}
+
+	section := func(text, name string) string {
+		_, after, _ := strings.Cut(text, "platform."+name+"]")
+		before, _, _ := strings.Cut(after, "[")
+
+		return before
+	}
+
+	if section(foreign, "plan9-mips") != section(string(locked), "plan9-mips") {
+		t.Fatalf("sync rewrote the plan9-mips entry:\n%s", locked)
+	}
+}

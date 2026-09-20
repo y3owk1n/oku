@@ -26,6 +26,10 @@ import (
 // metaFile is the description oku writes into every store path.
 const metaFile = "oku-meta.toml"
 
+// ErrPinConflict reports a manifest digest that differs from the one oku.lock
+// pinned for the same version and URL.
+var ErrPinConflict = errors.New("checksum changed")
+
 // Store is the directory of realized packages plus the download cache.
 type Store struct {
 	dir   string
@@ -90,8 +94,8 @@ func (s *Store) Realize(
 
 	if want != "" && pinned != "" && want != pinned {
 		return Realized{}, fmt.Errorf(
-			"%s: the manifest now says sha256 %s, but oku.lock pinned %s",
-			m.Package.Name, want, pinned,
+			"%s: %w: upstream publishes sha256 %s, oku.lock pinned %s",
+			m.Package.Name, ErrPinConflict, want, pinned,
 		)
 	}
 

@@ -38,6 +38,8 @@ func NewRootCmd(opts Options) *cobra.Command {
 	root.AddCommand(
 		newAddCmd(opts),
 		newRemoveCmd(),
+		newSyncCmd(opts),
+		newUpdateCmd(opts),
 		newListCmd(),
 		newSelfCmd(opts.Executable),
 	)
