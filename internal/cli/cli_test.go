@@ -4312,3 +4312,153 @@ func TestB97UninstallLeavesAProjectsListAndLockAlone(t *testing.T) {
 		t.Fatalf("uninstall changed the project's files:\n%s\nwas\n%s", after, before)
 	}
 }
+
+// releaseWith serves release v1.4.0 of owner/tool with an oku binary for this
+// platform and its signature by secret.
+func (m *machine) releaseWith(t *testing.T, body string, secret minisign.PrivateKey) {
+	t.Helper()
+
+	name := "oku-" + runtime.GOOS + "-" + runtime.GOARCH
+	binary := filepath.Join(m.fixtures, name)
+	must(t, os.WriteFile(binary, []byte(body), 0o755))
+
+	reader := minisign.NewReader(strings.NewReader(body))
+	_, err := io.Copy(io.Discard, reader)
+	must(t, err)
+	must(t, os.WriteFile(binary+".minisig", reader.Sign(secret), 0o644))
+
+	inferServer(t, m, map[string]string{name: binary, name + ".minisig": binary + ".minisig"})
+	m.opts.ReleaseRepo = "owner/tool"
+}
+
+func TestB92SelfUpdateReplacesTheBinaryOnlyAfterItsSignatureChecksOut(t *testing.T) {
+	m := newMachine(t)
+
+	public, secret, err := minisign.GenerateKey(rand.Reader)
+	must(t, err)
+	_, stranger, err := minisign.GenerateKey(rand.Reader)
+	must(t, err)
+
+	current := func() string {
+		data, err := os.ReadFile(m.exe)
+		must(t, err)
+
+		return string(data)
+	}
+
+	m.releaseWith(t, "the new oku", secret)
+
+	if _, err := m.run(t, "", "self", "update"); err == nil ||
+		!strings.Contains(err.Error(), "no release key") {
+		t.Fatalf("a build without a release key should refuse, got %v", err)
+	}
+
+	m.opts.ReleaseKey = public.String()
+
+	out, err := m.run(t, "", "self", "update", "--check")
+	must(t, err)
+
+	if !strings.Contains(out, "1.4.0 is available") || current() != "binary" {
+		t.Fatalf("--check should report and change nothing:\n%s", out)
+	}
+
+	forged := newMachine(t)
+	forged.opts.ReleaseKey = public.String()
+	forged.releaseWith(t, "a forged oku", stranger)
+
+	if _, err := forged.run(t, "", "self", "update"); err == nil ||
+		!strings.Contains(err.Error(), "is not signed by") {
+		t.Fatalf("want a refusal for a release the key did not sign, got %v", err)
+	}
+
+	if data, _ := os.ReadFile(forged.exe); string(data) != "binary" {
+		t.Fatalf("a forged release replaced the binary with %q", data)
+	}
+
+	out, err = m.run(t, "", "self", "update")
+	must(t, err)
+
+	if current() != "the new oku" || !strings.Contains(out, "to 1.4.0") {
+		t.Fatalf("self update did not replace the binary:\n%s", out)
+	}
+
+	if info, err := os.Stat(m.exe); err != nil || info.Mode().Perm()&0o100 == 0 {
+		t.Fatal("the new binary is not executable")
+	}
+
+	m.opts.Version = "1.4.0"
+
+	out, err = m.run(t, "", "self", "update")
+	must(t, err)
+
+	if !strings.Contains(out, "is the newest release") {
+		t.Fatalf("an up to date oku should say so:\n%s", out)
+	}
+}
+
+func TestB93InstallScriptPutsOneBinaryInPlaceAndEditsNothing(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("install.ps1 is covered by the live test on the Windows runner")
+	}
+
+	root := t.TempDir()
+	home := filepath.Join(root, "home")
+	download := filepath.Join(root, "release", "latest", "download")
+	must(t, os.MkdirAll(download, 0o755))
+	must(t, os.MkdirAll(home, 0o755))
+	must(t, os.WriteFile(filepath.Join(home, ".zshrc"), []byte("# mine\n"), 0o644))
+
+	name := "oku-" + runtime.GOOS + "-" + runtime.GOARCH
+	body := []byte("#!/bin/sh\necho oku\n")
+	must(t, os.WriteFile(filepath.Join(download, name), body, 0o644))
+
+	digest := sha256.Sum256(body)
+	must(t, os.WriteFile(filepath.Join(download, "checksums.txt"),
+		fmt.Appendf(nil, "%s  %s\n", hex.EncodeToString(digest[:]), name), 0o644))
+
+	server := httptest.NewServer(http.FileServer(http.Dir(filepath.Join(root, "release"))))
+	t.Cleanup(server.Close)
+
+	install := func(homeDir string) (string, error) {
+		cmd := exec.Command("sh", filepath.Join("..", "..", "install.sh"))
+		cmd.Env = []string{
+			"HOME=" + homeDir, "SHELL=/bin/zsh", "PATH=" + os.Getenv("PATH"),
+			"OKU_RELEASE_URL=" + server.URL,
+		}
+
+		out, err := cmd.CombinedOutput()
+
+		return string(out), err
+	}
+
+	out, err := install(home)
+	if err != nil {
+		t.Fatalf("install.sh: %v\n%s", err, out)
+	}
+
+	installed := filepath.Join(home, ".local", "bin", "oku")
+	if info, err := os.Stat(installed); err != nil || info.Mode().Perm()&0o100 == 0 {
+		t.Fatalf("no executable at %s:\n%s", installed, out)
+	}
+
+	if !strings.Contains(out, shellhook.Line("zsh")) || !strings.Contains(out, "to PATH") {
+		t.Fatalf("install.sh did not print the PATH hint and the hook line:\n%s", out)
+	}
+
+	if rc, _ := os.ReadFile(filepath.Join(home, ".zshrc")); string(rc) != "# mine\n" {
+		t.Fatalf("install.sh edited the shell startup file: %q", rc)
+	}
+
+	must(t, os.WriteFile(filepath.Join(download, name), append(body, 'x'), 0o644))
+
+	other := filepath.Join(root, "other")
+	must(t, os.MkdirAll(other, 0o755))
+
+	if out, err := install(other); err == nil || !strings.Contains(out, "sha256") {
+		t.Fatalf("install.sh accepted a binary that does not match checksums.txt:\n%s", out)
+	}
+
+	if exists(filepath.Join(other, ".local", "bin", "oku")) {
+		t.Fatal("a refused install left a binary behind")
+	}
+}

@@ -101,7 +101,8 @@ the default. Toolchain and C library collections are what `deps` point at.
 ### First contact
 
 ```
-$ curl -fsSL https://oku.sh/install | sh      # one static binary, no root
+# one static binary, no root
+$ curl -fsSL https://raw.githubusercontent.com/y3owk1n/oku/main/install.sh | sh
 $ oku add github:BurntSushi/ripgrep
 $ rg --version
 ```
@@ -135,7 +136,7 @@ macOS-only GUI app, and a font.
 ### New machine
 
 ```
-$ curl -fsSL https://oku.sh/install | sh
+$ curl -fsSL https://raw.githubusercontent.com/y3owk1n/oku/main/install.sh | sh
 $ oku sync github:kyle/machines
 resolving from lock: 23 packages, 41 store paths
   38 artifacts, 3 from cache (key: someone-recipes), 0 to build

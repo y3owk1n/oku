@@ -1,6 +1,7 @@
 # Runs the real oku.exe on Windows against real GitHub releases, in throwaway
 # directories. Each check throws on failure, which fails the job.
 $ErrorActionPreference = 'Stop'
+$repoRoot = (Get-Location).Path
 
 $root = Join-Path $env:RUNNER_TEMP 'oku-live'
 $env:XDG_CONFIG_HOME = Join-Path $root 'config'
@@ -434,6 +435,42 @@ Check 'the project list and lock are untouched' {
 Start-Sleep -Seconds 8
 Check 'the file that was moved aside is deleted once oku has exited' {
     -not (Test-Path "$oku.uninstalled")
+}
+
+# The install script, against a release that a local web server offers.
+$served = Join-Path $env:RUNNER_TEMP 'oku-release'
+$download = Join-Path $served 'latest\download'
+New-Item -ItemType Directory -Force $download | Out-Null
+Push-Location $repoRoot
+go build -ldflags '-X main.version=0.0.1' -o (Join-Path $download 'oku-windows-amd64.exe') ./cmd/oku
+Pop-Location
+if ($LASTEXITCODE -ne 0) { throw 'go build for the install test failed' }
+$digest = (Get-FileHash (Join-Path $download 'oku-windows-amd64.exe') -Algorithm SHA256).Hash.ToLower()
+Set-Content (Join-Path $download 'checksums.txt') "$digest  oku-windows-amd64.exe"
+
+$server = Start-Process python -ArgumentList '-m', 'http.server', '18767', '--directory', $served -PassThru -WindowStyle Hidden
+Start-Sleep -Seconds 2
+try {
+    $env:OKU_RELEASE_URL = 'http://127.0.0.1:18767'
+    $env:OKU_INSTALL_DIR = Join-Path $env:RUNNER_TEMP 'oku-installed'
+    $said = (& (Join-Path $repoRoot 'install.ps1') 6>&1) -join "`n"
+    $installedVersion = & (Join-Path $env:OKU_INSTALL_DIR 'oku.exe') --version
+    Check 'install.ps1 puts a working oku.exe in place and prints the hook line' {
+        ($installedVersion -match '0\.0\.1') -and ($said -match 'oku hook pwsh')
+    }
+
+    Add-Content (Join-Path $download 'oku-windows-amd64.exe') 'x'
+    $env:OKU_INSTALL_DIR = Join-Path $env:RUNNER_TEMP 'oku-tampered'
+    $refused = $false
+    try { & (Join-Path $repoRoot 'install.ps1') | Out-Null } catch { $refused = $_.Exception.Message -match 'sha256' }
+    Check 'install.ps1 refuses a binary that does not match checksums.txt' {
+        $refused -and -not (Test-Path (Join-Path $env:OKU_INSTALL_DIR 'oku.exe'))
+    }
+}
+finally {
+    Stop-Process -Id $server.Id -Force
+    Remove-Item Env:OKU_RELEASE_URL, Env:OKU_INSTALL_DIR
+    Remove-Item -Recurse -Force $served, (Join-Path $env:RUNNER_TEMP 'oku-installed') -ErrorAction SilentlyContinue
 }
 
 Remove-Item -Recurse -Force $root

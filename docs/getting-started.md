@@ -1,8 +1,36 @@
 # Getting started
 
+## Install oku
+
+oku has no release yet. Until the first one, [build it from source](#build-oku).
+After that, one line installs it for your user, with no root:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/y3owk1n/oku/main/install.sh | sh
+```
+
+```powershell
+irm https://raw.githubusercontent.com/y3owk1n/oku/main/install.ps1 | iex
+```
+
+The script downloads the binary for your OS and CPU from the newest GitHub
+release, checks its sha256 against the release's `checksums.txt`, and puts it in
+`~/.local/bin`, or `%LOCALAPPDATA%\oku\bin` on Windows. On unix it also checks
+the minisign signature when `minisign` is installed. It edits no file of yours.
+It ends by printing the directory to add to `PATH` and the hook line for your
+shell.
+
+| Variable | Effect |
+|---|---|
+| `OKU_INSTALL_DIR` | Where the binary goes. |
+| `OKU_VERSION` | A release tag such as `v0.1.0`. Default is the newest release. |
+
+`oku self update` replaces the binary later, see
+[Commands](commands.md#oku-self-update).
+
 ## Build oku
 
-There are no releases yet, so build from source. You need Go 1.26.4 or newer.
+You need Go 1.26.4 or newer.
 
 ```
 git clone https://github.com/y3owk1n/oku

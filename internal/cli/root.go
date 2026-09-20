@@ -37,6 +37,10 @@ type Options struct {
 	// Services replaces the OS's service manager. Tests set it, because a real
 	// one changes the user's login session.
 	Services service.Manager
+	// ReleaseRepo and ReleaseKey replace the GitHub repo that "oku self update"
+	// reads and the minisign key it trusts. Tests set them.
+	ReleaseRepo string
+	ReleaseKey  string
 	// SystemRoot replaces the shared store root that "oku setup --system" creates.
 	SystemRoot string
 	// SystemDirs replaces the directories for apps and fonts in system scope.
