@@ -140,7 +140,7 @@ func runRollback(cmd *cobra.Command, opts Options, args []string) error {
 		return err
 	}
 
-	if err := e.syncExposed(opts, cmd.ErrOrStderr()); err != nil {
+	if err := e.syncExposed(cmd, opts, false); err != nil {
 		return err
 	}
 

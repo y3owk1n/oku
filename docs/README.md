@@ -10,6 +10,7 @@ in [`../prd/`](../prd/).
 | [Refs](refs.md) | The ways to point oku at a manifest, and sources |
 | [Manifest reference](manifest.md) | Every key a package manifest accepts, for people publishing software |
 | [Services](services.md) | Running a package's daemon with launchd or systemd |
+| [System scope](system-scope.md) | Apps, fonts and services for every user of the machine, with `sudo` |
 | [Projects](projects.md) | A list, a lock and a profile that belong to one repo |
 | [List and lock](list-and-lock.md) | `oku.toml`, `oku.lock`, and moving a setup to another machine |
 | [Trust and checksums](trust.md) | What oku verifies, what it pins, and when it stops |
@@ -27,8 +28,9 @@ in [`../prd/`](../prd/).
   uninstall.
 - Services: a package's daemon runs under launchd or systemd for your user,
   enabled with `service = true` in your list.
-- A shared store root at `/opt/oku` with `oku setup --system`, the only command
-  that asks for administrator rights.
+- System scope: `--system` installs a package's apps, fonts and services for the
+  whole machine, after listing the files and asking.
+- A shared store root at `/opt/oku` with `oku setup --system`.
 - Packages built from source with `[build]` steps, after you approve their
   commands. The build uses tools already on your machine.
 - A build sandbox on macOS and Linux: build commands get no network and cannot

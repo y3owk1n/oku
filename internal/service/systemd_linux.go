@@ -15,6 +15,8 @@ import (
 // directory. "enable" decides whether it starts at login.
 type systemd struct {
 	units string
+	// scope is "--user", or "--system" for units that run as root.
+	scope string
 }
 
 // New returns the service manager for this OS. home is the user's home
@@ -25,7 +27,16 @@ func New(home, _ string) Manager {
 		config = filepath.Join(home, ".config")
 	}
 
-	return &systemd{units: filepath.Join(config, "systemd", "user")}
+	return &systemd{units: filepath.Join(config, "systemd", "user"), scope: "--user"}
+}
+
+// SystemLogDir is empty because the journal holds a system service's output.
+const SystemLogDir = ""
+
+// NewSystem returns the manager for services that run as root for the whole
+// machine. Everything but Status and Logs needs root.
+func NewSystem() Manager {
+	return &systemd{units: "/etc/systemd/system", scope: "--system"}
 }
 
 func (s *systemd) unit(d Definition) string { return "oku-" + d.Name + ".service" }
@@ -37,7 +48,7 @@ func (s *systemd) Install(ctx context.Context, d Definition, enabled bool) error
 		return err
 	}
 
-	if err := os.WriteFile(s.File(d), unitFile(d), 0o644); err != nil {
+	if err := os.WriteFile(s.File(d), s.unitFile(d), 0o644); err != nil {
 		return err
 	}
 
@@ -76,10 +87,10 @@ func (s *systemd) Status(ctx context.Context, d Definition) (Status, error) {
 	_, err := os.Stat(s.File(d))
 	status.Installed = err == nil
 
-	enabled, _ := exec.CommandContext(ctx, "systemctl", "--user", "is-enabled", s.unit(d)).Output()
+	enabled, _ := exec.CommandContext(ctx, "systemctl", s.scope, "is-enabled", s.unit(d)).Output()
 	status.Enabled = strings.TrimSpace(string(enabled)) == "enabled"
 
-	pid, _ := exec.CommandContext(ctx, "systemctl", "--user", "show", "--property=MainPID", "--value", s.unit(d)).
+	pid, _ := exec.CommandContext(ctx, "systemctl", s.scope, "show", "--property=MainPID", "--value", s.unit(d)).
 		Output()
 	if n, _ := strconv.Atoi(strings.TrimSpace(string(pid))); n > 0 {
 		status.Running = true
@@ -91,7 +102,7 @@ func (s *systemd) Status(ctx context.Context, d Definition) (Status, error) {
 
 func (s *systemd) Logs(ctx context.Context, d Definition, lines int) (string, error) {
 	args := []string{
-		"--user",
+		s.scope,
 		"--no-pager",
 		"-o",
 		"cat",
@@ -110,7 +121,7 @@ func (s *systemd) Logs(ctx context.Context, d Definition, lines int) (string, er
 }
 
 func (s *systemd) ctl(ctx context.Context, args ...string) error {
-	args = append([]string{"--user"}, args...)
+	args = append([]string{s.scope}, args...)
 
 	if out, err := exec.CommandContext(ctx, "systemctl", args...).CombinedOutput(); err != nil {
 		return commandError("systemctl", args, out, err)
@@ -120,7 +131,7 @@ func (s *systemd) ctl(ctx context.Context, args ...string) error {
 }
 
 // unitFile renders the systemd unit for d.
-func unitFile(d Definition) []byte {
+func (s *systemd) unitFile(d Definition) []byte {
 	var b strings.Builder
 
 	fmt.Fprintf(&b, "[Unit]\nDescription=%s, installed by oku\n\n[Service]\n", d.Name)
@@ -150,7 +161,14 @@ func unitFile(d Definition) []byte {
 		fmt.Fprintf(&b, "Environment=%s\n", quoteUnit(name+"="+d.Env[name]))
 	}
 
-	b.WriteString("\n[Install]\nWantedBy=default.target\n")
+	// A user manager has no multi-user.target, and the system manager does not
+	// start default.target's user units.
+	target := "default.target"
+	if s.scope == "--system" {
+		target = "multi-user.target"
+	}
+
+	fmt.Fprintf(&b, "\n[Install]\nWantedBy=%s\n", target)
 
 	return []byte(b.String())
 }

@@ -52,6 +52,7 @@ oku.toml yet.`,
 	}
 
 	flags.register(cmd)
+	cmd.Flags().Bool(systemFlag, false, systemUsage)
 
 	return cmd
 }
@@ -68,6 +69,7 @@ func newUpdateCmd(opts Options) *cobra.Command {
 	}
 
 	flags.register(cmd)
+	cmd.Flags().Bool(systemFlag, false, systemUsage)
 
 	return cmd
 }
@@ -149,6 +151,7 @@ func reconcile(
 			acceptDigest: fresh,
 			keepVersion:  !fresh && previous.Ref == r.String(),
 			service:      wanted[name].entry.Service,
+			system:       wanted[name].entry.System,
 			approve:      e.approver(cmd, opts, flags),
 			log:          buildLog(cmd, flags),
 		})
@@ -199,7 +202,9 @@ func reconcile(
 		return err
 	}
 
-	if err := e.syncExposed(opts, cmd.ErrOrStderr()); err != nil {
+	system, _ := cmd.Flags().GetBool(systemFlag)
+
+	if err := e.syncExposed(cmd, opts, system); err != nil {
 		return err
 	}
 

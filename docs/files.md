@@ -114,6 +114,9 @@ out of the store:
 | Fonts | `~/Library/Fonts/` | `<data home>/fonts/oku/` |
 | Enabled services | `~/Library/LaunchAgents/dev.oku.<name>.plist` | `<config home>/systemd/user/oku-<name>.service` |
 
+With `system = true` on the package they go to the machine-wide directories
+instead, see [System scope](system-scope.md).
+
 Every such file is written to the ledger `exposed.toml` before oku creates it,
 with the package and the store path it came from. `oku remove`, `oku rollback`
 and `oku sync` remove what the active generation no longer has, and

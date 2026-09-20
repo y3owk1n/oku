@@ -22,6 +22,7 @@ import (
 	"github.com/ulikunitz/xz"
 
 	"github.com/y3owk1n/oku/internal/cli"
+	"github.com/y3owk1n/oku/internal/expose"
 	"github.com/y3owk1n/oku/internal/platform"
 	"github.com/y3owk1n/oku/internal/sandbox"
 	"github.com/y3owk1n/oku/internal/service"
@@ -3477,5 +3478,137 @@ func TestB98UninstallNamesTheSharedRootAndAsksBeforeElevating(t *testing.T) {
 
 	if exists(root) || len(*elevated) != 2 {
 		t.Fatalf("accepting did not remove %s: %v", root, *elevated)
+	}
+}
+
+// systemScope gives the machine throwaway system directories and an Elevate that
+// runs "oku system-apply" in this process, as sudo would run it as root.
+func (m *machine) systemScope(t *testing.T) (expose.Dirs, *int) {
+	t.Helper()
+
+	base := filepath.Join(filepath.Dir(m.fixtures), "system")
+	dirs := expose.Dirs{Apps: filepath.Join(base, "apps"), Fonts: filepath.Join(base, "fonts")}
+	elevations := new(int)
+
+	m.opts.SystemDirs = &dirs
+	m.opts.Elevate = func(_ context.Context, argv []string) error {
+		*elevations++
+
+		_, err := m.run(t, "", argv[1:]...)
+
+		return err
+	}
+
+	return dirs, elevations
+}
+
+func TestB75SystemScopeItemsChangeOnlyWithTheFlagAndAfterAQuestion(t *testing.T) {
+	m := newMachine(t)
+	dirs, elevations := m.systemScope(t)
+	font := filepath.Join(dirs.Fonts, "Test.ttf")
+	userFont := func() string { _, path := m.exposedPaths(); return path }()
+	ref := m.desktopManifest(t)
+
+	out, err := m.run(t, "y\n", "add", ref, "--system")
+	must(t, err)
+
+	if !strings.Contains(out, "administrator rights") || !strings.Contains(out, font) {
+		t.Fatalf("add --system did not name what it writes:\n%s", out)
+	}
+
+	if !exists(font) || exists(userFont) {
+		t.Fatalf("the font should be in system scope only:\n%s", out)
+	}
+
+	list, err := os.ReadFile(filepath.Join(m.config, "oku.toml"))
+	must(t, err)
+
+	if !strings.Contains(string(list), "system = true") {
+		t.Fatalf("the list does not record system scope:\n%s", list)
+	}
+
+	before := *elevations
+
+	out, err = m.run(t, "", "remove", "foo")
+	must(t, err)
+
+	if *elevations != before || !exists(font) {
+		t.Fatalf("remove elevated without --system:\n%s", out)
+	}
+
+	if !strings.Contains(out, "oku sync --system") || !strings.Contains(out, font) {
+		t.Fatalf("remove did not say what it left unchanged:\n%s", out)
+	}
+
+	out, err = m.run(t, "n\n", "sync", "--system")
+	must(t, err)
+
+	if *elevations != before || !exists(font) {
+		t.Fatalf("answering no still elevated:\n%s", out)
+	}
+
+	_, err = m.run(t, "y\n", "sync", "--system")
+	must(t, err)
+
+	if exists(font) {
+		t.Fatal("sync --system left the font behind")
+	}
+}
+
+func TestB75SystemServiceNeedsTheFlagToStart(t *testing.T) {
+	m := newMachine(t)
+	_, elevations := m.systemScope(t)
+
+	_, err := m.run(t, "y\n", "add", m.serviceManifest(t), "--system", "--service")
+	must(t, err)
+
+	if got := m.services.state["food"]; got == nil || !got.enabled {
+		t.Fatalf("the system service is not enabled: %+v", got)
+	}
+
+	before := *elevations
+
+	if _, err := m.run(t, "", "service", "stop", "food"); err == nil || *elevations != before {
+		t.Fatal("service stop elevated without --system")
+	}
+
+	out, err := m.run(t, "", "service", "stop", "food", "--system")
+	must(t, err)
+
+	if m.services.state["food"].running || !strings.Contains(out, "system scope") {
+		t.Fatalf("service stop --system did not stop it:\n%s", out)
+	}
+}
+
+func TestB98UninstallLeavesSystemItemsWhenElevationIsDeclined(t *testing.T) {
+	m := newMachine(t)
+	dirs, _ := m.systemScope(t)
+	font := filepath.Join(dirs.Fonts, "Test.ttf")
+	ref := m.desktopManifest(t)
+
+	_, err := m.run(t, "y\n", "add", ref, "--system")
+	must(t, err)
+
+	out, err := m.run(t, "y\nn\n", "self", "uninstall")
+	must(t, err)
+
+	if !exists(font) || exists(m.data) {
+		t.Fatalf("declining should remove user scope only:\n%s", out)
+	}
+
+	if !strings.Contains(out, "left in place") || !strings.Contains(out, font) {
+		t.Fatalf("uninstall did not print what is left:\n%s", out)
+	}
+
+	m2 := newMachine(t)
+	dirs, _ = m2.systemScope(t)
+
+	_, err = m2.run(t, "y\n", "add", m2.desktopManifest(t), "--system")
+	must(t, err)
+	_, err = m2.run(t, "y\ny\n", "self", "uninstall")
+	must(t, err)
+
+	if exists(filepath.Join(dirs.Fonts, "Test.ttf")) {
+		t.Fatal("accepting left the system font behind")
 	}
 }

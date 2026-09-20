@@ -26,6 +26,9 @@ type Entry struct {
 	When platform.Selector
 	// Service enables the package's services, so they start now and at login.
 	Service bool
+	// System puts the package's apps, fonts and services in system scope, for
+	// every user of the machine. Applying it needs administrator rights.
+	System bool
 }
 
 // List is a parsed oku.toml.
@@ -81,6 +84,7 @@ func toEntry(value any) (Entry, error) {
 		e.Ref, _ = v["ref"].(string)
 		e.Version, _ = v["version"].(string)
 		e.Service, _ = v["service"].(bool)
+		e.System, _ = v["system"].(bool)
 
 		if e.Ref == "" {
 			return e, errors.New("ref is required")
@@ -119,7 +123,7 @@ func Delete(path, name string) error {
 func formatLine(name string, entry Entry) string {
 	value := fmt.Sprintf("%q", entry.Ref)
 
-	if entry.Version != "" || entry.Service {
+	if entry.Version != "" || entry.Service || entry.System {
 		fields := []string{fmt.Sprintf("ref = %q", entry.Ref)}
 
 		if entry.Version != "" {
@@ -128,6 +132,10 @@ func formatLine(name string, entry Entry) string {
 
 		if entry.Service {
 			fields = append(fields, "service = true")
+		}
+
+		if entry.System {
+			fields = append(fields, "system = true")
 		}
 
 		value = "{ " + strings.Join(fields, ", ") + " }"

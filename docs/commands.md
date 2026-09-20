@@ -29,6 +29,7 @@ Adding a package that is already installed replaces it.
 
 | Flag | Effect |
 |---|---|
+| `--system` | Puts the package's apps, fonts and services in [system scope](system-scope.md), and writes `system = true` to `oku.toml`. oku lists the files, asks, and uses `sudo`. |
 | `--service` | Runs the package's [services](services.md) now and at every login, and writes `service = true` to `oku.toml`. |
 | `--from-source` | Builds from source even when a prebuilt download fits. `oku.lock` records the choice, so `oku sync` builds too. |
 | `--yes`, `-y` | Approves the manifest's build commands without asking, see [Build commands](trust.md#build-commands). |
@@ -157,7 +158,7 @@ name that nothing installed uses.
 ## oku sync
 
 ```
-oku sync [list-ref]
+oku sync [list-ref] [--system]
 ```
 
 Makes the profile match `oku.toml` and the lists it includes, at the versions
@@ -168,6 +169,9 @@ pinned in `oku.lock`.
 - An included list is read at the commit in the lock.
 - A package installed but not in the list is dropped from the profile and from
   the lock.
+- Files in [system scope](system-scope.md) change only with `--system`, after
+  oku has listed them and you have agreed. Without the flag sync lists them and
+  leaves them as they are.
 - A `github:` or `git+` package is read at the commit in the lock.
 - Every package is installed at the version in the lock. oku does not ask
   upstream for versions, so a newer release is ignored until `oku update`.
@@ -224,7 +228,7 @@ If the install fails after the two files were written, fix the cause and run
 ## oku update
 
 ```
-oku update [name...]
+oku update [name...] [--system]
 ```
 
 Re-resolves packages from their refs and rewrites `oku.lock`. With no names it
@@ -254,12 +258,13 @@ A name that is in neither `oku.toml` nor its includes fails.
 
 ```
 oku service list
-oku service start|stop|restart|status|logs <name>
+oku service start|stop|restart|status|logs <name> [--system]
 ```
 
 Controls the services of installed packages through launchd or systemd. See
 [Services](services.md) for what each one does and for how to enable a service
-at login.
+at login. A service in [system scope](system-scope.md) needs `--system` for
+`start`, `stop` and `restart`.
 
 ## oku hook
 
@@ -609,17 +614,18 @@ Lists what it will delete, asks once, then removes:
 |---|---|
 | `--keep-list` | Keeps `oku.toml` and `oku.lock` in the config directory and prints where they are. |
 | `--yes`, `-y` | Does not ask. |
-| `--system` | With `--yes`, also deletes the shared store root through `sudo`. |
+| `--system` | With `--yes`, also removes what needs `sudo`: the shared store root and everything in [system scope](system-scope.md). |
 
 Any answer other than `y` or `yes` cancels and removes nothing.
 
 After [`oku setup --system`](#oku-setup) the list includes the shared store
-root, and uninstall asks a second question before it uses `sudo`:
+root. Uninstall asks a second question before it uses `sudo`, which also covers
+files in system scope:
 
 ```
   shared store root   /opt/oku (needs administrator rights)
 continue? [y/N] y
-remove /opt/oku with administrator rights? [y/N] n
+remove what needs administrator rights? [y/N] n
 oku is uninstalled
 left in place, empty:
   /opt/oku
