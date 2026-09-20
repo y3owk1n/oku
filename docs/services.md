@@ -1,8 +1,8 @@
 # Services
 
 A package can ship a long-running program, such as a database or a sync daemon.
-oku runs it through your OS's service manager, which is launchd on macOS and
-systemd on Linux. There is no oku daemon.
+oku runs it through your OS's service manager, which is launchd on macOS,
+systemd on Linux and Task Scheduler on Windows. There is no oku daemon.
 
 ## Turn a service on
 
@@ -60,7 +60,8 @@ the services you have.
 | Installed, not enabled | `<data>/oku/services/dev.oku.<name>.plist`, which launchd does not read | the same unit file, disabled |
 | Output | `<data>/oku/logs/<name>.log` | the user journal, `journalctl --user -u oku-<name>` |
 
-`<config home>` is `$XDG_CONFIG_HOME`, or `~/.config`.
+`<config home>` is `$XDG_CONFIG_HOME`, or `~/.config`. Windows is described in
+[Windows](windows.md#services).
 
 Each of these files is in oku's [ledger](files.md#outside-okus-directories).
 `oku remove` stops the service and deletes its file, and `oku self uninstall`
@@ -72,8 +73,8 @@ oku does not change it.
 
 Services come from your global list only. A package in a
 [project](projects.md) installs its programs, and oku says that its services
-were skipped. Services that run as root, for the whole machine, are not
-supported yet.
+were skipped. For services that run as root, for the whole machine, see
+[System scope](system-scope.md).
 
 ## For package authors
 
