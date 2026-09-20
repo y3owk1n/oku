@@ -43,12 +43,12 @@ func linkEntry(target, dest string, pkg Package) error {
 		return hardLinkOrCopy(target, dest)
 	}
 
-	self, err := os.Executable()
+	source, err := shimSource(filepath.Join(filepath.Dir(dest), "..", "..", "..", "..", "shims"))
 	if err != nil {
 		return err
 	}
 
-	if err := hardLinkOrCopy(self, dest); err != nil {
+	if err := hardLinkOrCopy(source, dest); err != nil {
 		return err
 	}
 
@@ -60,12 +60,51 @@ func linkEntry(target, dest string, pkg Package) error {
 	return shim.Write(dest, spec)
 }
 
+// shimSource returns a copy of the running oku.exe in dir, and makes it when it
+// is missing. Shims are hard links to that copy and not to oku.exe itself,
+// because Windows refuses to delete any link to a program that is running, and
+// "oku gc" deletes shims while oku runs. The name holds the size and time of
+// oku.exe, so an updated oku gets a new copy.
+func shimSource(dir string) (string, error) {
+	self, err := os.Executable()
+	if err != nil {
+		return "", err
+	}
+
+	info, err := os.Stat(self)
+	if err != nil {
+		return "", err
+	}
+
+	source := filepath.Join(dir, fmt.Sprintf("oku-%d-%d.exe", info.Size(), info.ModTime().Unix()))
+	if _, err := os.Stat(source); err == nil {
+		return source, nil
+	}
+
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return "", err
+	}
+
+	// This must be a copy. A hard link would be the running program again.
+	os.Remove(source + ".tmp")
+
+	if err := copyFile(self, source+".tmp"); err != nil {
+		return "", err
+	}
+
+	return source, os.Rename(source+".tmp", source)
+}
+
 // hardLinkOrCopy copies when source and dest are on different volumes.
 func hardLinkOrCopy(source, dest string) error {
 	if err := os.Link(source, dest); err == nil {
 		return nil
 	}
 
+	return copyFile(source, dest)
+}
+
+func copyFile(source, dest string) error {
 	in, err := os.Open(source)
 	if err != nil {
 		return err
