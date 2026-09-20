@@ -93,6 +93,25 @@ func (f *fakeServices) File(d service.Definition) string {
 	return "/fake/services/" + d.Name
 }
 
+// TestMain makes the test binary run as oku when the build sandbox starts it. On
+// Linux the sandbox runs the current binary again as "oku sandbox-init", and in a
+// test that binary is this one.
+func TestMain(m *testing.M) {
+	if len(os.Args) > 1 && os.Args[1] == sandbox.InitCommand {
+		cmd := cli.NewRootCmd(cli.Options{})
+		cmd.SetArgs(os.Args[1:])
+
+		if err := cmd.Execute(); err != nil {
+			fmt.Fprintln(os.Stderr, "oku:", err)
+			os.Exit(1)
+		}
+
+		os.Exit(0)
+	}
+
+	os.Exit(m.Run())
+}
+
 func newMachine(t *testing.T) machine {
 	t.Helper()
 
