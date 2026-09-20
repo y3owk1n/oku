@@ -602,3 +602,20 @@ under the old version.
 
 Out of scope: inferring a manifest for `github:owner/repo@nightly`, moving
 tags on `git-tags`, and moving branches.
+
+## D58. oku's own nightly is a signed prerelease that only a flag selects
+
+Every push to `main` moves the tag `nightly` and replaces the files of the
+prerelease with that name. The release key signs them like a release. The
+binaries report `nightly-<timestamp>-<commit>`. `oku self update --nightly`
+reads that release and compares its commit with the end of the running version.
+`oku self update` without the flag takes the newest release, also from a
+nightly binary. The install scripts need no change, because `OKU_VERSION`
+already names any tag.
+
+Why: testing a change on a real machine needed a release, and release-please
+makes one only from a version bump. A prerelease stays out of
+`releases/latest`, so no user gets a nightly without asking. `self update`
+could not install an unsigned nightly, and a second key would be one more
+secret to rotate. The cost is that the release key now signs every commit on
+`main`. Before, it signed releases only.

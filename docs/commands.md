@@ -729,7 +729,7 @@ Profiles, the ledger and approvals stay in the data directory.
 ## oku self update
 
 ```
-oku self update [--check]
+oku self update [--check] [--nightly]
 ```
 
 Replaces the `oku` binary with the newest release from
@@ -743,12 +743,31 @@ binary before that check has passed, so a failed check leaves oku as it was.
 | Flag | Effect |
 |---|---|
 | `--check` | Says whether a newer release exists, and changes nothing. |
+| `--nightly` | Takes the nightly build, see below. |
 
 At the newest release it prints `oku <version> is the newest release`.
 
 The release key is `RWSjFGqIxI8IPGwKE/uRgugZ51qCEMe1CDbFRVTMUAuin42JiOxg2HNW`.
 A binary that you built from source has it too, so `oku self update` replaces
 such a build with the newest release.
+
+### The nightly build
+
+Every push to `main` builds oku again and puts the files in the prerelease
+`nightly`. It can hold unfinished changes, so use it to test one of them.
+
+```
+$ oku self update --nightly
+updated oku from 0.2.1 to nightly a1b2c3d
+$ oku --version
+oku nightly-20260921101500-a1b2c3d
+```
+
+The nightly build has the same signature check as a release. When the running
+binary already is that build, oku prints
+`oku nightly <commit> is the newest nightly build` and changes nothing.
+`--check --nightly` only reports. `oku self update` without the flag goes back
+to the newest release.
 
 On Windows the running `oku.exe` is renamed aside first, as in
 [uninstalling](windows.md#uninstalling), because Windows does not let a running

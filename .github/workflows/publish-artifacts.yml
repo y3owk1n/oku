@@ -1,13 +1,19 @@
 name: publish-artifacts
 
-# release-please makes the tag and the release. This workflow builds the files
-# for it, signs them and uploads them.
+# release-please makes the tag and the release, and nightly.yml makes the
+# nightly one. This workflow builds the files for it, signs them and uploads
+# them.
 on:
   workflow_call:
     inputs:
       release_tag:
         required: true
         type: string
+      # The version the binaries report. Default is the tag without its "v".
+      version_override:
+        required: false
+        type: string
+        default: ""
     secrets:
       upload_token:
         required: false
@@ -31,8 +37,9 @@ jobs:
       - name: Build a static binary for every OS and CPU
         env:
           RELEASE_TAG: ${{ inputs.release_tag }}
+          VERSION_OVERRIDE: ${{ inputs.version_override }}
         run: |
-          version="${RELEASE_TAG#v}"
+          version="${VERSION_OVERRIDE:-${RELEASE_TAG#v}}"
           mkdir dist
           for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64 windows/arm64; do
             os="${target%/*}"

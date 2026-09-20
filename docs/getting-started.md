@@ -22,7 +22,7 @@ It ends by printing the one line your shell needs, see
 | Variable | Effect |
 |---|---|
 | `OKU_INSTALL_DIR` | Where the binary goes. |
-| `OKU_VERSION` | A release tag such as `v0.1.0`. Default is the newest release. |
+| `OKU_VERSION` | A release tag such as `v0.1.0`, or `nightly` for the build of the newest commit on `main`. Default is the newest release. |
 
 `oku self update` replaces the binary later, see
 [Commands](commands.md#oku-self-update). `oku doctor` checks the whole setup

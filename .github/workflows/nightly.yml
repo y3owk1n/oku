@@ -1,0 +1,63 @@
+name: nightly
+
+# Every push to main moves the tag "nightly" and replaces the files of the
+# prerelease with that name. "oku self update --nightly" and
+# OKU_VERSION=nightly in the install scripts read it.
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: nightly
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  prepare-nightly-release:
+    runs-on: ubuntu-latest
+    outputs:
+      version_override: ${{ steps.meta.outputs.version_override }}
+    steps:
+      - uses: actions/checkout@v7
+
+      # "oku self update --nightly" compares the last seven characters with the
+      # commit of the release, so the version has to end with them.
+      - name: Compute the version
+        id: meta
+        run: echo "version_override=nightly-$(date -u +'%Y%m%d%H%M%S')-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+
+      - name: Move the tag and the release to this commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          notes="$(mktemp)"
+          cat > "$notes" <<EOF
+          Built from [\`${GITHUB_SHA::7}\`](https://github.com/${GITHUB_REPOSITORY}/commit/${GITHUB_SHA}), the newest commit on \`main\`.
+
+          > [!WARNING]
+          > This is not a release. It can hold unfinished changes. Use a tagged release unless you are testing one of them.
+
+          Install it with \`OKU_VERSION=nightly\` in front of the install script, or run \`oku self update --nightly\`. \`oku self update\` goes back to the newest release.
+          EOF
+
+          git tag -f nightly "$GITHUB_SHA"
+          git push origin refs/tags/nightly:refs/tags/nightly --force
+
+          if gh release view nightly >/dev/null 2>&1; then
+            gh release edit nightly --target "$GITHUB_SHA" --notes-file "$notes" --prerelease --latest=false
+          else
+            gh release create nightly --target "$GITHUB_SHA" --title "oku nightly" \
+              --notes-file "$notes" --prerelease --latest=false
+          fi
+
+  publish-nightly-artifacts:
+    needs: prepare-nightly-release
+    uses: ./.github/workflows/publish-artifacts.yml
+    with:
+      release_tag: nightly
+      version_override: ${{ needs.prepare-nightly-release.outputs.version_override }}
+    secrets:
+      upload_token: ${{ github.token }}
+      minisign_secret_key: ${{ secrets.MINISIGN_SECRET_KEY }}
