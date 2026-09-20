@@ -57,6 +57,9 @@ type Package struct {
 	// Tag is the upstream tag of Version, kept so sync can expand {{tag}} without
 	// listing versions again.
 	Tag string `toml:"tag,omitempty"`
+	// TagCommit is the commit a moving tag pointed at for Version. Sync refuses
+	// to download once upstream moved the tag off it.
+	TagCommit string `toml:"tag_commit,omitempty"`
 	// Inferred marks a package whose repo has no manifest. Manifest then holds the
 	// manifest oku wrote for it, so sync installs from the same text.
 	Inferred bool   `toml:"inferred,omitempty"`

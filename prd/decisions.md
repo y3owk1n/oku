@@ -558,3 +558,47 @@ edits no startup file itself (B93). Why: the first install on a fresh Mac ended
 with "add ~/.local/bin to PATH" and nothing more. The user then needed a second
 `PATH` entry for installed programs and a third line for projects, and a line
 that calls `oku` by name cannot work before `oku` is on `PATH`.
+
+## D57. A moving tag is a version source, and each build is its own version
+
+`[version] from = "github-releases"` takes `tag = "nightly"`. oku then reads
+that one release instead of listing releases, and accepts it when it is a
+prerelease. A draft fails. `tag` excludes `strip_prefix`, and `git-tags` does
+not take it.
+
+The version is `<date>-<commit>`, such as `2026.09.20-a73243f`. The date is the
+release's `published_at` in UTC, and the commit is the first seven characters
+of the commit the tag points at, read from `GET /repos/<repo>/commits/<tag>`.
+`{{tag}}` expands to `nightly` and `{{version}}` to the version. The lock
+stores the full commit as `tag_commit`.
+
+When the manifest gives no `sha256` and no `sha256_url`, oku uses the `digest`
+that the GitHub API reports for the asset whose download URL equals the
+artifact's `url`. An asset without a digest falls back to trust on first use.
+
+`update` moves the package when the tag's commit differs from `tag_commit`. The
+URL stays the same, and the old digest no longer applies because the version
+changed. `sync` with a locked version asks upstream only when it has to
+download, which is when the store path is missing or the platform has no lock
+entry. It then fails when the tag's commit is not `tag_commit`, and names
+`oku update <name>`.
+`add <ref>@<version>` succeeds only while upstream is at that version. A
+`[build]` whose `source.git` clones `{{tag}}` fails when the clone is not at
+`tag_commit`.
+
+Why: D24 drops `nightly` on purpose, because it is no version. But a nightly
+under a fixed `value` has one version for ever, so the lock pins the first
+digest and every later download fails, and `update` has nothing to move. Making
+each build a version keeps the rest unchanged. The store path differs per
+build, `rollback` returns to yesterday's build with no download, and `gc`
+decides how long old builds stay. The date sorts builds for a dep constraint,
+and the commit tells two builds of one day apart. The API digest gives a
+checked download for projects like neovim that publish no checksum file.
+
+Upstream deletes the old build when the tag moves, so a lock that pins a
+moving tag restores on another machine only until then. A build cache does not help, because `cache push` skips plain downloads
+(D46). oku fails there with the reason instead of installing a newer build
+under the old version.
+
+Out of scope: inferring a manifest for `github:owner/repo@nightly`, moving
+tags on `git-tags`, and moving branches.

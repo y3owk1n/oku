@@ -58,6 +58,22 @@ order step in `prd/product.md`.
   versions never move, and `sync` installs the locked version without asking
   upstream for versions. A package pinned in `oku.toml` stays on its version
   through `update`.
+- B106 [3] With `[version] tag`, `add` installs the release of that tag, also
+  when it is a prerelease, as version `<date>-<commit>`. `update` moves the
+  package when the tag points at another commit and prints both versions, and
+  changes nothing when it does not. `rollback` returns to the earlier build
+  without a download.
+- B107 [3] With `[version] tag` and no checksum in the manifest, oku rejects a
+  download that does not match the digest the GitHub API reports for that
+  asset, and nothing enters the store or profile.
+- B108 [3] `sync` of a locked moving-tag package that must download fails when
+  the tag has moved since the lock was written, and names `oku update <name>`.
+  It installs no newer build under the locked version. With the store path
+  present it asks upstream nothing.
+- B109 [3] `add <ref>@<version>` on a moving-tag manifest fails when upstream
+  is at another version, and names the version upstream is at.
+- B110 [4] `manifest lint` rejects `tag` with `git-tags`, with `value` and with
+  `strip_prefix`. `manifest bump` refuses a manifest with `tag`.
 - B22 [3] Every profile change creates a generation. `oku rollback` restores
   the previous one, `oku rollback <n>` a named one. Rollback restores
   `oku.lock` with it, so a following `sync` changes nothing, and it never

@@ -99,6 +99,10 @@ func (s *Store) Build(
 		return Realized{}, fmt.Errorf("fetch the source: %w", err)
 	}
 
+	if err := checkTagCommit(ctx, m, src); err != nil {
+		return Realized{}, err
+	}
+
 	// A crashed build may have left the prefix behind without a meta file.
 	if err := os.RemoveAll(prefix); err != nil {
 		return Realized{}, err
@@ -264,6 +268,30 @@ func findNeeds(needs []string) ([]string, error) {
 	}
 
 	return dirs, nil
+}
+
+// checkTagCommit fails when the source was cloned from a moving tag that no
+// longer points at the commit the version names.
+func checkTagCommit(ctx context.Context, m *manifest.Manifest, src string) error {
+	source := m.Build.Source
+	if m.TagCommit == "" || source.Git == "" || !strings.Contains(source.Tag, "{{tag}}") {
+		return nil
+	}
+
+	out, err := exec.CommandContext(ctx, "git", "-C", src, "rev-parse", "HEAD").Output()
+	if err != nil {
+		return fmt.Errorf("read the commit of the source: %w", err)
+	}
+
+	if got := strings.TrimSpace(string(out)); got != m.TagCommit {
+		return fmt.Errorf(
+			"upstream moved the tag %s to commit %s, and version %s is commit %s\n"+
+				"run `oku update %s` to take the new build",
+			m.Tag, got, m.Version.Value, m.TagCommit, m.Package.Name,
+		)
+	}
+
+	return nil
 }
 
 func (s *Store) fetchSource(

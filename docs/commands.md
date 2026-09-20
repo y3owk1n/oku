@@ -285,6 +285,9 @@ one. Then it syncs.
 A package pinned with `version` in `oku.toml` stays on that version. A version
 changes only when you run `update`.
 
+A package that follows a [moving tag](manifest.md#a-moving-tag) moves when the
+tag points at another commit.
+
 It prints one line per package that changed:
 
 ```
