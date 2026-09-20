@@ -250,7 +250,9 @@ Check 'the program got its arguments and environment, and its output is in the l
 
 Oku service stop ticker
 Start-Sleep -Seconds 2
-Check 'stop stops it' { (ServiceStatus) -match 'stopped' }
+Check 'stop stops the task and the program' {
+    (ServiceStatus) -match 'stopped' -and -not (Get-Process ticker -ErrorAction SilentlyContinue)
+}
 Oku service start ticker
 Start-Sleep -Seconds 3
 Check 'start starts it again' { (ServiceStatus) -match 'running' }

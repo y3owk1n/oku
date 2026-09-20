@@ -5,8 +5,10 @@ import (
 	"os"
 	"os/exec"
 	"syscall"
+	"unsafe"
 
 	"github.com/spf13/cobra"
+	"golang.org/x/sys/windows"
 
 	"github.com/y3owk1n/oku/internal/service"
 )
@@ -55,12 +57,56 @@ func runService(cmd *cobra.Command, path string) error {
 
 	program.SysProcAttr = &syscall.SysProcAttr{CreationFlags: createNoWindow, HideWindow: true}
 
+	if err := program.Start(); err != nil {
+		return err
+	}
+
+	if err := killWithParent(program.Process.Pid); err != nil {
+		_ = program.Process.Kill()
+
+		return err
+	}
+
 	var exit *exec.ExitError
-	if err := program.Run(); errors.As(err, &exit) {
+	if err := program.Wait(); errors.As(err, &exit) {
 		return ExitError{Code: exit.ExitCode()}
 	} else if err != nil {
 		return err
 	}
 
 	return nil
+}
+
+// killWithParent puts the process in a job object that Windows closes when oku
+// exits. "schtasks /End" kills only the task's own process, which is oku, and
+// without the job the service's program would keep running.
+func killWithParent(pid int) error {
+	job, err := windows.CreateJobObject(nil, nil)
+	if err != nil {
+		return err
+	}
+
+	info := windows.JOBOBJECT_EXTENDED_LIMIT_INFORMATION{
+		BasicLimitInformation: windows.JOBOBJECT_BASIC_LIMIT_INFORMATION{
+			LimitFlags: windows.JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
+		},
+	}
+
+	if _, err := windows.SetInformationJobObject(
+		job, windows.JobObjectExtendedLimitInformation,
+		uintptr(unsafe.Pointer(&info)), uint32(unsafe.Sizeof(info)),
+	); err != nil {
+		return err
+	}
+
+	process, err := windows.OpenProcess(
+		windows.PROCESS_SET_QUOTA|windows.PROCESS_TERMINATE, false, uint32(pid),
+	)
+	if err != nil {
+		return err
+	}
+	defer windows.CloseHandle(process)
+
+	// The job handle stays open for the life of oku, which is the point.
+	return windows.AssignProcessToJobObject(job, process)
 }
