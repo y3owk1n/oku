@@ -41,14 +41,10 @@ type schema struct {
 		App          []string          `toml:"app"`
 		Font         []string          `toml:"font"`
 	} `toml:"artifact"`
-	Build   Build             `toml:"build"`
-	Runtime Runtime           `toml:"runtime"`
-	Env     map[string]string `toml:"env"`
-	Apps    []struct {
-		Name string `toml:"name"`
-		Exec string `toml:"exec"`
-		Icon string `toml:"icon"`
-	} `toml:"app"`
+	Build    Build             `toml:"build"`
+	Runtime  Runtime           `toml:"runtime"`
+	Env      map[string]string `toml:"env"`
+	Apps     []App             `toml:"app"`
 	Services []struct {
 		Name    string            `toml:"name"`
 		Command string            `toml:"command"`

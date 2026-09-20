@@ -51,6 +51,9 @@ func newMachine(t *testing.T) machine {
 	// project runs.
 	m.opts = cli.Options{Version: "test", Executable: m.exe, WorkDir: m.fixtures}
 
+	// oku places apps and fonts under HOME, so tests get their own.
+	t.Setenv("HOME", filepath.Join(root, "home"))
+	must(t, os.MkdirAll(filepath.Join(root, "home"), 0o755))
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(root, "config"))
 	t.Setenv("XDG_DATA_HOME", filepath.Join(root, "data"))
 	t.Setenv("XDG_CACHE_HOME", filepath.Join(root, "cache"))
@@ -2816,5 +2819,129 @@ func TestB69EnvThatControlsOtherProgramsIsRejected(t *testing.T) {
 
 	if len(m.storeEntries(t)) != 0 {
 		t.Fatal("a rejected manifest left something in the store")
+	}
+}
+
+// desktopManifest writes a package that ships a program, a macOS app bundle, a
+// Linux launcher and a font.
+func (m machine) desktopManifest(t *testing.T) string {
+	t.Helper()
+
+	return m.manifest(
+		t,
+		"foo",
+		map[string]string{
+			"Foo.app/Contents/MacOS/foo":  script,
+			"Foo.app/Contents/Info.plist": "<plist/>",
+			"fonts/Test.ttf":              "not really a font",
+		},
+		"bin = [\"Foo.app/Contents/MacOS/foo\"]\napp = [\"Foo.app\"]\nfont = [\"fonts/Test.ttf\"]\n"+
+			"[[app]]\nname = \"Foo\"\nexec = \"bin/foo\"\n",
+	)
+}
+
+// exposedPaths returns where this OS shows the test package's app and font.
+func (m machine) exposedPaths() (app, font string) {
+	home := os.Getenv("HOME")
+	dataHome := filepath.Dir(m.data)
+
+	if runtime.GOOS == "darwin" {
+		return filepath.Join(home, "Applications", "Foo.app", "Contents", "MacOS", "foo"),
+			filepath.Join(home, "Library", "Fonts", "Test.ttf")
+	}
+
+	return filepath.Join(dataHome, "applications", "oku-foo.desktop"),
+		filepath.Join(dataHome, "fonts", "oku", "Test.ttf")
+}
+
+func TestB70AppAppearsForTheUserAndRemoveAndRollbackTakeItAway(t *testing.T) {
+	m := newMachine(t)
+	ref := m.desktopManifest(t)
+	app, _ := m.exposedPaths()
+
+	_, err := m.run(t, "", "add", ref)
+	must(t, err)
+
+	info, err := os.Lstat(app)
+	if err != nil || !info.Mode().IsRegular() {
+		t.Fatalf("the app is not a real file at %s: %v", app, err)
+	}
+
+	if runtime.GOOS != "darwin" {
+		entry, err := os.ReadFile(app)
+		must(t, err)
+
+		if !strings.Contains(string(entry), "Name=Foo") ||
+			!strings.Contains(string(entry), "/bin/foo") {
+			t.Fatalf("the desktop entry is:\n%s", entry)
+		}
+	}
+
+	_, err = m.run(t, "", "remove", "foo")
+	must(t, err)
+
+	if exists(app) {
+		t.Fatal("remove left the app behind")
+	}
+
+	_, err = m.run(t, "", "add", ref)
+	must(t, err)
+
+	_, err = m.run(t, "", "rollback")
+	must(t, err)
+
+	if exists(app) {
+		t.Fatal("rollback to a generation without the package left the app behind")
+	}
+
+	// oku does not overwrite what it did not place.
+	must(t, os.MkdirAll(filepath.Dir(app), 0o755))
+	must(t, os.WriteFile(app, []byte("mine"), 0o644))
+
+	_, err = m.run(t, "", "add", ref)
+	if err == nil || !strings.Contains(err.Error(), "did not put it there") {
+		t.Fatalf("want a refusal to overwrite, got %v", err)
+	}
+
+	if body, _ := os.ReadFile(app); string(body) != "mine" {
+		t.Fatal("oku overwrote a file it did not place")
+	}
+}
+
+func TestB71FontIsInstalledForTheUserAndRemoveTakesItAway(t *testing.T) {
+	m := newMachine(t)
+	_, font := m.exposedPaths()
+
+	_, err := m.run(t, "", "add", m.desktopManifest(t))
+	must(t, err)
+
+	if body, _ := os.ReadFile(font); string(body) != "not really a font" {
+		t.Fatalf("the font is not at %s", font)
+	}
+
+	_, err = m.run(t, "", "remove", "foo")
+	must(t, err)
+
+	if exists(font) {
+		t.Fatal("remove left the font behind")
+	}
+}
+
+func TestB95UninstallRemovesExposedAppsAndFonts(t *testing.T) {
+	m := newMachine(t)
+	app, font := m.exposedPaths()
+
+	_, err := m.run(t, "", "add", m.desktopManifest(t))
+	must(t, err)
+
+	out, err := m.run(t, "", "self", "uninstall", "--yes")
+	must(t, err)
+
+	if exists(app) || exists(font) {
+		t.Fatal("uninstall left the app or the font behind")
+	}
+
+	if !strings.Contains(out, font) {
+		t.Fatalf("uninstall did not list what it removes outside its directories:\n%s", out)
 	}
 }

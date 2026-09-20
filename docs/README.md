@@ -20,6 +20,9 @@ in [`../prd/`](../prd/).
   so treat it as not supported yet.
 - Packages that ship a prebuilt download: tar, tar.gz, tar.bz2, zip, or a
   single binary.
+- Packages that ship a macOS app, a Linux desktop launcher, or fonts. oku puts
+  them in your per-user folders and takes them away on remove, rollback and
+  uninstall.
 - Packages built from source with `[build]` steps, after you approve their
   commands. The build uses tools already on your machine.
 - A build sandbox on macOS and Linux: build commands get no network and cannot
@@ -47,4 +50,7 @@ in [`../prd/`](../prd/).
 ## What does not work yet
 
 - `patch` build steps.
+- Apps shipped as `.dmg`, `.pkg`, `.deb`, `.rpm` or AppImage. oku unpacks tar,
+  zip and single files today.
+- Services, and installing anything system-wide.
 - `.tar.xz` and `.tar.zst` archives.

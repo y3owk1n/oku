@@ -100,8 +100,11 @@ machine, so put specific entries before general ones.
 | `bin` | see below | Paths of executables inside the package. |
 | `man` | see below | Paths of man pages. The file name needs a section, such as `rg.1` or `rg.1.gz`. |
 | `completions` | see below | Shell name to path, such as `{ fish = "complete/rg.fish" }`. |
+| `app` | see below | macOS app bundles, such as `["Foo.app"]`. See [Apps and fonts](#apps-and-fonts). |
+| `font` | see below | Font files, such as `["fonts/ttf/Foo-Regular.ttf"]`. |
 
-Each artifact needs at least one of `bin`, `man` and `completions`.
+Each artifact needs at least one of `bin`, `man`, `completions`, `app` and
+`font`.
 
 ### match values
 
@@ -165,6 +168,56 @@ linked into the user's profile:
 
 oku refuses an archive entry that is absolute or contains `..`, and a symlink
 whose target is absolute or resolves outside the package.
+
+## Apps and fonts
+
+A package can ship a desktop app and fonts. oku copies them to where the user's
+OS looks for them, and removes them again when the package is removed.
+
+```toml
+[[artifact]]
+match = { os = "darwin" }
+url = "https://github.com/p0deje/Maccy/releases/download/{{tag}}/Maccy.app.zip"
+app = ["Maccy.app"]
+```
+
+```toml
+[[artifact]]
+url = "https://github.com/JetBrains/JetBrainsMono/releases/download/{{tag}}/JetBrainsMono-{{version}}.zip"
+font = ["fonts/ttf/JetBrainsMono-Regular.ttf", "fonts/ttf/JetBrainsMono-Bold.ttf"]
+```
+
+| Key | macOS | Linux |
+|---|---|---|
+| `app = ["Foo.app"]` | oku copies the bundle to `~/Applications/Foo.app`. | Not used. |
+| `[[app]]` | Not used. | A desktop entry at `<data home>/applications/oku-<name>.desktop`. |
+| `font = [...]` | oku copies them to `~/Library/Fonts/`. | oku copies them to `<data home>/fonts/oku/`. |
+
+`<data home>` is `$XDG_DATA_HOME`, or `~/.local/share`.
+
+On Linux an app is a program plus a launcher. Ship the program with `bin` and
+describe the launcher in a `[[app]]` table at the top level of the manifest:
+
+```toml
+[[app]]
+name = "Foo"
+exec = "bin/foo"
+icon = "share/icons/foo.png"
+```
+
+`name` and `exec` are required. `exec` and `icon` are paths inside the installed
+package, so `exec` is normally `bin/<program>`.
+
+oku copies apps and fonts, because Finder, Spotlight and font services do not
+treat a symlink as installed. A macOS bundle keeps its code signature. oku
+refuses to overwrite a file that it did not place, and the install fails with a
+message that names the file.
+
+Apps and fonts come from the user's global list only. A package in a
+[project](projects.md) installs its programs, and oku says that its apps and
+fonts were skipped.
+
+A `[build]` can install them too, with `install = { app = [...], font = [...] }`.
 
 ## [env]
 
@@ -287,7 +340,7 @@ one of these keys:
 | Key | What it does |
 |---|---|
 | `run = "..."` | Runs a command string in a shell. |
-| `install = { bin, lib, include, man, share, completions }` | Copies files from the source directory into the package. `bin` files become executable. `man` and `completions` go where an artifact's would. |
+| `install = { bin, lib, include, man, share, completions, app, font }` | Copies files from the source directory into the package. `bin` files become executable. `man` and `completions` go where an artifact's would. |
 | `copy = { from, to }` | Copies one file. `from` is relative to the source directory and `to` to the package. |
 | `fetch = { url, sha256, to }` | Downloads a file into the source directory. `sha256` is required. |
 | `extract = { file, to, strip }` | Unpacks an archive that is in the source directory. |
