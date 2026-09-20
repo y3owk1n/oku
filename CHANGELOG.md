@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.3.0](https://github.com/y3owk1n/oku/compare/v0.2.2...v0.3.0) (2026-09-20)
+
+
+### Features
+
+* **self:** support nightly builds for oku itself via install script or self update ([#76](https://github.com/y3owk1n/oku/issues/76)) ([eb98eac](https://github.com/y3owk1n/oku/commit/eb98eac1020c7b5032308a5e7861118ab34d70f4))
+* **version:** follow a moving tag such as nightly ([#74](https://github.com/y3owk1n/oku/issues/74)) ([093395c](https://github.com/y3owk1n/oku/commit/093395cdec37b10476e77041bd10807ad5bc48f0))
+
+
+### Bug Fixes
+
+* **self:** upload the nightly files before the tag moves ([#78](https://github.com/y3owk1n/oku/issues/78)) ([ac04e91](https://github.com/y3owk1n/oku/commit/ac04e91698c6fe0128620533d7f32cbf04d7f1b8))
+* **version:** date a moving tag's version from its commit ([#77](https://github.com/y3owk1n/oku/issues/77)) ([bed5770](https://github.com/y3owk1n/oku/commit/bed5770fb9d1361ea1c97ffc74ff8a88b54dbe0b))
+
 ## [0.2.2](https://github.com/y3owk1n/oku/compare/v0.2.1...v0.2.2) (2026-09-20)
 
 
