@@ -431,5 +431,48 @@ equal store paths across machines, not for sharing between users.
 `self uninstall` asks one second question for everything that needs `sudo`.
 After a no it removes user scope, empties the shared root, which the user owns,
 and prints the `sudo` commands for what is left. `--yes` alone counts as no.
-Why: uninstall must not fail half way because the user cannot enter a password, and
-oku is gone afterwards, so the printed commands are the only way left.
+Why: uninstall must not fail half way because the user cannot enter a password,
+and oku is gone afterwards, so the printed commands are the only way left.
+
+## D46. A cache entry is one signed archive named after the store path
+
+An entry is `<store name>.tar.zst` beside `<store name>.tar.zst.minisig`, in a
+directory or on a static http(s) host. The archive's top directory is the store
+name, so a signed entry cannot be served under another package's name. Entries
+carry no owner and no file times. Why: a cache must work from any file host
+with no server code, and minisign signatures verify with a tool that already
+exists.
+
+`oku cache push` writes into a directory and never uploads. It skips packages
+that are plain downloads and refuses impure ones. The secret key is
+`<config>/oku/signing.key` and has no password. Why: upload differs per host,
+and a push must run in CI without a prompt.
+
+## D47. The store hash of a build is the same on every machine that can share it
+
+A build's hash covers the manifest, version, platform and the store names of
+its deps, not their absolute paths. It also covers the store root unless the
+manifest says `relocatable = true`. Why: two machines must compute the same
+store name before one can use the other's build, and a build that can contain
+its own path must never match a machine with another root. B88 follows from
+the hash and needs no check at substitution time.
+
+## D48. A trusted cache entry needs no build approval
+
+oku looks in the caches before it asks for approval, for the package and for
+each dep. An entry from a trusted key installs without the approval prompt, and
+the lock records it as a build. An entry that oku cannot trust is ignored with
+a note, and the package builds locally. Why: approval protects against running
+a manifest's commands, and substitution runs none. Trusting a key grants more
+than an approval does, because oku installs whatever that key signed.
+
+## D49. A signing key covers artifacts, and the lock pins the first one seen
+
+The signature of an artifact is at its URL with `.minisig` appended. oku accepts
+the hashed and the legacy kind of minisign signature. The lock pins the key at
+the first install. After that oku refuses a manifest with another key, or with
+none, on `add`, `sync` and `update` until `--accept-key`. A signed artifact without a
+sha256 is not trust on first use. Why: with no registry, the first install is
+the only point where oku can learn a developer's key, and after it a changed
+key is what someone who took over the repo would publish. Build sources are outside the key and
+rely on the sha256 of their `fetch` steps.
