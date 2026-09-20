@@ -155,7 +155,12 @@ func reconcile(cmd *cobra.Command, opts Options, names []string, update bool) er
 		pkgs = append(pkgs, got.profile)
 	}
 
-	changed, err := e.globalProfile().Replace(pkgs)
+	lockData, err := next.Bytes()
+	if err != nil {
+		return err
+	}
+
+	changed, err := e.globalProfile().Replace(pkgs, lockData)
 	if err != nil {
 		return err
 	}

@@ -1153,3 +1153,60 @@ func TestB21VersionsOnlyMoveOnUpdate(t *testing.T) {
 		t.Fatalf("update moved a package pinned to 1.0.0 to %s", got)
 	}
 }
+
+func TestB22EveryChangeIsAGenerationAndRollbackRestoresOne(t *testing.T) {
+	m := newMachine(t)
+	server := newReleaseServer(t, "v1.0.0")
+	m.opts.GitHubAPI = server.URL + "/api"
+
+	ref := m.discoveredManifest(t, "1.0.0", "1.1.0")
+
+	_, err := m.run(t, "", "add", ref)
+	must(t, err)
+
+	server.tags = append(server.tags, "v1.1.0")
+
+	_, err = m.run(t, "", "update")
+	must(t, err)
+
+	out, err := m.run(t, "", "generations")
+	must(t, err)
+
+	if !strings.Contains(out, "  1") || !strings.Contains(out, "* 2") ||
+		!strings.Contains(out, "tool 1.0.0") || !strings.Contains(out, "tool 1.1.0") {
+		t.Fatalf("generations after add and update:\n%s", out)
+	}
+
+	_, err = m.run(t, "", "rollback")
+	must(t, err)
+
+	if got := m.toolOutput(t); got != "1.0.0" {
+		t.Fatalf("rollback left tool at %s", got)
+	}
+
+	// The lock went back too, so sync does not undo the rollback.
+	out, err = m.run(t, "", "sync")
+	must(t, err)
+
+	if got := m.toolOutput(t); got != "1.0.0" || !strings.Contains(out, "already in sync") {
+		t.Fatalf("sync after rollback moved tool to %s:\n%s", got, out)
+	}
+
+	_, err = m.run(t, "", "rollback", "2")
+	must(t, err)
+
+	if got := m.toolOutput(t); got != "1.1.0" {
+		t.Fatalf("rollback 2 left tool at %s", got)
+	}
+
+	if _, err := m.run(t, "", "rollback", "99"); err == nil {
+		t.Fatal("rolling back to a generation that does not exist succeeded")
+	}
+
+	_, err = m.run(t, "", "rollback", "1")
+	must(t, err)
+
+	if _, err := m.run(t, "", "rollback"); err == nil {
+		t.Fatal("rolling back from the oldest generation succeeded")
+	}
+}

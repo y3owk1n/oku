@@ -104,17 +104,27 @@ func (l *Lock) Delete(name string) {
 	l.Packages = slices.DeleteFunc(l.Packages, func(p Package) bool { return p.Name == name })
 }
 
-// Write saves the lock to path with packages sorted by name, so the same state
-// always produces the same bytes.
-func (l *Lock) Write(path string) error {
+// Bytes renders the lock with packages sorted by name, so the same state always
+// produces the same bytes.
+func (l *Lock) Bytes() ([]byte, error) {
 	slices.SortFunc(l.Packages, func(a, b Package) int { return strings.Compare(a.Name, b.Name) })
 
 	data, err := toml.Marshal(l)
 	if err != nil {
-		return fmt.Errorf("write %s: %w", path, err)
+		return nil, fmt.Errorf("render %s: %w", FileName, err)
 	}
 
-	if err := list.WriteFile(path, append([]byte(header), data...)); err != nil {
+	return append([]byte(header), data...), nil
+}
+
+// Write saves the lock to path.
+func (l *Lock) Write(path string) error {
+	data, err := l.Bytes()
+	if err != nil {
+		return err
+	}
+
+	if err := list.WriteFile(path, data); err != nil {
 		return fmt.Errorf("write %s: %w", path, err)
 	}
 

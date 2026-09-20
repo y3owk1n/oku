@@ -93,6 +93,19 @@ $ oku remove ripgrep
 removed ripgrep
 ```
 
+## Undo a change
+
+Every change to the installed packages is a numbered generation.
+
+```
+$ oku update
+ripgrep 14.1.1 -> 15.2.0
+$ oku rollback
+generation 1 is active: ripgrep 14.1.1
+```
+
+See [Commands](commands.md#oku-rollback).
+
 ## Move to another machine
 
 `oku add` records every package in `~/.config/oku/oku.toml` and pins what it

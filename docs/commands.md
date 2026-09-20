@@ -173,6 +173,57 @@ stay pinned.
 
 A name that is in neither `oku.toml` nor its includes fails.
 
+## oku generations
+
+```
+oku generations
+```
+
+Every command that changes the installed packages writes a new generation.
+`generations` lists them, oldest first, with `*` on the active one:
+
+```
+  1  2026-09-20 14:02  ripgrep 14.1.1
+  2  2026-09-20 14:10  ripgrep 15.2.0
+* 3  2026-09-20 14:31  hello 1.0.0, ripgrep 15.2.0
+```
+
+## oku rollback
+
+```
+oku rollback [generation]
+```
+
+Switches the profile and `oku.lock` back to an earlier generation. Without a
+number it goes to the generation before the active one.
+
+```
+$ oku rollback
+generation 2 is active: ripgrep 15.2.0
+```
+
+Rollback downloads nothing, because the packages of every generation are still
+in the store. It changes two things:
+
+- The `current` link points at the chosen generation.
+- oku replaces `oku.lock` with the copy saved in that generation, so a later
+  `oku sync` keeps the rolled-back versions.
+
+It does not change `oku.toml`. If your list names a package that the generation
+does not hold, rollback prints a notice:
+
+```
+~/.config/oku/oku.toml still lists hello, so `oku sync` will install it again. Run `oku remove hello` to drop it.
+```
+
+Rollback does not write a new generation. After `oku rollback 1`, generation 1
+is active and generations 2 and 3 still exist, so `oku rollback 3` goes forward
+again. The next `add`, `remove`, `sync` or `update` that changes something
+writes the next number.
+
+Rollback fails for a number that does not exist, for the generation that is
+already active, and with no number when the oldest generation is active.
+
 ## oku self uninstall
 
 ```

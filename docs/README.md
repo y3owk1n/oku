@@ -22,6 +22,7 @@ in [`../prd/`](../prd/).
 - Manifests with a fixed version, or with versions discovered from GitHub
   releases or git tags.
 - One `oku.toml` for several machines, with `include` and per-platform `when`.
+- `oku generations` and `oku rollback`.
 - Setting up a new machine from a published list and lock with
   `oku sync <list-ref>`.
 
@@ -29,7 +30,8 @@ in [`../prd/`](../prd/).
 
 - Building from source. A `[build]` table in a manifest is recognised and
   refused.
-- `oku rollback` and `oku gc`.
+- `oku gc`. Store paths and old generations are never deleted, except by
+  `oku self uninstall`.
 - Installing from a repo that has no manifest.
 - Source aliases (`alias/name` refs) and `oku search`.
 - Per-project lists and the shell hook.

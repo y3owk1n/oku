@@ -45,9 +45,16 @@ func newRemoveCmd() *cobra.Command {
 				)
 			}
 
+			locked.Delete(name)
+
+			lockData, err := locked.Bytes()
+			if err != nil {
+				return err
+			}
+
 			// A package can be listed without being in the profile, for example
 			// after the data directory was deleted. Remove still has to clear it.
-			err = e.globalProfile().Remove(name)
+			err = e.globalProfile().Remove(name, lockData)
 			if err != nil && (!errors.Is(err, profile.ErrNotInstalled) || (!inList && !inLock)) {
 				return err
 			}
@@ -55,8 +62,6 @@ func newRemoveCmd() *cobra.Command {
 			if err := list.Delete(e.listPath(), name); err != nil {
 				return err
 			}
-
-			locked.Delete(name)
 
 			if err := locked.Write(e.lockPath()); err != nil {
 				return err

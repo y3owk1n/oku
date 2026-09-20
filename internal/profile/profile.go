@@ -11,6 +11,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/pelletier/go-toml/v2"
 )
@@ -33,8 +34,22 @@ type Package struct {
 }
 
 type state struct {
+	Created  time.Time `toml:"created"`
 	Packages []Package `toml:"package"`
 }
+
+// Generation is one numbered snapshot of the profile.
+type Generation struct {
+	Number   int
+	Created  time.Time
+	Packages []Package
+	// Current marks the generation that "current" points at.
+	Current bool
+}
+
+// LockSnapshot is the file in a generation that holds oku.lock as it was when
+// the generation was activated.
+const LockSnapshot = "oku.lock"
 
 // Profile is a directory of generations.
 type Profile struct {
@@ -72,8 +87,8 @@ func (p *Profile) Packages() ([]Package, error) {
 }
 
 // Add activates a new generation that includes pkg. It replaces a package of
-// the same name.
-func (p *Profile) Add(pkg Package) error {
+// the same name. lockData is saved in the generation as LockSnapshot.
+func (p *Profile) Add(pkg Package, lockData []byte) error {
 	pkgs, err := p.Packages()
 	if err != nil {
 		return err
@@ -81,11 +96,11 @@ func (p *Profile) Add(pkg Package) error {
 
 	pkgs = slices.DeleteFunc(pkgs, func(have Package) bool { return have.Name == pkg.Name })
 
-	return p.activate(append(pkgs, pkg))
+	return p.activate(append(pkgs, pkg), lockData)
 }
 
 // Remove activates a new generation without the package called name.
-func (p *Profile) Remove(name string) error {
+func (p *Profile) Remove(name string, lockData []byte) error {
 	pkgs, err := p.Packages()
 	if err != nil {
 		return err
@@ -99,12 +114,12 @@ func (p *Profile) Remove(name string) error {
 		return fmt.Errorf("%s: %w", name, ErrNotInstalled)
 	}
 
-	return p.activate(kept)
+	return p.activate(kept, lockData)
 }
 
 // Replace activates a new generation holding exactly pkgs. It does nothing when
 // the active generation already holds them, and reports whether it changed.
-func (p *Profile) Replace(pkgs []Package) (bool, error) {
+func (p *Profile) Replace(pkgs []Package, lockData []byte) (bool, error) {
 	have, err := p.Packages()
 	if err != nil {
 		return false, err
@@ -117,12 +132,12 @@ func (p *Profile) Replace(pkgs []Package) (bool, error) {
 		return false, nil
 	}
 
-	return true, p.activate(pkgs)
+	return true, p.activate(pkgs, lockData)
 }
 
 // activate builds the next generation from pkgs and points "current" at it. A
 // failure deletes the half-built generation and leaves "current" unchanged.
-func (p *Profile) activate(pkgs []Package) error {
+func (p *Profile) activate(pkgs []Package, lockData []byte) error {
 	slices.SortFunc(pkgs, func(a, b Package) int { return strings.Compare(a.Name, b.Name) })
 
 	next, err := p.nextGeneration()
@@ -135,29 +150,93 @@ func (p *Profile) activate(pkgs []Package) error {
 		return fmt.Errorf("create generation: %w", err)
 	}
 
-	if err := build(gen, pkgs); err != nil {
+	if err := build(gen, pkgs, lockData); err != nil {
 		os.RemoveAll(gen)
 
 		return err
 	}
 
-	// Rename replaces "current" in one step, so the link exists at every moment.
+	if err := p.point(next); err != nil {
+		os.RemoveAll(gen)
+
+		return err
+	}
+
+	return nil
+}
+
+// point makes "current" name the generation directory gen. Rename replaces the
+// link in one step, so the link exists at every moment.
+func (p *Profile) point(gen string) error {
 	tmp := filepath.Join(p.dir, current+".tmp")
 	os.Remove(tmp)
 
-	if err := os.Symlink(next, tmp); err != nil {
-		os.RemoveAll(gen)
-
+	if err := os.Symlink(gen, tmp); err != nil {
 		return fmt.Errorf("activate generation: %w", err)
 	}
 
 	if err := os.Rename(tmp, filepath.Join(p.dir, current)); err != nil {
-		os.RemoveAll(gen)
-
 		return fmt.Errorf("activate generation: %w", err)
 	}
 
 	return nil
+}
+
+// Generations lists every generation, oldest first.
+func (p *Profile) Generations() ([]Generation, error) {
+	entries, err := os.ReadDir(p.dir)
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return nil, fmt.Errorf("read profile: %w", err)
+	}
+
+	active, _ := os.Readlink(filepath.Join(p.dir, current))
+
+	var gens []Generation
+
+	for _, entry := range entries {
+		n, err := strconv.Atoi(strings.TrimPrefix(entry.Name(), genPrefix))
+		if err != nil || !strings.HasPrefix(entry.Name(), genPrefix) {
+			continue
+		}
+
+		data, err := os.ReadFile(filepath.Join(p.dir, entry.Name(), stateFile))
+		if err != nil {
+			return nil, fmt.Errorf("read generation %d: %w", n, err)
+		}
+
+		var s state
+		if err := toml.Unmarshal(data, &s); err != nil {
+			return nil, fmt.Errorf("read generation %d: %w", n, err)
+		}
+
+		gens = append(gens, Generation{
+			Number:   n,
+			Created:  s.Created,
+			Packages: s.Packages,
+			Current:  entry.Name() == active,
+		})
+	}
+
+	slices.SortFunc(gens, func(a, b Generation) int { return a.Number - b.Number })
+
+	return gens, nil
+}
+
+// Switch points "current" at generation n and returns the lock snapshot saved
+// in it. The snapshot is nil for a generation written before snapshots existed.
+func (p *Profile) Switch(n int) ([]byte, error) {
+	gen := genPrefix + strconv.Itoa(n)
+
+	if _, err := os.Stat(filepath.Join(p.dir, gen, stateFile)); err != nil {
+		return nil, fmt.Errorf("generation %d does not exist", n)
+	}
+
+	snapshot, err := os.ReadFile(filepath.Join(p.dir, gen, LockSnapshot))
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return nil, fmt.Errorf("read generation %d: %w", n, err)
+	}
+
+	return snapshot, p.point(gen)
 }
 
 func (p *Profile) nextGeneration() (string, error) {
@@ -178,9 +257,9 @@ func (p *Profile) nextGeneration() (string, error) {
 	return genPrefix + strconv.Itoa(highest+1), nil
 }
 
-// build links every file under each package's bin and share into gen and writes
-// the state file.
-func build(gen string, pkgs []Package) error {
+// build links every file under each package's bin and share into gen, saves the
+// lock snapshot and writes the state file.
+func build(gen string, pkgs []Package, lockData []byte) error {
 	owners := map[string]string{}
 
 	for _, pkg := range pkgs {
@@ -191,7 +270,15 @@ func build(gen string, pkgs []Package) error {
 		}
 	}
 
-	data, err := toml.Marshal(state{Packages: pkgs})
+	if lockData != nil {
+		if err := os.WriteFile(filepath.Join(gen, LockSnapshot), lockData, 0o644); err != nil {
+			return fmt.Errorf("write generation: %w", err)
+		}
+	}
+
+	data, err := toml.Marshal(
+		state{Created: time.Now().UTC().Truncate(time.Second), Packages: pkgs},
+	)
 	if err != nil {
 		return fmt.Errorf("write generation: %w", err)
 	}
