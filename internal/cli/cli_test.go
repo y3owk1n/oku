@@ -3987,3 +3987,53 @@ func TestB72MsiIsRefusedWithAReasonOffWindows(t *testing.T) {
 		t.Fatal("a refused msi left something in the store")
 	}
 }
+
+func TestB91DoctorReportsTheSetupAndItsProblems(t *testing.T) {
+	m := newMachine(t)
+	ref := m.manifest(t, "tool", map[string]string{"tool": script}, `bin = ["tool"]`)
+
+	_, err := m.run(t, "", "add", ref)
+	must(t, err)
+
+	bin := filepath.Dir(m.profile("bin", "tool"))
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+"/usr/bin:/bin")
+
+	out, err := m.run(t, "", "doctor")
+	if err != nil {
+		t.Fatalf("doctor found a problem on a healthy machine: %v\n%s", err, out)
+	}
+
+	for _, want := range []string{filepath.Join(m.data, "store"), "sandbox", "shell hook", "is on PATH", "leads into the store"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("doctor does not report %q:\n%s", want, out)
+		}
+	}
+
+	// A program of the same name earlier on PATH, and a store path that is gone.
+	shadow := filepath.Join(filepath.Dir(m.fixtures), "shadow")
+	must(t, os.MkdirAll(shadow, 0o755))
+	must(t, os.WriteFile(filepath.Join(shadow, "tool"), []byte(script), 0o755))
+	t.Setenv("PATH", shadow+string(os.PathListSeparator)+bin)
+
+	for _, entry := range m.storeEntries(t) {
+		must(t, os.RemoveAll(filepath.Join(m.data, "store", entry)))
+	}
+
+	out, err = m.run(t, "", "doctor")
+	if err == nil {
+		t.Fatalf("doctor found nothing wrong:\n%s", out)
+	}
+
+	for _, want := range []string{"runs in place of oku's tool", "is missing", "leads nowhere"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("doctor does not report %q:\n%s", want, out)
+		}
+	}
+
+	t.Setenv("PATH", "/usr/bin:/bin")
+
+	out, _ = m.run(t, "", "doctor")
+	if !strings.Contains(out, "is not on PATH") {
+		t.Fatalf("doctor does not say that the profile is missing from PATH:\n%s", out)
+	}
+}

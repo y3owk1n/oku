@@ -104,6 +104,19 @@ Set-Location $root
 prompt | Out-Null
 Check 'leaving the project takes fd away again' { -not (Get-Command fd -ErrorAction SilentlyContinue) }
 
+# doctor, on a machine where the profile is not on PATH yet, and then where it is.
+$diagnosis = (& $oku doctor) -join "`n"
+Check 'doctor says that the profile is not on PATH, and exits with 1' {
+    ($LASTEXITCODE -eq 1) -and ($diagnosis -match 'is not on PATH') -and
+    ($diagnosis -match 'without a sandbox')
+}
+$env:PATH = "$bin;$env:PATH"
+$diagnosis = (& $oku doctor) -join "`n"
+Check 'doctor is content once the profile is on PATH' {
+    ($LASTEXITCODE -eq 0) -and ($diagnosis -match 'is on PATH') -and
+    ($diagnosis -match 'leads into the store')
+}
+
 # A build from source: a dep, a needs tool, pwsh and cmd steps, and an install.
 $fixtures = Join-Path $root 'fixtures'
 New-Item -ItemType Directory -Force $fixtures | Out-Null

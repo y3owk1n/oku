@@ -82,6 +82,11 @@ func (p *Profile) LockSnapshotOfCurrent() []byte {
 	return data
 }
 
+// Name is "global" or "project-<hash>".
+func (p *Profile) Name() string {
+	return filepath.Base(p.dir)
+}
+
 // BinDir is the directory a user puts on PATH.
 func (p *Profile) BinDir() string {
 	return filepath.Join(p.dir, current, "bin")
