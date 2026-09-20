@@ -51,8 +51,11 @@ func quoteArgs(args []string) []string {
 // createRootArgv creates dir and gives owner full control of it and of what is
 // made in it later.
 func createRootArgv(dir string, owner *user.User) []string {
+	// The directory can exist already, because system services keep their
+	// definitions and logs in it, and mkdir fails on a directory that exists.
 	return []string{
-		"cmd", "/c", "mkdir", dir, "&&", "icacls", dir, "/grant", owner.Username + ":(OI)(CI)F",
+		"cmd", "/c", "(if", "not", "exist", dir, "mkdir", dir + ")", "&&",
+		"icacls", dir, "/grant", owner.Username + ":(OI)(CI)F",
 	}
 }
 
