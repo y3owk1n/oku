@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 
 	"github.com/y3owk1n/oku/internal/cli"
+	"github.com/y3owk1n/oku/internal/shim"
 )
 
 // The build sets version through -ldflags "-X main.version=...".
@@ -21,6 +22,11 @@ func main() {
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "oku: locate the running binary:", err)
 		os.Exit(1)
+	}
+
+	// On Windows a profile's bin holds copies of oku under other names.
+	if code, handled := shim.Run(executable, os.Args[1:]); handled {
+		os.Exit(code)
 	}
 
 	if err := cli.NewRootCmd(cli.Options{Version: version, Executable: executable}).
