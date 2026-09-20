@@ -13,6 +13,7 @@ Tested on a GitHub Actions `windows-latest` machine with real releases:
 - Programs start through the profile from any directory, with their arguments,
   stdin, stdout and exit code unchanged.
 - Apps and fonts for your user, see [Apps and fonts](#apps-and-fonts).
+- Services for your user, see [Services](#services).
 - Building from source, see [Builds](#builds).
 - `oku self uninstall`, see [Uninstalling](#uninstalling).
 - [Projects](projects.md) with the PowerShell hook: `oku allow`, and a project's
@@ -20,8 +21,7 @@ Tested on a GitHub Actions `windows-latest` machine with real releases:
 
 ## What does not work yet
 
-- Services.
-- Apps and fonts in [system scope](system-scope.md).
+- [System scope](system-scope.md): apps, fonts and services for the whole machine.
 
 ## Put oku's programs on PATH
 
@@ -82,6 +82,29 @@ oku writes that value and deletes it again with the font. oku creates the
 shortcut through the Windows shell, by way of `powershell`. `oku remove`,
 `oku rollback` and `oku self uninstall` take all of it away, as on the other
 systems.
+
+## Services
+
+A [service](services.md) is a scheduled task named `oku-<name>`. It runs as you,
+with your normal rights, and only while you are logged on.
+
+| | |
+|---|---|
+| Enabled | The task has a trigger for your logon, and oku starts it right away. |
+| Installed, not enabled | The task has no trigger. `oku service start <name>` runs it. |
+| Definition | `<data>\oku\services\<name>.json` |
+| Output | `<data>\oku\logs\<name>.log` |
+
+A scheduled task can neither set environment variables nor send output to a
+file. So the task starts `oku service-run`, a hidden command that reads the
+definition, opens the log, sets the service's `env` and runs its program without
+a window. It puts the program in a Windows job object, so that ending the task
+ends the program too. `oku service stop`, `oku remove` and `oku self uninstall`
+rely on that.
+
+Task Scheduler restarts a task only after it fails. So `restart = "always"`
+behaves like `restart = "on-failure"` here: one minute after a failure the task
+starts again. A program that exits with code 0 stays stopped.
 
 ## Builds
 

@@ -197,6 +197,71 @@ Check 'adding the package again brings the shortcut and the font back' {
     (Test-Path $shortcut) -and (Test-Path $font)
 }
 
+# A service, which oku runs as a scheduled task of the current user.
+Set-Content (Join-Path $fixtures 'ticker.go') @'
+package main
+
+import (
+	"fmt"
+	"os"
+	"time"
+)
+
+func main() {
+	fmt.Println("started with PORT=" + os.Getenv("PORT") + " and " + os.Args[1])
+	time.Sleep(10 * time.Minute)
+}
+'@
+$tickerGo = (Join-Path $fixtures 'ticker.go') -replace '\\', '/'
+
+Set-Content (Join-Path $fixtures 'ticker.toml') @"
+[package]
+name = "ticker"
+[version]
+value = "1.0.0"
+[build]
+needs = ["go"]
+[[build.step]]
+run = "Copy-Item '$tickerGo' main.go; Set-Content go.mod 'module ticker'; go build -o ticker.exe ."
+shell = "pwsh"
+[[build.step]]
+install = { bin = ["ticker.exe"] }
+[[service]]
+name = "ticker"
+command = "bin/ticker.exe"
+args = ["--data"]
+env = { PORT = "8080" }
+restart = "on-failure"
+"@
+
+function ServiceStatus { (& $oku service status ticker) -join ' ' }
+
+Oku add (Join-Path $fixtures 'ticker.toml') --yes --service
+Start-Sleep -Seconds 3
+Check 'an enabled service is running' { (ServiceStatus) -match 'running' -and (ServiceStatus) -match 'starts at login' }
+Check 'its task has a logon trigger and runs with the least rights' {
+    $task = Get-ScheduledTask -TaskName 'oku-ticker'
+    ($task.Triggers.Count -eq 1) -and ($task.Principal.RunLevel -eq 'Limited')
+}
+$logs = (& $oku service logs ticker) -join ' '
+Check 'the program got its arguments and environment, and its output is in the log' {
+    $logs -match 'started with PORT=8080 and --data'
+}
+
+Oku service stop ticker
+Start-Sleep -Seconds 2
+Check 'stop stops the task and the program' {
+    (ServiceStatus) -match 'stopped' -and -not (Get-Process ticker -ErrorAction SilentlyContinue)
+}
+Oku service start ticker
+Start-Sleep -Seconds 3
+Check 'start starts it again' { (ServiceStatus) -match 'running' }
+
+Oku remove ticker
+Check 'remove deletes the task' { -not (Get-ScheduledTask -TaskName 'oku-ticker' -ErrorAction SilentlyContinue) }
+Start-Sleep -Seconds 2
+Check 'remove stops the program' { -not (Get-Process ticker -ErrorAction SilentlyContinue) }
+
 # An .msi download, which oku unpacks with "msiexec /a" and never installs.
 Set-Content (Join-Path $fixtures 'gh.toml') @'
 [package]
