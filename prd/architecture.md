@@ -173,7 +173,8 @@ tag = "v14.1.0"             # only when it differs from version
 strategy = "artifact"       # artifact | build
 url = ""
 sha256 = ""
-vendor_sha256 = ""
+vendor_sha256 = ""          # what the vendor steps downloaded (D34)
+impure = false              # true when a run step used network = true
 
 [[package.dep]]             # pinned like a package, and may nest its own deps
 name = "pcre2"
@@ -233,7 +234,7 @@ oku add <ref>[@version] [--from-source] [--yes] [--verbose] [--global]
 oku remove <name> [--global]
 oku sync [list-ref]
 oku update [name]
-oku list | info <ref> | why <name> | search <term>
+oku list | info <name> | why <name> | search <term>
 oku generations | rollback [n] | gc [--keep N] [--dry-run]
 oku source add|remove|list
 oku hook <bash|zsh|fish|pwsh> | env | allow [path] | deny [path]
@@ -241,7 +242,8 @@ oku shell <ref>...
 oku service list|start|stop|restart|status|logs <name>
 oku cache add|remove|list|push
 oku key trust|revoke|list|generate
-oku manifest init --from <repo> [-o file] | lint [file...] | bump [file] | test
+oku manifest init --from <repo> [-o file] | lint [file...] | bump [file]
+oku manifest test [file] [--keep]
 oku setup --system | doctor
 oku self update | self uninstall [--keep-list] [--yes]
 ```
