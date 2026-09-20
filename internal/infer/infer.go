@@ -37,7 +37,10 @@ type Inferrer struct {
 
 // Release is a GitHub release with its downloads.
 type Release struct {
-	Tag    string `json:"tag_name"`
+	Tag string `json:"tag_name"`
+	// Commit is the commit the release was made from, when upstream made it from
+	// a commit and not from a branch.
+	Commit string `json:"target_commitish"`
 	Assets []struct {
 		Name string `json:"name"`
 		URL  string `json:"browser_download_url"`
@@ -184,10 +187,20 @@ func (inf *Inferrer) Manifest(
 
 // Latest returns the newest release of the GitHub repo "owner/name".
 func (inf *Inferrer) Latest(ctx context.Context, repo string) (Release, error) {
+	return inf.release(ctx, repo, "latest")
+}
+
+// Tagged returns the release of repo with that tag. Unlike Latest, it also
+// returns a prerelease.
+func (inf *Inferrer) Tagged(ctx context.Context, repo, tag string) (Release, error) {
+	return inf.release(ctx, repo, "tags/"+tag)
+}
+
+func (inf *Inferrer) release(ctx context.Context, repo, which string) (Release, error) {
 	var rel Release
 
 	req, err := http.NewRequestWithContext(
-		ctx, http.MethodGet, inf.GitHubAPI+"/repos/"+repo+"/releases/latest", nil,
+		ctx, http.MethodGet, inf.GitHubAPI+"/repos/"+repo+"/releases/"+which, nil,
 	)
 	if err != nil {
 		return rel, err
@@ -207,6 +220,8 @@ func (inf *Inferrer) Latest(ctx context.Context, repo string) (Release, error) {
 	defer resp.Body.Close()
 
 	switch {
+	case resp.StatusCode == http.StatusNotFound && which != "latest":
+		return rel, fmt.Errorf("%s has no release %s", repo, strings.TrimPrefix(which, "tags/"))
 	case resp.StatusCode == http.StatusNotFound:
 		return rel, fmt.Errorf("%s has no manifest and no release to infer one from", repo)
 	case resp.StatusCode == http.StatusForbidden && resp.Header.Get("X-RateLimit-Remaining") == "0":

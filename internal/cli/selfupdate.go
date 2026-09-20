@@ -11,6 +11,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/y3owk1n/oku/internal/infer"
 	"github.com/y3owk1n/oku/internal/store"
 )
 
@@ -20,10 +21,13 @@ const (
 	// releaseKey is the minisign public key that signs those releases. Its secret
 	// half is the MINISIGN_SECRET_KEY secret of the repo.
 	releaseKey = "RWSjFGqIxI8IPGwKE/uRgugZ51qCEMe1CDbFRVTMUAuin42JiOxg2HNW"
+	// nightlyTag is the prerelease that holds the build of the newest commit on
+	// main.
+	nightlyTag = "nightly"
 )
 
 func newSelfUpdateCmd(opts Options) *cobra.Command {
-	var check bool
+	var check, nightly bool
 
 	cmd := &cobra.Command{
 		Use:   "update",
@@ -32,15 +36,21 @@ func newSelfUpdateCmd(opts Options) *cobra.Command {
 
 oku downloads the binary for this OS and CPU from its GitHub releases, with the
 minisign signature beside it. It replaces itself only when the release key that
-is built into this binary made that signature.`,
+is built into this binary made that signature.
+
+--nightly takes the build of the newest commit on main instead. It is a
+prerelease with the same signature. Run "oku self update" without the flag to go
+back to the newest release.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			return runSelfUpdate(cmd, opts, check)
+			return runSelfUpdate(cmd, opts, check, nightly)
 		},
 	}
 
 	cmd.Flags().
 		BoolVar(&check, "check", false, "say whether a newer release exists, and change nothing")
+	cmd.Flags().
+		BoolVar(&nightly, "nightly", false, "take the build of the newest commit on main")
 
 	return cmd
 }
@@ -55,7 +65,7 @@ func releaseAsset() string {
 	return name
 }
 
-func runSelfUpdate(cmd *cobra.Command, opts Options, check bool) error {
+func runSelfUpdate(cmd *cobra.Command, opts Options, check, nightly bool) error {
 	key, repo := releaseKey, releaseRepo
 	if opts.ReleaseKey != "" {
 		key = opts.ReleaseKey
@@ -70,16 +80,43 @@ func runSelfUpdate(cmd *cobra.Command, opts Options, check bool) error {
 		return err
 	}
 
-	release, err := e.inferrer(opts).Latest(cmd.Context(), repo)
-	if err != nil {
-		return err
+	out := cmd.OutOrStdout()
+
+	var (
+		release infer.Release
+		newest  string
+		current bool
+	)
+
+	if nightly {
+		if release, err = e.inferrer(opts).Tagged(cmd.Context(), repo, nightlyTag); err != nil {
+			return err
+		}
+
+		// The nightly workflow makes the release from a commit and ends the
+		// version of its binaries with the same seven characters.
+		if len(release.Commit) < 7 {
+			return fmt.Errorf("release %s of %s names no commit", nightlyTag, repo)
+		}
+
+		newest = nightlyTag + " " + release.Commit[:7]
+		current = strings.HasSuffix(opts.Version, "-"+release.Commit[:7])
+	} else {
+		if release, err = e.inferrer(opts).Latest(cmd.Context(), repo); err != nil {
+			return err
+		}
+
+		newest = strings.TrimPrefix(release.Tag, "v")
+		current = newest == strings.TrimPrefix(opts.Version, "v")
 	}
 
-	out := cmd.OutOrStdout()
-	newest := strings.TrimPrefix(release.Tag, "v")
+	if current {
+		kind := "release"
+		if nightly {
+			kind = "nightly build"
+		}
 
-	if newest == strings.TrimPrefix(opts.Version, "v") {
-		fmt.Fprintf(out, "oku %s is the newest release\n", newest)
+		fmt.Fprintf(out, "oku %s is the newest %s\n", newest, kind)
 
 		return nil
 	}

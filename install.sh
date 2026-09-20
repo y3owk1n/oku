@@ -4,7 +4,8 @@
 #   curl -fsSL https://raw.githubusercontent.com/y3owk1n/oku/main/install.sh | sh
 #
 # OKU_INSTALL_DIR  where the binary goes, default ~/.local/bin
-# OKU_VERSION      a release tag such as v0.1.0, default the newest release
+# OKU_VERSION      a release tag such as v0.1.0, or nightly for the build of the
+#                  newest commit on main, default the newest release
 set -eu
 
 repo="y3owk1n/oku"

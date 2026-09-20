@@ -219,6 +219,9 @@ order step in `prd/product.md`.
   PATH order problems and broken profile links.
 - B92 [11] `oku self update` replaces the oku binary after verifying its
   signature.
+- B111 [11] `oku self update --nightly` replaces the oku binary with the build
+  of the `nightly` release after the same signature check, and changes nothing
+  when the running binary is that build.
 - B93 [11] The install script puts one static binary in place and prints the
   hook line for the user's shell. It needs no root and edits no existing file.
 

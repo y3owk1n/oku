@@ -1650,6 +1650,11 @@ func inferServer(t *testing.T, m *machine, assets map[string]string) {
 	}
 
 	latest := `{"tag_name": "v1.4.0", "assets": [` + strings.Join(items, ",") + `]}`
+	nightly := `{"tag_name": "nightly", "target_commitish": "7777777aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",` +
+		` "assets": [` + strings.Join(
+		items,
+		",",
+	) + `]}`
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
@@ -1657,6 +1662,8 @@ func inferServer(t *testing.T, m *machine, assets map[string]string) {
 			_, _ = w.Write([]byte("5555555555555555555555555555555555555555"))
 		case "/api/repos/owner/tool/releases/latest":
 			_, _ = w.Write([]byte(latest))
+		case "/api/repos/owner/tool/releases/tags/nightly":
+			_, _ = w.Write([]byte(nightly))
 		case "/api/repos/owner/tool/releases":
 			_, _ = w.Write([]byte(`[{"tag_name": "v1.4.0"}]`))
 		default:
@@ -4676,6 +4683,50 @@ func TestB92SelfUpdateReplacesTheBinaryOnlyAfterItsSignatureChecksOut(t *testing
 
 	if !strings.Contains(out, "is the newest release") {
 		t.Fatalf("an up to date oku should say so:\n%s", out)
+	}
+}
+
+func TestB111SelfUpdateNightlyTakesTheNightlyBuildAfterTheSameCheck(t *testing.T) {
+	public, secret, err := minisign.GenerateKey(rand.Reader)
+	must(t, err)
+	_, stranger, err := minisign.GenerateKey(rand.Reader)
+	must(t, err)
+
+	forged := newMachine(t)
+	forged.opts.ReleaseKey = public.String()
+	forged.releaseWith(t, "a forged oku", stranger)
+
+	if _, err := forged.run(t, "", "self", "update", "--nightly"); err == nil ||
+		!strings.Contains(err.Error(), "is not signed by") {
+		t.Fatalf("want a refusal for a nightly the key did not sign, got %v", err)
+	}
+
+	if data, _ := os.ReadFile(forged.exe); string(data) != "binary" {
+		t.Fatalf("a forged nightly replaced the binary with %q", data)
+	}
+
+	m := newMachine(t)
+	m.opts.ReleaseKey = public.String()
+	m.releaseWith(t, "the nightly oku", secret)
+
+	out, err := m.run(t, "", "self", "update", "--nightly")
+	must(t, err)
+
+	if data, _ := os.ReadFile(m.exe); string(data) != "the nightly oku" ||
+		!strings.Contains(out, "nightly 7777777") {
+		t.Fatalf("self update --nightly did not replace the binary:\n%s", out)
+	}
+
+	m.opts.Version = "nightly-20260921010203-7777777"
+
+	must(t, os.WriteFile(m.exe, []byte("binary"), 0o755))
+
+	out, err = m.run(t, "", "self", "update", "--nightly")
+	must(t, err)
+
+	if data, _ := os.ReadFile(m.exe); string(data) != "binary" ||
+		!strings.Contains(out, "is the newest nightly build") {
+		t.Fatalf("self update --nightly replaced the build it already is:\n%s", out)
 	}
 }
 
