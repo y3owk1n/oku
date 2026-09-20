@@ -11,7 +11,8 @@
   `oku sync <ref>` adopts.
 - **Adopt**: set a machine up from a published list by including it and
   starting from the lock beside it.
-- **Collection**: a repo or directory holding many manifests as `<name>.toml`.
+- **Collection**: a repo or directory holding many manifests as `<name>.toml`,
+  at its root or under `packages/`.
 - **Source**: a user-defined alias for a collection. oku ships none.
 - **Artifact**: a prebuilt download in a manifest, chosen by a selector.
 - **Selector**: `{ os, arch, libc }` match table. Omitted keys match anything.
