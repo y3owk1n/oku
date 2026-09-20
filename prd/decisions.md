@@ -482,9 +482,10 @@ are outside the key and rely on the sha256 of their `fetch` steps.
 There is no Windows machine to test on, so `.github/scripts/live-windows.ps1`
 runs the real `oku.exe` on a GitHub Actions `windows-latest` runner against real
 GitHub releases, on every pull request. The Go test suite skips on Windows,
-because its fixtures are shell scripts. Why: code that only cross-compiles for Windows has
-never run, and the first three runs each found a bug that no other machine
-could show. The same CI found two bugs on Linux amd64 that an arm64 Mac hid.
+because its fixtures are shell scripts. Why: code that only cross-compiles for
+Windows has never run, and the first three runs each found a bug that no other
+machine could show. The same CI found two bugs on Linux amd64 that an arm64 Mac
+hid.
 
 ## D51. A Windows profile uses junctions, hard links and shims
 
