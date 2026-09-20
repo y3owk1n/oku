@@ -31,6 +31,10 @@ You can also edit the file by hand and run `oku sync`.
 A relative file ref such as `"./recipes/fd.toml"` starts at the directory of the
 list that contains it, not at your working directory.
 
+`oku add` writes a file inside the list's directory this way, in `oku.toml` and
+in `oku.lock`, so a project that keeps its manifests beside its list works in
+any checkout. oku stores a file outside that directory as its absolute path.
+
 ### Services
 
 `service = true` runs the package's [services](services.md) now and at every

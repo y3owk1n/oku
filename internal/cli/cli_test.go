@@ -1106,6 +1106,55 @@ func TestB19RelativeRefsStartAtTheListAndRemoteListsRejectLocalPaths(t *testing.
 	}
 }
 
+func TestB19AddStoresAFileInsideTheProjectRelativeToIt(t *testing.T) {
+	m := newMachine(t)
+
+	manifest, err := os.ReadFile(m.namedManifest(t, "tool", "tool", "tool"))
+	must(t, err)
+
+	project := filepath.Join(m.fixtures, "work", "api")
+	must(t, os.MkdirAll(filepath.Join(project, "recipes"), 0o755))
+	must(t, os.WriteFile(filepath.Join(project, "oku.toml"), nil, 0o644))
+	must(t, os.WriteFile(filepath.Join(project, "recipes", "tool.toml"), manifest, 0o644))
+
+	m.opts.WorkDir = project
+
+	_, err = m.run(t, "", "add", filepath.Join(project, "recipes", "tool.toml"))
+	must(t, err)
+
+	for _, name := range []string{"oku.toml", "oku.lock"} {
+		data, err := os.ReadFile(filepath.Join(project, name))
+		must(t, err)
+
+		if !strings.Contains(string(data), "./recipes/tool.toml") ||
+			strings.Contains(string(data), project) {
+			t.Fatalf("%s does not hold the ref relative to the project:\n%s", name, data)
+		}
+	}
+
+	// Another checkout is the same project at another path.
+	moved := filepath.Join(m.fixtures, "elsewhere")
+	must(t, os.Rename(project, moved))
+	must(t, os.RemoveAll(m.data))
+
+	locked, err := os.ReadFile(filepath.Join(moved, "oku.lock"))
+	must(t, err)
+
+	m.opts.WorkDir = moved
+
+	out, err := m.run(t, "", "sync")
+	if err != nil || !strings.Contains(out, "profile now holds 1 package") {
+		t.Fatalf("sync in the moved project: %v\n%s", err, out)
+	}
+
+	after, err := os.ReadFile(filepath.Join(moved, "oku.lock"))
+	must(t, err)
+
+	if string(after) != string(locked) {
+		t.Fatalf("sync in the moved project changed the lock:\n%s", after)
+	}
+}
+
 // releaseServer fakes the GitHub releases API for owner/tool. The test changes
 // tags between calls, and hits counts the requests.
 type releaseServer struct {
