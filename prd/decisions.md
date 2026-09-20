@@ -226,6 +226,57 @@ against the whole schema and rejects them. Why: a manifest written for a newer
 oku must still install on an older one. The author is the person who can fix a
 misspelt key, so the strict check is a command the author runs.
 
+## D28. A build installs straight into its final store path
+
+`{{prefix}}` is the final store path, and a build writes into it directly. The
+source is unpacked in a temporary directory outside the store. oku writes
+`oku-meta.toml` last, and a store path without it is a crashed build that oku
+deletes before it builds again. Why: build systems write the install prefix
+into the files they produce, so building elsewhere and renaming would leave
+wrong paths inside the package. Artifacts keep the unpack-then-rename install,
+because no file inside them contains its path.
+
+## D29. Approval is per manifest hash and per machine
+
+Before the first build of a manifest with `run` steps for the host, oku shows
+the commands and asks. The answer is stored by manifest sha256 in
+`<data>/oku/trust/approvals.toml`. Without a terminal oku refuses unless `--yes`
+is passed. A dep that builds asks for itself. `sync` on a new machine asks
+again. Why: a changed manifest is different code, so it needs a new answer. An
+approval stored in a published lock would let one person approve commands for
+everyone who adopts the list. The executor and the prompt were merged in one
+change so that no commit on main runs manifest commands unasked.
+
+## D30. Each package pins its own deps, nested in the lock
+
+The lock stores deps as `[[package.dep]]` under the package that needs them,
+recursively. Generations record each package's closure of store paths, and gc
+treats those as used. Why: D6 lets two packages use different versions of one
+dep, so a flat list keyed by name cannot hold them. Nesting also makes
+`oku update <name>` re-resolve exactly that package's deps and nothing else.
+
+## D31. Runtime library lookup comes from the linker, not from rewriting
+
+On Linux oku sets `LD_RUN_PATH` to the deps' lib directories, and the GNU linker
+records them in what it links. On macOS a shared library must record its own
+absolute install name, which build systems do when given `{{prefix}}`. oku
+never edits a binary after the build. Why: this refines D7. The linker reads
+`LD_RUN_PATH` itself, while `LDFLAGS` only works when the build system passes
+it on. Rewriting a binary after the build can corrupt it, and an absolute
+install name is already what a correct macOS library has.
+
+Known limit: the GNU linker ignores `LD_RUN_PATH` when the build passes its own
+`-rpath`. Such a build adds the dep paths itself with `{{dep.<name>.prefix}}`.
+
+## D32. The build environment is scrubbed before the sandbox exists
+
+A `run` step gets `PATH` with the deps' `bin`, the directories of the `needs`
+tools, then `/usr/bin` and `/bin`, a temporary `HOME` and `TMPDIR`, the link
+environment, oku's variables and the step's `env`. Why: it makes a missing
+`needs` entry fail on the author's machine instead of the user's. `/usr/bin`
+and `/bin` stay because `sh`, `make` and the system compiler driver are there
+on most hosts. Step 6 replaces this with the sandbox and revisits B54.
+
 ## D16. Installers are unpacked, never executed
 
 `extract` understands tar, zip, 7z, dmg, pkg, msi, deb, rpm and AppImage. Why:

@@ -30,7 +30,8 @@ XDG on unix, `%APPDATA%` and `%LOCALAPPDATA%` on Windows. `<root>` is
 
 A store path holds `pkg/` (the whole unpacked download), `bin/`, `lib/`,
 `include/`, `share/`, `apps/`, `fonts/` and `oku-meta.toml` (closure, env,
-services). The output directories hold relative links into `pkg/`. A profile
+services). For an artifact the output directories hold relative links into
+`pkg/`. A built package has no `pkg/` and holds real files (D28). A profile
 generation mirrors `bin/` and `share/` with links, and holds `oku-gen.toml`
 (time, packages) and a copy of `oku.lock`.
 
@@ -173,7 +174,11 @@ strategy = "artifact"       # artifact | build
 url = ""
 sha256 = ""
 vendor_sha256 = ""
-deps = ["pcre2-10.44-<hash>"]
+
+[[package.dep]]             # pinned like a package, and may nest its own deps
+name = "pcre2"
+ref = "github:someone/recipes#pcre2"
+version = "10.44"
 ```
 
 ```toml
@@ -185,7 +190,7 @@ core = "github:someone/recipes"
 A source names a collection. `core/ripgrep` expands to
 `github:someone/recipes#ripgrep` before it is written anywhere (D26).
 
-Dep packages appear as their own `[[package]]` entries. The lock adds a
+Deps nest under the package that needs them (D30). The lock adds a
 platform entry the first time that platform resolves, so one lock serves a
 mixed-OS team.
 
@@ -224,7 +229,7 @@ internal/shellhook/ hook and env output per shell
 ## CLI
 
 ```
-oku add <ref>[@version] [--from-source] [--global]
+oku add <ref>[@version] [--from-source] [--yes] [--verbose] [--global]
 oku remove <name> [--global]
 oku sync [list-ref]
 oku update [name]
