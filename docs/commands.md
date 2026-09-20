@@ -8,6 +8,36 @@ a list act on that [project](projects.md) and print `project <dir>` on stderr.
 `--global`, or `-g`, makes them use the global list instead. It works on every
 command.
 
+## JSON output
+
+The commands that print data take `--json` and then print JSON on stdout in
+place of text. Messages and errors still go to stderr as text.
+
+| Command | JSON |
+|---|---|
+| `oku list` | a list of `name`, `version`, `ref`, `store_path`, `service`, `system` |
+| `oku info <name>` | one object: `name`, `version`, `ref`, `commit`, `installed`, `store_path`, `inferred`, `impure`, `vendor_sha256`, `signing_key` |
+| `oku why <name>` | `name`, `in_list` (the ref, or empty), and `needed_by`, a list of `name`, `version`, `dep_versions` |
+| `oku generations` | a list of `number`, `current`, `created`, `packages` |
+| `oku search <term>` | a list of `ref`, `description` |
+| `oku source list` | a list of `alias`, `ref` |
+| `oku cache list` | a list of locations |
+| `oku key list` | `yours` and `trusted` |
+| `oku service list` | a list of `name`, `package`, `installed`, `enabled`, `running`, `system`, `detail` |
+| `oku service status <name>` | one such object |
+| `oku doctor` | `problems`, and `checks`, a list of `status` and `message` |
+
+A result with nothing in it prints `[]`, never `null`. `created` is an RFC 3339
+time in UTC. Exit codes are the same as without the flag, so `oku doctor --json`
+still exits with 1 when it found a problem.
+
+```
+$ oku list --json | jq -r '.[] | "\(.name) \(.version)"'
+ripgrep 15.2.0
+```
+
+On a command that prints no data, `--json` changes nothing.
+
 ## oku add
 
 ```

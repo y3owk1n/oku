@@ -225,6 +225,26 @@ func listServices(cmd *cobra.Command, opts Options) error {
 		return err
 	}
 
+	if wantJSON(cmd) {
+		rows := []serviceRow{}
+
+		for _, item := range items {
+			manager, err := e.managerFor(opts, item)
+			if err != nil {
+				return err
+			}
+
+			status, err := manager.Status(cmd.Context(), defs[item.Name])
+			if err != nil {
+				return err
+			}
+
+			rows = append(rows, newServiceRow(item, status))
+		}
+
+		return printJSON(cmd, rows)
+	}
+
 	if len(items) == 0 {
 		fmt.Fprintln(cmd.OutOrStdout(), "no installed package ships a service")
 
@@ -248,6 +268,24 @@ func listServices(cmd *cobra.Command, opts Options) error {
 	}
 
 	return w.Flush()
+}
+
+// serviceRow is the JSON form of one service.
+type serviceRow struct {
+	Name      string `json:"name"`
+	Package   string `json:"package"`
+	Installed bool   `json:"installed"`
+	Enabled   bool   `json:"enabled"`
+	Running   bool   `json:"running"`
+	System    bool   `json:"system"`
+	Detail    string `json:"detail,omitempty"`
+}
+
+func newServiceRow(item expose.Item, status service.Status) serviceRow {
+	return serviceRow{
+		item.Name, item.Package, status.Installed, status.Enabled, status.Running,
+		item.System, status.Detail,
+	}
 }
 
 // rootManager starts and stops a system service through "oku system-apply".
@@ -362,6 +400,10 @@ func controlService(cmd *cobra.Command, opts Options, action, name string) error
 	status, err := manager.Status(ctx, d)
 	if err != nil {
 		return err
+	}
+
+	if wantJSON(cmd) {
+		return printJSON(cmd, newServiceRow(item, status))
 	}
 
 	fmt.Fprintf(out, "%s: %s\n", name, describeStatus(status, item.System))

@@ -7,6 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/y3owk1n/oku/internal/profile"
 	"github.com/y3owk1n/oku/internal/store"
 )
 
@@ -33,6 +34,10 @@ dep.`,
 
 			out := cmd.OutOrStdout()
 			found := false
+
+			if wantJSON(cmd) {
+				return printJSON(cmd, whyReport(pkgs, args[0]))
+			}
 
 			for _, pkg := range pkgs {
 				if pkg.Name == args[0] {
@@ -78,4 +83,43 @@ dep.`,
 			return nil
 		},
 	}
+}
+
+// whyAnswer is the JSON form of "oku why".
+type whyAnswer struct {
+	Name string `json:"name"`
+	// InList is the ref that put the package in the list, or empty.
+	InList   string    `json:"in_list"`
+	NeededBy []whyUser `json:"needed_by"`
+}
+
+type whyUser struct {
+	Name        string   `json:"name"`
+	Version     string   `json:"version"`
+	DepVersions []string `json:"dep_versions"`
+}
+
+func whyReport(pkgs []profile.Package, name string) whyAnswer {
+	answer := whyAnswer{Name: name, NeededBy: []whyUser{}}
+
+	for _, pkg := range pkgs {
+		if pkg.Name == name {
+			answer.InList = pkg.Ref
+		}
+
+		var versions []string
+
+		for _, path := range pkg.Closure {
+			meta, err := store.ReadMeta(path)
+			if err == nil && meta.Name == name && !slices.Contains(versions, meta.Version) {
+				versions = append(versions, meta.Version)
+			}
+		}
+
+		if len(versions) > 0 {
+			answer.NeededBy = append(answer.NeededBy, whyUser{pkg.Name, pkg.Version, versions})
+		}
+	}
+
+	return answer
 }

@@ -49,6 +49,24 @@ func newInfoCmd(opts Options) *cobra.Command {
 			at := entry.Platforms[platform.Host().String()]
 			out := cmd.OutOrStdout()
 
+			if wantJSON(cmd) {
+				return printJSON(cmd, struct {
+					Name         string `json:"name"`
+					Version      string `json:"version"`
+					Ref          string `json:"ref"`
+					Commit       string `json:"commit,omitempty"`
+					Installed    string `json:"installed"`
+					StorePath    string `json:"store_path"`
+					Inferred     bool   `json:"inferred"`
+					Impure       bool   `json:"impure"`
+					VendorSHA256 string `json:"vendor_sha256,omitempty"`
+					SigningKey   string `json:"signing_key,omitempty"`
+				}{
+					pkg.Name, pkg.Version, pkg.Ref, entry.Commit, at.Strategy, pkg.StorePath,
+					entry.Inferred, at.Impure, at.VendorSHA256, entry.SigningKey,
+				})
+			}
+
 			row := func(label, value string) {
 				if value != "" {
 					fmt.Fprintf(out, "%-10s %s\n", label, value)

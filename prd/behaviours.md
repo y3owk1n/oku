@@ -226,3 +226,7 @@ order step in `prd/product.md`.
   printing that PATH entry for the user to remove.
 - B101 [9] On Windows the oku binary is gone from its path once the command has
   exited, and the renamed file a few seconds later.
+- B103 [11] With `--json`, `list`, `info`, `why`, `generations`, `search`,
+  `source list`, `cache list`, `key list`, `service list`, `service status` and
+  `doctor` print JSON on stdout. An empty result is `[]`, and exit codes do not
+  change.

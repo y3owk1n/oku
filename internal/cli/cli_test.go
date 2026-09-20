@@ -8,6 +8,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -1646,6 +1647,16 @@ func TestB31SearchMatchesNamesAndDescriptionsInSourcesOnly(t *testing.T) {
 
 	if !strings.Contains(out, "nothing in your sources") {
 		t.Fatalf("search for a term with no match:\n%s", out)
+	}
+
+	out, err = m.run(t, "", "search", "grep", "--json")
+	must(t, err)
+
+	var hits []map[string]string
+	must(t, json.Unmarshal([]byte(out), &hits))
+
+	if len(hits) != 2 || hits[0]["ref"] != "core/finder" || hits[1]["description"] == "" {
+		t.Fatalf("search --json: %v", hits)
 	}
 }
 
@@ -4035,5 +4046,75 @@ func TestB91DoctorReportsTheSetupAndItsProblems(t *testing.T) {
 	out, _ = m.run(t, "", "doctor")
 	if !strings.Contains(out, "is not on PATH") {
 		t.Fatalf("doctor does not say that the profile is missing from PATH:\n%s", out)
+	}
+}
+
+func TestB103DataCommandsPrintJSON(t *testing.T) {
+	m := newMachine(t)
+
+	decode := func(args ...string) any {
+		t.Helper()
+
+		out, err := m.run(t, "", append(args, "--json")...)
+		if err != nil && args[0] != "doctor" {
+			t.Fatalf("%v: %v\n%s", args, err, out)
+		}
+
+		// doctor ends with its error line after the JSON when it found a problem.
+		var value any
+		if err := json.NewDecoder(strings.NewReader(out)).Decode(&value); err != nil {
+			t.Fatalf("%v --json is not JSON: %v\n%s", args, err, out)
+		}
+
+		return value
+	}
+
+	for _, args := range [][]string{
+		{"list"}, {"generations"}, {"source", "list"}, {"cache", "list"}, {"service", "list"},
+	} {
+		if list, ok := decode(args...).([]any); !ok || len(list) != 0 {
+			t.Fatalf("%v --json on an empty machine should be [], got %v", args, list)
+		}
+	}
+
+	_, err := m.run(t, "", "add", m.serviceManifest(t), "--service")
+	must(t, err)
+
+	listed := decode("list").([]any)[0].(map[string]any)
+	if listed["name"] != "food" || listed["version"] != "1.2.3" || listed["service"] != true {
+		t.Fatalf("list --json: %v", listed)
+	}
+
+	if info := decode("info", "food").(map[string]any); info["installed"] != "artifact" ||
+		!strings.Contains(info["store_path"].(string), "food-1.2.3-") {
+		t.Fatalf("info --json: %v", info)
+	}
+
+	if why := decode("why", "food").(map[string]any); why["in_list"] == "" {
+		t.Fatalf("why --json: %v", why)
+	}
+
+	gens := decode("generations").([]any)
+	if gen := gens[len(gens)-1].(map[string]any); gen["current"] != true ||
+		gen["packages"].([]any)[0].(map[string]any)["name"] != "food" {
+		t.Fatalf("generations --json: %v", gens)
+	}
+
+	services := decode("service", "list").([]any)[0].(map[string]any)
+	if services["name"] != "food" || services["enabled"] != true || services["running"] != true {
+		t.Fatalf("service list --json: %v", services)
+	}
+
+	if status := decode("service", "status", "food").(map[string]any); status["running"] != true {
+		t.Fatalf("service status --json: %v", status)
+	}
+
+	if keys := decode("key", "list").(map[string]any); keys["trusted"] == nil {
+		t.Fatalf("key list --json: %v", keys)
+	}
+
+	doctor := decode("doctor").(map[string]any)
+	if len(doctor["checks"].([]any)) < 5 {
+		t.Fatalf("doctor --json: %v", doctor)
 	}
 }

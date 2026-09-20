@@ -263,5 +263,5 @@ oku self update | self uninstall [--keep-list] [--yes]
 ```
 
 Commands that read or change a list act on the project list when one is found,
-else the global list. `--global`, or `-g`, forces the global list (D37). Every command that prints data
-accepts `--json`.
+else the global list. `--global`, or `-g`, forces the global list (D37). The
+commands that print data accept `--json` (B103).

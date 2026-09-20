@@ -150,6 +150,10 @@ an entry only when a key from "oku key trust" signed it.`,
 					return err
 				}
 
+				if wantJSON(cmd) {
+					return printJSON(cmd, append([]string{}, config.Caches...))
+				}
+
 				if len(config.Caches) == 0 {
 					fmt.Fprintln(cmd.OutOrStdout(), "no caches, add one with \"oku cache add\"")
 				}
@@ -369,14 +373,26 @@ func newKeyCmd() *cobra.Command {
 				}
 
 				out := cmd.OutOrStdout()
+				yours := ""
 
 				if key, err := readSigningKey(filepath.Join(e.config, signingKeyFile)); err == nil {
-					fmt.Fprintf(out, "yours    %s\n", key.Public().(minisign.PublicKey))
+					yours = key.Public().(minisign.PublicKey).String()
 				}
 
 				config, err := source.Read(e.configPath())
 				if err != nil {
 					return err
+				}
+
+				if wantJSON(cmd) {
+					return printJSON(cmd, struct {
+						Yours   string   `json:"yours"`
+						Trusted []string `json:"trusted"`
+					}{yours, append([]string{}, config.TrustedKeys...)})
+				}
+
+				if yours != "" {
+					fmt.Fprintf(out, "yours    %s\n", yours)
 				}
 
 				for _, key := range config.TrustedKeys {
