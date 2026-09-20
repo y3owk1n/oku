@@ -187,6 +187,7 @@ func reconcile(
 		reportInferred(out, got)
 		e.reportFirstUse(cmd.ErrOrStderr(), got)
 		reportUnsandboxed(cmd.ErrOrStderr(), got)
+		reportCache(cmd.ErrOrStderr(), got)
 
 		next.Set(got.lock)
 		pkgs = append(pkgs, got.profile)

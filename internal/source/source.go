@@ -28,8 +28,13 @@ var (
 type Config struct {
 	// StoreRoot is the shared store root from "oku setup --system". Empty means
 	// the store is in the user's data directory.
-	StoreRoot string            `toml:"store_root,omitempty"`
-	Sources   map[string]string `toml:"sources"`
+	StoreRoot string `toml:"store_root,omitempty"`
+	// Caches are the directories and URLs oku looks in for a built package before
+	// it builds one.
+	Caches []string `toml:"caches,omitempty"`
+	// TrustedKeys are the minisign public keys whose cache entries oku accepts.
+	TrustedKeys []string          `toml:"trusted_keys,omitempty"`
+	Sources     map[string]string `toml:"sources"`
 }
 
 // Read parses the config at path. A missing file is an empty config.

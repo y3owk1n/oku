@@ -556,6 +556,19 @@ It edits the file as text, so comments and layout stay:
 At the newest version it prints `<name> is already at <version>` and changes
 nothing. A manifest that uses `version.from` needs no bump, and bump says so.
 
+## oku cache, oku key
+
+```
+oku cache add|remove <directory-or-url>
+oku cache list
+oku cache push <directory> [name...]
+oku key generate
+oku key trust|revoke <public-key>
+oku key list
+```
+
+Shares built packages through signed caches. See [Build caches](caches.md).
+
 ## oku setup
 
 ```

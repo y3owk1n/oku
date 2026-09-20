@@ -41,6 +41,9 @@ type Package struct {
 	Description string `toml:"description"`
 	Homepage    string `toml:"homepage"`
 	License     string `toml:"license"`
+	// Relocatable declares that the built files contain no store path, so the
+	// result works under any store root.
+	Relocatable bool `toml:"relocatable"`
 }
 
 // Version is either fixed by Value or discovered from From.
