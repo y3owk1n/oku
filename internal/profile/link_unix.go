@@ -25,7 +25,7 @@ func (p *Profile) point(gen string) error {
 	return nil
 }
 
-// linkEntry makes dest in a generation stand for the store file target.
+// linkEntry creates dest in a generation for the store file target.
 func linkEntry(target, dest string, _ Package) error {
 	return os.Symlink(target, dest)
 }

@@ -92,7 +92,8 @@ func Run(executable string, args []string) (code int, handled bool) {
 		cmd.Env = append(os.Environ(), "PATH="+path)
 	}
 
-	// Ctrl-C reaches the program too. The shim waits for it to decide.
+	// Ctrl-C reaches the program too. The shim ignores it and waits for the
+	// program to exit.
 	signal.Ignore(os.Interrupt)
 
 	var exit *exec.ExitError

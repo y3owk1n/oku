@@ -35,7 +35,7 @@ func (p *Profile) point(gen string) error {
 	return nil
 }
 
-// linkEntry makes dest in a generation stand for the store file target. A
+// linkEntry creates dest in a generation for the store file target. A
 // program becomes a shim, which also puts the bin directories of the package's
 // deps on PATH so that Windows finds their DLLs. Any other file is a hard link.
 func linkEntry(target, dest string, pkg Package) error {
@@ -43,6 +43,8 @@ func linkEntry(target, dest string, pkg Package) error {
 		return hardLinkOrCopy(target, dest)
 	}
 
+	// dest is <data>/oku/profiles/<profile>/gen-<n>/bin/<name>.exe, and the shims
+	// of every profile share <data>/oku/shims.
 	source, err := shimSource(filepath.Join(filepath.Dir(dest), "..", "..", "..", "..", "shims"))
 	if err != nil {
 		return err
