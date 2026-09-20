@@ -29,6 +29,9 @@ jobs:
       - name: Live test on Windows
         if: runner.os == 'Windows'
         shell: pwsh
+        # Anonymous GitHub API calls from a shared runner are rate limited.
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: .github/scripts/live-windows.ps1
 
   lint:
