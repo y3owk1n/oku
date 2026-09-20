@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.2.0](https://github.com/y3owk1n/oku/compare/v0.1.0...v0.2.0) (2026-09-20)
+
+
+### Features
+
+* **hook:** make one hook line the whole shell setup ([#65](https://github.com/y3owk1n/oku/issues/65)) ([d43d490](https://github.com/y3owk1n/oku/commit/d43d490c83bb72c1c4646ebf0ab35952142b9a52))
+
+
+### Bug Fixes
+
+* **sandbox:** let builds read the store on newer macOS ([#67](https://github.com/y3owk1n/oku/issues/67)) ([f33fa16](https://github.com/y3owk1n/oku/commit/f33fa163512b7b4cca196dff4ed5455347aface8))
+
 ## [0.1.0](https://github.com/y3owk1n/oku/compare/v0.0.0...v0.1.0) (2026-09-20)
 
 
