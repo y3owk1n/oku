@@ -67,9 +67,14 @@ func Read(path string) (*Lock, error) {
 		return nil, fmt.Errorf("read %s: %w", path, err)
 	}
 
+	return Parse(data, path)
+}
+
+// Parse reads lock data. origin names the data in error messages.
+func Parse(data []byte, origin string) (*Lock, error) {
 	var l Lock
 	if err := toml.Unmarshal(data, &l); err != nil {
-		return nil, fmt.Errorf("parse %s: %w", path, err)
+		return nil, fmt.Errorf("parse %s: %w", origin, err)
 	}
 
 	return &l, nil

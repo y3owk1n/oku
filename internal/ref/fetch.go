@@ -18,9 +18,6 @@ import (
 // maxManifest is the most bytes Fetch reads from a server.
 const maxManifest = 1 << 20
 
-// errNotFound reports a 404 for one candidate path.
-var errNotFound = errors.New("not found")
-
 // Fetcher reads manifests. The GitHub URLs are fields so tests can point them at
 // a local server.
 type Fetcher struct {
@@ -33,12 +30,18 @@ type Fetcher struct {
 	GitCache string
 }
 
-// Fetched is a manifest plus the commit it came from. Commit is empty for File
-// and HTTP refs.
+// Fetched is a file plus where it came from.
 type Fetched struct {
-	Data   []byte
+	Data []byte
+	// Commit is empty for File and HTTP refs.
 	Commit string
+	// Path is the file Fetch read. It is a local path, a URL, or a path inside the
+	// repository.
+	Path string
 }
+
+// ErrNotFound reports that the file a ref or path names does not exist.
+var ErrNotFound = errors.New("not found")
 
 // NewFetcher returns a Fetcher for github.com that clones under cacheDir.
 func NewFetcher(cacheDir string) *Fetcher {
@@ -57,18 +60,22 @@ func (f *Fetcher) Fetch(ctx context.Context, r Ref, commit string, t Target) (Fe
 	switch r.Kind {
 	case File:
 		data, err := os.ReadFile(r.Location)
+		if errors.Is(err, fs.ErrNotExist) {
+			return Fetched{}, fmt.Errorf("read %s: %w", r.Location, ErrNotFound)
+		}
+
 		if err != nil {
 			return Fetched{}, fmt.Errorf("read %s: %w", r.Location, err)
 		}
 
-		return Fetched{Data: data}, nil
+		return Fetched{Data: data, Path: r.Location}, nil
 	case HTTP:
 		data, err := f.get(ctx, r.Location, nil)
 		if err != nil {
 			return Fetched{}, fmt.Errorf("fetch %s: %w", r.Location, err)
 		}
 
-		return Fetched{Data: data}, nil
+		return Fetched{Data: data, Path: r.Location}, nil
 	case GitHub:
 		return f.fetchGitHub(ctx, r, commit, t)
 	default:
@@ -97,7 +104,7 @@ func (f *Fetcher) fetchGitHub(
 
 	for _, path := range t.paths(r.Fragment) {
 		data, err := f.get(ctx, f.GitHubRaw+"/"+r.Location+"/"+commit+"/"+path, nil)
-		if errors.Is(err, errNotFound) {
+		if errors.Is(err, ErrNotFound) {
 			continue
 		}
 
@@ -105,7 +112,7 @@ func (f *Fetcher) fetchGitHub(
 			return Fetched{}, fmt.Errorf("fetch %s: %w", r, err)
 		}
 
-		return Fetched{Data: data, Commit: commit}, nil
+		return Fetched{Data: data, Commit: commit, Path: path}, nil
 	}
 
 	return Fetched{}, fmt.Errorf(
@@ -147,7 +154,7 @@ func (f *Fetcher) get(ctx context.Context, url string, headers map[string]string
 
 	switch {
 	case resp.StatusCode == http.StatusNotFound:
-		return nil, errNotFound
+		return nil, ErrNotFound
 	case resp.StatusCode == http.StatusForbidden && resp.Header.Get("X-RateLimit-Remaining") == "0":
 		return nil, errors.New("GitHub rate limit reached, set GITHUB_TOKEN to raise it")
 	case resp.StatusCode != http.StatusOK:
@@ -232,11 +239,15 @@ func (f *Fetcher) fetchGit(
 	defer root.Close()
 
 	data, err := root.ReadFile(path)
+	if errors.Is(err, fs.ErrNotExist) {
+		return Fetched{}, fmt.Errorf("%s: read %s: %w", r, path, ErrNotFound)
+	}
+
 	if err != nil {
 		return Fetched{}, fmt.Errorf("%s: read %s: %w", r, path, err)
 	}
 
-	return Fetched{Data: data, Commit: head}, nil
+	return Fetched{Data: data, Commit: head, Path: path}, nil
 }
 
 func git(ctx context.Context, dir string, args ...string) error {
@@ -256,4 +267,30 @@ func gitOutput(ctx context.Context, dir string, args ...string) (string, error) 
 	}
 
 	return strings.TrimSpace(string(out)), nil
+}
+
+// FetchBeside reads the file next to an earlier result, at the same commit. name replaces the last element of got.Path.
+func (f *Fetcher) FetchBeside(
+	ctx context.Context,
+	r Ref,
+	got Fetched,
+	name string,
+) (Fetched, error) {
+	at := got.Path[:strings.LastIndexAny(got.Path, `/\\`)+1] + name
+
+	switch r.Kind {
+	case File, HTTP:
+		r.Location = at
+	case GitHub:
+		data, err := f.get(ctx, f.GitHubRaw+"/"+r.Location+"/"+got.Commit+"/"+at, nil)
+		if err != nil {
+			return Fetched{}, fmt.Errorf("fetch %s: %w", at, err)
+		}
+
+		return Fetched{Data: data, Commit: got.Commit, Path: at}, nil
+	default:
+		r.Fragment = at
+	}
+
+	return f.Fetch(ctx, r, got.Commit, Target{Default: at})
 }

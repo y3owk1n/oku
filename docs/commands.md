@@ -78,7 +78,7 @@ installed it prints `no packages installed`.
 ## oku sync
 
 ```
-oku sync
+oku sync [list-ref]
 ```
 
 Makes the profile match `oku.toml` and the lists it includes, at the versions
@@ -107,6 +107,39 @@ If any package fails, `sync` leaves the profile unchanged.
 
 Output is either `already in sync` or a line such as
 `profile now holds 12 packages`.
+
+### Setting up a machine from a published list
+
+```
+oku sync github:you/machines
+```
+
+With a [ref to a list](list-and-lock.md#including-other-lists), `sync` first
+sets the machine up from it, then syncs:
+
+1. Reads the list, and the lock beside it at the same commit. The lock's name
+   is the list's name with `.lock`, so `oku.toml` pairs with `oku.lock` and
+   `base.toml` with `base.lock`.
+2. Writes a global `oku.toml` that holds only `include = ["<ref>"]`.
+3. Writes a global `oku.lock` that starts from the published lock and pins the
+   list itself.
+
+The machine then installs what the published lock pinned, so it ends with the
+same store paths as the machine that published it.
+
+```
+adopted github:you/machines with 23 locked packages
+profile now holds 23 packages
+```
+
+Without a lock beside the list, oku prints a notice and resolves every package fresh.
+
+This only works on a machine whose global `oku.toml` is missing or empty. On
+any other machine oku refuses and tells you to add the ref to your `include`
+array instead. A list ref takes no `@version`.
+
+If the install fails after the two files were written, fix the cause and run
+`oku sync` with no argument.
 
 ## oku update
 

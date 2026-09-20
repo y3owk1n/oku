@@ -13,6 +13,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 
@@ -886,6 +887,84 @@ func TestB17WhenSkipsOtherPlatformsAndKeepsTheirLockEntry(t *testing.T) {
 	for _, want := range []string{"'elsewhere'", "plan9-mips", "sha256 = 'def'", "'here'"} {
 		if !strings.Contains(string(locked), want) {
 			t.Fatalf("oku.lock lacks %s:\n%s", want, locked)
+		}
+	}
+}
+
+func TestB18SyncRefAdoptsListAndLockWithIdenticalStoreHashes(t *testing.T) {
+	const commit = "3333333333333333333333333333333333333333"
+
+	files := map[string][]byte{}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/repos/me/machines/commits/HEAD" {
+			_, _ = w.Write([]byte(commit))
+
+			return
+		}
+
+		body, ok := files[r.URL.Path]
+		if !ok {
+			http.NotFound(w, r)
+
+			return
+		}
+
+		_, _ = w.Write(body)
+	}))
+	defer server.Close()
+
+	setUp := func() machine {
+		m := newMachine(t)
+		m.opts.GitHubAPI = server.URL + "/api"
+		m.opts.GitHubRaw = server.URL + "/raw"
+
+		return m
+	}
+
+	// The publisher installs a package, then publishes its list and lock.
+	publisher := setUp()
+
+	manifest, err := os.ReadFile(publisher.namedManifest(t, "tool", "tool", "tool"))
+	must(t, err)
+
+	files["/plain/tool.toml"] = manifest
+
+	_, err = publisher.run(t, "", "add", server.URL+"/plain/tool.toml")
+	must(t, err)
+
+	for _, name := range []string{"oku.toml", "oku.lock"} {
+		body, err := os.ReadFile(filepath.Join(publisher.config, name))
+		must(t, err)
+
+		files["/raw/me/machines/"+commit+"/"+name] = body
+	}
+
+	want := publisher.storeEntries(t)
+
+	for range 2 {
+		m := setUp()
+
+		out, err := m.run(t, "", "sync", "github:me/machines")
+		if err != nil {
+			t.Fatalf("sync github:me/machines: %v\n%s", err, out)
+		}
+
+		if !strings.Contains(out, "1 locked package") {
+			t.Fatalf("sync did not adopt the lock:\n%s", out)
+		}
+
+		if got := m.storeEntries(t); !slices.Equal(got, want) {
+			t.Fatalf("store holds %v, the publisher has %v", got, want)
+		}
+
+		if !exists(m.profile("bin", "tool")) {
+			t.Fatal("tool is not in the profile")
+		}
+
+		_, err = m.run(t, "", "sync", "github:me/machines")
+		if err == nil || !strings.Contains(err.Error(), "already has packages or includes") {
+			t.Fatalf("want a second adoption to be refused, got %v", err)
 		}
 	}
 }

@@ -89,15 +89,19 @@ removed ripgrep
 ## Move to another machine
 
 `oku add` records every package in `~/.config/oku/oku.toml` and pins what it
-resolved in `~/.config/oku/oku.lock`. Copy both files to a new machine, or keep
-them in a dotfiles repo, and run:
+resolved in `~/.config/oku/oku.lock`. Commit both files to a repo. On a new
+machine, one command restores the same versions:
 
 ```
-$ oku sync
+$ oku sync github:you/machines
+adopted github:you/machines with 1 locked package
 profile now holds 1 package
 ```
 
-See [List and lock](list-and-lock.md).
+Use URL or repo refs in a list you publish. The `./ripgrep.toml` ref above only
+works on the machine that has that file.
+
+See [List and lock](list-and-lock.md#a-new-machine).
 
 ## Uninstall oku
 
