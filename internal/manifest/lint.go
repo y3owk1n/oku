@@ -107,7 +107,7 @@ func Lint(data []byte) Report {
 			}
 		}
 
-		if a.SHA256 == "" && a.SHA256URL == "" {
+		if a.SHA256 == "" && a.SHA256URL == "" && full.Package.SigningKey == "" {
 			report.Warnings = append(report.Warnings, fmt.Sprintf(
 				"artifact[%d]: no sha256 or sha256_url, so users trust the first download", i,
 			))

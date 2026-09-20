@@ -33,9 +33,10 @@ Adding a package that is already installed replaces it.
 | `--service` | Runs the package's [services](services.md) now and at every login, and writes `service = true` to `oku.toml`. |
 | `--from-source` | Builds from source even when a prebuilt download fits. `oku.lock` records the choice, so `oku sync` builds too. |
 | `--yes`, `-y` | Approves the manifest's build commands without asking, see [Build commands](trust.md#build-commands). |
+| `--accept-key` | Accepts a manifest whose `signing_key` differs from the one in `oku.lock`, see [Signing keys](trust.md#signing-keys). |
 | `--verbose`, `-v` | Shows the output of build commands as they run. |
 
-`oku sync` and `oku update` take `--yes` and `--verbose` too.
+`oku sync` and `oku update` take `--yes`, `--verbose` and `--accept-key` too.
 
 Build commands run in a [sandbox](manifest.md#the-sandbox). When the host
 cannot provide one, oku builds anyway and prints a warning on stderr that names

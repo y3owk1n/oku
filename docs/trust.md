@@ -92,6 +92,26 @@ It never installs, never uses the network, and never runs anything from a
 manifest. A package's `[env]` cannot set `PATH`, `LD_PRELOAD` or similar
 variables. See [Projects](projects.md#why-a-project-has-to-be-allowed).
 
+## Signing keys
+
+A manifest can name its developer's minisign public key as `signing_key`. oku
+then downloads `<artifact url>.minisig` and installs the artifact only when
+that key signed it.
+
+`oku.lock` pins the key at the first install. When the manifest later shows
+another key, or drops it, `oku sync` and `oku update` stop:
+
+```
+oku: foo: oku.lock pinned the signing key RWTr8ko..., and the manifest now has the signing key RWSwtYz...
+if the developer announced this change, run the command again with --accept-key
+```
+
+A new key is what an attacker who took over the repo would publish, so check
+with the developer before you run `oku update foo --accept-key`.
+
+oku trusts the key it sees at the first install. It does not know whether that
+key belongs to the developer.
+
 ## What the lock pins
 
 | Pinned | Effect |
@@ -99,6 +119,7 @@ variables. See [Projects](projects.md#why-a-project-has-to-be-allowed).
 | Commit of a `github:` or `git+` ref | `oku sync` reads the manifest at that commit, even after the branch moves. |
 | Manifest sha256 | `oku sync` stops if the manifest content changed. |
 | Artifact sha256 per platform | A changed download fails. |
+| Signing key | oku refuses a manifest with another `signing_key`, or with none, until you pass `--accept-key`. |
 | Vendor digest per platform | A build whose vendor steps download something else fails, and nothing is kept. |
 
 ## When oku stops
@@ -133,7 +154,10 @@ read the lock diff before you commit it.
   from sources you do not know.
 - A `sha256_url` on the same host as the download. It catches corruption and
   in-place tampering after you locked, not a compromised host on first use.
-- Signatures. Manifests cannot declare a signing key yet.
+- A `signing_key` that was the attacker's at your first install. oku pins the
+  first key it sees.
+- The sources of a `[build]`. `signing_key` covers artifacts only, and `fetch`
+  steps rely on their `sha256`.
 - A build command you approved, on a host where the sandbox is not available.
 - On Linux the sandbox hides your home directory and the network. It does not
   stop writes to other places your user can already write to.

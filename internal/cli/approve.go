@@ -21,6 +21,8 @@ import (
 type buildFlags struct {
 	yes     bool
 	verbose bool
+	// acceptKey accepts a signing key that differs from the one in oku.lock.
+	acceptKey bool
 }
 
 func (f *buildFlags) register(cmd *cobra.Command) {
@@ -28,6 +30,8 @@ func (f *buildFlags) register(cmd *cobra.Command) {
 		BoolVarP(&f.yes, "yes", "y", false, "run a manifest's build commands without asking")
 	cmd.Flags().
 		BoolVarP(&f.verbose, "verbose", "v", false, "show the output of build commands as they run")
+	cmd.Flags().
+		BoolVar(&f.acceptKey, "accept-key", false, "accept a signing key that differs from the one in oku.lock")
 }
 
 // approver returns the check that install runs before a build. A manifest with

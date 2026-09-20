@@ -49,6 +49,9 @@ type Package struct {
 	Commit         string `toml:"commit,omitempty"`
 	ManifestSHA256 string `toml:"manifest_sha256"`
 	Version        string `toml:"version"`
+	// SigningKey pins the manifest's signing key. oku refuses a manifest that
+	// changes or drops it until the user accepts the change.
+	SigningKey string `toml:"signing_key,omitempty"`
 	// Tag is the upstream tag of Version, kept so sync can expand {{tag}} without
 	// listing versions again.
 	Tag string `toml:"tag,omitempty"`

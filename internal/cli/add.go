@@ -97,6 +97,7 @@ func runAdd(
 		previous:   previous,
 		fromSource: fromSource,
 		service:    enable,
+		acceptKey:  flags.acceptKey,
 		system:     system,
 		approve:    e.approver(cmd, opts, flags),
 		log:        buildLog(cmd, flags),

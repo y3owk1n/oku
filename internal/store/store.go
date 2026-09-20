@@ -132,6 +132,15 @@ func (s *Store) Realize(
 		return realized, nil
 	}
 
+	if m.Package.SigningKey != "" {
+		if err := s.verifySignature(ctx, m.Package.SigningKey, a.URL, download); err != nil {
+			return Realized{}, fmt.Errorf("%s: %w", m.Package.Name, err)
+		}
+
+		// A valid signature replaces the digest, so this is not a first use.
+		realized.FirstUse = false
+	}
+
 	a.SHA256 = got
 	final := realized.Path
 
