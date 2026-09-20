@@ -227,7 +227,7 @@ A store path's hash covers the manifest, the version, the platform and the downl
 
 ## Contributing
 
-oku is written in Go. `devbox shell` provisions the toolchain.
+oku is written in Go. oku installs its own toolchain. `oku sync && oku allow` sets it up from `oku.toml`.
 
 ```bash
 just fmt && just lint && just test && just build   # the pre-commit gate
