@@ -17,9 +17,9 @@ import (
 const (
 	// releaseRepo is where oku's own releases are published.
 	releaseRepo = "y3owk1n/oku"
-	// releaseKey is the minisign public key that signs those releases. An empty
-	// key means this build cannot verify an update, and it refuses to update.
-	releaseKey = ""
+	// releaseKey is the minisign public key that signs those releases. Its secret
+	// half is the MINISIGN_SECRET_KEY secret of the repo.
+	releaseKey = "RWSjFGqIxI8IPGwKE/uRgugZ51qCEMe1CDbFRVTMUAuin42JiOxg2HNW"
 )
 
 func newSelfUpdateCmd(opts Options) *cobra.Command {
@@ -63,13 +63,6 @@ func runSelfUpdate(cmd *cobra.Command, opts Options, check bool) error {
 
 	if opts.ReleaseRepo != "" {
 		repo = opts.ReleaseRepo
-	}
-
-	if key == "" {
-		return errors.New(
-			"this build of oku has no release key, so it cannot verify an update. " +
-				"Install a released build to get one",
-		)
 	}
 
 	e, err := loadEnv()
@@ -125,6 +118,14 @@ func runSelfUpdate(cmd *cobra.Command, opts Options, check bool) error {
 
 	// Nothing is written near the running binary before this check has passed.
 	if err := store.VerifyDetached(key, downloaded, signed); err != nil {
+		if errors.Is(err, store.ErrSignature) {
+			return fmt.Errorf(
+				"release %s: %w\nif oku's release key was rotated, run the install script again, "+
+					"see https://github.com/%s/blob/main/docs/releasing.md",
+				release.Tag, err, repo,
+			)
+		}
+
 		return fmt.Errorf("release %s: %w", release.Tag, err)
 	}
 

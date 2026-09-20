@@ -10,7 +10,7 @@ set -eu
 repo="y3owk1n/oku"
 # The minisign public key that signs oku's releases. The script checks the
 # signature when minisign is installed, and always checks the sha256.
-release_key=""
+release_key="RWSjFGqIxI8IPGwKE/uRgugZ51qCEMe1CDbFRVTMUAuin42JiOxg2HNW"
 dir="${OKU_INSTALL_DIR:-$HOME/.local/bin}"
 base="${OKU_RELEASE_URL:-https://github.com/$repo/releases}"
 

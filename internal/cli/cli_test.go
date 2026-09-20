@@ -4348,9 +4348,11 @@ func TestB92SelfUpdateReplacesTheBinaryOnlyAfterItsSignatureChecksOut(t *testing
 
 	m.releaseWith(t, "the new oku", secret)
 
+	// Without an override oku trusts only its built-in release key, which did not
+	// sign this test release.
 	if _, err := m.run(t, "", "self", "update"); err == nil ||
-		!strings.Contains(err.Error(), "no release key") {
-		t.Fatalf("a build without a release key should refuse, got %v", err)
+		!strings.Contains(err.Error(), "is not signed by") || current() != "binary" {
+		t.Fatalf("a release that the built-in key did not sign should be refused, got %v", err)
 	}
 
 	m.opts.ReleaseKey = public.String()
