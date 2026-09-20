@@ -49,7 +49,7 @@ $ oku service logs postgres
 | `oku service status <name>` | Whether it is running and whether it starts at login. |
 | `oku service logs <name>` | The last 50 lines it printed. |
 
-The commands work the same on macOS and Linux. An unknown name fails and lists
+The commands work the same on macOS, Linux and Windows. An unknown name fails and lists
 the services you have.
 
 ## What oku writes

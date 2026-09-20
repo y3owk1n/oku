@@ -1,5 +1,19 @@
 # Commands
 
+| To | Use |
+|---|---|
+| Install and remove | [`add`](#oku-add) · [`remove`](#oku-remove) · [`shell`](#oku-shell) |
+| See what is installed | [`list`](#oku-list) · [`info`](#oku-info) · [`why`](#oku-why) |
+| Follow the list and the lock | [`sync`](#oku-sync) · [`update`](#oku-update) |
+| Go back, and free space | [`generations`](#oku-generations) · [`rollback`](#oku-rollback) · [`gc`](#oku-gc) |
+| Find packages | [`source`](#oku-source) · [`search`](#oku-search) |
+| Work in a project | [`hook`](#oku-hook) · [`env`](#oku-env) · [`allow`, `deny`](#oku-allow-oku-deny) |
+| Run services | [`service`](#oku-service) |
+| Publish a package | [`manifest init`](#oku-manifest-init) · [`lint`](#oku-manifest-lint) · [`test`](#oku-manifest-test) · [`bump`](#oku-manifest-bump) |
+| Share builds | [`cache`, `key`](#oku-cache-oku-key) |
+| Look after oku | [`doctor`](#oku-doctor) · [`setup`](#oku-setup) · [`self update`](#oku-self-update) · [`self uninstall`](#oku-self-uninstall) |
+| Script it | [`--json`](#json-output) |
+
 Every command exits with status 0 on success. On failure it prints
 `oku: <reason>` to stderr and exits with status 1.
 
@@ -292,7 +306,8 @@ oku service list
 oku service start|stop|restart|status|logs <name> [--system]
 ```
 
-Controls the services of installed packages through launchd or systemd. See
+Controls the services of installed packages through launchd, systemd or Task
+Scheduler. See
 [Services](services.md) for what each one does and for how to enable a service
 at login. A service in [system scope](system-scope.md) needs `--system` for
 `start`, `stop` and `restart`.
@@ -500,8 +515,8 @@ oku.pkg.toml: warning: artifact[0]: no sha256 or sha256_url, so users trust the 
 oku: 1 of 1 manifests have errors
 ```
 
-`oku add` ignores keys it does not know, so that a manifest may use parts of the
-schema that oku does not act on yet. Lint knows the whole schema and is strict.
+`oku add` ignores keys it does not know, so that an older oku still installs a
+manifest written for a newer one. Lint knows the whole schema and is strict.
 
 Errors:
 
