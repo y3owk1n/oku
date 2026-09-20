@@ -50,13 +50,19 @@ order step in `prd/product.md`.
 ## Versions and generations
 
 - B20 [3] With `[version] from`, `add` picks the newest discovered version and
-  `add <ref>@x` picks x.
+  `add <ref>@x` picks x. Drafts, prereleases and tags that are not versions
+  are never picked, and an unknown x fails naming the newest versions.
 - B21 [3] `oku update [name]` re-resolves and rewrites the lock. Without it,
-  versions never move.
+  versions never move, and `sync` installs the locked version without asking
+  upstream for versions. A package pinned in `oku.toml` stays on its version
+  through `update`.
 - B22 [3] Every profile change creates a generation. `oku rollback` restores
-  the previous one, `oku rollback <n>` a named one.
+  the previous one, `oku rollback <n>` a named one. Rollback restores
+  `oku.lock` with it, so a following `sync` changes nothing, and it never
+  edits `oku.toml`.
 - B23 [3] `oku gc` deletes store paths referenced by no generation of any
-  profile, and nothing else.
+  profile, and nothing else. `--keep N` first deletes all but the newest N
+  generations and the active one. `--dry-run` deletes nothing.
 
 ## Publishing
 

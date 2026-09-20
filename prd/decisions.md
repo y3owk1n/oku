@@ -173,6 +173,35 @@ shells out to `git` for a depth-1 fetch. Why: a fresh machine may have no git,
 and `github:` is the common case. Other hosts share no HTTP API, so `git` is
 the only portable way to read them.
 
+## D22. Rollback restores the lock and never edits the list
+
+Each generation stores a copy of `oku.lock`. `oku rollback` switches the
+`current` link and writes that copy back. It writes no new generation, so
+later generations stay reachable by number. It does not edit `oku.toml`, and
+it prints a notice when the list names a package the generation lacks. Why: a
+rollback that only switched the profile would be undone by the next `sync`,
+because the lock would still hold the newer versions. The list is the user's
+file, so oku reports the disagreement and leaves the edit to them.
+
+## D23. gc deletes only unused store paths, and only --keep deletes generations
+
+`oku gc` deletes only store paths that no generation uses. Generations are
+deleted only by `--keep N`, which keeps the newest N and the active one. Why:
+every generation stays a working rollback target until the user says
+otherwise. A gc that deleted generations by default would remove rollback
+targets without the user asking.
+
+## D24. Versions are ordered by their numbers, and the tag is kept
+
+Discovered tags become versions by cutting `strip_prefix`. A tag that then
+does not start with a digit is ignored. Versions compare by dot-separated
+numbers, and a `-` suffix sorts before the same version without one. GitHub
+drafts and prereleases are skipped. The lock stores the tag beside the version,
+and `{{tag}}` expands to it. Why: many upstream tags are not valid semver, so a
+strict parser would reject real projects. Release URLs often contain the tag
+and the version in different places, and keeping the tag in the lock lets
+`sync` build the URL without asking upstream again.
+
 ## D16. Installers are unpacked, never executed
 
 `extract` understands tar, zip, 7z, dmg, pkg, msi, deb, rpm and AppImage. Why:
