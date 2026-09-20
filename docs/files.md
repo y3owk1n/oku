@@ -45,6 +45,7 @@ export XDG_CACHE_HOME=/tmp/oku-try/cache
                                the store paths of their deps
         oku.lock               a copy of oku.lock as it was at that time
       current -> gen-2         the active generation
+    project-2d27013d8c67/      one per project, same layout
   trust/
     approvals.toml             manifests you allowed to run build commands
 
@@ -74,6 +75,9 @@ them. `oku gc` deletes the store paths that no generation uses, see
 [Commands](commands.md#oku-gc).
 
 ## Profiles and generations
+
+A [project](projects.md) keeps `oku.toml` and `oku.lock` in its own directory
+and gets its own profile here.
 
 Put `<data>/oku/profiles/global/current/bin` on `PATH`. Every `add`, `remove`,
 `sync` and `update` that changes the package set writes a new `gen-<n>`

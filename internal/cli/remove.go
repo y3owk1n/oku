@@ -11,13 +11,13 @@ import (
 	"github.com/y3owk1n/oku/internal/profile"
 )
 
-func newRemoveCmd() *cobra.Command {
+func newRemoveCmd(opts Options) *cobra.Command {
 	return &cobra.Command{
 		Use:   "remove <name>",
 		Short: "Remove a package from the profile",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			e, err := loadEnv()
+			e, err := scopedEnv(cmd, opts)
 			if err != nil {
 				return err
 			}
@@ -54,7 +54,7 @@ func newRemoveCmd() *cobra.Command {
 
 			// A package can be listed without being in the profile, for example
 			// after the data directory was deleted. Remove still has to clear it.
-			err = e.globalProfile().Remove(name, lockData)
+			err = e.profile().Remove(name, lockData)
 			if err != nil && (!errors.Is(err, profile.ErrNotInstalled) || (!inList && !inLock)) {
 				return err
 			}

@@ -2,6 +2,10 @@
 package cli
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+	"fmt"
+	"os"
 	"path/filepath"
 
 	"github.com/spf13/cobra"
@@ -23,6 +27,9 @@ type Options struct {
 	// Executable is the path of the running binary, which "self uninstall"
 	// deletes.
 	Executable string
+	// WorkDir is where oku looks for a project list. Empty means the working
+	// directory. Tests set it.
+	WorkDir string
 	// Interactive overrides the check for a terminal on stdin. Tests set it.
 	Interactive *bool
 	// GitHubAPI and GitHubRaw replace the github.com URLs when set.
@@ -40,20 +47,24 @@ func NewRootCmd(opts Options) *cobra.Command {
 		SilenceErrors: true,
 	}
 
+	root.PersistentFlags().BoolP(
+		globalFlag, "g", false, "use the global list even inside a project",
+	)
+
 	root.AddCommand(
 		newAddCmd(opts),
-		newRemoveCmd(),
+		newRemoveCmd(opts),
 		newSyncCmd(opts),
 		newUpdateCmd(opts),
-		newGenerationsCmd(),
-		newRollbackCmd(),
+		newGenerationsCmd(opts),
+		newRollbackCmd(opts),
 		newGCCmd(),
 		newManifestCmd(opts),
 		newSourceCmd(),
 		newSearchCmd(opts),
-		newListCmd(),
-		newWhyCmd(),
-		newInfoCmd(),
+		newListCmd(opts),
+		newWhyCmd(opts),
+		newInfoCmd(opts),
 		newSelfCmd(opts.Executable),
 	)
 
@@ -68,11 +79,16 @@ func NewRootCmd(opts Options) *cobra.Command {
 	return root
 }
 
-// env is where oku keeps its files on this machine.
+const globalFlag = "global"
+
+// env is where oku keeps its files on this machine, and which list it acts on.
 type env struct {
 	config string
 	data   string
 	cache  string
+	// project is the directory of the project list in use, or empty for the
+	// global list.
+	project string
 }
 
 func loadEnv() (env, error) {
@@ -94,12 +110,76 @@ func loadEnv() (env, error) {
 	return e, err
 }
 
+// scopedEnv is loadEnv for commands that act on a list. Inside a directory tree
+// with an oku.toml they act on that project, unless --global is set.
+func scopedEnv(cmd *cobra.Command, opts Options) (env, error) {
+	e, err := loadEnv()
+	if err != nil {
+		return e, err
+	}
+
+	if global, _ := cmd.Flags().GetBool(globalFlag); global {
+		return e, nil
+	}
+
+	dir := opts.WorkDir
+	if dir == "" {
+		if dir, err = os.Getwd(); err != nil {
+			return e, err
+		}
+	}
+
+	e.project = findProject(dir, e.config)
+	if e.project != "" {
+		fmt.Fprintf(cmd.ErrOrStderr(), "project %s\n", e.project)
+	}
+
+	return e, nil
+}
+
+// findProject returns the nearest directory at or above dir that holds an
+// oku.toml. The config directory holds the global list and is not a project.
+func findProject(dir, config string) string {
+	for {
+		if _, err := os.Stat(filepath.Join(dir, list.FileName)); err == nil && dir != config {
+			return dir
+		}
+
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return ""
+		}
+
+		dir = parent
+	}
+}
+
+func (e env) listDir() string {
+	if e.project != "" {
+		return e.project
+	}
+
+	return e.config
+}
+
 func (e env) listPath() string {
-	return filepath.Join(e.config, list.FileName)
+	return filepath.Join(e.listDir(), list.FileName)
 }
 
 func (e env) lockPath() string {
-	return filepath.Join(e.config, lock.FileName)
+	return filepath.Join(e.listDir(), lock.FileName)
+}
+
+// profile returns the profile of the list in use. A project profile is named
+// after a hash of its directory, so moving a project gives it a new profile.
+func (e env) profile() *profile.Profile {
+	if e.project == "" {
+		return e.globalProfile()
+	}
+
+	sum := sha256.Sum256([]byte(e.project))
+
+	return profile.Open(e.data, "project-"+hex.EncodeToString(sum[:])[:12])
 }
 
 func (e env) store() *store.Store {

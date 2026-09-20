@@ -9,6 +9,7 @@ in [`../prd/`](../prd/).
 | [Commands](commands.md) | Every command, its flags, and what it prints |
 | [Refs](refs.md) | The ways to point oku at a manifest, and sources |
 | [Manifest reference](manifest.md) | Every key a package manifest accepts, for people publishing software |
+| [Projects](projects.md) | A list, a lock and a profile that belong to one repo |
 | [List and lock](list-and-lock.md) | `oku.toml`, `oku.lock`, and moving a setup to another machine |
 | [Trust and checksums](trust.md) | What oku verifies, what it pins, and when it stops |
 | [Files and directories](files.md) | Where oku keeps things on disk |
@@ -36,6 +37,7 @@ in [`../prd/`](../prd/).
 - Manifests with a fixed version, or with versions discovered from GitHub
   releases or git tags.
 - One `oku.toml` for several machines, with `include` and per-platform `when`.
+- Per-project lists: a repo with its own `oku.toml`, `oku.lock` and profile.
 - `oku generations`, `oku rollback` and `oku gc`.
 - Setting up a new machine from a published list and lock with
   `oku sync <list-ref>`.
@@ -43,5 +45,5 @@ in [`../prd/`](../prd/).
 ## What does not work yet
 
 - `patch` build steps.
-- Per-project lists and the shell hook.
+- The shell hook that puts a project's programs on `PATH` when you enter it.
 - `.tar.xz` and `.tar.zst` archives.

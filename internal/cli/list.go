@@ -7,18 +7,18 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func newListCmd() *cobra.Command {
+func newListCmd(opts Options) *cobra.Command {
 	return &cobra.Command{
 		Use:   "list",
 		Short: "List installed packages",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			e, err := loadEnv()
+			e, err := scopedEnv(cmd, opts)
 			if err != nil {
 				return err
 			}
 
-			pkgs, err := e.globalProfile().Packages()
+			pkgs, err := e.profile().Packages()
 			if err != nil {
 				return err
 			}

@@ -14,18 +14,18 @@ import (
 	"github.com/y3owk1n/oku/internal/store"
 )
 
-func newInfoCmd() *cobra.Command {
+func newInfoCmd(opts Options) *cobra.Command {
 	return &cobra.Command{
 		Use:   "info <name>",
 		Short: "Show what oku knows about an installed package",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			e, err := loadEnv()
+			e, err := scopedEnv(cmd, opts)
 			if err != nil {
 				return err
 			}
 
-			pkgs, err := e.globalProfile().Packages()
+			pkgs, err := e.profile().Packages()
 			if err != nil {
 				return err
 			}

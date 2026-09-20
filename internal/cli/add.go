@@ -51,7 +51,7 @@ func runAdd(
 	flags *buildFlags,
 	fromSource bool,
 ) error {
-	e, err := loadEnv()
+	e, err := scopedEnv(cmd, opts)
 	if err != nil {
 		return err
 	}
@@ -105,7 +105,7 @@ func runAdd(
 		return err
 	}
 
-	prof := e.globalProfile()
+	prof := e.profile()
 	if err := prof.Add(got.profile, lockData); err != nil {
 		return err
 	}
@@ -124,7 +124,11 @@ func runAdd(
 	reportUnsandboxed(cmd.ErrOrStderr(), got)
 	fmt.Fprintf(cmd.OutOrStdout(), "added %s %s\n", got.lock.Name, got.lock.Version)
 
-	if !slices.Contains(filepath.SplitList(os.Getenv("PATH")), prof.BinDir()) {
+	switch {
+	case slices.Contains(filepath.SplitList(os.Getenv("PATH")), prof.BinDir()):
+	case e.project != "":
+		fmt.Fprintf(cmd.ErrOrStderr(), "this project's programs are in %s\n", prof.BinDir())
+	default:
 		fmt.Fprintf(cmd.ErrOrStderr(), "add %s to PATH to run it\n", prof.BinDir())
 	}
 
