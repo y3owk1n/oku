@@ -192,23 +192,6 @@ func (p *Profile) activate(pkgs []Package, lockData []byte) error {
 	return nil
 }
 
-// point makes "current" name the generation directory gen. Rename replaces the
-// link in one step, so the link exists at every moment.
-func (p *Profile) point(gen string) error {
-	tmp := filepath.Join(p.dir, current+".tmp")
-	os.Remove(tmp)
-
-	if err := os.Symlink(gen, tmp); err != nil {
-		return fmt.Errorf("activate generation: %w", err)
-	}
-
-	if err := os.Rename(tmp, filepath.Join(p.dir, current)); err != nil {
-		return fmt.Errorf("activate generation: %w", err)
-	}
-
-	return nil
-}
-
 // Generations lists every generation, oldest first.
 func (p *Profile) Generations() ([]Generation, error) {
 	entries, err := os.ReadDir(p.dir)
@@ -240,7 +223,8 @@ func (p *Profile) Generations() ([]Generation, error) {
 			Number:   n,
 			Created:  s.Created,
 			Packages: s.Packages,
-			Current:  entry.Name() == active,
+			// A Windows junction reads back as an absolute path.
+			Current: entry.Name() == filepath.Base(active),
 		})
 	}
 
@@ -341,7 +325,7 @@ func linkTree(gen string, pkg Package, sub string, owners map[string]string) err
 			return err
 		}
 
-		return os.Symlink(path, dest)
+		return linkEntry(path, dest, pkg)
 	})
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil

@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 
 	"github.com/y3owk1n/oku/internal/cli"
+	"github.com/y3owk1n/oku/internal/shim"
 )
 
 // The build sets version through -ldflags "-X main.version=...".
@@ -15,6 +16,12 @@ var version = "dev"
 func main() {
 	executable, err := os.Executable()
 	if err == nil {
+		// On Windows a profile's bin holds copies of oku under other names. The
+		// check uses the path as started, because the shim file is beside that name.
+		if code, handled := shim.Run(executable, os.Args[1:]); handled {
+			os.Exit(code)
+		}
+
 		executable, err = filepath.EvalSymlinks(executable)
 	}
 
