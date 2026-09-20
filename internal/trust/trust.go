@@ -71,3 +71,58 @@ func (a *Approvals) Add(name, manifestSHA256 string) error {
 
 	return nil
 }
+
+// Allowed is the list of projects whose environment the shell hook may apply.
+// An entry belongs to one oku.toml content, so editing the list revokes it.
+type Allowed struct {
+	path  string
+	Items []Allow `toml:"allow"`
+}
+
+// Allow is one project the user trusts.
+type Allow struct {
+	Dir        string `toml:"dir"`
+	ListSHA256 string `toml:"list_sha256"`
+}
+
+// ReadAllowed loads the allow list under dataDir. A missing file allows nothing.
+func ReadAllowed(dataDir string) (*Allowed, error) {
+	a := &Allowed{path: filepath.Join(dataDir, "trust", "allow.toml")}
+
+	data, err := os.ReadFile(a.path)
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return nil, fmt.Errorf("read %s: %w", a.path, err)
+	}
+
+	if err := toml.Unmarshal(data, a); err != nil {
+		return nil, fmt.Errorf("parse %s: %w", a.path, err)
+	}
+
+	return a, nil
+}
+
+// Has reports whether dir is allowed with exactly this list content.
+func (a *Allowed) Has(dir, listSHA256 string) bool {
+	return slices.Contains(a.Items, Allow{Dir: dir, ListSHA256: listSHA256})
+}
+
+// Set allows dir with this list content, or removes dir when listSHA256 is
+// empty, and saves the file.
+func (a *Allowed) Set(dir, listSHA256 string) error {
+	a.Items = slices.DeleteFunc(a.Items, func(item Allow) bool { return item.Dir == dir })
+
+	if listSHA256 != "" {
+		a.Items = append(a.Items, Allow{Dir: dir, ListSHA256: listSHA256})
+	}
+
+	data, err := toml.Marshal(a)
+	if err != nil {
+		return fmt.Errorf("write %s: %w", a.path, err)
+	}
+
+	if err := list.WriteFile(a.path, data); err != nil {
+		return fmt.Errorf("write %s: %w", a.path, err)
+	}
+
+	return nil
+}

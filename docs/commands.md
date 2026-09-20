@@ -243,6 +243,47 @@ stay pinned.
 
 A name that is in neither `oku.toml` nor its includes fails.
 
+## oku hook
+
+```
+oku hook <bash|zsh|fish>
+```
+
+Prints the shell code that applies a [project's](projects.md) environment. You
+load it from your shell's startup file with one line, which `oku hook --help`
+and [Projects](projects.md#using-the-projects-programs) show for each shell. oku
+never edits that file.
+
+The hook runs `oku env` before each prompt.
+
+## oku env
+
+```
+oku env [--shell bash|zsh|fish]
+```
+
+Prints the environment changes for the directory you are in: `PATH`, the
+`[env]` of installed packages, and the commands that undo what the last run
+applied. `--shell` defaults to `bash`. It reads local files only and takes a few
+milliseconds.
+
+Outside a project it exports the `[env]` of your global packages. Inside an
+allowed project whose profile matches its lock, it also puts the project's `bin`
+first on `PATH` and exports its packages' `[env]`. Otherwise it prints a one-line
+hint that names `oku allow` or `oku sync`.
+
+## oku allow, oku deny
+
+```
+oku allow [dir]
+oku deny [dir]
+```
+
+`allow` lets the shell hook apply a project's environment. The allow belongs to
+the project's `oku.toml` as it is now, so any later edit needs a new `oku allow`.
+`deny` removes it. Both default to the project you are in, and fail when
+there is no `oku.toml` in the directory or above it.
+
 ## oku generations
 
 ```
@@ -509,9 +550,10 @@ Lists what it will delete, asks once, then removes:
 
 Any answer other than `y` or `yes` cancels and removes nothing.
 
-oku never edits shell config files. If the profile `bin` directory is on
-`PATH`, uninstall ends by printing that entry so you can delete the line
-yourself.
+oku never edits shell config files. Uninstall ends by printing what you should
+delete yourself: the oku hook line, with the startup file it found it in, and
+the profile `bin` entry when that is on `PATH`. A hook line you leave behind does
+nothing once oku is gone.
 
 ## oku --version, oku --help
 

@@ -96,6 +96,14 @@ func runUninstall(cmd *cobra.Command, executable string, keepList, yes bool) err
 
 	fmt.Fprintln(out, "oku is uninstalled")
 
+	if lines := hookLines(); len(lines) > 0 {
+		fmt.Fprintf(
+			out,
+			"remove the oku hook from your shell startup file:\n  %s\n",
+			strings.Join(lines, "\n  "),
+		)
+	}
+
 	if slices.Contains(filepath.SplitList(os.Getenv("PATH")), binDir) {
 		fmt.Fprintf(out, "remove %s from PATH in your shell config\n", binDir)
 	}

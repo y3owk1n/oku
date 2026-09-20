@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/pelletier/go-toml/v2"
@@ -21,6 +22,9 @@ type Manifest struct {
 	Artifacts []Artifact `toml:"artifact"`
 	Build     *Build     `toml:"build"`
 	Runtime   Runtime    `toml:"runtime"`
+	// Env holds variables the shell hook exports while the package is installed.
+	// Values expand {{prefix}} and {{version}}.
+	Env map[string]string `toml:"env"`
 
 	// SHA256 is the hex digest of the manifest data. The store hash includes it.
 	SHA256 string `toml:"-"`
@@ -115,6 +119,15 @@ func (m *Manifest) validate() error {
 		}
 
 		m.Build.Deps = deps
+	}
+
+	for name := range m.Env {
+		if !envNameRe.MatchString(name) || reservedEnv(name) {
+			errs = append(errs, fmt.Errorf(
+				"env.%s: a package may not set this variable, because it changes how other programs load or run",
+				name,
+			))
+		}
 	}
 
 	deps, err := parseDeps(m.Runtime.RawDeps)
@@ -213,6 +226,24 @@ func (m *Manifest) Select(p platform.Platform) (Artifact, bool, error) {
 	}
 
 	return Artifact{}, false, nil
+}
+
+var envNameRe = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+
+// reservedEnv reports variables that would let a package control the user's
+// shell or other programs.
+func reservedEnv(name string) bool {
+	upper := strings.ToUpper(name)
+
+	for _, prefix := range []string{"LD_", "DYLD_", "OKU_"} {
+		if strings.HasPrefix(upper, prefix) {
+			return true
+		}
+	}
+
+	return slices.Contains([]string{
+		"PATH", "HOME", "SHELL", "IFS", "ENV", "BASH_ENV", "PROMPT_COMMAND", "PS1", "USER",
+	}, upper)
 }
 
 // Expand replaces {{name}} with vars[name] and fails on an unknown name.

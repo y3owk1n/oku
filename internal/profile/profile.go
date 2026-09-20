@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -34,6 +35,9 @@ type Package struct {
 	// Closure holds the store paths of every package this one depends on. They
 	// are not linked into the profile, and they keep gc from deleting them.
 	Closure []string `toml:"closure,omitempty"`
+	// Env holds the package's [env] with its values expanded. The shell hook
+	// reads it from here, so it never has to open a manifest.
+	Env map[string]string `toml:"env,omitempty"`
 }
 
 type state struct {
@@ -62,6 +66,14 @@ type Profile struct {
 // Open returns the profile called name under dataDir.
 func Open(dataDir, name string) *Profile {
 	return &Profile{dir: filepath.Join(dataDir, "profiles", name)}
+}
+
+// LockSnapshotOfCurrent returns the oku.lock saved in the active generation, or
+// nil when there is none.
+func (p *Profile) LockSnapshotOfCurrent() []byte {
+	data, _ := os.ReadFile(filepath.Join(p.dir, current, LockSnapshot))
+
+	return data
 }
 
 // BinDir is the directory a user puts on PATH.
@@ -133,7 +145,8 @@ func (p *Profile) Replace(pkgs []Package, lockData []byte) (bool, error) {
 
 	same := func(a, b Package) bool {
 		return a.Name == b.Name && a.Version == b.Version && a.Ref == b.Ref &&
-			a.StorePath == b.StorePath && slices.Equal(a.Closure, b.Closure)
+			a.StorePath == b.StorePath && slices.Equal(a.Closure, b.Closure) &&
+			maps.Equal(a.Env, b.Env)
 	}
 
 	if slices.EqualFunc(have, pkgs, same) {

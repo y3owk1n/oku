@@ -48,6 +48,7 @@ export XDG_CACHE_HOME=/tmp/oku-try/cache
     project-2d27013d8c67/      one per project, same layout
   trust/
     approvals.toml             manifests you allowed to run build commands
+    allow.toml                 projects the shell hook may apply
 
 <cache>/oku/
   downloads/<sha256>           verified downloads, reused on reinstall

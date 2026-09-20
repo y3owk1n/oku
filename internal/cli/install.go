@@ -200,6 +200,19 @@ func (e env) install(ctx context.Context, opts Options, req request) (installed,
 		}
 	}
 
+	env := map[string]string{}
+
+	for name, value := range m.Env {
+		expanded, err := manifest.Expand(value, map[string]string{
+			"prefix": realized.Path, "version": m.Version.Value, "tag": m.Tag,
+		})
+		if err != nil {
+			return installed{}, fmt.Errorf("env.%s: %w", name, err)
+		}
+
+		env[name] = expanded
+	}
+
 	// Entries for other platforms stay while they describe the same manifest.
 	platforms := map[string]lock.Platform{}
 
@@ -219,6 +232,7 @@ func (e env) install(ctx context.Context, opts Options, req request) (installed,
 			Ref:       r.String(),
 			StorePath: realized.Path,
 			Closure:   deps.closure,
+			Env:       env,
 		},
 		lock: lock.Package{
 			Name:           m.Package.Name,
