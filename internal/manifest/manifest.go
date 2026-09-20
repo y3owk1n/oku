@@ -66,7 +66,7 @@ var (
 	nameRe     = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]*$`)
 	repoRe     = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9._-]+$`)
 	sha256Re   = regexp.MustCompile(`^[0-9a-f]{64}$`)
-	templateRe = regexp.MustCompile(`\{\{\s*([a-zA-Z0-9_.]+)\s*\}\}`)
+	templateRe = regexp.MustCompile(`\{\{\s*([a-zA-Z0-9_.-]+)\s*\}\}`)
 )
 
 // Parse validates manifest data. origin names the data in error messages.

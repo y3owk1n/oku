@@ -66,10 +66,11 @@ relocatable = true
 signing_key = ""            # minisign public key, optional
 
 [version]
-value = "14.1.0"            # static, or:
 from = "github-releases"    # github-releases | git-tags
 repo = "BurntSushi/ripgrep"
 strip_prefix = "v"
+# or a fixed version, not together with from:
+# value = "14.1.0"
 
 [[artifact]]
 match = { os = "linux", arch = "amd64", libc = "musl" }
@@ -99,8 +100,12 @@ vendor = "cargo"            # cargo | go | npm | pip, output hash pinned in lock
 run = "cargo build --release --offline"
 env = { PCRE2_SYS_STATIC = "1" }
 when = { os = "linux" }     # optional on any step
-shell = "pwsh"              # required for run steps reachable on windows
 network = false             # true marks the package impure
+
+[[build.step]]
+run = "cargo build --release --offline"
+when = { os = "windows" }
+shell = "pwsh"              # a run step that can reach windows must name its shell
 
 [[build.step]]
 install = { bin = ["target/release/rg"], man = ["doc/rg.1"] }

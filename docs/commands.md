@@ -314,6 +314,73 @@ check the result, and commit it to the repo as `oku.pkg.toml`.
 Inference opens the asset for the machine it runs on, so run it on a platform
 the project releases for.
 
+## oku manifest lint
+
+```
+oku manifest lint [file...]
+```
+
+Checks manifests for mistakes before you publish them. Without a file it checks
+`oku.pkg.toml`. It prints one line per problem, then `<file>: ok` for each file
+with no errors, and exits with status 1 when any file has an error.
+
+```
+$ oku manifest lint
+oku.pkg.toml: error: line 4: unknown key package.relocateable
+oku.pkg.toml: warning: artifact[0]: no sha256 or sha256_url, so users trust the first download
+oku: 1 of 1 manifests have errors
+```
+
+`oku add` ignores keys it does not know, so that a manifest may use parts of the
+schema that oku does not act on yet. Lint knows the whole schema and is strict.
+
+Errors:
+
+- a key that is not in the schema, with its line
+- everything `oku add` rejects, such as a bad name, `value` together with `from`,
+  or an artifact with none of `bin`, `man` and `completions`
+- a template variable that does not exist
+- a build step with no type key, or with more than one
+- a `run` build step that can run on Windows and sets no `shell`. A step can run
+  on Windows unless its `when` names another `os`.
+- a `fetch` build step without `sha256`
+
+Warnings, which do not fail the run:
+
+- an artifact with neither `sha256` nor `sha256_url`
+- an empty `description`
+
+## oku manifest bump
+
+```
+oku manifest bump [file] [--to version] [--repo owner/repo] [--strip-prefix text]
+```
+
+Moves a manifest with a fixed `version.value` to the newest upstream release.
+Without a file it bumps `oku.pkg.toml`.
+
+```
+$ oku manifest bump
+ripgrep 14.1.0 -> 15.2.0, 2 checksums updated in oku.pkg.toml
+```
+
+It edits the file as text, so comments and layout stay:
+
+- `version.value` becomes the new version.
+- A `url` or `sha256_url` that spells the old version out, without
+  `{{version}}`, gets the new one.
+- Every inline `sha256` is replaced. oku downloads each artifact, for every
+  platform, to compute the new digest.
+
+| Flag | Effect |
+|---|---|
+| `--to` | The version to move to. Default is the newest release. |
+| `--repo` | The GitHub repo to read releases from. Default is the repo in the first `github.com/<owner>/<repo>/releases/download/` URL of the manifest. |
+| `--strip-prefix` | Text before the version in a tag. Default is `v` when a URL contains `/releases/download/v`, else nothing. |
+
+At the newest version it prints `<name> is already at <version>` and changes
+nothing. A manifest that uses `version.from` needs no bump, and bump says so.
+
 ## oku self uninstall
 
 ```
