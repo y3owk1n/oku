@@ -266,8 +266,9 @@ one of these keys:
 | `copy = { from, to }` | Copies one file. `from` is relative to the source directory and `to` to the package. |
 | `fetch = { url, sha256, to }` | Downloads a file into the source directory. `sha256` is required. |
 | `extract = { file, to, strip }` | Unpacks an archive that is in the source directory. |
+| `vendor = "go"` | Downloads the language's packages with the network on, see [Vendoring](#vendoring). |
 
-`patch` and `vendor` are in the schema and not supported yet.
+`patch` is in the schema and not supported yet.
 
 Any step may also set:
 
@@ -348,6 +349,52 @@ absolute install name, which cmake and autotools do when they are given
 A package's store path depends on the deps it was built against, so a new dep
 version leads to a new build instead of changing an installed package.
 
+### Vendoring
+
+`run` steps have no network, so `go build` or `cargo build` cannot download
+packages. A `vendor` step does that download for them. It runs the language's
+own tool with the network on, and oku hashes everything it downloaded.
+
+```toml
+[build]
+needs = ["go", "git"]
+source = { git = "https://github.com/rakyll/hey", tag = "{{tag}}" }
+
+[[build.step]]
+vendor = "go"
+
+[[build.step]]
+run = "go build -mod=vendor -o hey ."
+shell = "sh"
+env = { GOTOOLCHAIN = "local", GOFLAGS = "-buildvcs=false" }
+
+[[build.step]]
+install = { bin = ["hey"] }
+```
+
+| `vendor` | Runs | Fills | Then build with |
+|---|---|---|---|
+| `"go"` | `go mod vendor` | `vendor/` | `go build -mod=vendor` |
+| `"cargo"` | `cargo vendor --locked vendor`, and points `.cargo/config.toml` at it | `vendor/` | `cargo build --offline --locked` |
+| `"npm"` | `npm ci --ignore-scripts` | `node_modules/` | the project as it is |
+| `"pip"` | `pip download -r requirements.txt -d vendor/pip` | `vendor/pip/` | `pip install --no-index --find-links vendor/pip` |
+
+The tool must be in `needs`, or come from a dep. `cargo` and `npm` need the
+project's lockfile, and `pip` needs `requirements.txt`. `pip` uses `pip3` when
+there is no `pip`.
+
+The user's `oku.lock` pins one digest for what the vendor steps downloaded.
+`oku sync` runs them again and fails if the digest differs, so a locked build
+cannot get different packages. `oku update` accepts the new digest. What `pip`
+and `npm` download depends on the platform, and the lock keeps one digest per
+platform.
+
+A vendor step runs a program, so it appears in the approval prompt. It does not
+make the package impure, because its output is checked.
+
+A `cargo` that rustup manages works in the sandbox. oku passes `RUSTUP_HOME`
+through and lets the build read that directory.
+
 ### The build environment
 
 A `run` step does not see the user's environment. It gets:
@@ -370,9 +417,8 @@ On macOS and Linux a `run` step runs in a sandbox:
 - On macOS it can only write to the source directory, its temporary `HOME` and
   `TMPDIR`, and `{{prefix}}`.
 
-So a build must get everything it downloads through `source` or a `fetch` step,
-which oku runs outside the sandbox and checks against a sha256. A build that
-calls `cargo build` or `go build` has to work offline.
+So a build must get everything it downloads through `source`, a `fetch` step, or
+a [`vendor` step](#vendoring). oku checks all three against a digest.
 
 `network = true` on a `run` step gives that step the network and nothing else.
 oku shows it in the approval prompt as `(wants network)`, and marks the package
@@ -387,9 +433,9 @@ network = true
 ```
 
 A `needs` tool that is installed in the user's home directory and loads files
-from elsewhere in it, such as `~/.cargo/bin/cargo` with its toolchain in `~/.rustup`,
-cannot read them in the sandbox. Depend on a toolchain package, or on a
-system-wide install.
+from elsewhere in it cannot read them in the sandbox. rustup is the one case oku
+handles. For anything else, depend on a toolchain package or on a system-wide
+install.
 
 oku uses `sandbox-exec` on macOS and user, mount and network namespaces on
 Linux. On a Linux host that forbids unprivileged user namespaces, which

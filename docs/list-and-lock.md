@@ -148,8 +148,8 @@ Keys of a `[[package]]` entry:
 | `dep` | The packages this one depends on, pinned the same way. |
 
 A platform entry has `strategy`, which is `artifact` or `build`. An artifact
-also has `url` and `sha256`. A build has `impure = true` when one of its steps
-used `network = true`.
+also has `url` and `sha256`. A build has `vendor_sha256` when it has vendor
+steps, and `impure = true` when one of its steps used `network = true`.
 
 Platform names are `os-arch`, plus `-glibc` or `-musl` on Linux.
 

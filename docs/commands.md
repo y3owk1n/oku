@@ -62,6 +62,7 @@ Common failures:
 | `<name> needs approval to run them, and this is not a terminal` | The manifest runs build commands and stdin is not a terminal. Pass `--yes` after reading them. |
 | `dep <ref>: no version satisfies ">=9"` | A dep's version constraint matches nothing upstream. The versions found follow. |
 | `dependency cycle: a -> b -> a` | Two manifests depend on each other. |
+| `the vendored packages changed: oku.lock pinned ...` | A build's vendor steps downloaded something other than the lock pinned. Nothing was installed. `oku update <name>` accepts it. |
 | `build.step[N] (run) failed` | A build step failed. The last 40 lines of its output follow. |
 | `checksum mismatch for <url>` | The download differs from the expected sha256. Nothing was installed. |
 | `<alias> is not a source and <arg> is not a file` | The argument looks like `alias/name`, but no such source exists. See `oku source list`. |

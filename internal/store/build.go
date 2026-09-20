@@ -3,6 +3,8 @@ package store
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -27,7 +29,7 @@ const outputTail = 40
 
 // Build produces the package of m from source and returns its store path. It
 // returns an existing store path untouched, and it removes a half-built one on
-// any failure. log receives the output of run steps as they run, and may be nil.
+// any failure.
 //
 // {{prefix}} is the final store path, because build systems write it into the
 // files they install. The path counts as realized once its meta file exists.
@@ -35,10 +37,10 @@ func (s *Store) Build(
 	ctx context.Context,
 	m *manifest.Manifest,
 	p platform.Platform,
-	deps []Dep,
-	log io.Writer,
+	opts BuildOptions,
 ) (Realized, error) {
 	build := m.Build
+	deps, log := opts.Deps, opts.Log
 
 	// The deps are part of the hash, so a package rebuilt against another dep
 	// version gets another store path.
@@ -109,7 +111,18 @@ func (s *Store) Build(
 		Writable: []string{work, prefix},
 	}
 
+	if rustup := rustupHome(build.Needs, home); rustup != "" {
+		env = append(env, "RUSTUP_HOME="+rustup)
+		box.Readable = append(box.Readable, rustup)
+
+		if toolchain := os.Getenv("RUSTUP_TOOLCHAIN"); toolchain != "" {
+			env = append(env, "RUSTUP_TOOLCHAIN="+toolchain)
+		}
+	}
+
 	result := Realized{Path: prefix}
+
+	var vendored []string
 
 	for i, step := range build.Steps {
 		if !step.When.Matches(p) {
@@ -118,10 +131,16 @@ func (s *Store) Build(
 
 		var err error
 
-		if step.Run != nil {
+		switch {
+		case step.Run != nil:
 			result.Impure = result.Impure || step.Network
 			result.Unsandboxed, err = runCommand(ctx, step, src, vars, env, box, log)
-		} else {
+		case step.Vendor != nil:
+			var digest string
+
+			digest, result.Unsandboxed, err = runVendor(ctx, *step.Vendor, src, env, box, log)
+			vendored = append(vendored, digest)
+		default:
 			err = s.runStep(ctx, step, src, prefix, vars)
 		}
 
@@ -132,6 +151,22 @@ func (s *Store) Build(
 				"build.step[%d] (%s) failed: %w", i, strings.Join(step.Kinds(), ","), err,
 			)
 		}
+	}
+
+	if len(vendored) > 0 {
+		sum := sha256.Sum256([]byte(strings.Join(vendored, "\n")))
+		result.VendorSHA256 = hex.EncodeToString(sum[:])
+	}
+
+	// The check comes after the build on purpose. The vendored files decide what
+	// was compiled, so a mismatch has to stop the package from being kept.
+	if opts.PinnedVendor != "" && opts.PinnedVendor != result.VendorSHA256 {
+		os.RemoveAll(prefix)
+
+		return Realized{}, fmt.Errorf(
+			"%w: oku.lock pinned %s, this build downloaded %s",
+			ErrVendorChanged, opts.PinnedVendor, result.VendorSHA256,
+		)
 	}
 
 	if entries, _ := os.ReadDir(prefix); len(entries) == 0 {
@@ -154,6 +189,28 @@ func (s *Store) Build(
 	}
 
 	return result, nil
+}
+
+// rustupHome returns the rustup directory when the build needs cargo or rustc
+// and rustup manages them. The cargo on PATH is then a rustup proxy that finds
+// its toolchain through RUSTUP_HOME, which defaults to a directory in the home
+// that the sandbox hides. The toolchain stays read-only, and CARGO_HOME still
+// points into the build's temporary HOME.
+func rustupHome(needs []string, home string) string {
+	if !slices.Contains(needs, "cargo") && !slices.Contains(needs, "rustc") {
+		return ""
+	}
+
+	dir := os.Getenv("RUSTUP_HOME")
+	if dir == "" && home != "" {
+		dir = filepath.Join(home, ".rustup")
+	}
+
+	if info, err := os.Stat(filepath.Join(dir, "toolchains")); err != nil || !info.IsDir() {
+		return ""
+	}
+
+	return dir
 }
 
 // findNeeds returns the directories of the needed tools, and fails on the first
@@ -416,6 +473,64 @@ func copyInto(fromDir, from, toDir, to string, mode os.FileMode) error {
 	}
 
 	return os.Chmod(dest, mode)
+}
+
+// BuildOptions are the inputs of a build besides the manifest.
+type BuildOptions struct {
+	// Deps are the realized build deps.
+	Deps []Dep
+	// Log receives the output of commands as they run, and may be nil.
+	Log io.Writer
+	// PinnedVendor is the vendor digest oku.lock recorded, or empty.
+	PinnedVendor string
+}
+
+// ErrVendorChanged reports vendor steps that downloaded something other than
+// what oku.lock pinned.
+var ErrVendorChanged = errors.New("the vendored packages changed")
+
+// runVendor downloads a language's packages into the source directory, with the
+// network on, and returns the digest of what it downloaded.
+func runVendor(
+	ctx context.Context,
+	kind, src string,
+	env []string,
+	box sandbox.Spec,
+	log io.Writer,
+) (digest, unsandboxed string, err error) {
+	vendor, ok := vendorKinds[kind]
+	if !ok {
+		return "", "", fmt.Errorf(
+			"vendor %q must be one of %s",
+			kind,
+			strings.Join(manifest.VendorKinds, ", "),
+		)
+	}
+
+	tool, err := findTool(vendor.tools, env)
+	if err != nil {
+		return "", "", fmt.Errorf("vendor %q %w", kind, err)
+	}
+
+	script := "tool=" + strconv.Quote(tool) + "\n" + vendor.script
+	step := manifest.Step{Run: &script, Shell: "sh", Network: true}
+
+	unsandboxed, err = runCommand(
+		ctx,
+		step,
+		src,
+		nil,
+		append(slices.Clone(env), vendor.env...),
+		box,
+		log,
+	)
+	if err != nil {
+		return "", unsandboxed, err
+	}
+
+	digest, err = hashTree(filepath.Join(src, filepath.FromSlash(vendor.output)))
+
+	return digest, unsandboxed, err
 }
 
 // Dep is a realized package that a build uses.

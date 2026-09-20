@@ -35,9 +35,10 @@ type Step struct {
 	Fetch   *Fetch   `toml:"fetch"`
 	Extract *Extract `toml:"extract"`
 	Copy    *Copy    `toml:"copy"`
-	// Patch and Vendor are part of the schema. oku does not run them yet.
-	Patch  map[string]any `toml:"patch"`
-	Vendor *string        `toml:"vendor"`
+	// Vendor downloads a language's packages: "cargo", "go", "npm" or "pip".
+	Vendor *string `toml:"vendor"`
+	// Patch is part of the schema. oku does not run it yet.
+	Patch map[string]any `toml:"patch"`
 
 	When    platform.Selector `toml:"when"`
 	Shell   string            `toml:"shell"`
@@ -102,12 +103,13 @@ func (s Step) Kinds() []string {
 	return set
 }
 
-// RunSteps returns the run steps that apply to p, with their positions.
-func (b *Build) RunSteps(p platform.Platform) map[int]Step {
+// CommandSteps returns the steps that run a program on p, with their positions:
+// run steps and vendor steps.
+func (b *Build) CommandSteps(p platform.Platform) map[int]Step {
 	found := map[int]Step{}
 
 	for i, step := range b.Steps {
-		if step.Run != nil && step.When.Matches(p) {
+		if (step.Run != nil || step.Vendor != nil) && step.When.Matches(p) {
 			found[i] = step
 		}
 	}

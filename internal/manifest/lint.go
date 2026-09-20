@@ -58,6 +58,10 @@ type schema struct {
 	} `toml:"service"`
 }
 
+// VendorKinds are the values a vendor step accepts. The store holds how each
+// one runs.
+var VendorKinds = []string{"cargo", "go", "npm", "pip"}
+
 var (
 	artifactVars = []string{"version", "tag", "os", "arch", "libc"}
 	buildVars    = append([]string{"prefix", "src", "jobs"}, artifactVars...)
@@ -137,20 +141,6 @@ func Lint(data []byte) Report {
 func lintStep(i int, s Step) []string {
 	var found []string
 
-	set := s.Kinds()
-
-	switch len(set) {
-	case 0:
-		found = append(found, fmt.Sprintf(
-			"build.step[%d]: needs one of run, install, patch, fetch, extract, copy, vendor", i,
-		))
-	case 1:
-	default:
-		found = append(found, fmt.Sprintf(
-			"build.step[%d]: has %s, a step takes exactly one", i, strings.Join(set, " and "),
-		))
-	}
-
 	if s.Run != nil {
 		// A step with no when.os, or with when.os = "windows", can run on Windows,
 		// where no default shell exists.
@@ -167,6 +157,15 @@ func lintStep(i int, s Step) []string {
 				fmt.Sprintf("build.step[%d]: unknown template variable {{%s}}", i, name),
 			)
 		}
+	}
+
+	if s.Vendor != nil && !slices.Contains(VendorKinds, *s.Vendor) {
+		found = append(found, fmt.Sprintf(
+			"build.step[%d]: vendor %q must be one of %s",
+			i,
+			*s.Vendor,
+			strings.Join(VendorKinds, ", "),
+		))
 	}
 
 	if s.Fetch != nil {

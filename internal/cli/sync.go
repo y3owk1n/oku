@@ -147,6 +147,8 @@ func reconcile(
 		switch {
 		case errors.Is(err, errManifestChanged):
 			return fmt.Errorf("%s: %w\nrun `oku update %s` to accept it", name, err, name)
+		case errors.Is(err, store.ErrVendorChanged):
+			return fmt.Errorf("%w\nrun `oku update %s` to accept what it downloads now", err, name)
 		case errors.Is(err, store.ErrPinConflict) && !fresh:
 			return fmt.Errorf("%w\nrun `oku update %s` to accept the new checksum", err, name)
 		case err != nil:

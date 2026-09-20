@@ -23,6 +23,8 @@ in [`../prd/`](../prd/).
   commands. The build uses tools already on your machine.
 - A build sandbox on macOS and Linux: build commands get no network and cannot
   read your home directory.
+- `vendor` steps for Go, Cargo, npm and pip packages, with the download pinned
+  in `oku.lock`.
 - Dependencies between packages, with version constraints. A build finds its
   deps' headers and libraries with no flags in the manifest.
 - `oku add github:owner/repo` for a repo that has no oku manifest, by reading
@@ -39,7 +41,6 @@ in [`../prd/`](../prd/).
 
 ## What does not work yet
 
-- `patch` and `vendor` build steps. A build that needs language packages has
-  to vendor them itself or mark a step `network = true`.
+- `patch` build steps.
 - Per-project lists and the shell hook.
 - `.tar.xz` and `.tar.zst` archives.
