@@ -298,20 +298,32 @@ func rank(name string) int {
 	}
 }
 
-// hasWord reports whether name holds one of words between separators, so that
-// "win" does not match inside "darwin".
+// hasWord reports whether name holds one of words as a whole word, so that "win"
+// does not match inside "darwin". It searches the name and does not split it,
+// because a word such as "x86_64" contains a separator itself.
 func hasWord(name string, words []string) bool {
-	parts := strings.FieldsFunc(name, func(r rune) bool {
-		return r == '-' || r == '_' || r == '.' || r == ' '
-	})
-
 	for _, word := range words {
-		if slices.Contains(parts, word) {
-			return true
+		for from := 0; ; {
+			at := strings.Index(name[from:], word)
+			if at < 0 {
+				break
+			}
+
+			start, end := from+at, from+at+len(word)
+			if (start == 0 || !isAlnum(name[start-1])) &&
+				(end == len(name) || !isAlnum(name[end])) {
+				return true
+			}
+
+			from = start + 1
 		}
 	}
 
 	return false
+}
+
+func isAlnum(c byte) bool {
+	return c >= 'a' && c <= 'z' || c >= '0' && c <= '9'
 }
 
 func isArchive(name string) bool {

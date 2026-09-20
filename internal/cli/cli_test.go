@@ -1456,12 +1456,28 @@ func TestB27ManifestInitWritesTheInferredManifest(t *testing.T) {
 	m := newMachine(t)
 	archive, _ := m.archive(t, "release", map[string]string{"tool": script})
 
-	inferServer(t, &m, map[string]string{hostAssetName(): archive})
+	// A manifest covers every platform, so the test checks the x86_64 and aarch64
+	// spellings whatever the host is.
+	inferServer(t, &m, map[string]string{
+		hostAssetName():                           archive,
+		"tool-v1.4.0-x86_64-pc-windows-msvc.zip":  archive,
+		"tool-v1.4.0-aarch64-pc-windows-msvc.zip": archive,
+	})
 
 	target := filepath.Join(m.fixtures, "oku.pkg.toml")
 
 	_, err := m.run(t, "", "manifest", "init", "--from", "owner/tool", "-o", target)
 	must(t, err)
+
+	written, err := os.ReadFile(target)
+	must(t, err)
+
+	for _, arch := range []string{"amd64", "arm64"} {
+		match := fmt.Sprintf(`match = { os = "windows", arch = %q }`, arch)
+		if !strings.Contains(string(written), match) {
+			t.Fatalf("the manifest has no artifact for windows %s:\n%s", arch, written)
+		}
+	}
 
 	if _, err := m.run(t, "", "add", target); err != nil {
 		t.Fatalf("the written manifest does not install: %v", err)
