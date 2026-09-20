@@ -204,7 +204,7 @@ mixed-OS team.
 | app | copy bundle to `~/Applications` | `.desktop` and icons in XDG data dir | Start Menu shortcut |
 | font | `~/Library/Fonts` | `<data>/fonts` | per-user Fonts dir and its registry value |
 | service, user | launchd agent | systemd user unit | scheduled task at logon |
-| service, system | launchd daemon | systemd system unit | Windows service |
+| service, system | launchd daemon | systemd system unit | scheduled task as SYSTEM at boot |
 
 With `system = true` on the list entry the targets are `/Applications`,
 `/Library/Fonts` and `/Library/LaunchDaemons` on macOS, and

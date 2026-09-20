@@ -3,7 +3,8 @@
 By default oku installs a package's apps, fonts and services for your user, and
 needs no administrator rights. System scope puts them where every user of the
 machine gets them, and runs services as root from boot. Writing there needs
-`sudo`.
+`sudo`. On Windows it needs administrator rights, see
+[Windows](windows.md#system-scope).
 
 The package's programs are not affected. They stay in your profile's `bin`.
 
