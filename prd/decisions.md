@@ -471,8 +471,70 @@ than an approval does, because oku installs whatever that key signed.
 The signature of an artifact is at its URL with `.minisig` appended. oku accepts
 the hashed and the legacy kind of minisign signature. The lock pins the key at
 the first install. After that oku refuses a manifest with another key, or with
-none, on `add`, `sync` and `update` until `--accept-key`. A signed artifact without a
-sha256 is not trust on first use. Why: with no registry, the first install is
-the only point where oku can learn a developer's key, and after it a changed
-key is what someone who took over the repo would publish. Build sources are outside the key and
-rely on the sha256 of their `fetch` steps.
+none, on `add`, `sync` and `update` until `--accept-key`. A signed artifact
+without a sha256 is not trust on first use. Why: with no registry, the first
+install is the only point where oku can learn a developer's key, and after it a
+changed key is what someone who took over the repo would publish. Build sources
+are outside the key and rely on the sha256 of their `fetch` steps.
+
+## D50. Windows is tested on a CI runner, with a live script
+
+There is no Windows machine to test on, so `.github/scripts/live-windows.ps1`
+runs the real `oku.exe` on a GitHub Actions `windows-latest` runner against real
+GitHub releases, on every pull request. The Go test suite skips on Windows,
+because its fixtures are shell scripts. Why: code that only cross-compiles for Windows has
+never run, and the first three runs each found a bug that no other machine
+could show. The same CI found two bugs on Linux amd64 that an arm64 Mac hid.
+
+## D51. A Windows profile uses junctions, hard links and shims
+
+A normal Windows user may create a symlink only in developer mode. So `current`
+is a directory junction, a program in `bin` is a shim, and any other file is a
+hard link, or a copy across volumes. A shim is a copy of `oku.exe` under the
+program's name beside a `<name>.shim` file. oku checks for that file before
+anything else, runs the program it names with the same arguments and stdio, puts
+the `bin` of each dep at the front of `PATH` for DLL lookup (D7), and exits with
+the program's code. Why: oku ships one binary and needs only a normal user's
+rights. Scoop works the same way.
+
+Shims are hard links to one copy of oku in `<data>\oku\shims`, not to `oku.exe`.
+Why: Windows refuses to delete any link to a running program, and `gc` deletes
+shims while oku runs. A junction cannot be replaced by a rename, so switching
+generations on Windows has a moment without `current`. On unix it is one rename.
+
+## D52. An .msi is unpacked with msiexec /a
+
+oku recognises an `.msi` by its OLE header and runs the administrative install,
+which copies the files out and skips the install sequence. It is Windows only,
+as dmg and pkg are macOS only (D16). Why: a parser for the format in Go is a
+large dependency for one OS, and `msiexec /a` is the tool Windows provides for
+this. An `.msi` can define actions for the administrative install itself, and
+those run. The docs say so.
+
+## D53. Windows uninstall renames the running binary
+
+Windows refuses to delete a running program but lets it be renamed. `self
+uninstall` renames `oku.exe` to `oku.exe.uninstalled` and starts a detached
+`cmd` that deletes it about four seconds later. B101 holds for the path of
+`oku.exe` when the command returns, and for the last file a few seconds after.
+
+## D54. A Windows service is a scheduled task with an oku wrapper
+
+A user service is a task named `oku-<name>` that runs as the user with the least
+rights. Enabled means a logon trigger. A task can neither set environment
+variables nor redirect output, so it starts the hidden `oku service-run`, which
+reads the stored definition, opens the log, and runs the program without a
+window inside a job object with kill-on-close. Why: `schtasks /End` kills only
+the task's own process, and without the job a stopped service keeps running.
+The wrapper exits when the service's program exits, so D14's "no oku daemon"
+still holds. Task Scheduler restarts only after a failure, so `always` behaves
+like `on-failure`. System scope on Windows, which D14 maps to a Windows service,
+is not built.
+
+## D55. The sandbox probe runs the real setup
+
+The Linux sandbox probe created the namespaces and took that as a yes. Ubuntu
+24.04 allows that and then denies every mount, so every build failed there. The
+probe now runs the real sandbox setup with a command that does nothing. Why:
+creating the namespaces succeeds on hosts where the setup then fails, so only
+the setup itself shows whether a host can sandbox.

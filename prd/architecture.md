@@ -202,7 +202,7 @@ mixed-OS team.
 | Kind | macOS | Linux | Windows |
 |---|---|---|---|
 | app | copy bundle to `~/Applications` | `.desktop` and icons in XDG data dir | Start Menu shortcut |
-| font | `~/Library/Fonts` | `<data>/fonts` | per-user Fonts dir |
+| font | `~/Library/Fonts` | `<data>/fonts` | per-user Fonts dir and its registry value |
 | service, user | launchd agent | systemd user unit | scheduled task at logon |
 | service, system | launchd daemon | systemd system unit | Windows service |
 
@@ -233,9 +233,10 @@ internal/dirs/      config, data and cache directories
 internal/store/     download, verify, extract, realize, build steps, vendor
                     steps, cache entries, signatures, gc
 internal/sandbox/   linux userns, macos sandbox-exec, fallback
-internal/profile/   generations, links, windows shims
+internal/profile/   generations, links, windows junction and shims
+internal/shim/      what oku.exe does when it starts as a shim
 internal/expose/    ledger of apps, fonts and services
-internal/service/   launchd and systemd managers
+internal/service/   launchd, systemd and task scheduler managers
 internal/trust/     allow list, approvals
 internal/shellhook/ hook and env output per shell
 ```
