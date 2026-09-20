@@ -5,6 +5,9 @@ A manifest is one TOML file that describes one package. Put it in your repo as
 manifests for many packages names them `<name>.toml` or
 `packages/<name>.toml`, and users add `github:you/repo#<name>`.
 
+You may not need one. A GitHub repo whose releases follow common naming is
+installable with no manifest, see [Inferred manifests](#inferred-manifests).
+
 This page lists the keys oku reads today. Unknown keys are ignored, so a
 manifest may already carry sections from the full design in
 [`prd/architecture.md`](../prd/architecture.md).
@@ -156,6 +159,61 @@ linked into the user's profile:
 
 oku refuses an archive entry that is absolute or contains `..`, and a symlink
 whose target is absolute or resolves outside the package.
+
+## Inferred manifests
+
+`oku add github:owner/repo` on a repo with no `oku.pkg.toml` writes a manifest
+from the repo's newest release, prints it, and installs from it. To get that
+manifest as a file you can edit and commit:
+
+```
+$ oku manifest init --from owner/repo
+wrote oku.pkg.toml
+```
+
+How inference reads a release:
+
+- It matches asset names to platforms by the words in them, listed in the table
+  below.
+- On Linux it writes the glibc build first and the musl build second with no
+  `libc` in its `match`, so glibc machines with no build of their own use the
+  musl build.
+- It takes tar, tar.gz, tar.bz2 and zip archives and single binaries. It skips
+  packages and formats oku cannot unpack, such as `.deb`, `.rpm`, `.msi`,
+  `.dmg`, `.tar.xz` and `.tar.zst`. With several candidates it prefers a tar
+  archive over a zip, then the shortest name.
+- It uses `<asset>.sha256` as `sha256_url` when that exists, else a release file
+  with `checksum` or `sha256sum` in its name. With neither, the package is
+  [trusted on first use](trust.md#trust-on-first-use).
+- The version starts at the first digit of the tag, and everything before it
+  becomes `strip_prefix`. `v1.2.0` gives `"v"` and `jq-1.8.1` gives `"jq-"`.
+- It downloads the asset for your machine and looks inside. The program is the
+  executable named after the repo, else the only executable. A single top-level
+  directory becomes `strip = 1`. Files ending in `.1` become `man`, and with
+  more than 8 of them only the program's own page is kept.
+
+| For | Words it looks for in an asset name |
+|---|---|
+| `linux` | `linux` |
+| `darwin` | `darwin`, `macos`, `apple`, `osx`, `mac` |
+| `windows` | `windows`, `win64`, `win` |
+| `amd64` | `x86_64`, `amd64`, `x64` |
+| `arm64` | `aarch64`, `arm64` |
+| `glibc` | `gnu`, `glibc` |
+| `musl` | `musl` |
+
+Limits:
+
+- The repo has no releases, or no asset for your machine. The error lists the
+  asset names it saw.
+- The archive holds several executables and none is named after the repo.
+- It names the package after the repo, so `github:cli/cli` installs a package
+  called `cli` whose program is `gh`. Commit a manifest to choose the name.
+- It writes `bin` and `man` only. Completions need a manifest.
+
+An inferred manifest is pinned like any other. `oku.lock` stores its full text,
+so `oku sync` on another machine installs from the same text and does not infer
+again. `oku update` infers again.
 
 ## [build]
 

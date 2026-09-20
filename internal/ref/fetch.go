@@ -115,9 +115,9 @@ func (f *Fetcher) fetchGitHub(
 		return Fetched{Data: data, Commit: commit, Path: path}, nil
 	}
 
-	return Fetched{}, fmt.Errorf(
-		"%s: no %s at commit %s",
-		r, strings.Join(t.paths(r.Fragment), " or "), commit,
+	return Fetched{Commit: commit}, fmt.Errorf(
+		"%s: no %s at commit %s: %w",
+		r, strings.Join(t.paths(r.Fragment), " or "), commit, ErrNotFound,
 	)
 }
 

@@ -21,6 +21,8 @@ type installed struct {
 	profile  profile.Package
 	lock     lock.Package
 	firstUse bool
+	// inferred is the manifest text when oku inferred it during this install.
+	inferred string
 }
 
 // request says what install should fetch and what it must match.
@@ -44,9 +46,9 @@ type request struct {
 // install fetches the manifest, realizes the host's artifact and returns the
 // profile and lock entries for it. It changes the store only.
 func (e env) install(ctx context.Context, opts Options, req request) (installed, error) {
-	r, commit, previous, wantManifest := req.ref, req.commit, req.previous, req.wantManifest
+	r, previous, wantManifest := req.ref, req.previous, req.wantManifest
 
-	fetched, err := e.fetcher(opts).Fetch(ctx, r, commit, ref.Manifest)
+	fetched, inferred, err := e.manifestData(ctx, opts, req)
 	if err != nil {
 		return installed{}, err
 	}
@@ -144,10 +146,62 @@ func (e env) install(ctx context.Context, opts Options, req request) (installed,
 			ManifestSHA256: m.SHA256,
 			Version:        m.Version.Value,
 			Tag:            tagFor(m),
+			Inferred:       inferred != "" || req.previous.Inferred && req.keepVersion,
+			Manifest:       inferredText(inferred, req),
 			Platforms:      platforms,
 		},
 		firstUse: realized.FirstUse,
+		inferred: inferred,
 	}, nil
+}
+
+// manifestData returns the manifest for req. A GitHub repo without a manifest
+// gets an inferred one, which is returned a second time as text. Sync reuses the
+// inferred text in the lock, so it installs from what the user saw.
+func (e env) manifestData(
+	ctx context.Context,
+	opts Options,
+	req request,
+) (ref.Fetched, string, error) {
+	if req.keepVersion && req.previous.Inferred {
+		return ref.Fetched{
+			Data:   []byte(req.previous.Manifest),
+			Commit: req.previous.Commit,
+		}, "", nil
+	}
+
+	fetched, err := e.fetcher(opts).Fetch(ctx, req.ref, req.commit, ref.Manifest)
+	if err == nil || !errors.Is(err, ref.ErrNotFound) ||
+		req.ref.Kind != ref.GitHub || req.ref.Fragment != "" {
+		return fetched, "", err
+	}
+
+	text, err := e.inferrer(opts).Manifest(ctx, req.ref.Location, platform.Host())
+	if err != nil {
+		return ref.Fetched{}, "", err
+	}
+
+	return ref.Fetched{Data: []byte(text), Commit: fetched.Commit}, text, nil
+}
+
+func inferredText(inferred string, req request) string {
+	if inferred == "" && req.previous.Inferred && req.keepVersion {
+		return req.previous.Manifest
+	}
+
+	return inferred
+}
+
+// reportInferred prints a manifest that oku just inferred.
+func reportInferred(w io.Writer, got installed) {
+	if got.inferred == "" {
+		return
+	}
+
+	fmt.Fprintf(
+		w, "%s has no manifest, so oku inferred this one from its newest release:\n\n%s\n",
+		got.lock.Ref, got.inferred,
+	)
 }
 
 // reportFirstUse tells the user that oku trusted a download unverified.

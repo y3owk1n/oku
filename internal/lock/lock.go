@@ -52,6 +52,10 @@ type Package struct {
 	// Tag is the upstream tag of Version, kept so sync can expand {{tag}} without
 	// listing versions again.
 	Tag string `toml:"tag,omitempty"`
+	// Inferred marks a package whose repo has no manifest. Manifest then holds the
+	// manifest oku wrote for it, so sync installs from the same text.
+	Inferred bool   `toml:"inferred,omitempty"`
+	Manifest string `toml:"manifest,omitempty"`
 	// Platforms is keyed by platform.Platform.String(), such as "linux-amd64-musl".
 	Platforms map[string]Platform `toml:"platform"`
 }

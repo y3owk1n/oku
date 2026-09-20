@@ -33,6 +33,13 @@ every machine that uses your lock.
 If you see this notice, the first download is the one you trusted. Prefer
 manifests that publish `sha256` or `sha256_url`.
 
+## Inferred manifests
+
+For a repo with no manifest, oku writes one from the release and prints it
+before it installs, so you can read what it is about to do. The lock stores that
+text. Other machines install from the stored text, and only `oku update` infers
+again.
+
 ## What the lock pins
 
 | Pinned | Effect |

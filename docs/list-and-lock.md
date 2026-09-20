@@ -143,6 +143,7 @@ Keys of a `[[package]]` entry:
 | `manifest_sha256` | Digest of the manifest file. |
 | `version` | The version installed. |
 | `tag` | The upstream tag of that version, when it differs, such as `v10.2.0`. |
+| `inferred`, `manifest` | Set for a package whose repo has no manifest. `manifest` holds the full text oku inferred. |
 | `platform.<name>` | One entry per platform that has resolved this package. |
 
 Platform names are `os-arch`, plus `-glibc` or `-musl` on Linux.

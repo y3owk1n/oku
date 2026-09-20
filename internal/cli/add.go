@@ -82,6 +82,7 @@ func runAdd(cmd *cobra.Command, opts Options, arg string) error {
 		return err
 	}
 
+	reportInferred(cmd.OutOrStdout(), got)
 	e.reportFirstUse(cmd.ErrOrStderr(), got)
 	fmt.Fprintf(cmd.OutOrStdout(), "added %s %s\n", got.lock.Name, got.lock.Version)
 

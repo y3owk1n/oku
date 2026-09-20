@@ -14,7 +14,8 @@ oku add <ref>[@version]
 
 Installs the package a [ref](refs.md) points at.
 
-1. Fetches the manifest.
+1. Fetches the manifest. For a `github:owner/repo` ref whose repo has none, oku
+   [infers one](manifest.md#inferred-manifests) and prints it.
 2. Picks the first `[[artifact]]` whose `match` fits this machine.
 3. Downloads it, verifies the checksum, and unpacks it into the store.
 4. Activates a new profile generation that includes the package.
@@ -255,6 +256,25 @@ With nothing to delete it prints
 temporary directory of an install that is still running. You cannot roll back
 to a deleted generation. You can install a deleted package again, and oku
 reuses its cached download when the cache still has it.
+
+## oku manifest init
+
+```
+oku manifest init --from <owner/repo> [-o file] [--force]
+```
+
+Writes the manifest that oku [infers](manifest.md#inferred-manifests) from a
+GitHub repo's newest release. It is for people who publish a package. Run it,
+check the result, and commit it to the repo as `oku.pkg.toml`.
+
+| Flag | Effect |
+|---|---|
+| `--from` | The repo, as `owner/repo`. Required. |
+| `-o`, `--output` | The file to write. Default `oku.pkg.toml`. `-` prints to stdout. |
+| `--force` | Replaces the output file when it exists. |
+
+Inference opens the asset for the machine it runs on, so run it on a platform
+the project releases for.
 
 ## oku self uninstall
 

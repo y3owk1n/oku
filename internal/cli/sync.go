@@ -149,6 +149,7 @@ func reconcile(cmd *cobra.Command, opts Options, names []string, update bool) er
 			fmt.Fprintf(out, "%s %s, checksum changed\n", name, got.lock.Version)
 		}
 
+		reportInferred(out, got)
 		e.reportFirstUse(cmd.ErrOrStderr(), got)
 
 		next.Set(got.lock)

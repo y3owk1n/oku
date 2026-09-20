@@ -7,6 +7,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/y3owk1n/oku/internal/dirs"
+	"github.com/y3owk1n/oku/internal/infer"
 	"github.com/y3owk1n/oku/internal/list"
 	"github.com/y3owk1n/oku/internal/lock"
 	"github.com/y3owk1n/oku/internal/profile"
@@ -44,6 +45,7 @@ func NewRootCmd(opts Options) *cobra.Command {
 		newGenerationsCmd(),
 		newRollbackCmd(),
 		newGCCmd(),
+		newManifestCmd(opts),
 		newListCmd(),
 		newSelfCmd(opts.Executable),
 	)
@@ -107,6 +109,17 @@ func (e env) resolver(opts Options) *resolve.Resolver {
 	f := e.fetcher(opts)
 
 	return &resolve.Resolver{HTTP: f.HTTP, GitHubAPI: f.GitHubAPI, Token: f.Token}
+}
+
+func (e env) inferrer(opts Options) *infer.Inferrer {
+	f := e.fetcher(opts)
+
+	return &infer.Inferrer{
+		HTTP:      f.HTTP,
+		GitHubAPI: f.GitHubAPI,
+		Token:     f.Token,
+		Inspect:   e.store().Inspect,
+	}
 }
 
 func (e env) globalProfile() *profile.Profile {

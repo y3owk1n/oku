@@ -19,6 +19,7 @@ import (
 
 	"github.com/pelletier/go-toml/v2"
 
+	"github.com/y3owk1n/oku/internal/infer"
 	"github.com/y3owk1n/oku/internal/manifest"
 	"github.com/y3owk1n/oku/internal/platform"
 )
@@ -361,4 +362,56 @@ func (s *Store) Remove(path string) error {
 	}
 
 	return os.RemoveAll(path)
+}
+
+// Inspect downloads url into the cache, unpacks it into a temporary directory
+// and returns its regular files. A download that is not an archive is one
+// executable file.
+func (s *Store) Inspect(ctx context.Context, url string) ([]infer.File, error) {
+	download, _, err := s.fetch(ctx, url, "")
+	if err != nil {
+		return nil, err
+	}
+
+	tmp, err := os.MkdirTemp("", "oku-inspect-")
+	if err != nil {
+		return nil, err
+	}
+	defer os.RemoveAll(tmp)
+
+	err = extract(download, tmp, 0)
+	if errors.Is(err, errNotArchive) {
+		return []infer.File{{Path: path.Base(url), Executable: true}}, nil
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	var files []infer.File
+
+	err = filepath.WalkDir(tmp, func(p string, entry fs.DirEntry, err error) error {
+		if err != nil || !entry.Type().IsRegular() {
+			return err
+		}
+
+		info, err := entry.Info()
+		if err != nil {
+			return err
+		}
+
+		rel, err := filepath.Rel(tmp, p)
+		if err != nil {
+			return err
+		}
+
+		files = append(files, infer.File{
+			Path:       filepath.ToSlash(rel),
+			Executable: info.Mode()&0o111 != 0 || strings.HasSuffix(p, ".exe"),
+		})
+
+		return nil
+	})
+
+	return files, err
 }
