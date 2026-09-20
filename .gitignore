@@ -1,0 +1,6 @@
+.devbox/
+.direnv/
+/bin/
+/dist/
+*.test
+*.out
