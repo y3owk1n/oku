@@ -32,6 +32,8 @@ in [`../prd/`](../prd/).
   uninstall.
 - Services: a package's daemon runs under launchd or systemd for your user,
   enabled with `service = true` in your list.
+- `oku doctor` checks the store, the sandbox, the shell hook, `PATH` and the
+  profiles, and says what to fix.
 - `oku shell <ref>...` opens a shell with packages on `PATH` and installs
   nothing.
 - Build caches: `oku cache` and `oku key` share built packages through any
