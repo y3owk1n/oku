@@ -184,13 +184,13 @@ order step in `prd/product.md`.
   the cache is substituted and no build step runs.
 - B86 [10] A cache entry with a missing, invalid or untrusted signature is
   ignored and the package builds locally.
-- B87 [10] `oku cache push` uploads the closure of the named packages, signed.
-  Impure packages are refused.
+- B87 [10] `oku cache push` writes the signed closure of the named packages
+  into a directory. Impure packages are refused.
 - B88 [10] A non-relocatable entry built under a different store root is never
   substituted.
 - B89 [10] A manifest with `signing_key` has its artifacts verified against
-  it. The key is pinned in the lock, and a changed key stops `sync` and
-  `update` until approved.
+  it. The key is pinned in the lock, and a changed or dropped key stops `sync`
+  and `update` until `--accept-key`.
 
 ## Tooling
 

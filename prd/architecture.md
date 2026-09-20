@@ -19,7 +19,8 @@ XDG on unix, `%APPDATA%` and `%LOCALAPPDATA%` on Windows. `<root>` is
 
 ```
 <config>/oku/oku.toml, oku.lock      global list
-<config>/oku/config.toml             sources, caches, trusted keys, store_root
+<config>/oku/config.toml             sources, caches, trusted_keys, store_root
+<config>/oku/signing.key             secret key of `oku cache push`
 <root>/store/<name>-<version>-<hash>/
 <data>/oku/profiles/global/gen-<n>/  current -> gen-<n>
 <data>/oku/profiles/project-<hash>/  same shape, keyed by the project's path
@@ -224,14 +225,18 @@ internal/ref/       parse and fetch refs
 internal/manifest/  TOML types, validation, templating
 internal/infer/     manifest inference from release assets
 internal/platform/  os, arch, libc detection, selector matching
-internal/resolve/   version discovery, closure, lock read and write
-internal/store/     download, verify, extract, realize, gc
-internal/build/     step executor, link environment, vendor steps
+internal/resolve/   version discovery
+internal/list/      oku.toml, edited as text
+internal/lock/      oku.lock
+internal/source/    config.toml: sources, caches, trusted keys, store root
+internal/dirs/      config, data and cache directories
+internal/store/     download, verify, extract, realize, build steps, vendor
+                    steps, cache entries, signatures, gc
 internal/sandbox/   linux userns, macos sandbox-exec, fallback
 internal/profile/   generations, links, windows shims
-internal/expose/    apps, fonts, services per OS
-internal/trust/     allow list, approvals, keys, signatures
-internal/cache/     substitute and push
+internal/expose/    ledger of apps, fonts and services
+internal/service/   launchd and systemd managers
+internal/trust/     allow list, approvals
 internal/shellhook/ hook and env output per shell
 ```
 
@@ -248,7 +253,7 @@ oku source add|remove|list
 oku hook <bash|zsh|fish|pwsh> | env [--shell] | allow [dir] | deny [dir]
 oku shell <ref>...
 oku service list|start|stop|restart|status|logs <name>
-oku cache add|remove|list|push
+oku cache add|remove|list <dir-or-url> | push <dir> [name...]
 oku key trust|revoke|list|generate
 oku manifest init --from <repo> [-o file] | lint [file...] | bump [file]
 oku manifest test [file] [--keep]
