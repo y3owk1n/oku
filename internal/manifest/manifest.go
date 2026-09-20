@@ -2,6 +2,8 @@
 package manifest
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"os"
@@ -18,6 +20,9 @@ type Manifest struct {
 	Version   Version        `toml:"version"`
 	Artifacts []Artifact     `toml:"artifact"`
 	Build     map[string]any `toml:"build"`
+
+	// SHA256 is the hex digest of the manifest file. The store hash includes it.
+	SHA256 string `toml:"-"`
 }
 
 type Package struct {
@@ -64,6 +69,9 @@ func Load(path string) (*Manifest, error) {
 	if err := m.validate(); err != nil {
 		return nil, fmt.Errorf("invalid manifest %s: %w", path, err)
 	}
+
+	sum := sha256.Sum256(data)
+	m.SHA256 = hex.EncodeToString(sum[:])
 
 	return &m, nil
 }
