@@ -1,0 +1,25 @@
+# A local manifest, because inference does not read "darwin-all" as a macOS download.
+[package]
+name = "golines"
+description = "A golang formatter that fixes long lines"
+homepage = "https://github.com/golangci/golines"
+license = "MIT"
+
+[version]
+from = "github-releases"
+repo = "golangci/golines"
+strip_prefix = "v"
+
+[[artifact]]
+match = { os = "darwin" }
+url = "https://github.com/golangci/golines/releases/download/{{tag}}/golines-{{version}}-darwin-all.tar.gz"
+sha256_url = "https://github.com/golangci/golines/releases/download/{{tag}}/golines_{{version}}_checksums.txt"
+strip = 1
+bin = ["golines"]
+
+[[artifact]]
+match = { os = "linux" }
+url = "https://github.com/golangci/golines/releases/download/{{tag}}/golines-{{version}}-linux-{{arch}}.tar.gz"
+sha256_url = "https://github.com/golangci/golines/releases/download/{{tag}}/golines_{{version}}_checksums.txt"
+strip = 1
+bin = ["golines"]
