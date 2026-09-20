@@ -185,8 +185,8 @@ bin = ["Program Files/GitHub CLI/gh.exe"]
 Oku add (Join-Path $fixtures 'gh.toml')
 $ghVersion = & "$bin\gh.exe" --version
 Check 'a program from an msi runs through its shim' { ($ghVersion -join ' ') -match 'gh version 2\.101\.0' }
-Check 'the msi was unpacked and not installed' {
-    -not (Test-Path "$env:ProgramFiles\GitHub CLI\gh.exe") -and
+# The runner has its own gh in Program Files, so that path proves nothing here.
+Check 'the copy of the msi that msiexec leaves behind is gone' {
     -not (Get-ChildItem "$env:XDG_DATA_HOME\oku\store\gh-*\pkg\*.msi")
 }
 
