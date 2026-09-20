@@ -73,19 +73,46 @@ mv "$tmp/$name" "$dir/oku"
 
 echo "installed $dir/oku"
 
-case ":$PATH:" in
-*":$dir:"*) ;;
-*) echo "add $dir to PATH to run it" ;;
+# The line uses $HOME when the binary is under it, so it also works in a
+# dotfiles repo that several machines share.
+case "$dir" in
+"$HOME"/*) oku="\$HOME${dir#"$HOME"}/oku" ;;
+*) oku="$dir/oku" ;;
 esac
 
 shell="$(basename "${SHELL:-sh}")"
 case "$shell" in
-bash | zsh) line="command -v oku >/dev/null 2>&1 && eval \"\$(oku hook $shell)\"" ;;
-fish) line="command -q oku; and oku hook fish | source" ;;
-*) line="" ;;
+bash)
+	rc="$HOME/.bashrc"
+	line="[ -x \"$oku\" ] && eval \"\$(\"$oku\" hook bash)\""
+	;;
+zsh)
+	rc="$HOME/.zshrc"
+	line="[ -x \"$oku\" ] && eval \"\$(\"$oku\" hook zsh)\""
+	;;
+fish)
+	rc="$HOME/.config/fish/config.fish"
+	line="test -x \"$oku\"; and \"$oku\" hook fish | source"
+	;;
+*)
+	rc=""
+	line=""
+	;;
 esac
 
-if [ -n "$line" ]; then
-	echo "to use oku in projects, add this line to your $shell startup file:"
-	echo "  $line"
+echo
+if [ -z "$line" ]; then
+	echo "next: put $dir on PATH, then run \"oku hook --help\" for the line your shell needs"
+	exit 0
 fi
+
+pretty="~${rc#"$HOME"}"
+echo "one step left. Add this line to $pretty:"
+echo
+echo "  $line"
+echo
+echo "It puts oku and the programs it installs on PATH. This command adds it for you:"
+echo
+echo "  echo '$line' >> $pretty && exec $shell"
+echo
+echo "then try:  oku add github:sharkdp/fd && fd --version"

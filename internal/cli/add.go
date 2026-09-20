@@ -151,7 +151,12 @@ func runAdd(
 	case e.project != "":
 		fmt.Fprintf(cmd.ErrOrStderr(), "this project's programs are in %s\n", prof.BinDir())
 	default:
-		fmt.Fprintf(cmd.ErrOrStderr(), "add %s to PATH to run it\n", prof.BinDir())
+		// One hook line puts oku and its programs on PATH, see "oku hook --help".
+		if hint := setupHint(opts); hint != "" {
+			fmt.Fprintf(cmd.ErrOrStderr(), "to run it, %s\n", hint)
+		} else {
+			fmt.Fprintf(cmd.ErrOrStderr(), "add %s to PATH to run it\n", prof.BinDir())
+		}
 	}
 
 	return nil

@@ -318,12 +318,14 @@ at login. A service in [system scope](system-scope.md) needs `--system` for
 oku hook <bash|zsh|fish|pwsh>
 ```
 
-Prints the shell code that applies a [project's](projects.md) environment. You
-load it from your shell's startup file with one line, which `oku hook --help`
-and [Projects](projects.md#using-the-projects-programs) show for each shell. oku
-never edits that file.
+Prints the shell code that sets oku up in a shell. You load it from your shell's
+startup file with one line, which `oku hook --help` and
+[Set up your shell](getting-started.md#set-up-your-shell) show for each shell.
+oku never edits that file.
 
-The hook runs `oku env` before each prompt. In PowerShell it wraps your `prompt`
+The code puts the directory of `oku` and the global profile's `bin` on `PATH`,
+unless they are there already. It also runs `oku env` before each prompt, which
+applies a [project's](projects.md) environment. In PowerShell it wraps your `prompt`
 function, keeps `$LASTEXITCODE`, and works on Windows, macOS and Linux.
 
 ## oku env
@@ -667,7 +669,7 @@ prints one line per check, and exits with code 1 when it found a problem.
 $ oku doctor
 ok       the store is /home/you/.local/share/oku/store, in your data directory
 note     builds from source run without a sandbox, because this host does not let an unprivileged user set up namespaces (...)
-ok       the shell hook is loaded from /home/you/.zshrc: command -v oku >/dev/null 2>&1 && eval "$(oku hook zsh)"
+ok       the shell hook is loaded from /home/you/.zshrc: [ -x "$HOME/.local/bin/oku" ] && eval "$("$HOME/.local/bin/oku" hook zsh)"
 ok       /home/you/.local/share/oku/profiles/global/current/bin is on PATH
 problem  /usr/bin/rg runs in place of oku's rg, because /usr/bin is earlier on PATH
 ok       every link in 3 profiles points at a file in the store

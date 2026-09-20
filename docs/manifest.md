@@ -311,7 +311,7 @@ Installing a package never starts its service. The user turns it on with
 ## [env]
 
 Variables the package needs in the user's shell. The user's
-[shell hook](projects.md#using-the-projects-programs) exports them while the
+[shell hook](getting-started.md#set-up-your-shell) exports them while the
 package is installed: in every shell for a globally installed package, and
 inside the project for a project package.
 

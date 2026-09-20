@@ -53,7 +53,7 @@ curl -fsSL https://raw.githubusercontent.com/y3owk1n/oku/main/install.sh | sh
 irm https://raw.githubusercontent.com/y3owk1n/oku/main/install.ps1 | iex
 ```
 
-The script puts one static binary in `~/.local/bin`, or `%LOCALAPPDATA%\oku\bin`, after checking its sha256. It needs no root and edits none of your files. `oku self update` replaces the binary later, after checking its [minisign](https://jedisct1.github.io/minisign/) signature.
+The script puts one static binary in `~/.local/bin`, or `%LOCALAPPDATA%\oku\bin`, after checking its sha256. It needs no root and edits none of your files, so it prints the one line your shell needs. `oku self update` replaces the binary later, after checking its [minisign](https://jedisct1.github.io/minisign/) signature.
 
 <details>
 <summary>From source</summary>
@@ -69,10 +69,16 @@ You need Go 1.26.4 or newer.
 
 ### First run
 
+The installer ends with one line for your shell's startup file and a command that
+appends it. That line puts oku and the programs it installs on `PATH`. On a new
+Mac:
+
 ```bash
+echo '[ -x "$HOME/.local/bin/oku" ] && eval "$("$HOME/.local/bin/oku" hook zsh)"' >> ~/.zshrc && exec zsh
+
 oku add github:sharkdp/fd      # install something
-oku doctor                     # says what to put on PATH, and checks the rest
 fd --version
+oku doctor                     # checks PATH, the hook, the sandbox and the profiles
 ```
 
 [Getting started](docs/getting-started.md)

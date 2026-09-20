@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"runtime"
 	"slices"
 	"strings"
 
@@ -13,11 +12,10 @@ import (
 
 	"github.com/y3owk1n/oku/internal/profile"
 	"github.com/y3owk1n/oku/internal/sandbox"
-	"github.com/y3owk1n/oku/internal/shellhook"
 	"github.com/y3owk1n/oku/internal/store"
 )
 
-func newDoctorCmd() *cobra.Command {
+func newDoctorCmd(opts Options) *cobra.Command {
 	return &cobra.Command{
 		Use:   "doctor",
 		Short: "Check this machine's oku setup and say what to fix",
@@ -27,7 +25,7 @@ doctor reads local files only. It prints one line per check, and exits with
 code 1 when a check found a problem.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			return runDoctor(cmd)
+			return runDoctor(cmd, opts)
 		},
 	}
 }
@@ -57,7 +55,7 @@ func (r *report) problem(format string, args ...any) {
 	r.add("problem", format, args...)
 }
 
-func runDoctor(cmd *cobra.Command) error {
+func runDoctor(cmd *cobra.Command, opts Options) error {
 	e, err := loadEnv()
 	if err != nil {
 		return err
@@ -67,7 +65,7 @@ func runDoctor(cmd *cobra.Command) error {
 
 	checkStore(r, e)
 	checkSandbox(r)
-	checkHook(r)
+	checkHook(r, opts)
 	checkPath(r, e)
 
 	if err := checkProfiles(r, e); err != nil {
@@ -132,28 +130,20 @@ func checkSandbox(r *report) {
 	}
 }
 
-func checkHook(r *report) {
+func checkHook(r *report, opts Options) {
 	if lines := hookLines(); len(lines) > 0 {
 		r.ok("the shell hook is loaded from %s", strings.Join(lines, ", "))
 
 		return
 	}
 
-	shell := filepath.Base(os.Getenv("SHELL"))
-	if runtime.GOOS == "windows" {
-		shell = "pwsh"
+	hint := setupHint(opts)
+	if hint == "" {
+		hint = "see \"oku hook --help\""
 	}
 
-	if !slices.Contains(shellhook.Shells, shell) {
-		r.note("no shell hook found, projects need one, see \"oku hook --help\"")
-
-		return
-	}
-
-	r.note(
-		"no shell hook found, projects need one. Add this line to your %s startup file:\n"+
-			"           %s", shell, shellhook.Line(shell),
-	)
+	r.note("no shell hook line found in a startup file. The line puts oku's programs on PATH "+
+		"and activates projects. To set it up, %s", hint)
 }
 
 // checkPath looks for the global bin on PATH, and for programs earlier on PATH
@@ -164,7 +154,10 @@ func checkPath(r *report, e env) {
 
 	at := slices.Index(dirs, bin)
 	if at < 0 {
-		r.problem("%s is not on PATH, so installed programs do not run by name", bin)
+		r.problem(
+			"%s is not on PATH, so installed programs do not run by name. The hook line puts it there",
+			bin,
+		)
 
 		return
 	}

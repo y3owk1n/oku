@@ -86,9 +86,47 @@ func Render(shell string, change Change) (string, error) {
 	return b.String(), nil
 }
 
-// Hook returns the code a shell's startup file loads. It runs "oku env" before
-// each prompt, and does nothing when oku is not installed.
-func Hook(shell string) (string, error) {
+// Hook returns the code a shell's startup file loads. It puts dirs on PATH, the
+// first one in front, and runs "oku env" before each prompt. dirs are oku's own
+// directory and the global profile's bin, so the one hook line is the whole
+// shell setup.
+func Hook(shell string, dirs []string) (string, error) {
+	code, err := promptHook(shell)
+	if err != nil {
+		return "", err
+	}
+
+	return pathSetup(shell, dirs) + code, nil
+}
+
+// pathSetup adds each of dirs to PATH unless it is there already, so loading the
+// hook twice changes nothing.
+func pathSetup(shell string, dirs []string) string {
+	var b strings.Builder
+
+	quote := quoter(shell)
+
+	// Each dir goes to the front, so the last one added ends up first.
+	for _, dir := range slices.Backward(dirs) {
+		switch shell {
+		case "fish":
+			fmt.Fprintf(&b, "set -l _oku_dir %s\n"+
+				"contains -- $_oku_dir $PATH; or set -gx PATH $_oku_dir $PATH\n", quote(dir))
+		case "pwsh":
+			fmt.Fprintf(&b, "$okuDir = %s\n"+
+				"if (($env:PATH -split [IO.Path]::PathSeparator) -notcontains $okuDir) "+
+				"{ $env:PATH = $okuDir + [IO.Path]::PathSeparator + $env:PATH }\n", quote(dir))
+		default:
+			fmt.Fprintf(&b, "_oku_dir=%s\n"+
+				"case \":$PATH:\" in *\":$_oku_dir:\"*) ;; *) export PATH=\"$_oku_dir:$PATH\" ;; esac\n",
+				quote(dir))
+		}
+	}
+
+	return b.String()
+}
+
+func promptHook(shell string) (string, error) {
 	switch shell {
 	case "bash":
 		return `_oku_hook() {
@@ -135,18 +173,38 @@ end
 	}
 }
 
-// Line returns the line a user adds to the shell's startup file. It does nothing
-// when oku is not installed, so it is safe to leave behind.
-func Line(shell string) string {
+// Line returns the line a user adds to the shell's startup file. oku is the path
+// of the binary, which the line uses in full because oku is not on PATH before
+// the hook has run. The line does nothing when that file is gone, so it is safe
+// to leave behind.
+func Line(shell, oku string) string {
 	switch shell {
 	case "fish":
-		return "command -q oku; and oku hook fish | source"
+		return fmt.Sprintf(`test -x "%[1]s"; and "%[1]s" hook fish | source`, oku)
 	case "pwsh":
-		return "if (Get-Command oku -ErrorAction SilentlyContinue) " +
-			"{ Invoke-Expression ((& oku hook pwsh) -join [Environment]::NewLine) }"
+		return fmt.Sprintf(
+			`if (Test-Path "%[1]s") { Invoke-Expression ((& "%[1]s" hook pwsh) -join [Environment]::NewLine) }`,
+			oku,
+		)
 	}
 
-	return fmt.Sprintf(`command -v oku >/dev/null 2>&1 && eval "$(oku hook %s)"`, shell)
+	return fmt.Sprintf(`[ -x "%[1]s" ] && eval "$("%[1]s" hook %[2]s)"`, oku, shell)
+}
+
+// StartupFile names the file that Line goes into, as a user would type it.
+func StartupFile(shell string) string {
+	switch shell {
+	case "bash":
+		return "~/.bashrc"
+	case "zsh":
+		return "~/.zshrc"
+	case "fish":
+		return "~/.config/fish/config.fish"
+	case "pwsh":
+		return "the file that $PROFILE names"
+	}
+
+	return ""
 }
 
 // quoter returns the function that wraps a string in single quotes for shell.
