@@ -61,12 +61,17 @@ func runAdd(cmd *cobra.Command, opts Options, arg string) error {
 		return err
 	}
 
-	prof := e.globalProfile()
-	if err := prof.Add(got.profile); err != nil {
+	locked.Set(got.lock)
+
+	lockData, err := locked.Bytes()
+	if err != nil {
 		return err
 	}
 
-	locked.Set(got.lock)
+	prof := e.globalProfile()
+	if err := prof.Add(got.profile, lockData); err != nil {
+		return err
+	}
 
 	err = list.Set(e.listPath(), got.lock.Name, list.Entry{Ref: r.String(), Version: r.Version})
 	if err != nil {

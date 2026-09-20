@@ -202,3 +202,7 @@ directory from a dotfiles repo, and run `oku sync` with no argument.
 Versions stay fixed until you run `oku update`. It reads every ref fresh and
 rewrites the lock. `oku update <name>` does it for one package. See
 [Commands](commands.md#oku-update).
+
+If an update breaks something, `oku rollback` switches the profile and
+`oku.lock` back to the generation before it. Commit the lock again afterwards
+if you keep it in version control.
