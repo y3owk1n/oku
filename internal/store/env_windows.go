@@ -14,9 +14,6 @@ import (
 // build's scratch home, so a build neither reads nor writes the real profile.
 func hostEnv(home, tmp string) (systemDirs, vars []string) {
 	root := os.Getenv("SystemRoot")
-	if root == "" {
-		root = `C:\Windows`
-	}
 
 	systemDirs = []string{
 		filepath.Join(root, "System32"),
