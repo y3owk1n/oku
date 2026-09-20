@@ -163,6 +163,7 @@ ref = "github:BurntSushi/ripgrep"
 commit = "<git sha>"
 manifest_sha256 = ""
 inferred = false
+manifest = ""               # the inferred manifest text, when inferred
 signing_key = ""
 version = "14.1.0"
 tag = "v14.1.0"             # only when it differs from version
@@ -174,6 +175,15 @@ sha256 = ""
 vendor_sha256 = ""
 deps = ["pcre2-10.44-<hash>"]
 ```
+
+```toml
+# config.toml
+[sources]
+core = "github:someone/recipes"
+```
+
+A source names a collection. `core/ripgrep` expands to
+`github:someone/recipes#ripgrep` before it is written anywhere (D26).
 
 Dep packages appear as their own `[[package]]` entries. The lock adds a
 platform entry the first time that platform resolves, so one lock serves a
@@ -226,7 +236,7 @@ oku shell <ref>...
 oku service list|start|stop|restart|status|logs <name>
 oku cache add|remove|list|push
 oku key trust|revoke|list|generate
-oku manifest init [--from <repo>] | lint | test | bump
+oku manifest init --from <repo> [-o file] | lint [file...] | bump [file] | test
 oku setup --system | doctor
 oku self update | self uninstall [--keep-list] [--yes]
 ```

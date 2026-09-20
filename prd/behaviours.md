@@ -67,18 +67,24 @@ order step in `prd/product.md`.
 ## Publishing
 
 - B25 [4] `oku add github:owner/repo` on a repo with no manifest infers one
-  from release assets, prints it, and marks the lock entry `inferred`.
+  from release assets, prints it, and marks the lock entry `inferred`. The
+  lock stores the manifest text, and `sync` installs from it without inferring
+  again.
 - B26 [4] Inference that finds no asset for the host fails and lists the asset
   names it saw.
 - B27 [4] `oku manifest init --from <repo>` writes the inferred manifest to a
   file.
 - B28 [4] `oku manifest lint` rejects: unknown keys, a step with zero or
   several type keys, a windows-reachable `run` without `shell`, unknown
-  template variables, an artifact with no output keys.
+  template variables, an artifact with no output keys, a `fetch` step without
+  sha256. A missing checksum source and an empty description are warnings and
+  do not fail it.
 - B29 [4] `oku manifest bump` rewrites a static version and its checksums to
-  the newest upstream release.
+  the newest upstream release, or to `--to <version>`. It keeps the file's
+  comments, and it refuses a manifest that discovers its versions.
 - B30 [4] `oku source add <alias> <ref>` makes `alias/name` resolve to the
   manifest `name` in that collection, and `add` accepts `alias/name` refs.
+  `oku.toml` gets the full ref, so the list works without the alias.
 - B31 [4] `oku search <term>` matches names and descriptions across the user's
   sources, and nothing else.
 

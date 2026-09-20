@@ -202,6 +202,30 @@ strict parser would reject real projects. Release URLs often contain the tag
 and the version in different places, and keeping the tag in the lock lets
 `sync` build the URL without asking upstream again.
 
+## D25. An inferred manifest is printed, installed without a prompt, and stored
+
+`oku add github:owner/repo` on a repo with no manifest prints the manifest it
+inferred and installs from it without asking. The lock stores the full manifest
+text. `sync` installs from that text and never infers. Only `update` infers
+again. Why: a prompt would break scripted installs, and printing gives the user
+the same information. Inference is a heuristic that will change between oku
+versions, so re-running it on another machine could give a different manifest
+for the same lock. Storing the text keeps "same input, same machine" true.
+
+## D26. An alias expands before it reaches a list
+
+`oku add core/ripgrep` writes the full ref to `oku.toml` and `oku.lock`. Lists
+never hold aliases. A path that exists is used before an alias. Why: aliases
+live in one user's `config.toml`. A published list that held them would fail on
+every machine that lacks the same alias, which breaks `oku sync <list-ref>`.
+
+## D27. add is lenient about keys, lint is strict
+
+`oku add` ignores manifest keys it does not know. `oku manifest lint` decodes
+against the whole schema and rejects them. Why: a manifest written for a newer
+oku must still install on an older one. The author is the person who can fix a
+misspelt key, so the strict check is a command the author runs.
+
 ## D16. Installers are unpacked, never executed
 
 `extract` understands tar, zip, 7z, dmg, pkg, msi, deb, rpm and AppImage. Why:
