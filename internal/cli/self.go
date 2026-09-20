@@ -11,6 +11,8 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+
+	"github.com/y3owk1n/oku/internal/expose"
 )
 
 // listFiles are what --keep-list leaves in the config directory.
@@ -66,6 +68,12 @@ func runUninstall(cmd *cobra.Command, executable string, keepList, yes bool) err
 	fmt.Fprintf(out, "  config              %s\n", e.config)
 	fmt.Fprintf(out, "  binary              %s\n", executable)
 
+	if ledger, err := expose.ReadLedger(e.data); err == nil {
+		for _, item := range ledger.Items {
+			fmt.Fprintf(out, "  %-19s %s\n", item.Kind, item.Target)
+		}
+	}
+
 	if len(kept) > 0 {
 		fmt.Fprintf(out, "keeps:\n  %s\n", strings.Join(kept, "\n  "))
 	}
@@ -77,6 +85,16 @@ func runUninstall(cmd *cobra.Command, executable string, keepList, yes bool) err
 		if a := strings.ToLower(strings.TrimSpace(answer)); a != "y" && a != "yes" {
 			return errors.New("uninstall cancelled, nothing was removed")
 		}
+	}
+
+	// Files outside oku's directories go first, while the ledger still exists.
+	ledger, err := expose.ReadLedger(e.data)
+	if err != nil {
+		return err
+	}
+
+	if err := ledger.RemoveAll(); err != nil {
+		return err
 	}
 
 	// The cache goes first because on Windows it is inside the data directory.

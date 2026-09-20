@@ -49,7 +49,12 @@ Output:
 added ripgrep 14.1.1
 ```
 
-Two notices go to stderr when they apply. One names the profile `bin`
+A package that ships [apps or fonts](manifest.md#apps-and-fonts) gets them copied
+to your per-user app and font folders, and oku prints one `exposed ...` line on
+stderr for each. `oku remove`, `oku rollback` and `oku sync` remove them again
+when the package leaves the active generation.
+
+Two more notices go to stderr when they apply. One names the profile `bin`
 directory when it is missing from `PATH`. The other says that oku trusted a
 download because the manifest publishes no checksum, see
 [Trust and checksums](trust.md).
@@ -68,6 +73,7 @@ Common failures:
 | `build.step[N] (run) failed` | A build step failed. The last 40 lines of its output follow. |
 | `checksum mismatch for <url>` | The download differs from the expected sha256. Nothing was installed. |
 | `<alias> is not a source and <arg> is not a file` | The argument looks like `alias/name`, but no such source exists. See `oku source list`. |
+| `<path> already exists and oku did not put it there` | A package's app or font would overwrite a file of yours. Move it away, or leave the package out. |
 | `<a> and <b> both provide bin/<x>` | Two packages ship a file of the same name. The second install is refused. |
 | `the manifest provides version X, not Y` | The `@version` suffix does not match a manifest with a fixed version. |
 | `... has no version X, the newest are ...` | The `@version` suffix names a release that upstream does not have. |
@@ -538,6 +544,7 @@ oku self uninstall [--keep-list] [--yes]
 
 Lists what it will delete, asks once, then removes:
 
+- every app and font oku placed outside its directories, each listed by path
 - the data directory (store and profiles)
 - the cache directory
 - the config directory

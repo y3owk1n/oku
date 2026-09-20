@@ -110,6 +110,10 @@ func runAdd(
 		return err
 	}
 
+	if err := e.syncExposed(cmd.ErrOrStderr()); err != nil {
+		return err
+	}
+
 	err = list.Set(e.listPath(), got.lock.Name, list.Entry{Ref: r.String(), Version: r.Version})
 	if err != nil {
 		return err

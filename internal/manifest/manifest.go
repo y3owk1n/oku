@@ -22,6 +22,8 @@ type Manifest struct {
 	Artifacts []Artifact `toml:"artifact"`
 	Build     *Build     `toml:"build"`
 	Runtime   Runtime    `toml:"runtime"`
+	// Apps holds launcher entries for Linux desktops.
+	Apps []App `toml:"app"`
 	// Env holds variables the shell hook exports while the package is installed.
 	// Values expand {{prefix}} and {{version}}.
 	Env map[string]string `toml:"env"`
@@ -66,6 +68,16 @@ type Artifact struct {
 	Bin         []string          `toml:"bin"`
 	Man         []string          `toml:"man"`
 	Completions map[string]string `toml:"completions"`
+	// App holds macOS app bundles, such as "Foo.app". Font holds font files.
+	App  []string `toml:"app"`
+	Font []string `toml:"font"`
+}
+
+// App is a launcher entry for Linux desktops, from a [[app]] table.
+type App struct {
+	Name string `toml:"name"`
+	Exec string `toml:"exec"`
+	Icon string `toml:"icon"`
 }
 
 var (
@@ -119,6 +131,12 @@ func (m *Manifest) validate() error {
 		}
 
 		m.Build.Deps = deps
+	}
+
+	for i, app := range m.Apps {
+		if app.Name == "" || app.Exec == "" {
+			errs = append(errs, fmt.Errorf("app[%d]: name and exec are required", i))
+		}
 	}
 
 	for name := range m.Env {
@@ -177,9 +195,9 @@ func (m *Manifest) validate() error {
 			errs = append(errs, fmt.Errorf("artifact[%d]: set sha256 or sha256_url, not both", i))
 		}
 
-		if len(a.Bin)+len(a.Man)+len(a.Completions) == 0 {
+		if len(a.Bin)+len(a.Man)+len(a.Completions)+len(a.App)+len(a.Font) == 0 {
 			errs = append(errs, fmt.Errorf(
-				"artifact[%d]: set at least one of bin, man or completions",
+				"artifact[%d]: set at least one of bin, man, completions, app or font",
 				i,
 			))
 		}

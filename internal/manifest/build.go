@@ -55,6 +55,8 @@ type Install struct {
 	Man         []string          `toml:"man"`
 	Share       []string          `toml:"share"`
 	Completions map[string]string `toml:"completions"`
+	App         []string          `toml:"app"`
+	Font        []string          `toml:"font"`
 }
 
 // Fetch downloads URL to the path To inside the source directory.

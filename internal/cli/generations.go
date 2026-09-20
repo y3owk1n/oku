@@ -140,6 +140,10 @@ func runRollback(cmd *cobra.Command, opts Options, args []string) error {
 		return err
 	}
 
+	if err := e.syncExposed(cmd.ErrOrStderr()); err != nil {
+		return err
+	}
+
 	out := cmd.OutOrStdout()
 	fmt.Fprintf(out, "generation %d is active: %s\n", target.Number, describe(target.Packages))
 

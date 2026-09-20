@@ -198,6 +198,10 @@ func reconcile(
 		return err
 	}
 
+	if err := e.syncExposed(cmd.ErrOrStderr()); err != nil {
+		return err
+	}
+
 	if err := next.Write(e.lockPath()); err != nil {
 		return err
 	}

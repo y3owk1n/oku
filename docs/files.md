@@ -1,6 +1,8 @@
 # Files and directories
 
-oku writes only under three directories. It needs no root.
+oku writes under three directories of its own, and needs no root. The only files
+it writes anywhere else are the apps and fonts of packages you installed, see
+[Outside oku's directories](#outside-okus-directories).
 
 | Directory | Default | With the variable set |
 |---|---|---|
@@ -46,6 +48,7 @@ export XDG_CACHE_HOME=/tmp/oku-try/cache
         oku.lock               a copy of oku.lock as it was at that time
       current -> gen-2         the active generation
     project-2d27013d8c67/      one per project, same layout
+  exposed.toml                 every file oku wrote outside these directories
   trust/
     approvals.toml             manifests you allowed to run build commands
     allow.toml                 projects the shell hook may apply
@@ -88,6 +91,25 @@ change deletes its half-built generation and leaves `current` unchanged.
 Old generations stay on disk until `oku gc --keep N` deletes them.
 `oku generations` lists them and `oku rollback` switches back to one, see
 [Commands](commands.md#oku-rollback).
+
+## Outside oku's directories
+
+An app or a font only works from the place the OS reads it, so oku copies those
+out of the store:
+
+| | macOS | Linux |
+|---|---|---|
+| Apps | `~/Applications/` | `<data home>/applications/oku-<name>.desktop` |
+| Fonts | `~/Library/Fonts/` | `<data home>/fonts/oku/` |
+
+Every such file is written to the ledger `exposed.toml` before oku creates it,
+with the package and the store path it came from. `oku remove`, `oku rollback`
+and `oku sync` remove what the active generation no longer has, and
+`oku self uninstall` removes everything in the ledger. oku never overwrites
+a file that is not in its ledger.
+
+oku does not edit shell startup files, the system `PATH`, or anything else
+outside these places.
 
 ## The cache
 

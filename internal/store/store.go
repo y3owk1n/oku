@@ -47,6 +47,8 @@ type Meta struct {
 	SHA256   string `toml:"sha256"`
 	// Impure marks a build whose run steps could use the network.
 	Impure bool `toml:"impure,omitempty"`
+	// Launchers are the package's Linux desktop entries.
+	Launchers []manifest.App `toml:"launcher,omitempty"`
 }
 
 // New returns the store under dataDir that caches downloads under cacheDir.
@@ -145,16 +147,17 @@ func (s *Store) Realize(
 		return Realized{}, fmt.Errorf("unpack %s: %w", a.URL, err)
 	}
 
-	if err := expose(tmp, a); err != nil {
+	if err := linkOutputs(tmp, a); err != nil {
 		return Realized{}, err
 	}
 
 	meta, err := toml.Marshal(Meta{
-		Name:     m.Package.Name,
-		Version:  m.Version.Value,
-		Platform: p.String(),
-		URL:      a.URL,
-		SHA256:   a.SHA256,
+		Name:      m.Package.Name,
+		Version:   m.Version.Value,
+		Platform:  p.String(),
+		URL:       a.URL,
+		SHA256:    a.SHA256,
+		Launchers: m.Apps,
 	})
 	if err != nil {
 		return Realized{}, fmt.Errorf("write %s: %w", metaFile, err)
@@ -217,10 +220,10 @@ func unpack(download, tmp string, a manifest.Artifact) error {
 
 var manSectionRe = regexp.MustCompile(`\.([1-9])[a-z]*(\.gz)?$`)
 
-// expose links the artifact's outputs from <tmp>/pkg into <tmp>/bin and
+// linkOutputs links the artifact's outputs from <tmp>/pkg into <tmp>/bin and
 // <tmp>/share. Links are relative so they still resolve after the move into the
 // store.
-func expose(tmp string, a manifest.Artifact) error {
+func linkOutputs(tmp string, a manifest.Artifact) error {
 	for _, entry := range a.Bin {
 		if err := link(tmp, entry, path.Join("bin", path.Base(entry))); err != nil {
 			return fmt.Errorf("bin %q: %w", entry, err)
@@ -253,7 +256,45 @@ func expose(tmp string, a manifest.Artifact) error {
 		}
 	}
 
+	for _, entry := range a.Font {
+		if err := link(tmp, entry, path.Join("fonts", path.Base(entry))); err != nil {
+			return fmt.Errorf("font %q: %w", entry, err)
+		}
+	}
+
+	for _, entry := range a.App {
+		if err := linkDir(tmp, entry, path.Join("apps", path.Base(entry))); err != nil {
+			return fmt.Errorf("app %q: %w", entry, err)
+		}
+	}
+
 	return nil
+}
+
+// linkDir is link for a directory, which is what a macOS app bundle is.
+func linkDir(tmp, entry, dest string) error {
+	if !filepath.IsLocal(filepath.FromSlash(entry)) {
+		return errors.New("the path is outside the package")
+	}
+
+	source := filepath.Join(tmp, "pkg", filepath.FromSlash(entry))
+
+	info, err := os.Stat(source)
+	if err != nil || !info.IsDir() {
+		return errors.New("no such directory in the package")
+	}
+
+	destPath := filepath.Join(tmp, filepath.FromSlash(dest))
+	if err := os.MkdirAll(filepath.Dir(destPath), 0o755); err != nil {
+		return err
+	}
+
+	rel, err := filepath.Rel(filepath.Dir(destPath), source)
+	if err != nil {
+		return err
+	}
+
+	return os.Symlink(rel, destPath)
 }
 
 // link makes <tmp>/<dest> point at <tmp>/pkg/<entry>. It copies the file where

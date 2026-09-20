@@ -59,6 +59,10 @@ func newRemoveCmd(opts Options) *cobra.Command {
 				return err
 			}
 
+			if err := e.syncExposed(cmd.ErrOrStderr()); err != nil {
+				return err
+			}
+
 			if err := list.Delete(e.listPath(), name); err != nil {
 				return err
 			}

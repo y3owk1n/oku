@@ -20,6 +20,7 @@ import (
 
 	"github.com/pelletier/go-toml/v2"
 
+	"github.com/y3owk1n/oku/internal/expose"
 	"github.com/y3owk1n/oku/internal/manifest"
 	"github.com/y3owk1n/oku/internal/platform"
 	"github.com/y3owk1n/oku/internal/sandbox"
@@ -181,7 +182,8 @@ func (s *Store) Build(
 	}
 
 	meta, err := toml.Marshal(Meta{
-		Name: m.Package.Name, Version: m.Version.Value, Platform: p.String(), Impure: result.Impure,
+		Name: m.Package.Name, Version: m.Version.Value, Platform: p.String(),
+		Impure: result.Impure, Launchers: m.Apps,
 	})
 	if err == nil {
 		err = os.WriteFile(filepath.Join(prefix, metaFile), meta, 0o644)
@@ -421,6 +423,7 @@ func installFiles(in manifest.Install, src, prefix string) error {
 		{in.Lib, fixedDir("lib"), 0},
 		{in.Include, fixedDir("include"), 0},
 		{in.Share, fixedDir("share"), 0},
+		{in.Font, fixedDir("fonts"), 0},
 		{in.Man, func(file string) (string, error) {
 			section := manSectionRe.FindStringSubmatch(file)
 			if section == nil {
@@ -447,6 +450,24 @@ func installFiles(in manifest.Install, src, prefix string) error {
 			); err != nil {
 				return err
 			}
+		}
+	}
+
+	for _, bundle := range in.App {
+		if !filepath.IsLocal(filepath.FromSlash(bundle)) {
+			return fmt.Errorf("app %q points outside the source directory", bundle)
+		}
+
+		target := filepath.Join(prefix, "apps", path.Base(bundle))
+		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+			return err
+		}
+
+		if err := expose.CopyTree(
+			filepath.Join(src, filepath.FromSlash(bundle)),
+			target,
+		); err != nil {
+			return fmt.Errorf("app %q: %w", bundle, err)
 		}
 	}
 
