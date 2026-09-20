@@ -244,15 +244,16 @@ url = "https://github.com/JetBrains/JetBrainsMono/releases/download/{{tag}}/JetB
 font = ["fonts/ttf/JetBrainsMono-Regular.ttf", "fonts/ttf/JetBrainsMono-Bold.ttf"]
 ```
 
-| Key | macOS | Linux |
-|---|---|---|
-| `app = ["Foo.app"]` | oku copies the bundle to `~/Applications/Foo.app`. | Not used. |
-| `[[app]]` | Not used. | A desktop entry at `<data home>/applications/oku-<name>.desktop`. |
-| `font = [...]` | oku copies them to `~/Library/Fonts/`. | oku copies them to `<data home>/fonts/oku/`. |
+| Key | macOS | Linux | Windows |
+|---|---|---|---|
+| `app = ["Foo.app"]` | oku copies the bundle to `~/Applications/Foo.app`. | Not used. | Not used. |
+| `[[app]]` | Not used. | A desktop entry at `<data home>/applications/oku-<name>.desktop`. | A Start Menu shortcut, `oku-<name>.lnk`. |
+| `font = [...]` | oku copies them to `~/Library/Fonts/`. | oku copies them to `<data home>/fonts/oku/`. | oku copies them to the user's font folder and names them in the registry. |
 
-`<data home>` is `$XDG_DATA_HOME`, or `~/.local/share`.
+`<data home>` is `$XDG_DATA_HOME`, or `~/.local/share`. The Windows paths are in
+[Windows](windows.md#apps-and-fonts).
 
-On Linux an app is a program plus a launcher. Ship the program with `bin` and
+On Linux and Windows an app is a program plus a launcher. Ship the program with `bin` and
 describe the launcher in a `[[app]]` table at the top level of the manifest:
 
 ```toml
@@ -263,7 +264,8 @@ icon = "share/icons/foo.png"
 ```
 
 `name` and `exec` are required. `exec` and `icon` are paths inside the installed
-package, so `exec` is normally `bin/<program>`.
+package, so `exec` is normally `bin/<program>`. Windows ignores `icon`, because a
+shortcut shows the icon of its program.
 
 oku copies apps and fonts, because Finder, Spotlight and font services do not
 treat a symlink as installed. A macOS bundle keeps its code signature. oku

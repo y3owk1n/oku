@@ -235,7 +235,7 @@ func (e env) handlers(
 	for _, kind := range []string{"app", "font", "service"} {
 		local := expose.Handler{
 			Place:  expose.Place,
-			Remove: func(item expose.Item) error { return os.RemoveAll(item.Target) },
+			Remove: expose.Remove,
 		}
 		if kind == "service" {
 			local = serviceHandler(manager, defs)
