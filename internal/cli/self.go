@@ -170,14 +170,18 @@ func runUninstall(
 			fmt.Fprintf(out, "  %-8s %s\n", item.Kind, item.Target)
 		}
 
-		fmt.Fprintln(out, "remove them with:")
+		if runtime.GOOS == "windows" {
+			fmt.Fprintln(out, "remove them in a terminal that runs as administrator, with:")
+		} else {
+			fmt.Fprintln(out, "remove them with:")
+		}
 
 		for _, item := range stay {
 			if item.Kind == "service" {
 				fmt.Fprintf(out, "  %s\n", stopCommand(item.Name))
 			}
 
-			fmt.Fprintf(out, "  sudo rm -rf %q\n", item.Target)
+			fmt.Fprintf(out, "  %s\n", removeCommand(item.Target))
 		}
 	}
 
@@ -202,10 +206,19 @@ func stopCommand(name string) string {
 	case "darwin":
 		return "sudo launchctl bootout system/" + service.Definition{Name: name}.Label()
 	case "windows":
-		return "schtasks /Delete /F /TN oku-" + name + "  (in a terminal run as administrator)"
+		return "schtasks /Delete /F /TN oku-" + name
 	}
 
 	return "sudo systemctl disable --now oku-" + name + ".service"
+}
+
+// removeCommand is what deletes a file of system scope by hand once oku is gone.
+func removeCommand(target string) string {
+	if runtime.GOOS == "windows" {
+		return fmt.Sprintf("del /f /q %q", target)
+	}
+
+	return fmt.Sprintf("sudo rm -rf %q", target)
 }
 
 // removeSharedRoot empties the shared store root, which the user owns, and then
