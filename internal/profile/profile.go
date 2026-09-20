@@ -322,3 +322,51 @@ func linkTree(gen string, pkg Package, sub string, owners map[string]string) err
 
 	return err
 }
+
+// All returns every profile under dataDir.
+func All(dataDir string) ([]*Profile, error) {
+	root := filepath.Join(dataDir, "profiles")
+
+	entries, err := os.ReadDir(root)
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return nil, fmt.Errorf("read profiles: %w", err)
+	}
+
+	var profiles []*Profile
+
+	for _, entry := range entries {
+		if entry.IsDir() {
+			profiles = append(profiles, &Profile{dir: filepath.Join(root, entry.Name())})
+		}
+	}
+
+	return profiles, nil
+}
+
+// Prune deletes every generation except the newest keep and the active one. It
+// returns the numbers it deleted. With dryRun it deletes nothing.
+func (p *Profile) Prune(keep int, dryRun bool) ([]int, error) {
+	gens, err := p.Generations()
+	if err != nil {
+		return nil, err
+	}
+
+	var removed []int
+
+	for i, gen := range gens {
+		if gen.Current || i >= len(gens)-keep {
+			continue
+		}
+
+		if !dryRun {
+			dir := filepath.Join(p.dir, genPrefix+strconv.Itoa(gen.Number))
+			if err := os.RemoveAll(dir); err != nil {
+				return removed, fmt.Errorf("delete generation %d: %w", gen.Number, err)
+			}
+		}
+
+		removed = append(removed, gen.Number)
+	}
+
+	return removed, nil
+}

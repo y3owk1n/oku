@@ -1210,3 +1210,55 @@ func TestB22EveryChangeIsAGenerationAndRollbackRestoresOne(t *testing.T) {
 		t.Fatal("rolling back from the oldest generation succeeded")
 	}
 }
+
+func TestB23GCDeletesOnlyStorePathsNoGenerationUses(t *testing.T) {
+	m := newMachine(t)
+	keep := m.namedManifest(t, "keep", "keep", "keep")
+	gone := m.namedManifest(t, "gone", "gone", "gone")
+
+	for _, args := range [][]string{{"add", keep}, {"add", gone}, {"remove", "gone"}} {
+		_, err := m.run(t, "", args...)
+		must(t, err)
+	}
+
+	before := m.storeEntries(t)
+
+	out, err := m.run(t, "", "gc")
+	must(t, err)
+
+	if got := m.storeEntries(t); !slices.Equal(got, before) {
+		t.Fatalf("gc deleted a path that generation 2 still uses: %v\n%s", got, out)
+	}
+
+	out, err = m.run(t, "", "gc", "--keep", "1", "--dry-run")
+	must(t, err)
+
+	if got := m.storeEntries(
+		t,
+	); !slices.Equal(got, before) ||
+		!strings.Contains(out, "would remove gone-") {
+		t.Fatalf("dry run changed the store or did not name gone: %v\n%s", got, out)
+	}
+
+	_, err = m.run(t, "", "gc", "--keep", "1")
+	must(t, err)
+
+	got := m.storeEntries(t)
+	if len(got) != 1 || !strings.HasPrefix(got[0], "keep-") {
+		t.Fatalf("store after gc --keep 1 holds %v, want only keep", got)
+	}
+
+	if _, err := exec.Command(m.profile("bin", "keep")).Output(); err != nil {
+		t.Fatalf("keep no longer runs: %v", err)
+	}
+
+	for _, path := range []string{
+		filepath.Join(m.config, "oku.toml"),
+		filepath.Join(m.config, "oku.lock"),
+		filepath.Join(m.cache, "downloads"),
+	} {
+		if !exists(path) {
+			t.Fatalf("gc deleted %s", path)
+		}
+	}
+}

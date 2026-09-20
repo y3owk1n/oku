@@ -224,6 +224,38 @@ writes the next number.
 Rollback fails for a number that does not exist, for the generation that is
 already active, and with no number when the oldest generation is active.
 
+## oku gc
+
+```
+oku gc [--keep N] [--dry-run]
+```
+
+Deletes store paths that no generation of any profile uses, and nothing else.
+
+Old generations keep their packages in the store, so rollback needs no
+download. For that reason a plain `oku gc` usually finds little to delete. To
+free space, delete old generations first:
+
+| Flag | Effect |
+|---|---|
+| `--keep N` | First deletes all generations except the newest N. The active generation is always kept, even when it is older than those. N must be at least 1. |
+| `--dry-run` | Prints what would be deleted and deletes nothing. |
+
+```
+$ oku gc --keep 2
+removed generation 1
+removed ripgrep-14.0.3-4c8fe21b8d1d13c4 (4.6 MiB)
+freed 4.6 MiB from 1 store path
+```
+
+With nothing to delete it prints
+`nothing to delete, every store path is used by a generation`.
+
+`gc` does not touch the download cache, `oku.toml`, `oku.lock`, or the
+temporary directory of an install that is still running. You cannot roll back
+to a deleted generation. You can install a deleted package again, and oku
+reuses its cached download when the cache still has it.
+
 ## oku self uninstall
 
 ```

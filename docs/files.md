@@ -58,8 +58,9 @@ manifest gets a new path and never overwrites an old one.
 oku builds a package in a temporary directory inside the store and renames it
 into place as the last step. A failed install leaves no files in the store.
 
-`oku remove` leaves store paths in place. Nothing deletes them yet except
-`oku self uninstall`.
+`oku remove` leaves store paths in place, because older generations still use
+them. `oku gc` deletes the store paths that no generation uses, see
+[Commands](commands.md#oku-gc).
 
 ## Profiles and generations
 
@@ -68,10 +69,11 @@ Put `<data>/oku/profiles/global/current/bin` on `PATH`. Every `add`, `remove`,
 directory of symlinks and then moves `current` to it in one rename. A failed
 change deletes its half-built generation and leaves `current` unchanged.
 
-Old generations stay on disk, and nothing deletes them yet. `oku generations`
-lists them and `oku rollback` switches back to one, see
+Old generations stay on disk until `oku gc --keep N` deletes them.
+`oku generations` lists them and `oku rollback` switches back to one, see
 [Commands](commands.md#oku-rollback).
 
 ## The cache
 
 Deleting the cache directory is safe. oku downloads again when it needs to.
+`oku gc` does not delete the cache.

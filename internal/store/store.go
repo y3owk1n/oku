@@ -311,3 +311,54 @@ func copyFile(source, dest string) error {
 
 	return err
 }
+
+// Unreferenced returns the store paths that are not in keep, with their sizes in
+// bytes. It skips the temporary directories of installs that are in progress.
+func (s *Store) Unreferenced(keep map[string]bool) (map[string]int64, error) {
+	entries, err := os.ReadDir(s.dir)
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return nil, fmt.Errorf("read store: %w", err)
+	}
+
+	found := map[string]int64{}
+
+	for _, entry := range entries {
+		path := filepath.Join(s.dir, entry.Name())
+		if !entry.IsDir() || strings.HasPrefix(entry.Name(), ".tmp-") || keep[path] {
+			continue
+		}
+
+		var size int64
+
+		err := filepath.WalkDir(path, func(_ string, item fs.DirEntry, err error) error {
+			if err != nil || item.IsDir() {
+				return err
+			}
+
+			info, err := item.Info()
+			if err != nil {
+				return err
+			}
+
+			size += info.Size()
+
+			return nil
+		})
+		if err != nil {
+			return nil, fmt.Errorf("measure %s: %w", path, err)
+		}
+
+		found[path] = size
+	}
+
+	return found, nil
+}
+
+// Remove deletes one store path. It refuses a path outside the store.
+func (s *Store) Remove(path string) error {
+	if filepath.Dir(path) != s.dir {
+		return fmt.Errorf("%s is not a store path", path)
+	}
+
+	return os.RemoveAll(path)
+}
