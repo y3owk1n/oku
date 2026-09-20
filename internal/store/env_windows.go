@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 )
 
-// hostEnv returns the system directories that end a build's PATH, and the
+// hostEnv returns the system directories that come last in a build's PATH, and the
 // variables that point a build at its own home and temporary directory.
 //
 // Windows programs do not start without SystemRoot, and cmd and PowerShell need
