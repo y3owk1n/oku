@@ -210,21 +210,28 @@ func (r *Resolver) List(ctx context.Context, v manifest.Version) ([]Release, err
 }
 
 // movingTag returns the one release of a tag that upstream moves, such as
-// "nightly". Its version is the day it was published and the commit the tag
-// points at, such as 2026.09.20-a73243f. A prerelease counts, a draft does not.
+// "nightly". Its version is the day of the commit the tag points at and that
+// commit, such as 2026.09.20-a73243f, so one commit always has one version. A
+// prerelease counts, a draft does not.
 func (r *Resolver) movingTag(ctx context.Context, repo, tag string) (Release, error) {
 	what := "read the release " + tag + " of " + repo
 
 	var found struct {
-		Draft     bool      `json:"draft"`
-		Published time.Time `json:"published_at"`
-		Assets    []struct {
+		Draft  bool `json:"draft"`
+		Assets []struct {
 			URL    string `json:"browser_download_url"`
 			Digest string `json:"digest"`
 		} `json:"assets"`
 	}
 
-	if err := r.github(ctx, "/repos/"+repo+"/releases/tags/"+tag, what, &found); err != nil {
+	err := r.github(
+		ctx,
+		"/repos/"+repo+"/releases/tags/"+tag,
+		what,
+		"the repository has no such release",
+		&found,
+	)
+	if err != nil {
 		return Release{}, err
 	}
 
@@ -233,10 +240,18 @@ func (r *Resolver) movingTag(ctx context.Context, repo, tag string) (Release, er
 	}
 
 	var commit struct {
-		SHA string `json:"sha"`
+		SHA    string `json:"sha"`
+		Commit struct {
+			Committer struct {
+				Date time.Time `json:"date"`
+			} `json:"committer"`
+		} `json:"commit"`
 	}
 
-	if err := r.github(ctx, "/repos/"+repo+"/commits/"+tag, what, &commit); err != nil {
+	err = r.github(
+		ctx, "/repos/"+repo+"/commits/"+tag, what, "the repository has no such tag", &commit,
+	)
+	if err != nil {
 		return Release{}, err
 	}
 
@@ -253,7 +268,7 @@ func (r *Resolver) movingTag(ctx context.Context, repo, tag string) (Release, er
 	}
 
 	return Release{
-		Version: found.Published.UTC().Format("2006.01.02") + "-" + commit.SHA[:7],
+		Version: commit.Commit.Committer.Date.UTC().Format("2006.01.02") + "-" + commit.SHA[:7],
 		Tag:     tag,
 		Commit:  commit.SHA,
 		Digests: digests,
@@ -269,7 +284,10 @@ func (r *Resolver) githubReleases(ctx context.Context, repo string) ([]string, e
 		Prerelease bool   `json:"prerelease"`
 	}
 
-	err := r.github(ctx, "/repos/"+repo+"/releases?per_page=100", "list releases of "+repo, &found)
+	err := r.github(
+		ctx, "/repos/"+repo+"/releases?per_page=100", "list releases of "+repo,
+		"the repository was not found", &found,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -286,8 +304,8 @@ func (r *Resolver) githubReleases(ctx context.Context, repo string) ([]string, e
 }
 
 // github decodes the GitHub API's answer for path into into. what names the
-// request in errors.
-func (r *Resolver) github(ctx context.Context, path, what string, into any) error {
+// request in errors, and missing says what a 404 means for it.
+func (r *Resolver) github(ctx context.Context, path, what, missing string, into any) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, r.GitHubAPI+path, nil)
 	if err != nil {
 		return err
@@ -308,7 +326,7 @@ func (r *Resolver) github(ctx context.Context, path, what string, into any) erro
 
 	switch {
 	case resp.StatusCode == http.StatusNotFound:
-		return fmt.Errorf("%s: GitHub has no such repository, release or tag", what)
+		return fmt.Errorf("%s: %s", what, missing)
 	case resp.StatusCode == http.StatusForbidden && resp.Header.Get("X-RateLimit-Remaining") == "0":
 		return errors.New("GitHub rate limit reached, set GITHUB_TOKEN to raise it")
 	case resp.StatusCode != http.StatusOK:
