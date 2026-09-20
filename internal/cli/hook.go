@@ -8,6 +8,7 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 
@@ -18,23 +19,36 @@ import (
 	"github.com/y3owk1n/oku/internal/trust"
 )
 
-func newHookCmd() *cobra.Command {
+func newHookCmd(opts Options) *cobra.Command {
+	oku := displayPath(opts.Executable)
+
+	long := "Print the shell code that sets oku up in a shell.\n\n" +
+		"Add one line to your shell's startup file. oku never edits that file.\n\n"
+	for _, shell := range shellhook.Shells {
+		long += "  " + shellhook.StartupFile(shell) + "\n    " + shellhook.Line(shell, oku) + "\n\n"
+	}
+
+	long += "That one line puts oku and the programs it installs on PATH, and applies a\n" +
+		"project's environment while you are inside the project. It does nothing when\n" +
+		"oku is not installed, so it is safe to leave behind."
+
 	return &cobra.Command{
 		Use:   "hook <bash|zsh|fish|pwsh>",
-		Short: "Print the shell code that applies a project's environment",
-		Long: `Print the shell code that applies a project's environment.
-
-Add one line to your shell's startup file. oku never edits that file.
-
-  bash, in ~/.bashrc:                 ` + shellhook.Line("bash") + `
-  zsh, in ~/.zshrc:                   ` + shellhook.Line("zsh") + `
-  fish, in ~/.config/fish/config.fish: ` + shellhook.Line("fish") + `
-  PowerShell, in the file $PROFILE names: ` + shellhook.Line("pwsh") + `
-
-The line does nothing when oku is not installed, so it is safe to leave behind.`,
-		Args: cobra.ExactArgs(1),
+		Short: "Print the shell code that sets oku up in a shell",
+		Long:  long,
+		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			code, err := shellhook.Hook(args[0])
+			e, err := loadEnv()
+			if err != nil {
+				return err
+			}
+
+			dirs := []string{e.globalProfile().BinDir()}
+			if opts.Executable != "" {
+				dirs = append(dirs, filepath.Dir(opts.Executable))
+			}
+
+			code, err := shellhook.Hook(args[0], dirs)
 			if err != nil {
 				return err
 			}
@@ -293,6 +307,39 @@ func setAllowed(cmd *cobra.Command, opts Options, args []string, allow bool) err
 	return nil
 }
 
+// displayPath writes a path under the home directory with $HOME, which every
+// shell oku supports expands, so the line also works in a shared dotfiles repo.
+func displayPath(path string) string {
+	home, err := os.UserHomeDir()
+	if err != nil || home == "" {
+		return path
+	}
+
+	if rel, ok := strings.CutPrefix(path, home+string(filepath.Separator)); ok {
+		return "$HOME" + string(filepath.Separator) + rel
+	}
+
+	return path
+}
+
+// setupHint says which line to add to which file, for the user's shell. It is
+// empty when oku does not know the shell.
+func setupHint(opts Options) string {
+	shell := filepath.Base(os.Getenv("SHELL"))
+	if runtime.GOOS == "windows" {
+		shell = "pwsh"
+	}
+
+	if !slices.Contains(shellhook.Shells, shell) {
+		return ""
+	}
+
+	return fmt.Sprintf(
+		"add this line to %s, then open a new terminal:\n  %s",
+		shellhook.StartupFile(shell), shellhook.Line(shell, displayPath(opts.Executable)),
+	)
+}
+
 // hookLines returns the lines in the user's shell startup files that load the
 // oku hook, as "file: line".
 func hookLines() []string {
@@ -317,7 +364,8 @@ func hookLines() []string {
 		}
 
 		for _, line := range strings.Split(string(data), "\n") {
-			if strings.Contains(line, "oku hook") &&
+			// The current line quotes the path, and older ones call oku by name.
+			if (strings.Contains(line, `oku" hook`) || strings.Contains(line, "oku hook")) &&
 				!strings.HasPrefix(strings.TrimSpace(line), "#") {
 				found = append(found, file+": "+strings.TrimSpace(line))
 			}

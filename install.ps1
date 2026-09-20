@@ -38,9 +38,19 @@ finally {
 
 Write-Host "installed $(Join-Path $dir 'oku.exe') after checking its sha256"
 
-if (($env:PATH -split ';') -notcontains $dir) {
-    Write-Host "add $dir to PATH to run it"
-}
+# The line uses $HOME when the binary is under it, so it also works in a profile
+# that several machines share.
+$oku = Join-Path $dir 'oku.exe'
+if ($oku.StartsWith($HOME, [StringComparison]::OrdinalIgnoreCase)) { $oku = '$HOME' + $oku.Substring($HOME.Length) }
+$line = "if (Test-Path `"$oku`") { Invoke-Expression ((& `"$oku`" hook pwsh) -join [Environment]::NewLine) }"
 
-Write-Host 'to use oku in projects, add this line to the file that $PROFILE names:'
-Write-Host "  if (Get-Command oku -ErrorAction SilentlyContinue) { Invoke-Expression ((& oku hook pwsh) -join [Environment]::NewLine) }"
+Write-Host ''
+Write-Host 'There is one step left. Add this line to the file that $PROFILE names:'
+Write-Host ''
+Write-Host "  $line"
+Write-Host ''
+Write-Host 'It puts oku and the programs it installs on PATH. This command adds it for you:'
+Write-Host ''
+Write-Host "  if (-not (Test-Path `$PROFILE)) { New-Item -Force -ItemType File `$PROFILE | Out-Null }; Add-Content `$PROFILE '$line'; . `$PROFILE"
+Write-Host ''
+Write-Host 'then try:  oku add github:sharkdp/fd; fd --version'

@@ -2873,7 +2873,7 @@ func TestB99UninstallPrintsTheHookLineToDelete(t *testing.T) {
 		t,
 		os.WriteFile(
 			filepath.Join(home, ".zshrc"),
-			[]byte("# mine\n"+shellhook.Line("zsh")+"\n"),
+			[]byte("# mine\n"+shellhook.Line("zsh", "$HOME/.local/bin/oku")+"\n"),
 			0o644,
 		),
 	)
@@ -2881,13 +2881,15 @@ func TestB99UninstallPrintsTheHookLineToDelete(t *testing.T) {
 	out, err := m.run(t, "", "self", "uninstall", "--yes")
 	must(t, err)
 
-	if !strings.Contains(out, ".zshrc") || !strings.Contains(out, "oku hook zsh") {
+	if !strings.Contains(out, ".zshrc") || !strings.Contains(out, "hook zsh") {
 		t.Fatalf("uninstall did not name the hook line:\n%s", out)
 	}
 }
 
 func TestB100StaleHookLineWithoutOkuStartsCleanly(t *testing.T) {
-	for shell, line := range map[string]string{"bash": shellhook.Line("bash"), "zsh": shellhook.Line("zsh"), "fish": shellhook.Line("fish")} {
+	for _, shell := range []string{"bash", "zsh", "fish"} {
+		line := shellhook.Line(shell, "$HOME/.local/bin/oku")
+
 		path, err := exec.LookPath(shell)
 		if err != nil {
 			continue
@@ -4443,8 +4445,9 @@ func TestB93InstallScriptPutsOneBinaryInPlaceAndEditsNothing(t *testing.T) {
 		t.Fatalf("no executable at %s:\n%s", installed, out)
 	}
 
-	if !strings.Contains(out, shellhook.Line("zsh")) || !strings.Contains(out, "to PATH") {
-		t.Fatalf("install.sh did not print the PATH hint and the hook line:\n%s", out)
+	if !strings.Contains(out, shellhook.Line("zsh", "$HOME/.local/bin/oku")) ||
+		!strings.Contains(out, "~/.zshrc") {
+		t.Fatalf("install.sh did not print the hook line and the file it goes into:\n%s", out)
 	}
 
 	if rc, _ := os.ReadFile(filepath.Join(home, ".zshrc")); string(rc) != "# mine\n" {
@@ -4462,5 +4465,67 @@ func TestB93InstallScriptPutsOneBinaryInPlaceAndEditsNothing(t *testing.T) {
 
 	if exists(filepath.Join(other, ".local", "bin", "oku")) {
 		t.Fatal("a refused install left a binary behind")
+	}
+}
+
+func TestB105OneHookLineSetsUpPathForOkuAndItsPrograms(t *testing.T) {
+	m := newMachine(t)
+
+	_, err := m.run(
+		t,
+		"",
+		"add",
+		m.manifest(t, "tool", map[string]string{"tool": script}, `bin = ["tool"]`),
+	)
+	must(t, err)
+
+	bin := filepath.Dir(m.profile("bin", "tool"))
+	okuDir := filepath.Dir(m.exe)
+
+	for shell, show := range map[string]string{
+		"bash": `printf '%s' "$PATH"`, "zsh": `printf '%s' "$PATH"`, "fish": `string join : $PATH`,
+	} {
+		path, err := exec.LookPath(shell)
+		if err != nil {
+			continue
+		}
+
+		code, err := m.run(t, "", "hook", shell)
+		must(t, err)
+
+		// The hook is loaded twice, as it is when a startup file is sourced again.
+		cmd := exec.Command(path, "-c", code+"\n"+code+"\n"+show+"; echo; tool")
+		cmd.Env = []string{"PATH=/usr/bin:/bin", "HOME=" + t.TempDir()}
+
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("%s: %v\n%s", shell, err, out)
+		}
+
+		lines := strings.Split(strings.TrimSpace(string(out)), "\n")
+		// A system startup file may add directories of its own after these two.
+		if front := bin + ":" + okuDir + ":"; !strings.HasPrefix(lines[0], front) ||
+			strings.Count(lines[0], bin) != 1 {
+			t.Fatalf("%s: PATH should start with %q once, got %q", shell, front, lines[0])
+		}
+
+		if lines[len(lines)-1] != "hello from tool" {
+			t.Fatalf("%s: the installed program does not run by name:\n%s", shell, out)
+		}
+	}
+
+	t.Setenv("SHELL", "/bin/zsh")
+	t.Setenv("PATH", "/usr/bin:/bin")
+
+	out, err := m.run(
+		t,
+		"",
+		"add",
+		m.manifest(t, "other", map[string]string{"other": script}, `bin = ["other"]`),
+	)
+	must(t, err)
+
+	if !strings.Contains(out, "~/.zshrc") || !strings.Contains(out, "hook zsh") {
+		t.Fatalf("add did not say which line goes into which file:\n%s", out)
 	}
 }

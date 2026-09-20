@@ -35,14 +35,13 @@ have not run on a real machine of the kind they are for:
 Windows has no sandbox that oku can use, so a build from source can reach the
 network and read your files, see [Builds](#builds).
 
-## Put oku's programs on PATH
+## Set up PowerShell
 
-```powershell
-$bin = "$env:LOCALAPPDATA\oku\profiles\global\current\bin"
-[Environment]::SetEnvironmentVariable('Path', "$bin;" + [Environment]::GetEnvironmentVariable('Path', 'User'), 'User')
-```
-
-Open a new terminal afterwards. oku never edits `PATH` itself.
+`install.ps1` ends by printing one line for the file that `$PROFILE` names, and a
+command that appends it. That line puts `oku.exe` and the programs it installs
+on `PATH` and activates projects, see
+[Set up your shell](getting-started.md#set-up-your-shell). oku never edits your
+profile itself.
 
 ## How a profile differs
 

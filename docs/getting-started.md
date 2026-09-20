@@ -16,8 +16,8 @@ The script downloads the binary for your OS and CPU from the newest GitHub
 release, checks its sha256 against the release's `checksums.txt`, and puts it in
 `~/.local/bin`, or `%LOCALAPPDATA%\oku\bin` on Windows. On unix it also checks
 the minisign signature when `minisign` is installed. It edits no file of yours.
-It ends by printing the directory to add to `PATH` and the hook line for your
-shell.
+It ends by printing the one line your shell needs, see
+[Set up your shell](#set-up-your-shell).
 
 | Variable | Effect |
 |---|---|
@@ -112,36 +112,46 @@ added ripgrep 15.2.0
 
 The [manifest reference](manifest.md) lists every key.
 
-## Put the profile on PATH
+## Set up your shell
 
-oku links every installed binary into one directory. Add it to `PATH` once, in
-your shell's config file. oku never edits that file for you.
+The installer puts `oku` in `~/.local/bin`, and oku links every program it
+installs into one directory. Neither is on `PATH` on a new machine. One line in
+your shell's startup file puts both there. The installer prints that line for
+your shell, with a command that appends it.
+
+| Shell | File | Line |
+|---|---|---|
+| bash | `~/.bashrc` | `[ -x "$HOME/.local/bin/oku" ] && eval "$("$HOME/.local/bin/oku" hook bash)"` |
+| zsh | `~/.zshrc` | `[ -x "$HOME/.local/bin/oku" ] && eval "$("$HOME/.local/bin/oku" hook zsh)"` |
+| fish | `~/.config/fish/config.fish` | `test -x "$HOME/.local/bin/oku"; and "$HOME/.local/bin/oku" hook fish \| source` |
+| PowerShell | the file `$PROFILE` names | `if (Test-Path "$HOME\AppData\Local\oku\bin\oku.exe") { Invoke-Expression ((& "$HOME\AppData\Local\oku\bin\oku.exe" hook pwsh) -join [Environment]::NewLine) }` |
+
+For zsh on a new Mac, which has no `~/.zshrc` yet:
 
 ```sh
-# bash, zsh
-export PATH="$HOME/.local/share/oku/profiles/global/current/bin:$PATH"
+echo '[ -x "$HOME/.local/bin/oku" ] && eval "$("$HOME/.local/bin/oku" hook zsh)"' >> ~/.zshrc
+exec zsh
 ```
 
-```fish
-# fish
-fish_add_path ~/.local/share/oku/profiles/global/current/bin
-```
+The line does three things:
 
-```powershell
-# PowerShell on Windows, once
-$bin = "$env:LOCALAPPDATA\oku\profiles\global\current\bin"
-[Environment]::SetEnvironmentVariable('Path', "$bin;" + [Environment]::GetEnvironmentVariable('Path', 'User'), 'User')
-```
+- It puts the directory of `oku` on `PATH`.
+- It puts `<data>/oku/profiles/global/current/bin` on `PATH`, where the programs
+  you install are.
+- It applies a [project's](projects.md) tools and variables while you are inside
+  an allowed project.
 
-To use [projects](projects.md), also load the oku hook there.
-[Projects](projects.md#using-the-projects-programs) has the line for bash, zsh,
-fish and PowerShell.
+It names `oku` by its full path, because `oku` is not on `PATH` before the line
+has run. It does nothing when that file is gone, so it is safe in a dotfiles
+repo that other machines share. Loading it twice changes nothing. oku never
+edits a startup file itself.
 
-If you set `XDG_DATA_HOME`, the directory is
-`$XDG_DATA_HOME/oku/profiles/global/current/bin`. `oku add` prints the exact
-path whenever it is missing from `PATH`.
+If you chose another directory with `OKU_INSTALL_DIR`, the line has that path.
+`oku hook --help` prints the four lines for the oku you are running, and
+`oku doctor` says whether the line is in place.
 
 ```
+$ oku add github:BurntSushi/ripgrep
 $ rg --version
 ripgrep 15.2.0
 ```

@@ -69,17 +69,9 @@ pins and relative refs, which start at the project directory. See
 
 ## Using the project's programs
 
-Load the oku hook in your shell once. Add one line to the startup file:
-
-| Shell | File | Line |
-|---|---|---|
-| bash | `~/.bashrc` | `command -v oku >/dev/null 2>&1 && eval "$(oku hook bash)"` |
-| zsh | `~/.zshrc` | `command -v oku >/dev/null 2>&1 && eval "$(oku hook zsh)"` |
-| fish | `~/.config/fish/config.fish` | `command -q oku; and oku hook fish \| source` |
-| PowerShell | the file `$PROFILE` names | `if (Get-Command oku -ErrorAction SilentlyContinue) { Invoke-Expression ((& oku hook pwsh) -join [Environment]::NewLine) }` |
-
-oku never edits that file. The line does nothing when oku is not installed, so
-it is safe to leave in a dotfiles repo.
+A project needs the hook line in your shell's startup file, the same line that
+puts oku on `PATH`. [Set up your shell](getting-started.md#set-up-your-shell) has
+it for bash, zsh, fish and PowerShell. `oku doctor` says whether it is in place.
 
 Then allow the project, once:
 

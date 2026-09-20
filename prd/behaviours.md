@@ -226,6 +226,10 @@ order step in `prd/product.md`.
   printing that PATH entry for the user to remove.
 - B101 [9] On Windows the oku binary is gone from its path once the command has
   exited, and the renamed file a few seconds later.
+- B105 [11] The one hook line in a shell's startup file is the whole shell
+  setup. After it, `oku` and the programs of the global profile run by name, and
+  loading it twice changes nothing. The installer, `oku add` and `oku doctor`
+  print that line with the file it goes into.
 - B104 [5] A `patch` step applies a unified diff to the source, the same on
   every OS. A hunk that does not fit fails the build and names the file.
 - B103 [11] With `--json`, `list`, `info`, `why`, `generations`, `search`,

@@ -546,3 +546,15 @@ The Linux sandbox probe created the namespaces and took that as a yes. Ubuntu
 probe now runs the real sandbox setup with a command that does nothing. Why:
 creating the namespaces succeeds on hosts where the setup then fails, so only
 the setup itself shows whether a host can sandbox.
+
+## D56. One hook line is the whole shell setup
+
+`oku hook <shell>` puts the directory of `oku` and the global profile's `bin` on
+`PATH`, and applies projects. The line in the startup file names `oku` by its
+full path, written with `$HOME`, and does nothing when that file is gone. The
+installer, `oku add` and `oku doctor` print the line together with the file it
+goes into, and the installer also prints a command that appends it. oku still
+edits no startup file itself (B93). Why: the first install on a fresh Mac ended
+with "add ~/.local/bin to PATH" and nothing more. The user then needed a second
+`PATH` entry for installed programs and a third line for projects, and a line
+that calls `oku` by name cannot work before `oku` is on `PATH`.
