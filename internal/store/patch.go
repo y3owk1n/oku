@@ -131,6 +131,9 @@ func missing(err error, name string) error {
 // patchPath turns a name from the diff into a path under src. An empty name
 // belongs to the missing side of a new or a deleted file.
 func patchPath(src, name string, strip int) (string, error) {
+	// A patch file with Windows line endings leaves a carriage return on the names
+	// in its header.
+	name = strings.TrimRight(name, "\r")
 	if name == "" {
 		return "", nil
 	}
