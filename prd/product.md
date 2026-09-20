@@ -83,8 +83,8 @@ These are permanent edges of the product, not deferrals.
 ## Build order
 
 Everything below is in scope. The order is dependency order, not priority.
-All eleven steps are built. The first release waits for the release key. `docs/`
-describes what works today.
+All eleven steps are built. The first release needs the release key, which is
+not set yet. `docs/` describes what works today.
 
 1. Core: local ref, artifact, store, global profile. `add`, `remove`, `list`.
 2. Refs, `oku.toml`, `oku.lock`, `sync`, list `include` and `when`, bootstrap

@@ -31,8 +31,8 @@ jobs:
           cp install.sh install.ps1 dist/
           (cd dist && sha256sum * > checksums.txt)
 
-      # "oku self update" and the install scripts refuse a file without a signature
-      # of the release key, so a release without the secret would be useless.
+      # "oku self update" refuses a file that the release key did not sign, so
+      # nobody could update from a release that was made without the secret.
       - name: Sign every file with the release key
         env:
           MINISIGN_SECRET_KEY: ${{ secrets.MINISIGN_SECRET_KEY }}

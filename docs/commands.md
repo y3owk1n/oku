@@ -727,8 +727,8 @@ binary before that check has passed, so a failed check leaves oku as it was.
 At the newest release it prints `oku <version> is the newest release`.
 
 A binary that you built from source has no release key, and `oku self update`
-refuses with `this build of oku has no release key`. Install a released build
-once, and it updates itself from then on.
+refuses with `this build of oku has no release key`. A released build has the
+key, and `oku self update` works from it.
 
 On Windows the running `oku.exe` is renamed aside first, as in
 [uninstalling](windows.md#uninstalling), because Windows does not let a running
