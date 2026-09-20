@@ -26,7 +26,10 @@ var (
 
 // Config is the part of config.toml that oku reads today.
 type Config struct {
-	Sources map[string]string `toml:"sources"`
+	// StoreRoot is the shared store root from "oku setup --system". Empty means
+	// the store is in the user's data directory.
+	StoreRoot string            `toml:"store_root,omitempty"`
+	Sources   map[string]string `toml:"sources"`
 }
 
 // Read parses the config at path. A missing file is an empty config.

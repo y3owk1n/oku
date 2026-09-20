@@ -366,7 +366,12 @@ func runManifestTest(
 
 	// Only the store is throwaway. The cache is content-addressed, so sharing it
 	// is safe and saves downloads.
-	e := env{config: scratch + "/config", data: scratch + "/data", cache: own.cache}
+	e := env{
+		config: scratch + "/config",
+		data:   scratch + "/data",
+		root:   scratch + "/data",
+		cache:  own.cache,
+	}
 	out := cmd.OutOrStdout()
 
 	got, err := e.install(cmd.Context(), opts, request{

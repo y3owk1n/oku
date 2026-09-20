@@ -380,6 +380,9 @@ freed 4.6 MiB from 1 store path
 With nothing to delete it prints
 `nothing to delete, every store path is used by a generation`.
 
+After `oku setup --system`, gc checks the shared store and the old store in the
+data directory.
+
 A dep counts as used while any generation holds a package that depends on it.
 
 `gc` does not touch the download cache, `oku.toml`, `oku.lock`, or the
@@ -548,10 +551,49 @@ It edits the file as text, so comments and layout stay:
 At the newest version it prints `<name> is already at <version>` and changes
 nothing. A manifest that uses `version.from` needs no bump, and bump says so.
 
+## oku setup
+
+```
+oku setup --system [--yes]
+```
+
+Moves the store to a shared root, `/opt/oku`, which is the same path on every
+machine. You need this only to share packages built from source between
+machines, because a build can write its store path into the files it installs.
+Prebuilt downloads work from any store.
+
+`/opt` belongs to root, so this is the one oku command that asks for
+administrator rights. It prints the directory it will create and who will own
+it, asks, and then runs one command through `sudo`:
+
+```
+$ oku setup --system
+this creates, with administrator rights:
+  /opt/oku  owned by kyle
+continue? [y/N] y
+the store root is now /opt/oku
+run "oku sync" to install your packages there, then "oku gc" to delete the old copies
+```
+
+The directory belongs to your user, so nothing after this needs `sudo`. oku
+records the root as `store_root` in `config.toml`. When you run oku as root, it
+does not call `sudo`.
+
+| Flag | Effect |
+|---|---|
+| `--system` | Required. Without it `oku setup` fails and does nothing. |
+| `--yes`, `-y` | Does not ask. |
+
+Packages you already have stay in the old store until `oku sync` installs them
+under `/opt/oku`. Older generations still point at the old store, so rollback
+keeps working. `oku gc` covers both stores.
+
+Profiles, the ledger and approvals stay in the data directory.
+
 ## oku self uninstall
 
 ```
-oku self uninstall [--keep-list] [--yes]
+oku self uninstall [--keep-list] [--yes] [--system]
 ```
 
 Lists what it will delete, asks once, then removes:
@@ -567,8 +609,25 @@ Lists what it will delete, asks once, then removes:
 |---|---|
 | `--keep-list` | Keeps `oku.toml` and `oku.lock` in the config directory and prints where they are. |
 | `--yes`, `-y` | Does not ask. |
+| `--system` | With `--yes`, also deletes the shared store root through `sudo`. |
 
 Any answer other than `y` or `yes` cancels and removes nothing.
+
+After [`oku setup --system`](#oku-setup) the list includes the shared store
+root, and uninstall asks a second question before it uses `sudo`:
+
+```
+  shared store root   /opt/oku (needs administrator rights)
+continue? [y/N] y
+remove /opt/oku with administrator rights? [y/N] n
+oku is uninstalled
+left in place, empty:
+  /opt/oku
+remove it with: sudo rmdir /opt/oku
+```
+
+Answering no still deletes everything inside `/opt/oku`, because your user owns
+it. Only the empty directory stays. `--yes` alone counts as no.
 
 oku never edits shell config files. Uninstall ends by printing what you should
 delete yourself: the oku hook line, with the startup file it found it in, and

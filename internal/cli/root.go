@@ -2,6 +2,7 @@
 package cli
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
@@ -19,6 +20,7 @@ import (
 	"github.com/y3owk1n/oku/internal/resolve"
 	"github.com/y3owk1n/oku/internal/sandbox"
 	"github.com/y3owk1n/oku/internal/service"
+	"github.com/y3owk1n/oku/internal/source"
 	"github.com/y3owk1n/oku/internal/store"
 )
 
@@ -34,6 +36,11 @@ type Options struct {
 	// Services replaces the OS's service manager. Tests set it, because a real
 	// one changes the user's login session.
 	Services service.Manager
+	// SystemRoot replaces the shared store root that "oku setup --system" creates.
+	SystemRoot string
+	// Elevate replaces how oku runs a command with administrator rights. Tests
+	// set it.
+	Elevate func(ctx context.Context, argv []string) error
 	// Interactive overrides the check for a terminal on stdin. Tests set it.
 	Interactive *bool
 	// GitHubAPI and GitHubRaw replace the github.com URLs when set.
@@ -74,6 +81,7 @@ func NewRootCmd(opts Options) *cobra.Command {
 		newListCmd(opts),
 		newWhyCmd(opts),
 		newInfoCmd(opts),
+		newSetupCmd(opts),
 		newSelfCmd(opts),
 	)
 
@@ -95,6 +103,9 @@ type env struct {
 	config string
 	data   string
 	cache  string
+	// root is the directory that contains the store. It is data, or the shared
+	// root from "oku setup --system".
+	root string
 	// project is the directory of the project list in use, or empty for the
 	// global list.
 	project string
@@ -114,9 +125,21 @@ func loadEnv() (env, error) {
 		return e, err
 	}
 
-	e.cache, err = dirs.Cache()
+	if e.cache, err = dirs.Cache(); err != nil {
+		return e, err
+	}
 
-	return e, err
+	config, err := source.Read(filepath.Join(e.config, source.FileName))
+	if err != nil {
+		return e, err
+	}
+
+	e.root = e.data
+	if config.StoreRoot != "" {
+		e.root = config.StoreRoot
+	}
+
+	return e, nil
 }
 
 // scopedEnv is loadEnv for commands that act on a list. Inside a directory tree
@@ -192,7 +215,17 @@ func (e env) profile() *profile.Profile {
 }
 
 func (e env) store() *store.Store {
-	return store.New(e.data, e.cache)
+	return store.New(e.root, e.cache)
+}
+
+// stores returns every store that can hold packages. After "oku setup
+// --system", older generations still point into the store in the data directory.
+func (e env) stores() []*store.Store {
+	if e.root == e.data {
+		return []*store.Store{e.store()}
+	}
+
+	return []*store.Store{e.store(), store.New(e.data, e.cache)}
 }
 
 func (e env) fetcher(opts Options) *ref.Fetcher {
