@@ -143,6 +143,31 @@ func (r Ref) String() string {
 	return s
 }
 
+// InDir renders the absolute file path s as "./path" when the file is inside
+// dir, so a list or lock in dir still finds the file in another checkout. Any
+// other ref comes back unchanged.
+func InDir(dir, s string) string {
+	if !filepath.IsAbs(s) {
+		return s
+	}
+
+	rel, err := filepath.Rel(dir, s)
+	if err != nil || !filepath.IsLocal(rel) {
+		return s
+	}
+
+	return "./" + filepath.ToSlash(rel)
+}
+
+// FromDir undoes InDir.
+func FromDir(dir, s string) string {
+	if !strings.HasPrefix(s, "./") {
+		return s
+	}
+
+	return filepath.Join(dir, filepath.FromSlash(s))
+}
+
 // splitVersion cuts "@version" off the end of s. A version holds no "/" or ":",
 // so splitVersion does not read the "@" in ssh://git@host/repo as one.
 func splitVersion(s string) (string, string) {

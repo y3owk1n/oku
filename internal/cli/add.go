@@ -130,7 +130,12 @@ func runAdd(
 	err = list.Set(
 		e.listPath(),
 		got.lock.Name,
-		list.Entry{Ref: r.String(), Version: r.Version, Service: enable, System: system},
+		list.Entry{
+			Ref:     ref.InDir(filepath.Dir(e.listPath()), r.String()),
+			Version: r.Version,
+			Service: enable,
+			System:  system,
+		},
 	)
 	if err != nil {
 		return err

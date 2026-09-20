@@ -6,12 +6,14 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 
 	"github.com/pelletier/go-toml/v2"
 
 	"github.com/y3owk1n/oku/internal/list"
+	"github.com/y3owk1n/oku/internal/ref"
 )
 
 // FileName is the lock's file name.
@@ -88,14 +90,40 @@ type Platform struct {
 	VendorSHA256 string `toml:"vendor_sha256,omitempty"`
 }
 
-// Read parses the lock at path. A missing file is an empty lock.
+// Read parses the lock at path. A missing file is an empty lock. File refs that
+// Write stored relative to the lock come back absolute.
 func Read(path string) (*Lock, error) {
 	data, err := os.ReadFile(path)
 	if err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return nil, fmt.Errorf("read %s: %w", path, err)
 	}
 
-	return Parse(data, path)
+	l, err := Parse(data, path)
+	if err != nil {
+		return nil, err
+	}
+
+	return l.mapRefs(func(s string) string { return ref.FromDir(filepath.Dir(path), s) }), nil
+}
+
+// mapRefs returns a copy of l with f applied to every ref in it.
+func (l *Lock) mapRefs(f func(string) string) *Lock {
+	out := &Lock{Includes: slices.Clone(l.Includes), Packages: mapPackageRefs(l.Packages, f)}
+	for i := range out.Includes {
+		out.Includes[i].Ref = f(out.Includes[i].Ref)
+	}
+
+	return out
+}
+
+func mapPackageRefs(pkgs []Package, f func(string) string) []Package {
+	out := slices.Clone(pkgs)
+	for i := range out {
+		out[i].Ref = f(out[i].Ref)
+		out[i].Deps = mapPackageRefs(out[i].Deps, f)
+	}
+
+	return out
 }
 
 // Parse reads lock data. origin names the data in error messages.
@@ -142,9 +170,12 @@ func (l *Lock) Bytes() ([]byte, error) {
 	return append([]byte(header), data...), nil
 }
 
-// Write saves the lock to path.
+// Write saves the lock to path. It stores a ref to a file inside the lock's
+// directory relative to it, so a committed lock works in another checkout.
 func (l *Lock) Write(path string) error {
-	data, err := l.Bytes()
+	portable := l.mapRefs(func(s string) string { return ref.InDir(filepath.Dir(path), s) })
+
+	data, err := portable.Bytes()
 	if err != nil {
 		return err
 	}

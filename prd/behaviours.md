@@ -46,6 +46,8 @@ order step in `prd/product.md`.
   and changes nothing.
 - B19 [2] A relative file ref in a list resolves against that list's
   directory. A list from a URL or a repo that names a local path is an error.
+  `add` stores a file inside the list's directory relative to it, in the list
+  and in the lock.
 
 ## Versions and generations
 
