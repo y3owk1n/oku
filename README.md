@@ -3,10 +3,13 @@
 A cross-platform package manager with no central registry. Like nix in what it
 guarantees, unlike nix in what it asks you to learn.
 
-> **Status: early.** Build step 1 of 11 works. `oku add ./manifest.toml`
-> installs a prebuilt artifact from a local manifest file on Linux and macOS.
-> Remote refs such as `github:you/tool` do not work yet. The spec lives in
-> [`prd/`](prd/), and the build order is in [`prd/product.md`](prd/product.md).
+> **Status: early.** oku installs prebuilt packages from local files, URLs,
+> GitHub repos and git repos on Linux and macOS, records them in `oku.toml` and
+> `oku.lock`, and restores them on another machine with `oku sync`. Building
+> from source, version discovery and per-project lists do not work yet.
+
+Start with [Getting started](docs/getting-started.md). All user documentation
+is in [`docs/`](docs/README.md).
 
 ## The idea
 
@@ -29,6 +32,8 @@ oku add github:you/tool
   `oku self uninstall` leaves nothing behind.
 
 ## Read the spec
+
+The design for the whole product, including what is not built yet:
 
 | File | What it holds |
 |---|---|

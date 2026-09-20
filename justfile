@@ -4,7 +4,7 @@ default:
     @just --list
 
 build:
-    go build -ldflags "-X main.version={{ version }}" -o bin/oku ./cmd/oku
+    CGO_ENABLED=0 go build -ldflags "-X main.version={{ version }}" -o bin/oku ./cmd/oku
 
 test:
     go test ./...
