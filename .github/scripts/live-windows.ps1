@@ -104,6 +104,21 @@ Set-Location $root
 prompt | Out-Null
 Check 'leaving the project takes fd away again' { -not (Get-Command fd -ErrorAction SilentlyContinue) }
 
+# Uninstall, which has to delete the running oku.exe and the junctions.
 Set-Location $env:RUNNER_TEMP
+Oku self uninstall --yes
+Check 'oku.exe is no longer at its path' { -not (Test-Path $oku) }
+Check 'data, cache and config are gone' {
+    -not (Test-Path "$env:XDG_DATA_HOME\oku") -and -not (Test-Path "$env:XDG_CACHE_HOME\oku") -and
+    -not (Test-Path "$env:XDG_CONFIG_HOME\oku")
+}
+Check 'the project list and lock are untouched' {
+    (Test-Path "$project\oku.toml") -and (Test-Path "$project\oku.lock")
+}
+Start-Sleep -Seconds 8
+Check 'the file that was moved aside is deleted once oku has exited' {
+    -not (Test-Path "$oku.uninstalled")
+}
+
 Remove-Item -Recurse -Force $root
 Write-Host 'live test passed'
