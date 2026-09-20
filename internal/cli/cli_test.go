@@ -3955,3 +3955,35 @@ func TestB90ShellRunsWithThePackagesOnPathAndChangesNothing(t *testing.T) {
 		t.Fatalf("want the command's exit code 7, got %v", err)
 	}
 }
+
+func TestB72MsiIsRefusedWithAReasonOffWindows(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows unpacks an msi, and the live test on the Windows runner covers it")
+	}
+
+	m := newMachine(t)
+	msi := filepath.Join(m.fixtures, "tool.msi")
+	must(
+		t,
+		os.WriteFile(
+			msi,
+			append([]byte{0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1}, make([]byte, 600)...),
+			0o644,
+		),
+	)
+
+	ref := m.rawManifest(
+		t,
+		"tool",
+		fmt.Sprintf("[[artifact]]\nurl = \"file://%s\"\nbin = [\"tool.exe\"]\n", msi),
+	)
+
+	_, err := m.run(t, "", "add", ref)
+	if err == nil || !strings.Contains(err.Error(), "on Windows only") {
+		t.Fatalf("want a refusal that says msi needs Windows, got %v", err)
+	}
+
+	if len(m.storeEntries(t)) != 0 {
+		t.Fatal("a refused msi left something in the store")
+	}
+}

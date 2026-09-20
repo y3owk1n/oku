@@ -24,7 +24,8 @@ in [`../prd/`](../prd/).
 - Windows, in part. Prebuilt packages install, run, roll back and uninstall, see
   [Windows](windows.md) for what is missing.
 - Packages that ship a prebuilt download: tar in any common compression, zip,
-  `.deb`, `.rpm`, a single binary or AppImage, and on macOS `.dmg` and `.pkg`.
+  `.deb`, `.rpm`, a single binary or AppImage, on macOS `.dmg` and `.pkg`, and
+  on Windows `.msi`.
   oku unpacks installers and never runs them.
 - Packages that ship a macOS app, a Linux desktop launcher, or fonts. oku puts
   them in your per-user folders and takes them away on remove, rollback and

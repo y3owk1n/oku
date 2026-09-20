@@ -169,6 +169,27 @@ Check 'the build saw a scratch home, not the real profile' {
     ($where -match 'oku-build-') -and ($where -notmatch [regex]::Escape($env:USERPROFILE))
 }
 
+# An .msi download, which oku unpacks with "msiexec /a" and never installs.
+Set-Content (Join-Path $fixtures 'gh.toml') @'
+[package]
+name = "gh"
+[version]
+value = "2.101.0"
+[[artifact]]
+match = { os = "windows", arch = "amd64" }
+url = "https://github.com/cli/cli/releases/download/v{{version}}/gh_{{version}}_windows_amd64.msi"
+sha256 = "9ba92256a431d254706844ee1991f6f4a9559a3c3646ff7ae7fe23724bfaef83"
+bin = ["Program Files/GitHub CLI/gh.exe"]
+'@
+
+Oku add (Join-Path $fixtures 'gh.toml')
+$ghVersion = & "$bin\gh.exe" --version
+Check 'a program from an msi runs through its shim' { ($ghVersion -join ' ') -match 'gh version 2\.101\.0' }
+# The runner has its own gh in Program Files, so that path proves nothing here.
+Check 'the copy of the msi that msiexec leaves behind is gone' {
+    -not (Get-ChildItem "$env:XDG_DATA_HOME\oku\store\gh-*\pkg\*.msi")
+}
+
 # Uninstall, which has to delete the running oku.exe and the junctions.
 Set-Location $env:RUNNER_TEMP
 Oku self uninstall --yes

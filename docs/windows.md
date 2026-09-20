@@ -7,7 +7,7 @@ oku runs on Windows without administrator rights and without developer mode.
 Tested on a GitHub Actions `windows-latest` machine with real releases:
 
 - `oku add`, `remove`, `list`, `sync`, `update`, `generations`, `rollback` and
-  `gc` for packages that ship a prebuilt `.zip`.
+  `gc` for packages that ship a prebuilt `.zip` or `.msi`.
 - `oku add github:owner/repo` for a repo without a manifest. oku picks the
   `windows` asset for your CPU.
 - Programs start through the profile from any directory, with their arguments,
@@ -20,7 +20,6 @@ Tested on a GitHub Actions `windows-latest` machine with real releases:
 ## What does not work yet
 
 - Apps, fonts and services.
-- `.msi` downloads.
 
 ## Put oku's programs on PATH
 

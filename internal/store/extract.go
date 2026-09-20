@@ -55,6 +55,8 @@ func extract(src, dest string, strip int) error {
 		return unrpm(f, root, strip)
 	case bytes.HasPrefix(head, magicXar):
 		return unpkg(src, dest)
+	case bytes.HasPrefix(head, magicOLE):
+		return unmsi(src, dest)
 	case isDiskImage(f):
 		return undmg(src, dest)
 	case len(head) > 262 && string(head[257:262]) == "ustar":
