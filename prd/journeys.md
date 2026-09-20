@@ -20,23 +20,24 @@ is already installable (B25, B26).
 
 ```
 $ oku add github:you/tool
-no manifest found in you/tool, inferring from release v1.2.0
+github:you/tool has no manifest, so oku inferred this one from its newest release:
 
-  linux/amd64   tool_1.2.0_linux_amd64.tar.gz    bin: tool
-  darwin/arm64  tool_1.2.0_darwin_arm64.tar.gz   bin: tool
-  (4 more platforms)
-
-checksums: checksums.txt found, verified
-install tool 1.2.0? [y/N]
+[package]
+name = "tool"
+...
+added tool 1.2.0
 ```
+
+oku prints the inferred manifest and installs without asking, so the command
+works in scripts. The lock stores the manifest text (B25).
 
 ### Level 1: own the manifest
 
 ```
 $ oku manifest init --from you/tool
-wrote oku.pkg.toml (6 artifacts, version from github-releases)
+wrote oku.pkg.toml
 $ oku manifest lint
-ok
+oku.pkg.toml: ok
 ```
 
 Bin names, man pages, completions and a signing key are now explicit (B27,
@@ -59,6 +60,7 @@ vendor = "cargo"
 
 [[build.step]]
 run = "cargo build --release --offline"
+shell = "sh"
 
 [[build.step]]
 install = { bin = ["target/release/tool"] }
@@ -67,8 +69,9 @@ install = { bin = ["target/release/tool"] }
 Absent from that manifest: `PKG_CONFIG_PATH`, `-L` and `-I` flags, rpath
 handling, a macOS special case, a crate download step. oku supplies the link
 environment from `deps` (B37), the vendor step fetches with network and pins
-its hash (B52), and the build runs offline in the sandbox (B50). Windows needs
-a `when` guard and `shell = "pwsh"` only where the command differs.
+its hash (B52), and the build runs offline in the sandbox (B50). A `run` step
+that can reach Windows names its shell (D4). Here `shell = "sh"` covers every
+OS. A step that differs on Windows gets a `when` guard and `shell = "pwsh"`.
 
 ```
 $ oku manifest test

@@ -13,9 +13,10 @@ it a short name with `oku source add` and search it, see
 You may not need one. A GitHub repo whose releases follow common naming is
 installable with no manifest, see [Inferred manifests](#inferred-manifests).
 
-This page lists the keys oku reads today. Unknown keys are ignored, so a
-manifest may already carry sections from the full design in
-[`prd/architecture.md`](../prd/architecture.md).
+This page lists the keys oku reads today. `oku add` ignores other keys, so a
+manifest may already hold sections from the full design in
+[`prd/architecture.md`](../prd/architecture.md). `oku manifest lint` checks a
+manifest against that full design.
 
 ## Example
 
@@ -219,6 +220,13 @@ Limits:
 An inferred manifest is pinned like any other. `oku.lock` stores its full text,
 so `oku sync` on another machine installs from the same text and does not infer
 again. `oku update` infers again.
+
+## Checking and updating a manifest
+
+Run `oku manifest lint` before you publish. It is stricter than `oku add`. It
+knows the whole schema and rejects a misspelt key. If your manifest fixes a
+version with inline `sha256` values, `oku manifest bump` moves it to the newest
+release and recomputes them. See [Commands](commands.md#oku-manifest-lint).
 
 ## [build]
 

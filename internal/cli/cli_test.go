@@ -1539,3 +1539,154 @@ func TestB31SearchMatchesNamesAndDescriptionsInSourcesOnly(t *testing.T) {
 		t.Fatalf("search for a term with no match:\n%s", out)
 	}
 }
+
+func TestB28ManifestLintRejectsSchemaMistakes(t *testing.T) {
+	m := newMachine(t)
+	digest := strings.Repeat("a", 64)
+
+	valid := fmt.Sprintf(`[package]
+name = "tool"
+description = "a tool"
+relocatable = true
+
+[version]
+value = "1.0.0"
+
+[[artifact]]
+match = { os = "linux" }
+url = "https://example.com/tool-{{version}}-{{arch}}.tar.gz"
+sha256 = %q
+bin = ["tool"]
+
+[build]
+needs = ["cc"]
+source = { git = "https://example.com/tool", tag = "{{version}}" }
+
+[[build.step]]
+run = "make PREFIX={{prefix}} -j{{jobs}} DEP={{dep.z-lib.prefix}}"
+when = { os = "linux" }
+
+[[build.step]]
+run = "nmake"
+when = { os = "windows" }
+shell = "cmd"
+
+[[build.step]]
+install = { bin = ["tool"] }
+`, digest)
+
+	cases := map[string]struct{ from, to, want string }{
+		"an unknown key": {
+			`relocatable = true`,
+			`relocateable = true`,
+			"unknown key package.relocateable",
+		},
+		"a step with no type key": {
+			`install = { bin = ["tool"] }`,
+			`env = { A = "b" }`,
+			"needs one of run",
+		},
+		"a step with two type keys": {
+			`shell = "cmd"`,
+			"shell = \"cmd\"\nvendor = \"go\"",
+			"run and vendor",
+		},
+		"a run step reachable on windows": {
+			"when = { os = \"linux\" }\n\n[[build.step]]\nrun = \"nmake\"",
+			"\n[[build.step]]\nrun = \"nmake\"",
+			"can run on Windows",
+		},
+		"an unknown template variable": {
+			`{{arch}}`,
+			`{{cpu}}`,
+			"unknown template variable {{cpu}}",
+		},
+		"an artifact with no output keys": {
+			`bin = ["tool"]` + "\n\n[build]",
+			"\n[build]",
+			"at least one of bin",
+		},
+	}
+
+	write := func(name, body string) string {
+		path := filepath.Join(m.fixtures, name+".toml")
+		must(t, os.WriteFile(path, []byte(body), 0o644))
+
+		return path
+	}
+
+	if out, err := m.run(t, "", "manifest", "lint", write("valid", valid)); err != nil {
+		t.Fatalf("lint rejected a valid manifest: %v\n%s", err, out)
+	}
+
+	for name, c := range cases {
+		if !strings.Contains(valid, c.from) {
+			t.Fatalf("%s: the valid manifest lacks %q", name, c.from)
+		}
+
+		out, err := m.run(
+			t,
+			"",
+			"manifest",
+			"lint",
+			write("broken", strings.Replace(valid, c.from, c.to, 1)),
+		)
+		if err == nil || !strings.Contains(out, c.want) {
+			t.Errorf("lint accepted %s, or did not say %q: %v\n%s", name, c.want, err, out)
+		}
+	}
+}
+
+func TestB29ManifestBumpMovesVersionAndChecksums(t *testing.T) {
+	m := newMachine(t)
+	server := newReleaseServer(t, "v1.0.0", "v1.1.0")
+	m.opts.GitHubAPI = server.URL + "/api"
+
+	_, oldSum := m.archive(t, "tool-1.0.0", map[string]string{"tool": "#!/bin/sh\necho 1.0.0\n"})
+	_, newSum := m.archive(t, "tool-1.1.0", map[string]string{"tool": "#!/bin/sh\necho 1.1.0\n"})
+
+	path := filepath.Join(m.fixtures, "tool.toml")
+	must(t, os.WriteFile(path, []byte(fmt.Sprintf(
+		"# my tool\n[package]\nname = \"tool\"\n[version]\nvalue = \"1.0.0\"\n"+
+			"[[artifact]]\nurl = \"file://%s/tool-{{version}}.tar.gz\"\nsha256 = %q\nbin = [\"tool\"]\n",
+		m.fixtures, oldSum,
+	)), 0o644))
+
+	out, err := m.run(
+		t,
+		"",
+		"manifest",
+		"bump",
+		path,
+		"--repo",
+		"owner/tool",
+		"--strip-prefix",
+		"v",
+	)
+	if err != nil {
+		t.Fatalf("bump: %v\n%s", err, out)
+	}
+
+	bumped, err := os.ReadFile(path)
+	must(t, err)
+
+	for _, want := range []string{"# my tool", `value = "1.1.0"`, newSum} {
+		if !strings.Contains(string(bumped), want) {
+			t.Fatalf("the bumped manifest lacks %q:\n%s", want, bumped)
+		}
+	}
+
+	_, err = m.run(t, "", "add", path)
+	must(t, err)
+
+	if got := m.toolOutput(t); got != "1.1.0" {
+		t.Fatalf("the bumped manifest installs %s", got)
+	}
+
+	out, err = m.run(t, "", "manifest", "bump", path, "--repo", "owner/tool", "--strip-prefix", "v")
+	must(t, err)
+
+	if !strings.Contains(out, "already at 1.1.0") {
+		t.Fatalf("a second bump:\n%s", out)
+	}
+}

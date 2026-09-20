@@ -21,6 +21,7 @@ in [`../prd/`](../prd/).
   single binary.
 - `oku add github:owner/repo` for a repo that has no oku manifest, by reading
   its newest release.
+- `oku manifest init`, `lint` and `bump` for people who publish a manifest.
 - Sources: `oku source add core github:someone/recipes`, then
   `oku add core/ripgrep` and `oku search grep`.
 - Manifests with a fixed version, or with versions discovered from GitHub
@@ -34,6 +35,5 @@ in [`../prd/`](../prd/).
 
 - Building from source. A `[build]` table in a manifest is recognised and
   refused.
-- `oku manifest lint` and `oku manifest bump`.
 - Per-project lists and the shell hook.
 - `.tar.xz` and `.tar.zst` archives.
