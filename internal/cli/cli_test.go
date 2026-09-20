@@ -2786,3 +2786,35 @@ func TestB100StaleHookLineWithoutOkuStartsCleanly(t *testing.T) {
 		}
 	}
 }
+
+func TestB69EnvThatControlsOtherProgramsIsRejected(t *testing.T) {
+	m := newMachine(t)
+	path := m.namedManifest(t, "tool", "tool", "tool")
+
+	body, err := os.ReadFile(path)
+	must(t, err)
+
+	for _, name := range []string{"PATH", "LD_PRELOAD", "DYLD_INSERT_LIBRARIES", "BASH_ENV", "OKU_HOOK_PATH"} {
+		must(
+			t,
+			os.WriteFile(
+				path,
+				append(body, []byte(fmt.Sprintf("\n[env]\n%s = \"/evil\"\n", name))...),
+				0o644,
+			),
+		)
+
+		_, err := m.run(t, "", "add", path)
+		if err == nil || !strings.Contains(err.Error(), "env."+name) {
+			t.Fatalf("a manifest that sets %s was accepted: %v", name, err)
+		}
+
+		if out, err := m.run(t, "", "manifest", "lint", path); err == nil {
+			t.Fatalf("lint accepted a manifest that sets %s:\n%s", name, out)
+		}
+	}
+
+	if len(m.storeEntries(t)) != 0 {
+		t.Fatal("a rejected manifest left something in the store")
+	}
+}
