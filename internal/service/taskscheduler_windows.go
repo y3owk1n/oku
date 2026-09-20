@@ -201,8 +201,7 @@ func utf16File(text string) []byte {
 }
 
 // taskXML renders the Task Scheduler definition. The task runs with the user's
-// own rights and only while that user is logged on, which is what a normal user
-// may register. Task Scheduler restarts a task only after a failure, so "always"
+// own rights and only while that user is logged on. Task Scheduler restarts a task only after a failure, so "always"
 // and "on-failure" are the same here.
 func taskXML(d Definition, self, stored, account string, enabled bool) string {
 	esc := func(s string) string {
