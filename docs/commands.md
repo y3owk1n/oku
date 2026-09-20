@@ -688,6 +688,9 @@ remove it with: sudo rmdir /opt/oku
 Answering no still deletes everything inside `/opt/oku`, because your user owns
 it. Only the empty directory stays. `--yes` alone counts as no.
 
+On Windows the binary goes in two steps, see
+[Windows](windows.md#uninstalling).
+
 oku never edits shell config files. Uninstall ends by printing what you should
 delete yourself: the oku hook line, with the startup file it found it in, and
 the profile `bin` entry when that is on `PATH`. A hook line you leave behind does

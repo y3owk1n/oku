@@ -12,6 +12,7 @@ Tested on a GitHub Actions `windows-latest` machine with real releases:
   `windows` asset for your CPU.
 - Programs start through the profile from any directory, with their arguments,
   stdin, stdout and exit code unchanged.
+- `oku self uninstall`, see [Uninstalling](#uninstalling).
 - [Projects](projects.md) with the PowerShell hook: `oku allow`, and a project's
   programs on `PATH` while you are inside it.
 
@@ -21,7 +22,6 @@ Tested on a GitHub Actions `windows-latest` machine with real releases:
   Windows.
 - Apps, fonts and services.
 - `.msi` downloads.
-- `oku self uninstall` cannot delete the running `oku.exe`.
 
 ## Put oku's programs on PATH
 
@@ -68,3 +68,10 @@ delete any link to a running program, and `oku gc` deletes shims while oku
 runs. After you replace `oku.exe`, new shims use a new copy, and old generations
 keep the old one until `oku gc --keep N` removes them. The leftover copy in
 `shims\` stays.
+
+## Uninstalling
+
+Windows refuses to delete a program that is running, but it lets one be renamed.
+`oku self uninstall` renames `oku.exe` to `oku.exe.uninstalled` and starts a
+hidden `cmd` that deletes that file about four seconds later. `oku.exe` is gone
+from its path when the command returns, and nothing is left after those seconds.

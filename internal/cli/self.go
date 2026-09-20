@@ -148,7 +148,7 @@ func runUninstall(
 		return fmt.Errorf("remove %s: %w", e.config, err)
 	}
 
-	if err := os.Remove(executable); err != nil && !errors.Is(err, fs.ErrNotExist) {
+	if err := removeBinary(executable); err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return fmt.Errorf("remove %s: %w", executable, err)
 	}
 
