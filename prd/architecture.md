@@ -22,7 +22,7 @@ XDG on unix, `%APPDATA%` and `%LOCALAPPDATA%` on Windows. `<root>` is
 <config>/oku/config.toml             sources, caches, trusted keys, store root
 <root>/store/<name>-<version>-<hash>/
 <data>/oku/profiles/global/gen-<n>/  current -> gen-<n>
-<data>/oku/profiles/<project-hash>/  same shape, keyed by oku.toml path
+<data>/oku/profiles/project-<hash>/  same shape, keyed by the project's path
 <data>/oku/trust/allow.toml, approvals.toml
 <data>/oku/exposed.toml              ledger of every file written elsewhere (D17)
 <cache>/oku/downloads/, git/
@@ -237,7 +237,7 @@ oku update [name]
 oku list | info <name> | why <name> | search <term>
 oku generations | rollback [n] | gc [--keep N] [--dry-run]
 oku source add|remove|list
-oku hook <bash|zsh|fish|pwsh> | env | allow [path] | deny [path]
+oku hook <bash|zsh|fish|pwsh> | env [--shell] | allow [dir] | deny [dir]
 oku shell <ref>...
 oku service list|start|stop|restart|status|logs <name>
 oku cache add|remove|list|push
@@ -248,6 +248,6 @@ oku setup --system | doctor
 oku self update | self uninstall [--keep-list] [--yes]
 ```
 
-`add` and `remove` act on the project list when one is found, else the global
-list. `--global` forces the global list. Every command that prints data
+Commands that read or change a list act on the project list when one is found,
+else the global list. `--global`, or `-g`, forces the global list (D37). Every command that prints data
 accepts `--json`.

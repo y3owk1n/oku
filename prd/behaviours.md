@@ -132,18 +132,23 @@ order step in `prd/product.md`.
 ## Projects and activation
 
 - B60 [7] Inside a directory tree with an `oku.toml`, `add`, `remove`, `sync`
-  and `list` act on that project. `--global` overrides.
+  and `list` act on that project. `--global` overrides. The config directory is
+  never a project, and `oku sync <ref>` is refused inside one.
 - B61 [7] With `oku hook <shell>` loaded, entering an allowed and synced
   project prepends its profile `bin` to PATH and exports its packages'
-  `[env]`. Leaving restores both.
+  `[env]`. Leaving restores both. A second prompt in the same directory changes
+  nothing.
 - B62 [7] Entering a project that is not allowed changes nothing and prints a
-  hint to run `oku allow`.
+  hint to run `oku allow`, once.
 - B63 [7] Editing an allowed `oku.toml` revokes the allow until `oku allow`
   runs again.
 - B64 [7] Entering an allowed project whose profile is behind its lock changes
   nothing and prints a hint to run `oku sync`.
 - B65 [7] The hook performs no network access and runs no manifest code.
-- B66 [7] `oku env` prints the exports the hook would apply.
+- B66 [7] `oku env` prints the exports the hook would apply, for bash, zsh and
+  fish.
+- B69 [7] A manifest whose `[env]` sets `PATH`, `LD_PRELOAD` or another variable
+  that controls other programs is rejected.
 - B67 [7] Project packages shadow global ones on PATH while active.
 - B68 [7] The hook exports `[env]` of global packages in every shell.
 

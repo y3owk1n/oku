@@ -327,6 +327,49 @@ afterwards. It shares the user's download cache. It tests the platform it runs
 on. Why: the author's store, profile, list and lock must not change. The cache
 is content-addressed, so sharing it cannot change a result and saves downloads.
 
+## D37. A project is the nearest oku.toml, and oku says when it uses one
+
+Commands that read or change a list use the nearest `oku.toml` at or above the
+working directory. The config directory holds the global list and is never a
+project. `--global` overrides. A project profile is named from a hash of the
+project's path, and the store, cache, sources and build approvals stay shared.
+oku prints `project <dir>` on stderr whenever it acts on one.
+`oku sync <list-ref>` is refused inside a project. Why: git and direnv find
+their root the same way, so users already expect it. The stderr line exists
+because the same command now changes different files depending on where it
+runs, and a user must be able to see which. Adoption writes the global list,
+so oku refuses it inside a project.
+
+## D38. The hook keeps its own state and reads only the generation
+
+The hook stores what it applied in `OKU_HOOK_PATH`, `OKU_HOOK_KEYS` and
+`OKU_HOOK_HINT`, and each run undoes exactly that before it applies what holds
+now. A hint is printed once per reason. Each package's expanded `[env]` is
+stored in the generation, and "behind its lock" is a byte comparison between
+`oku.lock` and the copy in the active generation. Why: D9 forbids the hook from
+installing, using the network or running manifest code, so everything it needs
+must already be on disk in a form it can read without a manifest. Keeping state
+in the environment lets the hook undo exactly what it applied, including after
+the project's packages changed while the user was inside it.
+
+## D39. An allow belongs to one oku.toml content
+
+`oku allow` records the project directory and the sha256 of its `oku.toml`. Any
+edit, including one that arrives by `git pull`, stops the hook until the user
+allows again. Why: the allow exists because a cloned repo could put its own
+`make` or `git` ahead of the user's. An allow that stayed valid after edits
+would let a later commit do that to someone who only approved the first
+version.
+
+## D40. A package's [env] cannot set variables that control other programs
+
+`[env]` may not set `PATH`, `HOME`, `SHELL`, `USER`, `IFS`, `ENV`, `BASH_ENV`,
+`PS1`, `PROMPT_COMMAND`, or any name that starts with `LD_`, `DYLD_` or `OKU_`.
+When two packages set one variable, the package whose name sorts last is used,
+and a project package is used over a global one. Why: installing a prebuilt
+package needs no approval, so its `[env]` must not be a way to run code in every
+shell the user opens.
+
 ## D16. Installers are unpacked, never executed
 
 `extract` understands tar, zip, 7z, dmg, pkg, msi, deb, rpm and AppImage. Why:
