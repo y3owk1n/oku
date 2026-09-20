@@ -12,6 +12,7 @@ in [`../prd/`](../prd/).
 | [Services](services.md) | Running a package's daemon with launchd or systemd |
 | [Build caches](caches.md) | Downloading built packages from a signed cache, and filling one |
 | [System scope](system-scope.md) | Apps, fonts and services for every user of the machine, with `sudo` |
+| [Windows](windows.md) | What works on Windows, and how profiles differ there |
 | [Projects](projects.md) | A list, a lock and a profile that belong to one repo |
 | [List and lock](list-and-lock.md) | `oku.toml`, `oku.lock`, and moving a setup to another machine |
 | [Trust and checksums](trust.md) | What oku verifies, what it pins, and when it stops |
@@ -19,8 +20,9 @@ in [`../prd/`](../prd/).
 
 ## What works today
 
-- Linux and macOS, amd64 and arm64. Windows builds, but profiles need symlinks,
-  so treat it as not supported yet.
+- Linux and macOS, amd64 and arm64.
+- Windows, in part. Prebuilt packages install, run, roll back and uninstall, see
+  [Windows](windows.md) for what is missing.
 - Packages that ship a prebuilt download: tar in any common compression, zip,
   `.deb`, `.rpm`, a single binary or AppImage, and on macOS `.dmg` and `.pkg`.
   oku unpacks installers and never runs them.

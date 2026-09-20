@@ -51,6 +51,12 @@ Check 'a second generation holds both programs' {
     (Test-Path "$bin\rg.exe") -and (Test-Path "$bin\fd.exe")
 }
 
+Oku sync
+Oku update
+Check 'sync and update keep both programs' {
+    (Test-Path "$bin\rg.exe") -and (Test-Path "$bin\fd.exe")
+}
+
 Oku rollback
 Check 'rollback takes fd away and keeps rg' {
     (Test-Path "$bin\rg.exe") -and -not (Test-Path "$bin\fd.exe")
@@ -63,7 +69,8 @@ Oku remove ripgrep
 Check 'remove takes the shim away' { -not (Test-Path "$bin\rg.exe") }
 
 Oku gc --keep 1
-Oku list
+$listed = & $oku list
+Check 'list no longer shows ripgrep' { ($listed -join "`n") -notmatch 'ripgrep' }
 
 Remove-Item -Recurse -Force $root
 Write-Host 'live test passed'

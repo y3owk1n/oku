@@ -100,6 +100,9 @@ Put `<data>/oku/profiles/global/current/bin` on `PATH`. Every `add`, `remove`,
 directory of symlinks and then moves `current` to it in one rename. A failed
 change deletes its half-built generation and leaves `current` unchanged.
 
+On Windows a generation holds shims and hard links in place of symlinks, and
+`current` is a directory junction, see [Windows](windows.md).
+
 Old generations stay on disk until `oku gc --keep N` deletes them.
 `oku generations` lists them and `oku rollback` switches back to one, see
 [Commands](commands.md#oku-rollback).
