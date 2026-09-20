@@ -139,12 +139,6 @@ func (e env) install(ctx context.Context, opts Options, req request) (installed,
 		release.Tag = release.Version
 	}
 
-	// Upstream may publish the same commit again on a later day. That is the
-	// same build, so it keeps its version.
-	if release.Commit != "" && release.Commit == previous.TagCommit && r.Version == "" {
-		release.Version = previous.Version
-	}
-
 	m.Version.Value, m.Tag, m.TagCommit = release.Version, release.Tag, release.Commit
 
 	host := platform.Host()

@@ -108,14 +108,16 @@ bin = ["bin/nvim"]
 - oku reads that one release and accepts it when it is a prerelease. A draft
   fails.
 - Each build is its own version, `<date>-<commit>`, such as
-  `2026.09.20-a73243f`. The date is the day upstream published the release,
-  in UTC, and the commit is the one the tag points at. `{{tag}}` stays `nightly`.
+  `2026.09.20-a73243f`. Both parts come from the commit the tag points at, its
+  day in UTC and the start of its hash, so one commit always has one version.
+  `{{tag}}` stays `nightly`.
 - `oku update` moves the package when the tag points at another commit. Every
   build has its own store path, so `oku rollback` returns to the earlier build
   without a download.
 - When the artifact has no `sha256` and no `sha256_url`, oku checks the download
   against the sha256 that the GitHub API reports for that file. `url` must be
-  the file's GitHub download URL for that.
+  the file's GitHub download URL for that, and `oku manifest lint` warns when
+  it is not.
 - A `[build]` whose `source` clones `{{tag}}` fails when the clone is not at the
   commit of the version.
 

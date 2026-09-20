@@ -566,9 +566,12 @@ that one release instead of listing releases, and accepts it when it is a
 prerelease. A draft fails. `tag` excludes `strip_prefix`, and `git-tags` does
 not take it.
 
-The version is `<date>-<commit>`, such as `2026.09.20-a73243f`. The date is the
-release's `published_at` in UTC, and the commit is the first seven characters
-of the commit the tag points at, read from `GET /repos/<repo>/commits/<tag>`.
+The version is `<date>-<commit>`, such as `2026.09.20-a73243f`. Both come from
+the commit the tag points at, read from `GET /repos/<repo>/commits/<tag>`. The
+date is its committer date in UTC, and the commit is the first seven characters
+of its hash. One commit therefore has one version. The release's
+`published_at` cannot give the date. `gh release edit` leaves it at the first
+publish, and neru and oku update their nightly release with that command.
 `{{tag}}` expands to `nightly` and `{{version}}` to the version. The lock
 stores the full commit as `tag_commit`.
 

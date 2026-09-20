@@ -107,9 +107,20 @@ func Lint(data []byte) Report {
 			}
 		}
 
-		if a.SHA256 == "" && a.SHA256URL == "" && full.Package.SigningKey == "" {
+		// For a moving tag oku takes the sha256 from the GitHub API, which only
+		// knows the files of that repo's releases.
+		fromRelease := "https://github.com/" + full.Version.Repo + "/releases/download/"
+
+		switch {
+		case a.SHA256 != "" || a.SHA256URL != "" || full.Package.SigningKey != "":
+		case full.Version.Tag == "":
 			report.Warnings = append(report.Warnings, fmt.Sprintf(
 				"artifact[%d]: no sha256 or sha256_url, so users trust the first download", i,
+			))
+		case !strings.HasPrefix(a.URL, fromRelease):
+			report.Warnings = append(report.Warnings, fmt.Sprintf(
+				"artifact[%d]: url does not start with %s, so GitHub reports no sha256 for it "+
+					"and users trust the first download", i, fromRelease,
 			))
 		}
 	}

@@ -59,7 +59,8 @@ order step in `prd/product.md`.
   upstream for versions. A package pinned in `oku.toml` stays on its version
   through `update`.
 - B106 [3] With `[version] tag`, `add` installs the release of that tag, also
-  when it is a prerelease, as version `<date>-<commit>`. `update` moves the
+  when it is a prerelease, as version `<date>-<commit>`, the day and the first
+  seven characters of the commit the tag points at. `update` moves the
   package when the tag points at another commit and prints both versions, and
   changes nothing when it does not. `rollback` returns to the earlier build
   without a download.
@@ -73,7 +74,9 @@ order step in `prd/product.md`.
 - B109 [3] `add <ref>@<version>` on a moving-tag manifest fails when upstream
   is at another version, and names the version upstream is at.
 - B110 [4] `manifest lint` rejects `tag` with `git-tags`, with `value` and with
-  `strip_prefix`. `manifest bump` refuses a manifest with `tag`.
+  `strip_prefix`. With `tag` it warns about a missing checksum only for an
+  artifact whose `url` is no download of that repo's releases. `manifest bump`
+  refuses a manifest with `tag`.
 - B22 [3] Every profile change creates a generation. `oku rollback` restores
   the previous one, `oku rollback <n>` a named one. Rollback restores
   `oku.lock` with it, so a following `sync` changes nothing, and it never

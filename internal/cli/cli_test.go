@@ -1335,14 +1335,18 @@ func newNightlyServer(t *testing.T) *nightlyServer {
 
 			fmt.Fprintf(
 				w,
-				`{"draft": false, "prerelease": true, "published_at": "2026-09-20T05:23:16Z",`+
+				`{"draft": false, "prerelease": true, "published_at": "2026-01-01T00:00:00Z",`+
 					`"assets": [{"browser_download_url": %q, "digest": "sha256:%s"}]}`,
 				ns.URL+"/dl/tool.tar.gz", ns.digest,
 			)
 		case "/api/repos/owner/tool/commits/nightly":
 			ns.hits++
 
-			fmt.Fprintf(w, `{"sha": %q}`, ns.commit)
+			fmt.Fprintf(
+				w,
+				`{"sha": %q, "commit": {"committer": {"date": "2026-09-20T05:23:16Z"}}}`,
+				ns.commit,
+			)
 		case "/dl/tool.tar.gz":
 			_, _ = w.Write(ns.body)
 		default:
@@ -1504,10 +1508,12 @@ func TestB110LintAndBumpRefuseAMisplacedTag(t *testing.T) {
 
 	path := filepath.Join(m.fixtures, "tool.toml")
 
+	url := "https://example.com/tool.tar.gz"
+
 	write := func(version string) {
 		must(t, os.WriteFile(path, []byte(
 			"[package]\nname = \"tool\"\ndescription = \"a tool\"\n[version]\n"+version+
-				"\n[[artifact]]\nurl = \"https://example.com/tool.tar.gz\"\nbin = [\"tool\"]\n",
+				"\n[[artifact]]\nurl = \""+url+"\"\nbin = [\"tool\"]\n",
 		), 0o644))
 	}
 
@@ -1520,7 +1526,21 @@ func TestB110LintAndBumpRefuseAMisplacedTag(t *testing.T) {
 		}
 	}
 
-	write("from = \"github-releases\"\nrepo = \"owner/tool\"\ntag = \"nightly\"")
+	moving := "from = \"github-releases\"\nrepo = \"owner/tool\"\ntag = \"nightly\""
+	write(moving)
+
+	out, err := m.run(t, "", "manifest", "lint", path)
+	if err != nil || !strings.Contains(out, "trust the first download") {
+		t.Errorf("lint did not warn about a url GitHub reports no sha256 for: %v\n%s", err, out)
+	}
+
+	url = "https://github.com/owner/tool/releases/download/{{tag}}/tool.tar.gz"
+	write(moving)
+
+	out, err = m.run(t, "", "manifest", "lint", path)
+	if err != nil || strings.Contains(out, "warning") {
+		t.Errorf("lint warned about a download GitHub reports a sha256 for: %v\n%s", err, out)
+	}
 
 	if _, err := m.run(t, "", "manifest", "bump", path); err == nil {
 		t.Fatal("bump accepted a manifest that follows a moving tag")
