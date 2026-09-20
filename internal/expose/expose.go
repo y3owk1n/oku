@@ -28,6 +28,16 @@ type Item struct {
 	Source string `toml:"source"`
 	// Target is where oku put it.
 	Target string `toml:"target"`
+	// Name and Enabled describe a service.
+	Name    string `toml:"name,omitempty"`
+	Enabled bool   `toml:"enabled,omitempty"`
+}
+
+// Handler places and removes items of one kind. Apps and fonts are files, and
+// oku copies them itself. A service goes through the OS's service manager.
+type Handler struct {
+	Place  func(Item) error
+	Remove func(Item) error
 }
 
 // Ledger is the record of everything oku exposed. "oku self uninstall" replays it.
@@ -130,13 +140,13 @@ func Wanted(name, storePath string, launchers []Launcher, dirs Dirs) []Item {
 // Sync makes what is exposed match wanted. It removes ledger items that are no
 // longer wanted, adds new ones, and saves the ledger after each change, so a
 // crash never leaves a file the ledger does not know.
-func (l *Ledger) Sync(wanted []Item) error {
+func (l *Ledger) Sync(wanted []Item, handlers map[string]Handler) error {
 	for _, have := range slices.Clone(l.Items) {
 		if slices.Contains(wanted, have) {
 			continue
 		}
 
-		if err := l.remove(have); err != nil {
+		if err := l.remove(have, handlers[have.Kind]); err != nil {
 			return err
 		}
 	}
@@ -146,7 +156,7 @@ func (l *Ledger) Sync(wanted []Item) error {
 			continue
 		}
 
-		if _, err := os.Lstat(want.Target); err == nil {
+		if _, err := os.Lstat(want.Target); err == nil && want.Target != "" {
 			return fmt.Errorf(
 				"%s already exists and oku did not put it there, so %s cannot expose its %s",
 				want.Target, want.Package, want.Kind,
@@ -159,8 +169,13 @@ func (l *Ledger) Sync(wanted []Item) error {
 			return err
 		}
 
-		if err := place(want); err != nil {
-			return fmt.Errorf("expose %s: %w", want.Target, err)
+		placeItem := place
+		if custom := handlers[want.Kind].Place; custom != nil {
+			placeItem = custom
+		}
+
+		if err := placeItem(want); err != nil {
+			return fmt.Errorf("expose %s %s: %w", want.Kind, want.Target, err)
 		}
 	}
 
@@ -168,13 +183,18 @@ func (l *Ledger) Sync(wanted []Item) error {
 }
 
 // RemoveAll removes everything in the ledger.
-func (l *Ledger) RemoveAll() error {
-	return l.Sync(nil)
+func (l *Ledger) RemoveAll(handlers map[string]Handler) error {
+	return l.Sync(nil, handlers)
 }
 
-func (l *Ledger) remove(item Item) error {
-	if err := os.RemoveAll(item.Target); err != nil {
-		return fmt.Errorf("remove %s: %w", item.Target, err)
+func (l *Ledger) remove(item Item, handler Handler) error {
+	removeItem := func(item Item) error { return os.RemoveAll(item.Target) }
+	if handler.Remove != nil {
+		removeItem = handler.Remove
+	}
+
+	if err := removeItem(item); err != nil {
+		return fmt.Errorf("remove %s %s: %w", item.Kind, item.Target, err)
 	}
 
 	l.Items = slices.DeleteFunc(l.Items, func(have Item) bool { return have == item })

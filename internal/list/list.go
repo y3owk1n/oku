@@ -24,6 +24,8 @@ type Entry struct {
 	Version string
 	// When limits the package to matching platforms. The zero value matches all.
 	When platform.Selector
+	// Service enables the package's services, so they start now and at login.
+	Service bool
 }
 
 // List is a parsed oku.toml.
@@ -78,6 +80,7 @@ func toEntry(value any) (Entry, error) {
 
 		e.Ref, _ = v["ref"].(string)
 		e.Version, _ = v["version"].(string)
+		e.Service, _ = v["service"].(bool)
 
 		if e.Ref == "" {
 			return e, errors.New("ref is required")
@@ -115,8 +118,19 @@ func Delete(path, name string) error {
 
 func formatLine(name string, entry Entry) string {
 	value := fmt.Sprintf("%q", entry.Ref)
-	if entry.Version != "" {
-		value = fmt.Sprintf("{ ref = %q, version = %q }", entry.Ref, entry.Version)
+
+	if entry.Version != "" || entry.Service {
+		fields := []string{fmt.Sprintf("ref = %q", entry.Ref)}
+
+		if entry.Version != "" {
+			fields = append(fields, fmt.Sprintf("version = %q", entry.Version))
+		}
+
+		if entry.Service {
+			fields = append(fields, "service = true")
+		}
+
+		value = "{ " + strings.Join(fields, ", ") + " }"
 	}
 
 	return formatKey(name) + " = " + value

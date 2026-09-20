@@ -45,13 +45,7 @@ type schema struct {
 	Runtime  Runtime           `toml:"runtime"`
 	Env      map[string]string `toml:"env"`
 	Apps     []App             `toml:"app"`
-	Services []struct {
-		Name    string            `toml:"name"`
-		Command string            `toml:"command"`
-		Args    []string          `toml:"args"`
-		Env     map[string]string `toml:"env"`
-		Restart string            `toml:"restart"`
-	} `toml:"service"`
+	Services []Service         `toml:"service"`
 }
 
 // VendorKinds are the values a vendor step accepts. The store holds how each

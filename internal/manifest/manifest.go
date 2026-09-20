@@ -24,6 +24,8 @@ type Manifest struct {
 	Runtime   Runtime    `toml:"runtime"`
 	// Apps holds launcher entries for Linux desktops.
 	Apps []App `toml:"app"`
+	// Services holds long-running programs the OS's service manager can run.
+	Services []Service `toml:"service"`
 	// Env holds variables the shell hook exports while the package is installed.
 	// Values expand {{prefix}} and {{version}}.
 	Env map[string]string `toml:"env"`
@@ -71,6 +73,16 @@ type Artifact struct {
 	// App holds macOS app bundles, such as "Foo.app". Font holds font files.
 	App  []string `toml:"app"`
 	Font []string `toml:"font"`
+}
+
+// Service is a long-running program, from a [[service]] table. Command is a
+// path inside the installed package, such as "bin/food".
+type Service struct {
+	Name    string            `toml:"name"`
+	Command string            `toml:"command"`
+	Args    []string          `toml:"args"`
+	Env     map[string]string `toml:"env"`
+	Restart string            `toml:"restart"`
 }
 
 // App is a launcher entry for Linux desktops, from a [[app]] table.
@@ -136,6 +148,24 @@ func (m *Manifest) validate() error {
 	for i, app := range m.Apps {
 		if app.Name == "" || app.Exec == "" {
 			errs = append(errs, fmt.Errorf("app[%d]: name and exec are required", i))
+		}
+	}
+
+	for i, svc := range m.Services {
+		switch {
+		case !nameRe.MatchString(svc.Name):
+			errs = append(errs, fmt.Errorf(
+				"service[%d]: name %q must be lowercase letters, digits, '.', '_' or '-'",
+				i,
+				svc.Name,
+			))
+		case svc.Command == "":
+			errs = append(errs, fmt.Errorf("service[%d]: command is required", i))
+		case svc.Restart != "" && svc.Restart != "never" && svc.Restart != "on-failure" &&
+			svc.Restart != "always":
+			errs = append(errs, fmt.Errorf(
+				"service[%d]: restart %q must be never, on-failure or always", i, svc.Restart,
+			))
 		}
 	}
 

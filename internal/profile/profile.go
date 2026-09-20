@@ -38,6 +38,9 @@ type Package struct {
 	// Env holds the package's [env] with its values expanded. The shell hook
 	// reads it from here, so it never has to open a manifest.
 	Env map[string]string `toml:"env,omitempty"`
+	// Service reports that the list enables the package's services. Rollback
+	// restores it with the generation.
+	Service bool `toml:"service,omitempty"`
 }
 
 type state struct {
@@ -146,7 +149,7 @@ func (p *Profile) Replace(pkgs []Package, lockData []byte) (bool, error) {
 	same := func(a, b Package) bool {
 		return a.Name == b.Name && a.Version == b.Version && a.Ref == b.Ref &&
 			a.StorePath == b.StorePath && slices.Equal(a.Closure, b.Closure) &&
-			maps.Equal(a.Env, b.Env)
+			maps.Equal(a.Env, b.Env) && a.Service == b.Service
 	}
 
 	if slices.EqualFunc(have, pkgs, same) {

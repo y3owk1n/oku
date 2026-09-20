@@ -54,6 +54,8 @@ type request struct {
 	// keepVersion installs the version in previous without listing versions
 	// again. "oku sync" sets it.
 	keepVersion bool
+	// service enables the package's services.
+	service bool
 	// fromSource builds even when a prebuilt artifact fits the host.
 	fromSource bool
 	// approve decides whether a manifest may run its build commands.
@@ -233,6 +235,7 @@ func (e env) install(ctx context.Context, opts Options, req request) (installed,
 			StorePath: realized.Path,
 			Closure:   deps.closure,
 			Env:       env,
+			Service:   req.service,
 		},
 		lock: lock.Package{
 			Name:           m.Package.Name,

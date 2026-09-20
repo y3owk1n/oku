@@ -241,6 +241,36 @@ fonts were skipped.
 
 A `[build]` can install them too, with `install = { app = [...], font = [...] }`.
 
+## [[service]]
+
+A long-running program that the user's OS service manager can run, see
+[Services](services.md). A package may have several.
+
+```toml
+[[service]]
+name = "postgres"
+command = "bin/postgres"
+args = ["-D", "{{prefix}}/share/postgres/data"]
+env = { PGPORT = "5432" }
+restart = "on-failure"
+```
+
+| Key | Required | Meaning |
+|---|---|---|
+| `name` | yes | What the user types in `oku service start <name>`. Same characters as a package name. Two installed packages cannot ship a service of the same name. |
+| `command` | yes | A path inside the installed package, normally `bin/<program>`. |
+| `args` | no | Arguments. They expand `{{prefix}}` and `{{version}}`. |
+| `env` | no | Variables for the service. Values expand the same variables. |
+| `restart` | no | `never`, `on-failure` or `always`. Default `never`. |
+
+The program must stay in the foreground and must not fork into the background.
+The service manager starts it, watches it, and restarts it according to
+`restart`. What it prints goes to a log file on macOS and to the user journal on
+Linux.
+
+Installing a package never starts its service. The user turns it on with
+`service = true` in their list.
+
 ## [env]
 
 Variables the package needs in the user's shell. The user's

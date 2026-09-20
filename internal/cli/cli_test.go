@@ -4,6 +4,7 @@ import (
 	"archive/tar"
 	"bytes"
 	"compress/gzip"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
@@ -23,6 +24,7 @@ import (
 	"github.com/y3owk1n/oku/internal/cli"
 	"github.com/y3owk1n/oku/internal/platform"
 	"github.com/y3owk1n/oku/internal/sandbox"
+	"github.com/y3owk1n/oku/internal/service"
 	"github.com/y3owk1n/oku/internal/shellhook"
 )
 
@@ -32,6 +34,58 @@ const script = "#!/bin/sh\necho hello from tool\n"
 type machine struct {
 	config, data, cache, exe, fixtures string
 	opts                               cli.Options
+	services                           *fakeServices
+}
+
+// fakeServices stands in for launchd or systemd and remembers what oku asked.
+type fakeServices struct {
+	state map[string]*fakeService
+}
+
+type fakeService struct {
+	def              service.Definition
+	enabled, running bool
+}
+
+func (f *fakeServices) Install(_ context.Context, d service.Definition, enabled bool) error {
+	f.state[d.Name] = &fakeService{def: d, enabled: enabled, running: enabled}
+
+	return nil
+}
+
+func (f *fakeServices) Remove(_ context.Context, d service.Definition) error {
+	delete(f.state, d.Name)
+
+	return nil
+}
+
+func (f *fakeServices) Start(_ context.Context, d service.Definition) error {
+	f.state[d.Name].running = true
+
+	return nil
+}
+
+func (f *fakeServices) Stop(_ context.Context, d service.Definition) error {
+	f.state[d.Name].running = false
+
+	return nil
+}
+
+func (f *fakeServices) Status(_ context.Context, d service.Definition) (service.Status, error) {
+	s, ok := f.state[d.Name]
+	if !ok {
+		return service.Status{}, nil
+	}
+
+	return service.Status{Installed: true, Enabled: s.enabled, Running: s.running}, nil
+}
+
+func (f *fakeServices) Logs(context.Context, service.Definition, int) (string, error) {
+	return "listening on 8080", nil
+}
+
+func (f *fakeServices) File(d service.Definition) string {
+	return "/fake/services/" + d.Name
 }
 
 func newMachine(t *testing.T) machine {
@@ -53,6 +107,11 @@ func newMachine(t *testing.T) machine {
 	// WorkDir keeps a stray oku.toml above the repo from turning tests into
 	// project runs.
 	m.opts = cli.Options{Version: "test", Executable: m.exe, WorkDir: m.fixtures}
+
+	// A real service manager would load agents into the login session of whoever
+	// runs the tests.
+	m.services = &fakeServices{state: map[string]*fakeService{}}
+	m.opts.Services = m.services
 
 	// oku places apps and fonts under HOME, so tests get their own.
 	t.Setenv("HOME", filepath.Join(root, "home"))
@@ -3175,5 +3234,126 @@ func TestB72UnpacksMacOSDiskImagesAndInstallerPackages(t *testing.T) {
 
 	if left, _ := filepath.Glob("/Volumes/Tool*"); len(left) != 0 {
 		t.Fatalf("a disk image is still mounted: %v", left)
+	}
+}
+
+// serviceManifest writes a package that ships a program and a service running it.
+func (m machine) serviceManifest(t *testing.T) string {
+	t.Helper()
+
+	return m.manifest(t, "food", map[string]string{"food": script},
+		"bin = [\"food\"]\n[[service]]\nname = \"food\"\ncommand = \"bin/food\"\n"+
+			"args = [\"--data\", \"{{prefix}}/share\"]\nenv = { PORT = \"8080\" }\nrestart = \"on-failure\"\n")
+}
+
+func TestB73ServiceRunsWhenTheListEnablesItAndIsStoppedOtherwise(t *testing.T) {
+	m := newMachine(t)
+	ref := m.serviceManifest(t)
+
+	out, err := m.run(t, "", "add", ref)
+	must(t, err)
+
+	got, ok := m.services.state["food"]
+	if !ok || got.enabled || got.running {
+		t.Fatalf(
+			"without service = true the service should be installed and stopped, got %+v\n%s",
+			got,
+			out,
+		)
+	}
+
+	if !strings.HasSuffix(got.def.Program, "/bin/food") || got.def.Env["PORT"] != "8080" ||
+		got.def.Restart != "on-failure" || !strings.HasSuffix(got.def.Args[1], "/share") {
+		t.Fatalf("the definition oku passed on is %+v", got.def)
+	}
+
+	_, err = m.run(t, "", "add", ref, "--service")
+	must(t, err)
+
+	if got := m.services.state["food"]; !got.enabled || !got.running {
+		t.Fatalf("add --service left the service at %+v", got)
+	}
+
+	listed, err := os.ReadFile(filepath.Join(m.config, "oku.toml"))
+	must(t, err)
+
+	if !strings.Contains(string(listed), "service = true") {
+		t.Fatalf("oku.toml does not record service = true:\n%s", listed)
+	}
+
+	// A new machine gets the service running from the list alone.
+	must(t, os.RemoveAll(m.data))
+	m.services.state = map[string]*fakeService{}
+
+	_, err = m.run(t, "", "sync")
+	must(t, err)
+
+	if got := m.services.state["food"]; got == nil || !got.enabled {
+		t.Fatalf("sync did not enable the service: %+v", got)
+	}
+
+	_, err = m.run(t, "", "remove", "food")
+	must(t, err)
+
+	if _, still := m.services.state["food"]; still {
+		t.Fatal("remove left the service installed")
+	}
+}
+
+func TestB74ServiceCommandsControlTheService(t *testing.T) {
+	m := newMachine(t)
+
+	_, err := m.run(t, "", "add", m.serviceManifest(t))
+	must(t, err)
+
+	for _, step := range []struct {
+		args []string
+		want string
+	}{
+		{[]string{"service", "list"}, "stopped"},
+		{[]string{"service", "start", "food"}, "food: running"},
+		{[]string{"service", "status", "food"}, "food: running"},
+		{[]string{"service", "restart", "food"}, "food: running"},
+		{[]string{"service", "stop", "food"}, "food: stopped"},
+		{[]string{"service", "logs", "food"}, "listening on 8080"},
+	} {
+		out, err := m.run(t, "", step.args...)
+		if err != nil || !strings.Contains(out, step.want) {
+			t.Fatalf("oku %v: %v\n%s", step.args, err, out)
+		}
+	}
+
+	_, err = m.run(t, "", "service", "start", "nope")
+	if err == nil || !strings.Contains(err.Error(), "food") {
+		t.Fatalf("want an unknown service to fail and name the known ones, got %v", err)
+	}
+}
+
+func TestB76RollbackRestoresWhichServicesAreEnabled(t *testing.T) {
+	m := newMachine(t)
+	ref := m.serviceManifest(t)
+
+	_, err := m.run(t, "", "add", ref, "--service")
+	must(t, err)
+
+	_, err = m.run(t, "", "add", ref)
+	must(t, err)
+
+	if m.services.state["food"].enabled {
+		t.Fatal("the second generation should have the service disabled")
+	}
+
+	_, err = m.run(t, "", "rollback")
+	must(t, err)
+
+	if !m.services.state["food"].enabled {
+		t.Fatal("rollback did not enable the service again")
+	}
+
+	_, err = m.run(t, "", "self", "uninstall", "--yes")
+	must(t, err)
+
+	if len(m.services.state) != 0 {
+		t.Fatalf("uninstall left services behind: %v", m.services.state)
 	}
 }
