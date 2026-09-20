@@ -12,14 +12,13 @@ Tested on a GitHub Actions `windows-latest` machine with real releases:
   `windows` asset for your CPU.
 - Programs start through the profile from any directory, with their arguments,
   stdin, stdout and exit code unchanged.
+- Building from source, see [Builds](#builds).
 - `oku self uninstall`, see [Uninstalling](#uninstalling).
 - [Projects](projects.md) with the PowerShell hook: `oku allow`, and a project's
   programs on `PATH` while you are inside it.
 
 ## What does not work yet
 
-- Building from source. `run` steps need a `shell`, and there is no sandbox on
-  Windows.
 - Apps, fonts and services.
 - `.msi` downloads.
 
@@ -59,8 +58,9 @@ dir = C:\Users\you\AppData\Local\oku\store\pcre2-10.44-0a1b2c3d4e5f6a7b\bin
 
 Each `dir` line is the `bin` directory of one of the package's deps. The shim
 puts them at the front of `PATH` for the program, which is how Windows finds the
-DLLs of those deps from any working directory. No package with deps has been
-tried on Windows yet, because deps come from source builds.
+DLLs of those deps from any working directory. The live test checks that the
+shim of a built package lists its dep. It has no package that loads a DLL from a
+dep yet.
 
 Shims are hard links to one copy of oku in `<data>\oku\shims\`, so they take no
 extra space. They do not link to `oku.exe` itself, because Windows refuses to
@@ -68,6 +68,25 @@ delete any link to a running program, and `oku gc` deletes shims while oku
 runs. After you replace `oku.exe`, new shims use a new copy, and old generations
 keep the old one until `oku gc --keep N` removes them. The leftover copy in
 `shims\` stays.
+
+## Builds
+
+A `run` step that can run on Windows must name its shell, `pwsh` or `cmd`.
+`oku manifest lint` reports a step that does not.
+
+Windows has no sandbox that oku can use, so a build can reach the network and
+read your files. oku prints that warning after every build. The build still gets
+a scrubbed environment:
+
+| Variable | Value |
+|---|---|
+| `PATH` | the `bin` of each dep, the directories of the `needs` tools, `System32`, the Windows directory, Windows PowerShell, and the directory of `pwsh` when it is installed |
+| `USERPROFILE`, `HOME`, `APPDATA`, `LOCALAPPDATA` | a scratch home that oku deletes after the build |
+| `TEMP`, `TMP` | a scratch directory that oku deletes after the build |
+| `SystemRoot`, `SystemDrive`, `ComSpec`, `PATHEXT` | as on the host, because Windows programs do not start without them |
+
+The `OKU_*` variables and the dep variables are the same as on unix, see
+[The build environment](manifest.md#the-build-environment).
 
 ## Uninstalling
 
