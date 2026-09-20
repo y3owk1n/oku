@@ -81,6 +81,8 @@ type Platform struct {
 	SHA256   string `toml:"sha256,omitempty"`
 	// Impure marks a build whose run steps could use the network.
 	Impure bool `toml:"impure,omitempty"`
+	// VendorSHA256 pins what the build's vendor steps downloaded.
+	VendorSHA256 string `toml:"vendor_sha256,omitempty"`
 }
 
 // Read parses the lock at path. A missing file is an empty lock.

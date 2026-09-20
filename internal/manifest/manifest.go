@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"strings"
 
 	"github.com/pelletier/go-toml/v2"
 
@@ -91,6 +92,23 @@ func (m *Manifest) validate() error {
 	var errs []error
 
 	if m.Build != nil {
+		for i, step := range m.Build.Steps {
+			switch kinds := step.Kinds(); len(kinds) {
+			case 0:
+				errs = append(errs, fmt.Errorf(
+					"build.step[%d]: needs one of run, install, patch, fetch, extract, copy, vendor",
+					i,
+				))
+			case 1:
+			default:
+				errs = append(errs, fmt.Errorf(
+					"build.step[%d]: has %s, a step takes exactly one",
+					i,
+					strings.Join(kinds, " and "),
+				))
+			}
+		}
+
 		deps, err := parseDeps(m.Build.RawDeps)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("build.%w", err))

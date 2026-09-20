@@ -63,6 +63,8 @@ run them? [y/N]
 - A dep that builds from source asks for its own approval, before the package
   that needs it.
 - An approval applies to one machine. `oku sync` on a new machine asks again.
+- A `vendor` step is shown too. It runs the language's package tool with the
+  network on, and `oku.lock` pins a digest of what it downloads.
 - A manifest with only `install`, `copy`, `fetch` and `extract` steps runs no
   commands and needs no approval.
 
@@ -89,6 +91,7 @@ approve commands you have not read.
 | Commit of a `github:` or `git+` ref | `oku sync` reads the manifest at that commit, even after the branch moves. |
 | Manifest sha256 | `oku sync` stops if the manifest content changed. |
 | Artifact sha256 per platform | A changed download fails. |
+| Vendor digest per platform | A build whose vendor steps download something else fails, and nothing is kept. |
 
 ## When oku stops
 

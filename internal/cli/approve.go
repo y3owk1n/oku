@@ -38,7 +38,7 @@ func (e env) approver(
 	flags *buildFlags,
 ) func(*manifest.Manifest, platform.Platform) error {
 	return func(m *manifest.Manifest, host platform.Platform) error {
-		steps := m.Build.RunSteps(host)
+		steps := m.Build.CommandSteps(host)
 		if len(steps) == 0 {
 			return nil
 		}
@@ -62,9 +62,16 @@ func (e env) approver(
 			)
 
 			for _, i := range slices.Sorted(maps.Keys(steps)) {
-				note := ""
-				if steps[i].Network {
-					note = "  (wants network)"
+				text, note := "", ""
+
+				switch {
+				case steps[i].Vendor != nil:
+					text = "vendor " + *steps[i].Vendor
+					note = "  (downloads packages, checked against oku.lock)"
+				case steps[i].Network:
+					text, note = *steps[i].Run, "  (wants network)"
+				default:
+					text = *steps[i].Run
 				}
 
 				fmt.Fprintf(
@@ -72,7 +79,7 @@ func (e env) approver(
 					"  step %d%s\n    %s\n",
 					i,
 					note,
-					strings.ReplaceAll(*steps[i].Run, "\n", "\n    "),
+					strings.ReplaceAll(text, "\n", "\n    "),
 				)
 			}
 

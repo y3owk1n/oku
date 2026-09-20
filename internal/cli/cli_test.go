@@ -2225,3 +2225,94 @@ func TestB54BuildEnvironmentHoldsOnlyOkuVariables(t *testing.T) {
 		t.Fatalf("the build environment is %v", names)
 	}
 }
+
+func TestB52VendorOutputIsPinnedAndAMismatchFailsTheBuild(t *testing.T) {
+	if _, err := exec.LookPath("go"); err != nil {
+		t.Skip("needs go")
+	}
+
+	m := newMachine(t)
+
+	// The vendored module comes from a local directory, so the test needs no
+	// network. Changing it later stands in for upstream changing a package.
+	lib := filepath.Join(m.fixtures, "greet")
+	must(t, os.MkdirAll(lib, 0o755))
+	must(
+		t,
+		os.WriteFile(
+			filepath.Join(lib, "go.mod"),
+			[]byte("module example.com/greet\n\ngo 1.21\n"),
+			0o644,
+		),
+	)
+
+	writeLib := func(text string) {
+		must(t, os.WriteFile(filepath.Join(lib, "greet.go"), []byte(fmt.Sprintf(
+			"package greet\n\nfunc Text() string { return %q }\n", text,
+		)), 0o644))
+	}
+	writeLib("vendored hello")
+
+	ref := filepath.Join(m.fixtures, "gotool.toml")
+	must(t, os.WriteFile(ref, []byte(fmt.Sprintf(`[package]
+name = "gotool"
+[version]
+value = "1.0.0"
+[build]
+needs = ["go"]
+[[build.step]]
+run = """
+printf 'module example.com/gotool\\n\\ngo 1.21\\n\\nrequire example.com/greet v0.0.0\\n\\nreplace example.com/greet => %s\\n' > go.mod
+printf 'package main\\n\\nimport (\\n\\t"fmt"\\n\\n\\t"example.com/greet"\\n)\\n\\nfunc main() { fmt.Println(greet.Text()) }\\n' > main.go
+"""
+shell = "sh"
+[[build.step]]
+vendor = "go"
+[[build.step]]
+run = "go build -mod=vendor -o gotool ."
+shell = "sh"
+env = { GOTOOLCHAIN = "local", GOFLAGS = "-buildvcs=false" }
+[[build.step]]
+install = { bin = ["gotool"] }
+`, lib)), 0o644))
+
+	out, err := m.run(t, "", "add", ref, "--yes")
+	if err != nil {
+		t.Fatalf("add: %v\n%s", err, out)
+	}
+
+	if got := m.output(t, "gotool"); got != "vendored hello" {
+		t.Fatalf("gotool printed %q", got)
+	}
+
+	locked, err := os.ReadFile(filepath.Join(m.config, "oku.lock"))
+	must(t, err)
+
+	if !strings.Contains(string(locked), "vendor_sha256 = '") {
+		t.Fatalf("oku.lock does not pin the vendor output:\n%s", locked)
+	}
+
+	// The same manifest now downloads different code, on a machine with an empty
+	// store.
+	writeLib("something else")
+	must(t, os.RemoveAll(filepath.Join(m.data, "store")))
+	must(t, os.RemoveAll(filepath.Join(m.data, "profiles")))
+
+	_, err = m.run(t, "", "sync", "--yes")
+	if err == nil || !strings.Contains(err.Error(), "vendored packages changed") {
+		t.Fatalf("want sync to fail on changed vendor output, got %v", err)
+	}
+
+	if got := m.storeEntries(t); len(got) != 0 {
+		t.Fatalf("the mismatched build was kept: %v", got)
+	}
+
+	out, err = m.run(t, "", "update", "--yes")
+	if err != nil {
+		t.Fatalf("update: %v\n%s", err, out)
+	}
+
+	if got := m.output(t, "gotool"); got != "something else" {
+		t.Fatalf("gotool after update printed %q", got)
+	}
+}

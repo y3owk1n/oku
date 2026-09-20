@@ -156,11 +156,23 @@ func (e env) install(ctx context.Context, opts Options, req request) (installed,
 			return installed{}, err
 		}
 
-		if realized, err = e.store().Build(ctx, m, host, deps.prefixes, req.log); err != nil {
+		// A locked build must download the same packages again. Update drops the pin.
+		pinnedVendor := ""
+		if at := previous.Platforms[host.String()]; req.keepVersion &&
+			previous.ManifestSHA256 == m.SHA256 {
+			pinnedVendor = at.VendorSHA256
+		}
+
+		realized, err = e.store().Build(ctx, m, host, store.BuildOptions{
+			Deps: deps.prefixes, Log: req.log, PinnedVendor: pinnedVendor,
+		})
+		if err != nil {
 			return installed{}, fmt.Errorf("%s: %w", m.Package.Name, err)
 		}
 
-		entry = lock.Platform{Strategy: strategyBuild, Impure: realized.Impure}
+		entry = lock.Platform{
+			Strategy: strategyBuild, Impure: realized.Impure, VendorSHA256: realized.VendorSHA256,
+		}
 	} else {
 		// A digest that oku.lock pinned for this version and URL still applies,
 		// even when the manifest gives none.

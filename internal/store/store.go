@@ -73,6 +73,8 @@ type Realized struct {
 	Unsandboxed string
 	// Impure reports that a run step asked for the network.
 	Impure bool
+	// VendorSHA256 is the digest of what the vendor steps downloaded, or empty.
+	VendorSHA256 string
 }
 
 // Realize downloads, verifies and unpacks artifact a of manifest m. It returns
