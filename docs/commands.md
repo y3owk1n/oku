@@ -9,19 +9,29 @@ do not exist yet.
 ## oku add
 
 ```
-oku add <ref>[@version]
+oku add <ref>[@version] [--from-source] [--yes] [--verbose]
 ```
 
 Installs the package a [ref](refs.md) points at.
 
 1. Fetches the manifest. For a `github:owner/repo` ref whose repo has none, oku
    [infers one](manifest.md#inferred-manifests) and prints it.
-2. Picks the first `[[artifact]]` whose `match` fits this machine.
-3. Downloads it, verifies the checksum, and unpacks it into the store.
+2. Picks the first `[[artifact]]` whose `match` fits this machine. With none, or
+   with `--from-source`, it [builds from source](manifest.md#build).
+3. Downloads the artifact, verifies the checksum, and unpacks it into the
+   store. For a build it runs the steps and installs into the store.
 4. Activates a new profile generation that includes the package.
 5. Writes the package to `oku.toml` and its resolution to `oku.lock`.
 
 Adding a package that is already installed replaces it.
+
+| Flag | Effect |
+|---|---|
+| `--from-source` | Builds from source even when a prebuilt download fits. `oku.lock` records the choice, so `oku sync` builds too. |
+| `--yes`, `-y` | Approves the manifest's build commands without asking, see [Build commands](trust.md#build-commands). |
+| `--verbose`, `-v` | Shows the output of build commands as they run. |
+
+`oku sync` and `oku update` take `--yes` and `--verbose` too.
 
 Without `@version`, oku installs the newest version the manifest offers.
 `@version` picks one, see [Pinning a version](refs.md#pinning-a-version). The
@@ -43,7 +53,10 @@ Common failures:
 | Message | Meaning |
 |---|---|
 | `<name> has no artifact for darwin-arm64` | No `[[artifact]]` matches this machine. |
-| `... building from source is not supported so far` | The manifest only offers a `[build]`. |
+| `<name> has no [build], so it cannot be built from source` | `--from-source` on a manifest with artifacts only. |
+| `the build needs "<tool>", which is not on PATH` | Install that tool yourself. oku does not install `needs`. |
+| `<name> needs approval to run them, and this is not a terminal` | The manifest runs build commands and stdin is not a terminal. Pass `--yes` after reading them. |
+| `build.step[N] (run) failed` | A build step failed. The last 40 lines of its output follow. |
 | `checksum mismatch for <url>` | The download differs from the expected sha256. Nothing was installed. |
 | `<alias> is not a source and <arg> is not a file` | The argument looks like `alias/name`, but no such source exists. See `oku source list`. |
 | `<a> and <b> both provide bin/<x>` | Two packages ship a file of the same name. The second install is refused. |

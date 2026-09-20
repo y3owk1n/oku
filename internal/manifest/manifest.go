@@ -15,10 +15,10 @@ import (
 
 // Manifest is one TOML file describing one package.
 type Manifest struct {
-	Package   Package        `toml:"package"`
-	Version   Version        `toml:"version"`
-	Artifacts []Artifact     `toml:"artifact"`
-	Build     map[string]any `toml:"build"`
+	Package   Package    `toml:"package"`
+	Version   Version    `toml:"version"`
+	Artifacts []Artifact `toml:"artifact"`
+	Build     *Build     `toml:"build"`
 
 	// SHA256 is the hex digest of the manifest data. The store hash includes it.
 	SHA256 string `toml:"-"`
@@ -146,7 +146,7 @@ func (m *Manifest) validate() error {
 
 // HasBuild reports whether the manifest declares a source build.
 func (m *Manifest) HasBuild() bool {
-	return len(m.Build) > 0
+	return m.Build != nil && len(m.Build.Steps) > 0
 }
 
 // Select returns the first artifact whose selector matches p and expands the
@@ -166,11 +166,11 @@ func (m *Manifest) Select(p platform.Platform) (Artifact, bool, error) {
 		}
 
 		var err error
-		if a.URL, err = expand(a.URL, vars); err != nil {
+		if a.URL, err = Expand(a.URL, vars); err != nil {
 			return Artifact{}, false, fmt.Errorf("artifact url: %w", err)
 		}
 
-		if a.SHA256URL, err = expand(a.SHA256URL, vars); err != nil {
+		if a.SHA256URL, err = Expand(a.SHA256URL, vars); err != nil {
 			return Artifact{}, false, fmt.Errorf("artifact sha256_url: %w", err)
 		}
 
@@ -180,8 +180,8 @@ func (m *Manifest) Select(p platform.Platform) (Artifact, bool, error) {
 	return Artifact{}, false, nil
 }
 
-// expand replaces {{name}} with vars[name] and fails on an unknown name.
-func expand(s string, vars map[string]string) (string, error) {
+// Expand replaces {{name}} with vars[name] and fails on an unknown name.
+func Expand(s string, vars map[string]string) (string, error) {
 	var unknown []string
 
 	out := templateRe.ReplaceAllStringFunc(s, func(match string) string {

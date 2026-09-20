@@ -22,6 +22,8 @@ type Options struct {
 	// Executable is the path of the running binary, which "self uninstall"
 	// deletes.
 	Executable string
+	// Interactive overrides the check for a terminal on stdin. Tests set it.
+	Interactive *bool
 	// GitHubAPI and GitHubRaw replace the github.com URLs when set.
 	GitHubAPI string
 	GitHubRaw string

@@ -40,6 +40,35 @@ before it installs, so you can read what it is about to do. The lock stores that
 text. Other machines install from the stored text, and only `oku update` infers
 again.
 
+## Build commands
+
+A manifest with a `[build]` can run commands on your machine. Before the first
+build of such a manifest, oku shows every `run` step that applies to your
+machine and asks:
+
+```
+tree 2.3.2 builds from source and runs these commands on your machine:
+
+  step 0
+    make -j{{jobs}}
+
+run them? [y/N]
+```
+
+- Your answer is recorded for that exact manifest, by its sha256, in
+  `<data>/oku/trust/approvals.toml`. The same manifest never asks twice, and a
+  manifest that changed asks again.
+- When stdin is not a terminal, oku does not ask. It refuses, and `--yes`
+  approves. Use `--yes` in scripts only for manifests you have read.
+- An approval applies to one machine. `oku sync` on a new machine asks again.
+- A manifest with only `install`, `copy`, `fetch` and `extract` steps runs no
+  commands and needs no approval.
+
+Build commands run with a scrubbed environment and temporary `HOME`, see the
+[manifest reference](manifest.md#the-build-environment). They are not sandboxed
+yet, so they can still read your files and use the network. Read the commands
+before you approve them.
+
 ## What the lock pins
 
 | Pinned | Effect |
@@ -81,6 +110,7 @@ read the lock diff before you commit it.
 - A `sha256_url` on the same host as the download. It catches corruption and
   in-place tampering after you locked, not a compromised host on first use.
 - Signatures. Manifests cannot declare a signing key yet.
+- A build command you approved. Builds are not sandboxed yet.
 
 ## Archives
 

@@ -19,6 +19,8 @@ in [`../prd/`](../prd/).
   so treat it as not supported yet.
 - Packages that ship a prebuilt download: tar, tar.gz, tar.bz2, zip, or a
   single binary.
+- Packages built from source with `[build]` steps, after you approve their
+  commands. The build uses tools already on your machine.
 - `oku add github:owner/repo` for a repo that has no oku manifest, by reading
   its newest release.
 - `oku manifest init`, `lint` and `bump` for people who publish a manifest.
@@ -33,7 +35,7 @@ in [`../prd/`](../prd/).
 
 ## What does not work yet
 
-- Building from source. A `[build]` table in a manifest is recognised and
-  refused.
+- Build `deps` on other oku packages, `patch` and `vendor` steps, and a build
+  sandbox. Builds can use the network and read your files.
 - Per-project lists and the shell hook.
 - `.tar.xz` and `.tar.zst` archives.

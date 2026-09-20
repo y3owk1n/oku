@@ -3,6 +3,7 @@ package cli
 import (
 	"errors"
 	"fmt"
+	"io"
 	"maps"
 	"slices"
 
@@ -15,7 +16,9 @@ import (
 )
 
 func newSyncCmd(opts Options) *cobra.Command {
-	return &cobra.Command{
+	var flags buildFlags
+
+	cmd := &cobra.Command{
 		Use:   "sync [list-ref]",
 		Short: "Make the profile match oku.toml at the versions in oku.lock",
 		Long: `Make the profile match oku.toml at the versions in oku.lock.
@@ -36,19 +39,29 @@ oku.toml yet.`,
 				}
 			}
 
-			return reconcile(cmd, opts, nil, false)
+			return reconcile(cmd, opts, &flags, nil, false)
 		},
 	}
+
+	flags.register(cmd)
+
+	return cmd
 }
 
 func newUpdateCmd(opts Options) *cobra.Command {
-	return &cobra.Command{
+	var flags buildFlags
+
+	cmd := &cobra.Command{
 		Use:   "update [name...]",
 		Short: "Re-resolve packages from their refs and rewrite oku.lock",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return reconcile(cmd, opts, args, true)
+			return reconcile(cmd, opts, &flags, args, true)
 		},
 	}
+
+	flags.register(cmd)
+
+	return cmd
 }
 
 // reconcile installs every package of oku.toml, activates a generation holding
@@ -57,7 +70,13 @@ func newUpdateCmd(opts Options) *cobra.Command {
 // Without update, a locked package is read at its locked commit and must still
 // have its locked manifest hash. With update, the packages in names, or all of
 // them when names is empty, are read fresh and their lock entries replaced.
-func reconcile(cmd *cobra.Command, opts Options, names []string, update bool) error {
+func reconcile(
+	cmd *cobra.Command,
+	opts Options,
+	flags *buildFlags,
+	names []string,
+	update bool,
+) error {
 	e, err := loadEnv()
 	if err != nil {
 		return err
@@ -121,6 +140,8 @@ func reconcile(cmd *cobra.Command, opts Options, names []string, update bool) er
 			wantManifest: wantManifest,
 			acceptDigest: fresh,
 			keepVersion:  !fresh && previous.Ref == r.String(),
+			approve:      e.approver(cmd, opts, flags),
+			log:          buildLog(cmd, flags),
 		})
 
 		switch {
@@ -179,6 +200,14 @@ func reconcile(cmd *cobra.Command, opts Options, names []string, update bool) er
 		fmt.Fprintf(out, "profile now holds %d %s\n", len(pkgs), noun)
 	} else {
 		fmt.Fprintln(out, "already in sync")
+	}
+
+	return nil
+}
+
+func buildLog(cmd *cobra.Command, flags *buildFlags) io.Writer {
+	if flags.verbose {
+		return cmd.ErrOrStderr()
 	}
 
 	return nil

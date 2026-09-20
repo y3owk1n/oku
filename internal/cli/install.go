@@ -12,6 +12,12 @@ import (
 	"github.com/y3owk1n/oku/internal/profile"
 	"github.com/y3owk1n/oku/internal/ref"
 	"github.com/y3owk1n/oku/internal/resolve"
+	"github.com/y3owk1n/oku/internal/store"
+)
+
+const (
+	strategyArtifact = "artifact"
+	strategyBuild    = "build"
 )
 
 var errManifestChanged = errors.New("the manifest changed since oku.lock was written")
@@ -41,6 +47,12 @@ type request struct {
 	// keepVersion installs the version in previous without listing versions
 	// again. "oku sync" sets it.
 	keepVersion bool
+	// fromSource builds even when a prebuilt artifact fits the host.
+	fromSource bool
+	// approve decides whether a manifest may run its build commands.
+	approve func(m *manifest.Manifest, host platform.Platform) error
+	// log receives the output of build commands, or is nil.
+	log io.Writer
 }
 
 // install fetches the manifest, realizes the host's artifact and returns the
@@ -88,32 +100,59 @@ func (e env) install(ctx context.Context, opts Options, req request) (installed,
 		return installed{}, err
 	}
 
-	if !ok && m.HasBuild() {
-		return installed{}, fmt.Errorf(
-			"%s has no artifact for %s, and building from source is not supported so far",
-			m.Package.Name, host,
-		)
-	}
+	// A platform whose lock entry says "build" is built from source again.
+	build := req.fromSource || previous.Platforms[host.String()].Strategy == strategyBuild &&
+		previous.Version == m.Version.Value
 
-	if !ok {
+	switch {
+	case (build || !ok) && m.HasBuild():
+		build = true
+	case build:
+		return installed{}, fmt.Errorf(
+			"%s has no [build], so it cannot be built from source",
+			m.Package.Name,
+		)
+	case !ok:
 		return installed{}, fmt.Errorf("%s has no artifact for %s", m.Package.Name, host)
 	}
 
-	// A digest that oku.lock pinned for this version and URL still applies, even
-	// when the manifest gives none.
-	pinned := ""
-	if at := previous.Platforms[host.String()]; previous.Version == m.Version.Value &&
-		at.URL == artifact.URL {
-		pinned = at.SHA256
-	}
+	var (
+		realized store.Realized
+		entry    lock.Platform
+	)
 
-	if req.acceptDigest && (artifact.SHA256 != "" || artifact.SHA256URL != "") {
-		pinned = ""
-	}
+	if build {
+		if err := req.approve(m, host); err != nil {
+			return installed{}, err
+		}
 
-	realized, err := e.store().Realize(ctx, m, artifact, host, pinned)
-	if err != nil {
-		return installed{}, err
+		if realized, err = e.store().Build(ctx, m, host, req.log); err != nil {
+			return installed{}, fmt.Errorf("%s: %w", m.Package.Name, err)
+		}
+
+		entry = lock.Platform{Strategy: strategyBuild}
+	} else {
+		// A digest that oku.lock pinned for this version and URL still applies,
+		// even when the manifest gives none.
+		pinned := ""
+		if at := previous.Platforms[host.String()]; previous.Version == m.Version.Value &&
+			at.URL == artifact.URL {
+			pinned = at.SHA256
+		}
+
+		if req.acceptDigest && (artifact.SHA256 != "" || artifact.SHA256URL != "") {
+			pinned = ""
+		}
+
+		if realized, err = e.store().Realize(ctx, m, artifact, host, pinned); err != nil {
+			return installed{}, err
+		}
+
+		entry = lock.Platform{
+			Strategy: strategyArtifact,
+			URL:      artifact.URL,
+			SHA256:   realized.SHA256,
+		}
 	}
 
 	// Entries for other platforms stay while they describe the same manifest.
@@ -126,11 +165,7 @@ func (e env) install(ctx context.Context, opts Options, req request) (installed,
 		}
 	}
 
-	platforms[host.String()] = lock.Platform{
-		Strategy: "artifact",
-		URL:      artifact.URL,
-		SHA256:   realized.SHA256,
-	}
+	platforms[host.String()] = entry
 
 	return installed{
 		profile: profile.Package{

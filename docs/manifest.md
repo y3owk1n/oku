@@ -230,6 +230,88 @@ release and recomputes them. See [Commands](commands.md#oku-manifest-lint).
 
 ## [build]
 
-Building from source is not supported yet. When no artifact matches and the
-manifest has a `[build]` table, oku says so instead of reporting that the
-platform is unsupported.
+`[build]` says how to produce the package from source. oku builds when no
+`[[artifact]]` fits the machine, or when the user passes `--from-source`. A
+manifest may have both. oku then uses an artifact when one fits, because that
+needs no build.
+
+```toml
+[build]
+needs = ["cc", "make"]
+source = { git = "https://github.com/Old-Man-Programmer/tree", tag = "{{tag}}" }
+
+[[build.step]]
+run = "make -j{{jobs}}"
+shell = "sh"
+
+[[build.step]]
+install = { bin = ["tree"], man = ["doc/tree.1"] }
+```
+
+| Key | Meaning |
+|---|---|
+| `needs` | Tools that must be on the user's `PATH`, such as `cc` or `cargo`. oku checks them before any step runs and never installs them. |
+| `source` | `{ git, tag }` clones that tag at depth 1 and needs `git`. `{ url, sha256, strip }` downloads and unpacks an archive, and `sha256` is required. Without `source` the build starts in an empty directory. |
+| `deps` | Other oku packages. Not supported yet, and a manifest that lists any fails to build. |
+
+### Steps
+
+Steps run in order, in the source directory. Each `[[build.step]]` sets exactly
+one of these keys:
+
+| Key | What it does |
+|---|---|
+| `run = "..."` | Runs a command string in a shell. |
+| `install = { bin, lib, include, man, share, completions }` | Copies files from the source directory into the package. `bin` files become executable. `man` and `completions` go where an artifact's would. |
+| `copy = { from, to }` | Copies one file. `from` is relative to the source directory and `to` to the package. |
+| `fetch = { url, sha256, to }` | Downloads a file into the source directory. `sha256` is required. |
+| `extract = { file, to, strip }` | Unpacks an archive that is in the source directory. |
+
+`patch` and `vendor` are in the schema and not supported yet.
+
+Any step may also set:
+
+| Key | Meaning |
+|---|---|
+| `when = { os, arch, libc }` | The step only runs on a matching machine. |
+| `shell` | For `run`: `sh`, `bash`, `pwsh` or `cmd`. Default `sh`, except on Windows, which has no default. `oku manifest lint` requires `shell` on every `run` step that can reach Windows. |
+| `env = { KEY = "value" }` | Extra variables for `run`. Values expand template variables. |
+
+`sh` and `bash` run with `-e`, so the step fails at the first failing command.
+
+### Template variables in a build
+
+`run`, `env` values, `source.tag`, `source.url` and `fetch.url` expand
+`{{version}}`, `{{tag}}`, `{{os}}`, `{{arch}}`, `{{libc}}` and:
+
+| Variable | Value |
+|---|---|
+| `{{prefix}}` | The package's final directory in the store. Pass it to `make install PREFIX={{prefix}}` or `./configure --prefix={{prefix}}`. |
+| `{{src}}` | The source directory. |
+| `{{jobs}}` | The number of CPUs. |
+
+A `run` step may write into `{{prefix}}` itself, so a project with a working
+`make install` needs no `install` step. A build that leaves `{{prefix}}` empty
+fails.
+
+### The build environment
+
+A `run` step does not see the user's environment. It gets:
+
+- `PATH` with the directories of the `needs` tools, then `/usr/bin` and `/bin`
+- `HOME` and `TMPDIR` pointing at empty temporary directories
+- `OKU_PREFIX`, `OKU_SRC`, `OKU_JOBS`, and the step's `env`
+
+A tool the build uses must therefore be in `needs`. The network is still
+reachable today. A sandbox that turns it off comes later.
+
+### When a build fails
+
+oku reports the step number, its kind, and the last 40 lines of its output,
+deletes the half-built package, and leaves the user's profile as it was.
+`oku add -v` shows the output while the build runs.
+
+### Approval
+
+Before the first build of a manifest that has `run` steps, oku shows the user
+those commands and asks, see [Trust and checksums](trust.md#build-commands).

@@ -41,12 +41,7 @@ type schema struct {
 		App          []string          `toml:"app"`
 		Font         []string          `toml:"font"`
 	} `toml:"artifact"`
-	Build struct {
-		Needs  []string       `toml:"needs"`
-		Deps   []any          `toml:"deps"`
-		Source map[string]any `toml:"source"`
-		Steps  []step         `toml:"step"`
-	} `toml:"build"`
+	Build   Build `toml:"build"`
 	Runtime struct {
 		Deps []any `toml:"deps"`
 	} `toml:"runtime"`
@@ -63,21 +58,6 @@ type schema struct {
 		Env     map[string]string `toml:"env"`
 		Restart string            `toml:"restart"`
 	} `toml:"service"`
-}
-
-// step is one build step. Exactly one of the type keys must be set.
-type step struct {
-	Run     *string           `toml:"run"`
-	Install map[string]any    `toml:"install"`
-	Patch   map[string]any    `toml:"patch"`
-	Fetch   map[string]any    `toml:"fetch"`
-	Extract map[string]any    `toml:"extract"`
-	Copy    map[string]any    `toml:"copy"`
-	Vendor  *string           `toml:"vendor"`
-	When    platform.Selector `toml:"when"`
-	Shell   string            `toml:"shell"`
-	Env     map[string]string `toml:"env"`
-	Network bool              `toml:"network"`
 }
 
 var (
@@ -156,24 +136,10 @@ func Lint(data []byte) Report {
 	return report
 }
 
-func lintStep(i int, s step) []string {
+func lintStep(i int, s Step) []string {
 	var found []string
 
-	kinds := map[string]bool{
-		"run": s.Run != nil, "install": s.Install != nil, "patch": s.Patch != nil,
-		"fetch": s.Fetch != nil, "extract": s.Extract != nil, "copy": s.Copy != nil,
-		"vendor": s.Vendor != nil,
-	}
-
-	var set []string
-
-	for kind, present := range kinds {
-		if present {
-			set = append(set, kind)
-		}
-	}
-
-	slices.Sort(set)
+	set := s.Kinds()
 
 	switch len(set) {
 	case 0:
@@ -206,7 +172,7 @@ func lintStep(i int, s step) []string {
 	}
 
 	if s.Fetch != nil {
-		if sum, _ := s.Fetch["sha256"].(string); sum == "" {
+		if s.Fetch.SHA256 == "" {
 			found = append(found, fmt.Sprintf("build.step[%d]: a fetch step needs sha256", i))
 		}
 	}
