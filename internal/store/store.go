@@ -45,6 +45,8 @@ type Meta struct {
 	Platform string `toml:"platform"`
 	URL      string `toml:"url"`
 	SHA256   string `toml:"sha256"`
+	// Impure marks a build whose run steps could use the network.
+	Impure bool `toml:"impure,omitempty"`
 }
 
 // New returns the store under dataDir that caches downloads under cacheDir.
@@ -67,6 +69,10 @@ type Realized struct {
 	// FirstUse reports that neither the manifest nor the caller gave a digest, so
 	// oku accepted the download unverified.
 	FirstUse bool
+	// Unsandboxed says why a build ran without the sandbox, or is empty.
+	Unsandboxed string
+	// Impure reports that a run step asked for the network.
+	Impure bool
 }
 
 // Realize downloads, verifies and unpacks artifact a of manifest m. It returns

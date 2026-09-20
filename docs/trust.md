@@ -66,10 +66,21 @@ run them? [y/N]
 - A manifest with only `install`, `copy`, `fetch` and `extract` steps runs no
   commands and needs no approval.
 
-Build commands run with a scrubbed environment and temporary `HOME`, see the
-[manifest reference](manifest.md#the-build-environment). They are not sandboxed
-yet, so they can still read your files and use the network. Read the commands
-before you approve them.
+On macOS and Linux, build commands run in a
+[sandbox](manifest.md#the-sandbox) with no network and no access to your home
+directory, and with a scrubbed environment. A step marked `(wants network)` in
+the prompt gets the network and still cannot read your home directory.
+
+The sandbox is not available everywhere. On Windows, and on a Linux host that
+forbids unprivileged user namespaces, oku builds without it and says so:
+
+```
+tree was built without the sandbox, because this host does not allow unprivileged user namespaces (...)
+its build commands could use the network and read your files
+```
+
+The sandbox limits what an approved command can reach. It is not a reason to
+approve commands you have not read.
 
 ## What the lock pins
 
@@ -112,7 +123,9 @@ read the lock diff before you commit it.
 - A `sha256_url` on the same host as the download. It catches corruption and
   in-place tampering after you locked, not a compromised host on first use.
 - Signatures. Manifests cannot declare a signing key yet.
-- A build command you approved. Builds are not sandboxed yet.
+- A build command you approved, on a host where the sandbox is not available.
+- On Linux the sandbox hides your home directory and the network. It does not
+  stop writes to other places your user can already write to.
 
 ## Archives
 

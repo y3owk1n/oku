@@ -77,8 +77,10 @@ func (p Package) FindDep(ref string) Package {
 // Platform pins what one platform installs.
 type Platform struct {
 	Strategy string `toml:"strategy"`
-	URL      string `toml:"url"`
-	SHA256   string `toml:"sha256"`
+	URL      string `toml:"url,omitempty"`
+	SHA256   string `toml:"sha256,omitempty"`
+	// Impure marks a build whose run steps could use the network.
+	Impure bool `toml:"impure,omitempty"`
 }
 
 // Read parses the lock at path. A missing file is an empty lock.

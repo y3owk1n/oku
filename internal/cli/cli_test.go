@@ -19,6 +19,7 @@ import (
 
 	"github.com/y3owk1n/oku/internal/cli"
 	"github.com/y3owk1n/oku/internal/platform"
+	"github.com/y3owk1n/oku/internal/sandbox"
 )
 
 const script = "#!/bin/sh\necho hello from tool\n"
@@ -2085,5 +2086,142 @@ func TestB40UnsatisfiableDepConstraintNamesItAndTheVersionsFound(t *testing.T) {
 		if !strings.Contains(err.Error(), want) {
 			t.Fatalf("error lacks %q: %v", want, err)
 		}
+	}
+}
+
+// probeManifest writes a package whose build tries to fetch url and to read
+// secret, and installs what it learned as share/probe.txt.
+func (m machine) probeManifest(t *testing.T, url, secret string, network bool) string {
+	t.Helper()
+
+	path := filepath.Join(m.fixtures, "probe.toml")
+	must(t, os.WriteFile(path, []byte(fmt.Sprintf(`[package]
+name = "probe"
+[version]
+value = "1.0.0"
+[build]
+needs = ["curl"]
+[[build.step]]
+run = """
+curl -sf -m 5 -o /dev/null %s && echo network=open > probe.txt || echo network=blocked > probe.txt
+cat %s >/dev/null 2>&1 && echo home=readable >> probe.txt || echo home=hidden >> probe.txt
+env | cut -d= -f1 | sort | tr '\\n' ' ' >> probe.txt
+"""
+shell = "sh"
+network = %t
+env = { EXTRA = "1" }
+[[build.step]]
+install = { share = ["probe.txt"] }
+`, url, secret, network)), 0o644))
+
+	return path
+}
+
+func (m machine) probeResult(t *testing.T) string {
+	t.Helper()
+
+	body, err := os.ReadFile(m.profile("share", "probe.txt"))
+	must(t, err)
+
+	return string(body)
+}
+
+func sandboxedMachine(t *testing.T) (machine, string, string) {
+	t.Helper()
+
+	if ok, why := sandbox.Available(); !ok {
+		t.Skip("no sandbox on this host: " + why)
+	}
+
+	if _, err := exec.LookPath("curl"); err != nil {
+		t.Skip("needs curl")
+	}
+
+	m := newMachine(t)
+
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	secret := filepath.Join(home, "secret.txt")
+	must(t, os.WriteFile(secret, []byte("hunter2"), 0o600))
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte("ok"))
+	}))
+	t.Cleanup(server.Close)
+
+	return m, server.URL, secret
+}
+
+func TestB50RunStepCannotReachTheNetworkOrReadHome(t *testing.T) {
+	m, url, secret := sandboxedMachine(t)
+
+	out, err := m.run(t, "", "add", m.probeManifest(t, url, secret, false), "--yes")
+	if err != nil {
+		t.Fatalf("add: %v\n%s", err, out)
+	}
+
+	got := m.probeResult(t)
+	if !strings.Contains(got, "network=blocked") || !strings.Contains(got, "home=hidden") {
+		t.Fatalf("the run step saw:\n%s", got)
+	}
+
+	if strings.Contains(out, "without the sandbox") {
+		t.Fatalf("oku reported an unsandboxed build:\n%s", out)
+	}
+}
+
+func TestB53NetworkStepIsShownInThePromptAndMarksThePackageImpure(t *testing.T) {
+	m, url, secret := sandboxedMachine(t)
+	m.opts.Interactive = yes()
+
+	out, err := m.run(t, "y\n", "add", m.probeManifest(t, url, secret, true))
+	if err != nil {
+		t.Fatalf("add: %v\n%s", err, out)
+	}
+
+	if !strings.Contains(out, "wants network") {
+		t.Fatalf("the prompt does not say the step wants network:\n%s", out)
+	}
+
+	if got := m.probeResult(
+		t,
+	); !strings.Contains(got, "network=open") ||
+		!strings.Contains(got, "home=hidden") {
+		t.Fatalf("the run step saw:\n%s", got)
+	}
+
+	locked, err := os.ReadFile(filepath.Join(m.config, "oku.lock"))
+	must(t, err)
+
+	if !strings.Contains(string(locked), "impure = true") {
+		t.Fatalf("oku.lock does not mark the build impure:\n%s", locked)
+	}
+}
+
+func TestB54BuildEnvironmentHoldsOnlyOkuVariables(t *testing.T) {
+	m, url, secret := sandboxedMachine(t)
+
+	t.Setenv("MY_TOKEN", "leak-me")
+
+	_, err := m.run(t, "", "add", m.probeManifest(t, url, secret, false), "--yes")
+	must(t, err)
+
+	lines := strings.Split(strings.TrimSpace(m.probeResult(t)), "\n")
+	names := strings.Fields(lines[len(lines)-1])
+
+	allowed := []string{
+		"EXTRA", "HOME", "OKU_JOBS", "OKU_PREFIX", "OKU_SRC", "PATH", "TMPDIR",
+		"PWD", "OLDPWD", "SHLVL", "_", "__CF_USER_TEXT_ENCODING",
+	}
+
+	for _, name := range names {
+		if !slices.Contains(allowed, name) {
+			t.Errorf("the build saw %s", name)
+		}
+	}
+
+	if !slices.Contains(names, "EXTRA") || !slices.Contains(names, "OKU_PREFIX") {
+		t.Fatalf("the build environment is %v", names)
 	}
 }

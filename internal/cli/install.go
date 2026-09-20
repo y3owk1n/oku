@@ -34,6 +34,8 @@ type installed struct {
 	firstUse bool
 	// inferred is the manifest text when oku inferred it during this install.
 	inferred string
+	// unsandboxed says why the build ran without the sandbox, or is empty.
+	unsandboxed string
 }
 
 // request says what install should fetch and what it must match.
@@ -158,7 +160,7 @@ func (e env) install(ctx context.Context, opts Options, req request) (installed,
 			return installed{}, fmt.Errorf("%s: %w", m.Package.Name, err)
 		}
 
-		entry = lock.Platform{Strategy: strategyBuild}
+		entry = lock.Platform{Strategy: strategyBuild, Impure: realized.Impure}
 	} else {
 		// A digest that oku.lock pinned for this version and URL still applies,
 		// even when the manifest gives none.
@@ -215,9 +217,10 @@ func (e env) install(ctx context.Context, opts Options, req request) (installed,
 			Platforms:      platforms,
 			Deps:           deps.locks,
 		},
-		closure:  append([]string{realized.Path}, deps.closure...),
-		firstUse: realized.FirstUse,
-		inferred: inferred,
+		closure:     append([]string{realized.Path}, deps.closure...),
+		firstUse:    realized.FirstUse,
+		inferred:    inferred,
+		unsandboxed: realized.Unsandboxed,
 	}, nil
 }
 
@@ -256,6 +259,17 @@ func inferredText(inferred string, req request) string {
 	}
 
 	return inferred
+}
+
+// reportUnsandboxed warns that a build's commands ran without the sandbox.
+func reportUnsandboxed(w io.Writer, got installed) {
+	if got.unsandboxed != "" {
+		fmt.Fprintf(
+			w, "%s was built without the sandbox, because %s\n"+
+				"its build commands could use the network and read your files\n",
+			got.lock.Name, got.unsandboxed,
+		)
+	}
 }
 
 // reportInferred prints a manifest that oku just inferred.
