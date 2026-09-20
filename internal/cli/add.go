@@ -49,6 +49,23 @@ func newAddCmd(opts Options) *cobra.Command {
 	return cmd
 }
 
+// parseRef reads a ref from the command line and expands a source alias in it.
+// oku.toml gets the expanded ref, so a list works on a machine that does not
+// define the alias.
+func (e env) parseRef(arg string) (ref.Ref, error) {
+	sources, err := source.Read(e.configPath())
+	if err != nil {
+		return ref.Ref{}, err
+	}
+
+	expanded, err := sources.Expand(arg)
+	if err != nil {
+		return ref.Ref{}, err
+	}
+
+	return ref.Parse(expanded)
+}
+
 func runAdd(
 	cmd *cobra.Command,
 	opts Options,
@@ -61,19 +78,7 @@ func runAdd(
 		return err
 	}
 
-	sources, err := source.Read(e.configPath())
-	if err != nil {
-		return err
-	}
-
-	// oku.toml gets the expanded ref, so a list works on a machine that does not
-	// define the alias.
-	expanded, err := sources.Expand(arg)
-	if err != nil {
-		return err
-	}
-
-	r, err := ref.Parse(expanded)
+	r, err := e.parseRef(arg)
 	if err != nil {
 		return err
 	}

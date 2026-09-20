@@ -29,6 +29,8 @@ in [`../prd/`](../prd/).
   uninstall.
 - Services: a package's daemon runs under launchd or systemd for your user,
   enabled with `service = true` in your list.
+- `oku shell <ref>...` opens a shell with packages on `PATH` and installs
+  nothing.
 - Build caches: `oku cache` and `oku key` share built packages through any
   directory or static web host, signed with minisign.
 - System scope: `--system` installs a package's apps, fonts and services for the

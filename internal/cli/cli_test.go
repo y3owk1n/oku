@@ -8,6 +8,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -3855,5 +3856,67 @@ func TestB89SigningKeyVerifiesArtifactsAndAChangedKeyStopsUntilAccepted(t *testi
 
 	if !strings.Contains(string(lockText), otherPublic.String()) {
 		t.Fatalf("the lock does not pin the accepted key:\n%s", lockText)
+	}
+}
+
+func TestB90ShellRunsWithThePackagesOnPathAndChangesNothing(t *testing.T) {
+	m := newMachine(t)
+	kept := m.manifest(t, "kept", map[string]string{"kept": script}, `bin = ["kept"]`)
+
+	_, err := m.run(t, "", "add", kept)
+	must(t, err)
+
+	snapshot := func() string {
+		var state []string
+
+		for _, path := range []string{
+			filepath.Join(m.config, "oku.toml"), filepath.Join(m.config, "oku.lock"),
+		} {
+			data, err := os.ReadFile(path)
+			must(t, err)
+
+			state = append(state, string(data))
+		}
+
+		target, err := os.Readlink(filepath.Join(m.data, "profiles", "global", "current"))
+		must(t, err)
+
+		return strings.Join(append(state, target), "\n")
+	}
+
+	before := snapshot()
+	ref := m.envManifest(t, "tool", "TOOL_HOME")
+
+	out, err := m.run(
+		t,
+		"",
+		"shell",
+		ref,
+		"--",
+		"sh",
+		"-c",
+		`command -v tool; echo "home=$TOOL_HOME"`,
+	)
+	if err != nil {
+		t.Fatalf("shell: %v\n%s", err, out)
+	}
+
+	if !strings.Contains(out, filepath.Join(m.data, "store")) || strings.Contains(out, "home=\n") {
+		t.Fatalf("the command did not see the package on PATH with its env:\n%s", out)
+	}
+
+	if after := snapshot(); after != before {
+		t.Fatalf("shell changed the list, the lock or the profile:\n%s\nwas\n%s", after, before)
+	}
+
+	if exists(m.profile("bin", "tool")) {
+		t.Fatal("shell linked the package into the profile")
+	}
+
+	_, err = m.run(t, "", "shell", ref, "--", "sh", "-c", "exit 7")
+
+	var exit cli.ExitError
+	if !errors.As(err, &exit) || exit.Code != 7 {
+		t.Fatalf("want the command's exit code 7, got %v", err)
 	}
 }
