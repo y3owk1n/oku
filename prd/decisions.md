@@ -605,10 +605,13 @@ tags on `git-tags`, and moving branches.
 
 ## D58. oku's own nightly is a signed prerelease that only a flag selects
 
-Every push to `main` moves the tag `nightly` and replaces the files of the
-prerelease with that name. The release key signs them like a release. The
-binaries report `nightly-<timestamp>-<commit>`. `oku self update --nightly`
-reads that release and compares its commit with the end of the running version.
+Every push to `main` replaces the files of the prerelease `nightly` and then
+moves the tag with that name. The files come first, so that the files a reader
+gets are from the commit the tag points at. The release key signs them like a
+release. The binaries report `nightly-<timestamp>-<commit>`.
+`oku self update --nightly` reads that release and compares its commit with the end of the running version.
+It refuses a release that upstream made from a branch, because oku cannot tell
+from a branch name which commit the files are from.
 `oku self update` without the flag takes the newest release, also from a
 nightly binary. The install scripts need no change, because `OKU_VERSION`
 already names any tag.

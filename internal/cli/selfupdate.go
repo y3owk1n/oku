@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 
@@ -25,6 +26,8 @@ const (
 	// main.
 	nightlyTag = "nightly"
 )
+
+var commitRe = regexp.MustCompile(`^[0-9a-f]{40}$`)
 
 func newSelfUpdateCmd(opts Options) *cobra.Command {
 	var check, nightly bool
@@ -94,9 +97,14 @@ func runSelfUpdate(cmd *cobra.Command, opts Options, check, nightly bool) error 
 		}
 
 		// The nightly workflow makes the release from a commit and ends the
-		// version of its binaries with the same seven characters.
-		if len(release.Commit) < 7 {
-			return fmt.Errorf("release %s of %s names no commit", nightlyTag, repo)
+		// version of its binaries with the same seven characters. A release made
+		// from a branch has the branch name here, and oku cannot tell from it which
+		// commit the files are from.
+		if !commitRe.MatchString(release.Commit) {
+			return fmt.Errorf(
+				"release %s of %s was made from %q, which is no commit",
+				nightlyTag, repo, release.Commit,
+			)
 		}
 
 		newest = nightlyTag + " " + release.Commit[:7]

@@ -199,6 +199,11 @@ func (inf *Inferrer) Tagged(ctx context.Context, repo, tag string) (Release, err
 func (inf *Inferrer) release(ctx context.Context, repo, which string) (Release, error) {
 	var rel Release
 
+	what := "read the newest release of " + repo
+	if tag, ok := strings.CutPrefix(which, "tags/"); ok {
+		what = "read the release " + tag + " of " + repo
+	}
+
 	req, err := http.NewRequestWithContext(
 		ctx, http.MethodGet, inf.GitHubAPI+"/repos/"+repo+"/releases/"+which, nil,
 	)
@@ -215,7 +220,7 @@ func (inf *Inferrer) release(ctx context.Context, repo, which string) (Release, 
 
 	resp, err := inf.HTTP.Do(req)
 	if err != nil {
-		return rel, fmt.Errorf("read the newest release of %s: %w", repo, err)
+		return rel, fmt.Errorf("%s: %w", what, err)
 	}
 	defer resp.Body.Close()
 
@@ -227,15 +232,11 @@ func (inf *Inferrer) release(ctx context.Context, repo, which string) (Release, 
 	case resp.StatusCode == http.StatusForbidden && resp.Header.Get("X-RateLimit-Remaining") == "0":
 		return rel, errors.New("GitHub rate limit reached, set GITHUB_TOKEN to raise it")
 	case resp.StatusCode != http.StatusOK:
-		return rel, fmt.Errorf(
-			"read the newest release of %s: server returned %s",
-			repo,
-			resp.Status,
-		)
+		return rel, fmt.Errorf("%s: server returned %s", what, resp.Status)
 	}
 
 	if err := json.NewDecoder(io.LimitReader(resp.Body, 8<<20)).Decode(&rel); err != nil {
-		return rel, fmt.Errorf("read the newest release of %s: %w", repo, err)
+		return rel, fmt.Errorf("%s: %w", what, err)
 	}
 
 	return rel, nil

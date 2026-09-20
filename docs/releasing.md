@@ -25,11 +25,11 @@ where the first changelog starts.
 
 ## The nightly build
 
-`nightly.yml` runs on every push to `main`. It moves the tag `nightly` to that
-commit, points the prerelease `nightly` at it, and calls
-`publish-artifacts.yml` with the version `nightly-<timestamp>-<commit>`. The
-files and their signatures are the same set as for a release, and they replace
-the ones from the commit before.
+`nightly.yml` runs on every push to `main`. It calls `publish-artifacts.yml`
+with that commit and the version `nightly-<timestamp>-<commit>`, and then moves
+the tag `nightly` and the prerelease with that name to the commit. The files
+and their signatures are the same set as for a release, and they replace the
+ones from the commit before.
 
 Use it to test a merged change without a release:
 
@@ -40,8 +40,9 @@ oku self update             # back to the newest release
 
 A prerelease is not the `latest` release, so the install scripts and
 `oku self update` without the flag never take it. release-please ignores the
-tag, because it is no version. The upload takes about a minute. Until it ends,
-the release still holds the files of the commit before.
+tag, because it is no version. The files upload before the tag moves, so for a
+few seconds the release holds the new files under the old commit. In those
+seconds `oku self update --nightly` prints the old commit for the new build.
 
 ## Secrets
 
