@@ -401,3 +401,17 @@ func TestB96KeepListKeepsGlobalList(t *testing.T) {
 		t.Fatalf("output does not say where the list is:\n%s", out)
 	}
 }
+
+func TestB102UninstallPrintsPathEntryToRemove(t *testing.T) {
+	m := newMachine(t)
+	bin := m.profile("bin")
+
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	out, err := m.run(t, "", "self", "uninstall", "--yes")
+	must(t, err)
+
+	if !strings.Contains(out, "remove "+bin+" from PATH") {
+		t.Fatalf("output does not name the PATH entry:\n%s", out)
+	}
+}

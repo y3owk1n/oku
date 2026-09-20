@@ -190,8 +190,10 @@ order step in `prd/product.md`.
 - B98 [8] With system-scope items or a shared root present, uninstall names
   them and prompts for elevation. Declining removes everything in user scope
   and prints what is left.
-- B99 [1] Uninstall ends by printing the hook line to delete from the shell
+- B99 [7] Uninstall ends by printing the hook line to delete from the shell
   rc file, when `oku doctor` would have found one.
-- B100 [1] A shell with a stale hook line and no oku binary starts without an
+- B100 [7] A shell with a stale hook line and no oku binary starts without an
   error.
+- B102 [1] When the global profile `bin` is on PATH, uninstall ends by
+  printing that PATH entry for the user to remove.
 - B101 [9] On Windows the oku binary is gone once the command has exited.
