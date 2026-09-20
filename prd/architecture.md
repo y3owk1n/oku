@@ -19,7 +19,7 @@ XDG on unix, `%APPDATA%` and `%LOCALAPPDATA%` on Windows. `<root>` is
 
 ```
 <config>/oku/oku.toml, oku.lock      global list
-<config>/oku/config.toml             sources, caches, trusted keys, store root
+<config>/oku/config.toml             sources, caches, trusted keys, store_root
 <root>/store/<name>-<version>-<hash>/
 <data>/oku/profiles/global/gen-<n>/  current -> gen-<n>
 <data>/oku/profiles/project-<hash>/  same shape, keyed by the project's path
@@ -149,6 +149,7 @@ ripgrep = "github:BurntSushi/ripgrep"
 fd = { ref = "./recipes/fd.toml", version = "10.2.0" }
 rectangle = { ref = "mine/rectangle", when = { os = "darwin" } }
 postgres = { ref = "mine/postgres", service = true }
+caddy = { ref = "mine/caddy", service = true, system = true }
 ```
 
 ```toml
@@ -204,8 +205,15 @@ mixed-OS team.
 | service, user | launchd agent | systemd user unit | scheduled task at logon |
 | service, system | launchd daemon | systemd system unit | Windows service |
 
-Every exposed file is recorded in the generation, so rollback and remove
-reverse it exactly.
+With `system = true` on the list entry the targets are `/Applications`,
+`/Library/Fonts` and `/Library/LaunchDaemons` on macOS, and
+`/usr/local/share/applications`, `/usr/local/share/fonts/oku` and
+`/etc/systemd/system` on Linux.
+
+A generation records each package with its `service` and `system` flags. After
+every change of generation oku computes the wanted files from the active
+generation and makes the ledger match, so rollback and remove reverse an
+exposure exactly (D41).
 
 ## Packages
 
