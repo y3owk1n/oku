@@ -28,9 +28,11 @@ func command(ctx context.Context, spec Spec) (*exec.Cmd, string) {
 	return exec.CommandContext(ctx, sandboxExec, args...), ""
 }
 
-// profile writes the sandbox rules. A later rule overrides an earlier one. Reads
-// of file names and sizes under Home stay allowed, because resolving a path to
-// the store passes through Home. File contents and directory listings do not.
+// profile writes the sandbox rules. The read rule is one deny that leaves out
+// the readable paths, because newer macOS does not let a later allow override
+// it. Reads of file names and sizes under Home stay allowed, because resolving
+// a path to the store passes through Home. File contents and directory listings
+// do not.
 func profile(spec Spec) string {
 	var b strings.Builder
 
@@ -41,11 +43,13 @@ func profile(spec Spec) string {
 	}
 
 	if spec.Home != "" {
-		fmt.Fprintf(&b, "(deny file-read-data (subpath %q))\n", spec.Home)
-	}
+		fmt.Fprintf(&b, "(deny file-read-data (require-all (subpath %q)", spec.Home)
 
-	for _, path := range append(append([]string{}, spec.Readable...), spec.Writable...) {
-		fmt.Fprintf(&b, "(allow file-read* (subpath %q))\n", path)
+		for _, path := range append(append([]string{}, spec.Readable...), spec.Writable...) {
+			fmt.Fprintf(&b, " (require-not (subpath %q))", path)
+		}
+
+		b.WriteString("))\n")
 	}
 
 	b.WriteString("(deny file-write*)\n")
