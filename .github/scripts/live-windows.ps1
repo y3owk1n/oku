@@ -111,13 +111,19 @@ Set-Location $root
 prompt | Out-Null
 Check 'leaving the project takes fd away again' { -not (Get-Command fd -ErrorAction SilentlyContinue) }
 
-# doctor, on a machine where the profile is not on PATH yet, and then where it is.
+# doctor, without the profile on PATH and then with it. The hook above already
+# put it there, so the first check takes it out again.
+$withProfile = $env:PATH
+$env:PATH = (($env:PATH -split ';') | Where-Object { $_ -ne $bin }) -join ';'
 $diagnosis = (& $oku doctor) -join "`n"
 Check 'doctor says that the profile is not on PATH, and exits with 1' {
     ($LASTEXITCODE -eq 1) -and ($diagnosis -match 'is not on PATH') -and
     ($diagnosis -match 'without a sandbox')
 }
-$env:PATH = "$bin;$env:PATH"
+$env:PATH = $withProfile
+Check 'the hook put the profile and oku on PATH' {
+    (($env:PATH -split ';') -contains $bin) -and (($env:PATH -split ';') -contains $root)
+}
 $diagnosis = (& $oku doctor) -join "`n"
 Check 'doctor finds no problem once the profile is on PATH' {
     ($LASTEXITCODE -eq 0) -and ($diagnosis -match 'is on PATH') -and
