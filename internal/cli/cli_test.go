@@ -4118,3 +4118,99 @@ func TestB103DataCommandsPrintJSON(t *testing.T) {
 		t.Fatalf("doctor --json: %v", doctor)
 	}
 }
+
+// patchedManifest builds a program from a source file that a patch step changes
+// first. diff is the text of the patch file.
+func (m machine) patchedManifest(t *testing.T, diff string) string {
+	t.Helper()
+
+	must(
+		t,
+		os.WriteFile(
+			filepath.Join(m.fixtures, "tool.sh"),
+			[]byte("#!/bin/sh\necho original\n"),
+			0o644,
+		),
+	)
+	must(t, os.WriteFile(filepath.Join(m.fixtures, "fix.patch"), []byte(diff), 0o644))
+
+	sum := func(name string) string {
+		data, err := os.ReadFile(filepath.Join(m.fixtures, name))
+		must(t, err)
+
+		digest := sha256.Sum256(data)
+
+		return hex.EncodeToString(digest[:])
+	}
+
+	fetch := func(name string) string {
+		return fmt.Sprintf(
+			"[[build.step]]\nfetch = { url = \"file://%s\", sha256 = %q, to = %q }\n",
+			filepath.Join(m.fixtures, name), sum(name), name,
+		)
+	}
+
+	return m.buildManifest(t, false, "", fetch("tool.sh")+fetch("fix.patch")+
+		"[[build.step]]\npatch = { file = \"fix.patch\" }\n"+
+		"[[build.step]]\nrun = \"cp tool.sh tool && chmod +x tool\"\nshell = \"sh\"\n"+installTool)
+}
+
+func TestB104PatchStepChangesTheSourceAndAHunkThatDoesNotFitFailsTheBuild(t *testing.T) {
+	m := newMachine(t)
+
+	ref := m.patchedManifest(t, "diff --git a/tool.sh b/tool.sh\n--- a/tool.sh\n+++ b/tool.sh\n"+
+		"@@ -1,2 +1,2 @@\n #!/bin/sh\n-echo original\n+echo patched\n")
+
+	_, err := m.run(t, "", "add", ref, "--yes")
+	must(t, err)
+
+	if got := m.toolOutput(t); got != "patched" {
+		t.Fatalf("the built program printed %q, so the patch was not applied", got)
+	}
+
+	other := newMachine(t)
+
+	ref = other.patchedManifest(t, "diff --git a/tool.sh b/tool.sh\n--- a/tool.sh\n+++ b/tool.sh\n"+
+		"@@ -1,2 +1,2 @@\n #!/bin/sh\n-echo something else\n+echo patched\n")
+
+	_, err = other.run(t, "", "add", ref, "--yes")
+	if err == nil || !strings.Contains(err.Error(), "does not fit tool.sh") {
+		t.Fatalf("want a failure that names the file the patch does not fit, got %v", err)
+	}
+
+	if len(other.storeEntries(t)) != 0 {
+		t.Fatal("a build with a failed patch left something in the store")
+	}
+
+	// A plain diff keeps its a/ and b/ prefixes, as it does for "patch -p1".
+	plain := newMachine(t)
+	ref = plain.patchedManifest(t, "--- a/tool.sh\n+++ b/tool.sh\n"+
+		"@@ -1,2 +1,2 @@\n #!/bin/sh\n-echo original\n+echo patched\n")
+
+	_, err = plain.run(t, "", "add", ref, "--yes")
+	if err == nil || !strings.Contains(err.Error(), "strip removes them") {
+		t.Fatalf("want a failure that suggests strip, got %v", err)
+	}
+
+	body, err := os.ReadFile(ref)
+	must(t, err)
+	must(t, os.WriteFile(ref, bytes.Replace(
+		body,
+		[]byte(`patch = { file = "fix.patch" }`),
+		[]byte(`patch = { file = "fix.patch", strip = 1 }`),
+		1,
+	), 0o644))
+
+	_, err = plain.run(t, "", "add", ref, "--yes")
+	must(t, err)
+
+	if got := plain.toolOutput(t); got != "patched" {
+		t.Fatalf("with strip = 1 the built program printed %q", got)
+	}
+
+	report, err := other.run(t, "", "manifest", "lint", other.buildManifest(t, false, "",
+		"[[build.step]]\npatch = { strip = 1 }\n"+installTool))
+	if err == nil || !strings.Contains(report, "a patch step needs file") {
+		t.Fatalf("lint accepted a patch step without a file:\n%s", report)
+	}
+}

@@ -164,6 +164,10 @@ func lintStep(i int, s Step) []string {
 		}
 	}
 
+	if s.Patch != nil && s.Patch.File == "" {
+		found = append(found, fmt.Sprintf("build.step[%d]: a patch step needs file", i))
+	}
+
 	return found
 }
 

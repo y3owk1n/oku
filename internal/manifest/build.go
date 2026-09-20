@@ -37,8 +37,7 @@ type Step struct {
 	Copy    *Copy    `toml:"copy"`
 	// Vendor downloads a language's packages: "cargo", "go", "npm" or "pip".
 	Vendor *string `toml:"vendor"`
-	// Patch is part of the schema. oku does not run it yet.
-	Patch map[string]any `toml:"patch"`
+	Patch  *Patch  `toml:"patch"`
 
 	When    platform.Selector `toml:"when"`
 	Shell   string            `toml:"shell"`
@@ -64,6 +63,15 @@ type Fetch struct {
 	URL    string `toml:"url"`
 	SHA256 string `toml:"sha256"`
 	To     string `toml:"to"`
+}
+
+// Patch applies the unified diff File, which is in the source directory, to the
+// files of the source directory. Strip removes that many leading directories
+// from the file names in the diff. A git diff needs none, because its a/ and b/
+// prefixes are already left out.
+type Patch struct {
+	File  string `toml:"file"`
+	Strip int    `toml:"strip"`
 }
 
 // Extract unpacks the archive File into the directory To. Both are relative to
