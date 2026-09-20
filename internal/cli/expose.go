@@ -376,7 +376,7 @@ func applySystem(cmd *cobra.Command, opts Options, action string, change systemC
 	case "place":
 		return expose.Place(item)
 	case "remove":
-		if err := os.RemoveAll(item.Target); err != nil {
+		if err := expose.Remove(item); err != nil {
 			return err
 		}
 
