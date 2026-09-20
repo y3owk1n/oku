@@ -31,6 +31,9 @@ type Item struct {
 	// Name and Enabled describe a service.
 	Name    string `toml:"name,omitempty"`
 	Enabled bool   `toml:"enabled,omitempty"`
+	// System reports that Target is in system scope, so writing and removing it
+	// needs administrator rights.
+	System bool `toml:"system,omitempty"`
 }
 
 // Handler places and removes items of one kind. Apps and fonts are files, and
@@ -104,23 +107,33 @@ func UserDirs(home, dataHome string) Dirs {
 	}
 }
 
+// SystemDirs returns the directories this OS reads apps and fonts from for
+// every user. Only root can write to them.
+func SystemDirs() Dirs {
+	if runtime.GOOS == "darwin" {
+		return Dirs{Apps: "/Applications", Fonts: "/Library/Fonts"}
+	}
+
+	return Dirs{Apps: "/usr/local/share/applications", Fonts: "/usr/local/share/fonts/oku"}
+}
+
 // Wanted lists what the package at storePath exposes. On macOS an app is a
 // bundle under apps/. On Linux it is a launcher from the package's meta file,
 // written as a desktop entry.
-func Wanted(name, storePath string, launchers []Launcher, dirs Dirs) []Item {
+func Wanted(name, storePath string, launchers []Launcher, dirs Dirs, system bool) []Item {
 	var items []Item
 
 	if runtime.GOOS == "darwin" {
 		for _, bundle := range children(filepath.Join(storePath, "apps")) {
 			items = append(items, Item{
-				Kind: "app", Package: name, Source: bundle,
+				Kind: "app", Package: name, Source: bundle, System: system,
 				Target: filepath.Join(dirs.Apps, filepath.Base(bundle)),
 			})
 		}
 	} else {
 		for _, launcher := range launchers {
 			items = append(items, Item{
-				Kind: "app", Package: name,
+				Kind: "app", Package: name, System: system,
 				Source: desktopEntry(launcher, storePath),
 				Target: filepath.Join(dirs.Apps, "oku-"+slug(launcher.Name)+".desktop"),
 			})
@@ -129,7 +142,7 @@ func Wanted(name, storePath string, launchers []Launcher, dirs Dirs) []Item {
 
 	for _, font := range children(filepath.Join(storePath, "fonts")) {
 		items = append(items, Item{
-			Kind: "font", Package: name, Source: font,
+			Kind: "font", Package: name, Source: font, System: system,
 			Target: filepath.Join(dirs.Fonts, filepath.Base(font)),
 		})
 	}
@@ -169,7 +182,7 @@ func (l *Ledger) Sync(wanted []Item, handlers map[string]Handler) error {
 			return err
 		}
 
-		placeItem := place
+		placeItem := Place
 		if custom := handlers[want.Kind].Place; custom != nil {
 			placeItem = custom
 		}
@@ -202,7 +215,8 @@ func (l *Ledger) remove(item Item, handler Handler) error {
 	return l.write()
 }
 
-func place(item Item) error {
+// Place copies an app or a font to its target.
+func Place(item Item) error {
 	if err := os.MkdirAll(filepath.Dir(item.Target), 0o755); err != nil {
 		return err
 	}

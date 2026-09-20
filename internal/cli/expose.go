@@ -1,14 +1,28 @@
 package cli
 
 import (
+	"bufio"
+	"context"
+	"encoding/json"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
+
+	"github.com/spf13/cobra"
 
 	"github.com/y3owk1n/oku/internal/expose"
+	"github.com/y3owk1n/oku/internal/profile"
+	"github.com/y3owk1n/oku/internal/service"
 	"github.com/y3owk1n/oku/internal/store"
+)
+
+const (
+	systemFlag  = "system"
+	systemUsage = "apply system-scope apps, fonts and services, which needs administrator rights"
+	// systemApply is the hidden command that oku runs as root for one item.
+	systemApply = "system-apply"
 )
 
 // userDirs returns where this OS reads per-user apps and fonts from.
@@ -22,18 +36,23 @@ func (e env) userDirs() (expose.Dirs, error) {
 	return expose.UserDirs(home, filepath.Dir(e.data)), nil
 }
 
-// syncExposed makes the apps, fonts and services on this machine match the active
-// generation of the global profile. Project profiles expose nothing, because an
-// app or a font is visible to the whole user account, not to one directory.
-func (e env) syncExposed(opts Options, notice io.Writer) error {
-	pkgs, err := e.profile().Packages()
-	if err != nil {
-		return err
+func systemDirs(opts Options) expose.Dirs {
+	if opts.SystemDirs != nil {
+		return *opts.SystemDirs
 	}
 
+	return expose.SystemDirs()
+}
+
+// wantedItems lists the apps, fonts and services of pkgs, with the definitions
+// of the services by name.
+func (e env) wantedItems(
+	opts Options,
+	pkgs []profile.Package,
+) ([]expose.Item, map[string]service.Definition, error) {
 	dirs, err := e.userDirs()
 	if err != nil {
-		return err
+		return nil, nil, err
 	}
 
 	var wanted []expose.Item
@@ -49,20 +68,40 @@ func (e env) syncExposed(opts Options, notice io.Writer) error {
 			launchers[i] = expose.Launcher(app)
 		}
 
-		wanted = append(wanted, expose.Wanted(pkg.Name, pkg.StorePath, launchers, dirs)...)
+		into := dirs
+		if pkg.System {
+			into = systemDirs(opts)
+		}
+
+		wanted = append(
+			wanted,
+			expose.Wanted(pkg.Name, pkg.StorePath, launchers, into, pkg.System)...,
+		)
 	}
 
-	manager, err := e.services(opts)
+	services, defs, err := e.serviceItems(opts, pkgs)
+
+	return append(wanted, services...), defs, err
+}
+
+// syncExposed makes the apps, fonts and services on this machine match the active
+// generation of the global profile. Project profiles expose nothing, because an
+// app or a font is visible to the whole user account, not to one directory.
+//
+// Items in system scope change only with system set, after oku has listed them
+// and the user has agreed. Otherwise oku leaves them as they are and says so.
+func (e env) syncExposed(cmd *cobra.Command, opts Options, system bool) error {
+	notice := cmd.ErrOrStderr()
+
+	pkgs, err := e.profile().Packages()
 	if err != nil {
 		return err
 	}
 
-	services, defs, err := e.serviceItems(manager, pkgs)
+	wanted, defs, err := e.wantedItems(opts, pkgs)
 	if err != nil {
 		return err
 	}
-
-	wanted = append(wanted, services...)
 
 	if e.project != "" {
 		if len(wanted) > 0 {
@@ -82,7 +121,31 @@ func (e env) syncExposed(opts Options, notice io.Writer) error {
 
 	before := slices.Clone(ledger.Items)
 
-	handlers := map[string]expose.Handler{"service": serviceHandler(manager, defs)}
+	if pending := pendingSystem(before, wanted); len(pending) > 0 {
+		if system {
+			fmt.Fprintln(notice, "this changes, with administrator rights:")
+		} else {
+			fmt.Fprintln(notice, "left unchanged, because system scope needs administrator rights:")
+		}
+
+		fmt.Fprint(notice, strings.Join(pending, ""))
+
+		if system {
+			system = confirm(bufio.NewReader(cmd.InOrStdin()), notice, "continue? [y/N] ")
+		}
+
+		if !system {
+			fmt.Fprintln(notice, `run "oku sync --system" to apply them`)
+
+			wanted = keepSystem(before, wanted)
+		}
+	}
+
+	handlers, err := e.handlers(cmd.Context(), opts, defs)
+	if err != nil {
+		return err
+	}
+
 	if err := ledger.Sync(wanted, handlers); err != nil {
 		return err
 	}
@@ -96,6 +159,8 @@ func (e env) syncExposed(opts Options, notice io.Writer) error {
 		switch {
 		case item.Kind != "service":
 			fmt.Fprintf(notice, "exposed %s %s\n", item.Kind, item.Target)
+		case item.Enabled && item.System:
+			fmt.Fprintf(notice, "service %s is running and starts at boot\n", item.Name)
 		case item.Enabled:
 			fmt.Fprintf(notice, "service %s is running and starts at login\n", item.Name)
 		default:
@@ -104,4 +169,192 @@ func (e env) syncExposed(opts Options, notice io.Writer) error {
 	}
 
 	return nil
+}
+
+// pendingSystem describes the system-scope items that differ between have and
+// wanted, one line each.
+func pendingSystem(have, wanted []expose.Item) []string {
+	var lines []string
+
+	for _, item := range have {
+		if item.System && !slices.Contains(wanted, item) {
+			lines = append(lines, fmt.Sprintf("  remove %-8s %s\n", item.Kind, item.Target))
+		}
+	}
+
+	for _, item := range wanted {
+		if item.System && !slices.Contains(have, item) {
+			lines = append(lines, fmt.Sprintf("  write  %-8s %s\n", item.Kind, item.Target))
+		}
+	}
+
+	return lines
+}
+
+// keepSystem returns wanted with its system-scope items replaced by the ones in
+// have, so a sync without administrator rights leaves system scope alone.
+func keepSystem(have, wanted []expose.Item) []expose.Item {
+	kept := slices.DeleteFunc(
+		slices.Clone(wanted),
+		func(item expose.Item) bool { return item.System },
+	)
+
+	for _, item := range have {
+		if item.System {
+			kept = append(kept, item)
+		}
+	}
+
+	return kept
+}
+
+// systemChange is what oku passes to itself when it runs as root.
+type systemChange struct {
+	Item       expose.Item
+	Definition service.Definition
+}
+
+// handlers place and remove items. This process handles an item in user scope,
+// and runs "oku system-apply" as root for an item in system scope.
+func (e env) handlers(
+	ctx context.Context,
+	opts Options,
+	defs map[string]service.Definition,
+) (map[string]expose.Handler, error) {
+	manager, err := e.services(opts)
+	if err != nil {
+		return nil, err
+	}
+
+	elevated := func(action string, item expose.Item) error {
+		return e.applyAsRoot(ctx, opts, action, systemChange{item, defs[item.Name]})
+	}
+
+	handlers := map[string]expose.Handler{}
+
+	for _, kind := range []string{"app", "font", "service"} {
+		local := expose.Handler{
+			Place:  expose.Place,
+			Remove: func(item expose.Item) error { return os.RemoveAll(item.Target) },
+		}
+		if kind == "service" {
+			local = serviceHandler(manager, defs)
+		}
+
+		handlers[kind] = expose.Handler{
+			Place: func(item expose.Item) error {
+				if item.System {
+					return elevated("place", item)
+				}
+
+				return local.Place(item)
+			},
+			Remove: func(item expose.Item) error {
+				if item.System {
+					return elevated("remove", item)
+				}
+
+				return local.Remove(item)
+			},
+		}
+	}
+
+	return handlers, nil
+}
+
+func (e env) applyAsRoot(
+	ctx context.Context,
+	opts Options,
+	action string,
+	change systemChange,
+) error {
+	payload, err := json.Marshal(change)
+	if err != nil {
+		return err
+	}
+
+	executable := opts.Executable
+	if executable == "" {
+		if executable, err = os.Executable(); err != nil {
+			return err
+		}
+	}
+
+	return elevate(ctx, opts, []string{executable, systemApply, action, string(payload)})
+}
+
+// newSystemApplyCmd is the command that oku runs as root. It places or removes
+// one item, and refuses a target outside the directories system scope uses.
+func newSystemApplyCmd(opts Options) *cobra.Command {
+	return &cobra.Command{
+		Use:    systemApply + " <place|remove|start|stop|logs> <change>",
+		Hidden: true,
+		Args:   cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			var change systemChange
+			if err := json.Unmarshal([]byte(args[1]), &change); err != nil {
+				return fmt.Errorf("read the change: %w", err)
+			}
+
+			return applySystem(cmd, opts, args[0], change)
+		},
+	}
+}
+
+func applySystem(cmd *cobra.Command, opts Options, action string, change systemChange) error {
+	ctx := cmd.Context()
+	item, d := change.Item, change.Definition
+
+	if item.Kind == "service" {
+		manager := systemServices(opts)
+		d.Name = item.Name
+
+		if manager.File(d) != item.Target {
+			return fmt.Errorf("%s is not where this OS keeps the service %s", item.Target, d.Name)
+		}
+
+		switch action {
+		case "place":
+			return manager.Install(ctx, d, item.Enabled)
+		case "remove":
+			return manager.Remove(ctx, d)
+		case "start":
+			return manager.Start(ctx, d)
+		case "stop":
+			return manager.Stop(ctx, d)
+		case "logs":
+			text, err := manager.Logs(ctx, d, 50)
+			if err == nil {
+				fmt.Fprintln(cmd.OutOrStdout(), text)
+			}
+
+			return err
+		}
+
+		return fmt.Errorf("unknown action %s", action)
+	}
+
+	dirs := systemDirs(opts)
+	if dir := filepath.Dir(item.Target); dir != dirs.Apps && dir != dirs.Fonts {
+		return fmt.Errorf("%s is outside %s and %s", item.Target, dirs.Apps, dirs.Fonts)
+	}
+
+	switch action {
+	case "place":
+		return expose.Place(item)
+	case "remove":
+		if err := os.RemoveAll(item.Target); err != nil {
+			return err
+		}
+
+		// On Linux the fonts are in a directory that oku created. Remove fails
+		// while another font is in it.
+		if filepath.Base(dirs.Fonts) == "oku" {
+			os.Remove(dirs.Fonts)
+		}
+
+		return nil
+	}
+
+	return fmt.Errorf("unknown action %s", action)
 }

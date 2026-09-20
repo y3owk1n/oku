@@ -99,6 +99,18 @@ One form is not editable by oku. A package written as its own table,
 `[packages.fd]`, makes `oku add fd` and `oku remove fd` stop and ask you to
 edit it by hand. `oku sync` reads that form.
 
+### System scope
+
+`system = true` puts the package's apps, fonts and services in
+[system scope](system-scope.md), for every user of the machine:
+
+```toml
+postgres = { ref = "github:you/recipes#postgres", service = true, system = true }
+```
+
+A plain `oku sync` skips those files and lists them. `oku sync --system` applies
+them with `sudo`.
+
 ## oku.lock
 
 ```toml

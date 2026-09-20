@@ -56,6 +56,8 @@ type request struct {
 	keepVersion bool
 	// service enables the package's services.
 	service bool
+	// system puts the package's apps, fonts and services in system scope.
+	system bool
 	// fromSource builds even when a prebuilt artifact fits the host.
 	fromSource bool
 	// approve decides whether a manifest may run its build commands.
@@ -236,6 +238,7 @@ func (e env) install(ctx context.Context, opts Options, req request) (installed,
 			Closure:   deps.closure,
 			Env:       env,
 			Service:   req.service,
+			System:    req.system,
 		},
 		lock: lock.Package{
 			Name:           m.Package.Name,

@@ -135,7 +135,7 @@ func elevate(ctx context.Context, opts Options, argv []string) error {
 	}
 
 	command := exec.CommandContext(ctx, argv[0], argv[1:]...)
-	command.Stdin, command.Stdout, command.Stderr = os.Stdin, os.Stderr, os.Stderr
+	command.Stdin, command.Stdout, command.Stderr = os.Stdin, os.Stdout, os.Stderr
 
 	if err := command.Run(); err != nil {
 		return fmt.Errorf("%s: %w", strings.Join(argv, " "), err)

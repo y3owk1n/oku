@@ -20,6 +20,9 @@ import (
 type launchd struct {
 	agents  string
 	holding string
+	// domain is the launchd domain, "gui/<uid>" for a user and "system" for the
+	// whole machine.
+	domain string
 }
 
 // New returns the service manager for this OS. home is the user's home
@@ -28,10 +31,22 @@ func New(home, dataDir string) Manager {
 	return &launchd{
 		agents:  filepath.Join(home, "Library", "LaunchAgents"),
 		holding: filepath.Join(dataDir, "services"),
+		domain:  "gui/" + strconv.Itoa(os.Getuid()),
 	}
 }
 
-func (l *launchd) domain() string { return "gui/" + strconv.Itoa(os.Getuid()) }
+// SystemLogDir is where a system service's output goes.
+const SystemLogDir = "/Library/Logs/oku"
+
+// NewSystem returns the manager for services that run as root for the whole
+// machine. Everything but Status and Logs needs root.
+func NewSystem() Manager {
+	return &launchd{
+		agents:  "/Library/LaunchDaemons",
+		holding: "/Library/Application Support/oku/services",
+		domain:  "system",
+	}
+}
 
 func (l *launchd) File(d Definition) string {
 	return filepath.Join(l.agents, d.Label()+".plist")
@@ -80,6 +95,18 @@ func (l *launchd) Remove(ctx context.Context, d Definition) error {
 		}
 	}
 
+	if l.domain != "system" {
+		return nil
+	}
+
+	// A user service's log and holding directory are inside oku's data directory.
+	// In system scope they are not, so oku deletes them here. Remove fails on a
+	// directory that another service still uses, which is what oku wants.
+	os.Remove(filepath.Join(SystemLogDir, d.Name+".log"))
+	os.Remove(SystemLogDir)
+	os.Remove(l.holding)
+	os.Remove(filepath.Dir(l.holding))
+
 	return nil
 }
 
@@ -111,7 +138,7 @@ func (l *launchd) Status(ctx context.Context, d Definition) (Status, error) {
 	status.Enabled = enabledErr == nil
 	status.Installed = status.Enabled || heldErr == nil
 
-	out, err := exec.CommandContext(ctx, "/bin/launchctl", "print", l.domain()+"/"+d.Label()).
+	out, err := exec.CommandContext(ctx, "/bin/launchctl", "print", l.domain+"/"+d.Label()).
 		Output()
 	if err != nil {
 		return status, nil
@@ -145,7 +172,7 @@ func (l *launchd) Logs(_ context.Context, d Definition, lines int) (string, erro
 }
 
 func (l *launchd) bootstrap(ctx context.Context, path string) error {
-	args := []string{"bootstrap", l.domain(), path}
+	args := []string{"bootstrap", l.domain, path}
 
 	if out, err := exec.CommandContext(ctx, "/bin/launchctl", args...).
 		CombinedOutput(); err != nil {
@@ -158,7 +185,7 @@ func (l *launchd) bootstrap(ctx context.Context, path string) error {
 // bootout unloads the service. launchd reports an error for a service that is
 // not loaded, which is not a failure here.
 func (l *launchd) bootout(ctx context.Context, d Definition) error {
-	args := []string{"bootout", l.domain() + "/" + d.Label()}
+	args := []string{"bootout", l.domain + "/" + d.Label()}
 
 	out, err := exec.CommandContext(ctx, "/bin/launchctl", args...).CombinedOutput()
 	if err != nil && !bytes.Contains(out, []byte("No such process")) &&

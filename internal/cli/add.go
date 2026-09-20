@@ -19,6 +19,7 @@ func newAddCmd(opts Options) *cobra.Command {
 		flags      buildFlags
 		fromSource bool
 		enable     bool
+		system     bool
 	)
 
 	cmd := &cobra.Command{
@@ -34,7 +35,7 @@ func newAddCmd(opts Options) *cobra.Command {
   alias/name                          a package in a source, see "oku source"`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runAdd(cmd, opts, args[0], &flags, fromSource, enable)
+			return runAdd(cmd, opts, args[0], &flags, fromSource, enable, system)
 		},
 	}
 
@@ -43,6 +44,7 @@ func newAddCmd(opts Options) *cobra.Command {
 		BoolVar(&fromSource, "from-source", false, "build from source even when a prebuilt download fits")
 	cmd.Flags().
 		BoolVar(&enable, "service", false, "run the package's services now and at every login")
+	cmd.Flags().BoolVar(&system, systemFlag, false, systemUsage)
 
 	return cmd
 }
@@ -52,7 +54,7 @@ func runAdd(
 	opts Options,
 	arg string,
 	flags *buildFlags,
-	fromSource, enable bool,
+	fromSource, enable, system bool,
 ) error {
 	e, err := scopedEnv(cmd, opts)
 	if err != nil {
@@ -95,6 +97,7 @@ func runAdd(
 		previous:   previous,
 		fromSource: fromSource,
 		service:    enable,
+		system:     system,
 		approve:    e.approver(cmd, opts, flags),
 		log:        buildLog(cmd, flags),
 	})
@@ -114,14 +117,14 @@ func runAdd(
 		return err
 	}
 
-	if err := e.syncExposed(opts, cmd.ErrOrStderr()); err != nil {
+	if err := e.syncExposed(cmd, opts, system); err != nil {
 		return err
 	}
 
 	err = list.Set(
 		e.listPath(),
 		got.lock.Name,
-		list.Entry{Ref: r.String(), Version: r.Version, Service: enable},
+		list.Entry{Ref: r.String(), Version: r.Version, Service: enable, System: system},
 	)
 	if err != nil {
 		return err

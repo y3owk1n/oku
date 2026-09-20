@@ -41,6 +41,9 @@ type Package struct {
 	// Service reports that the list enables the package's services. Rollback
 	// restores it with the generation.
 	Service bool `toml:"service,omitempty"`
+	// System reports that the list puts the package's apps, fonts and services
+	// in system scope.
+	System bool `toml:"system,omitempty"`
 }
 
 type state struct {
@@ -149,7 +152,7 @@ func (p *Profile) Replace(pkgs []Package, lockData []byte) (bool, error) {
 	same := func(a, b Package) bool {
 		return a.Name == b.Name && a.Version == b.Version && a.Ref == b.Ref &&
 			a.StorePath == b.StorePath && slices.Equal(a.Closure, b.Closure) &&
-			maps.Equal(a.Env, b.Env) && a.Service == b.Service
+			maps.Equal(a.Env, b.Env) && a.Service == b.Service && a.System == b.System
 	}
 
 	if slices.EqualFunc(have, pkgs, same) {

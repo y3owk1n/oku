@@ -33,6 +33,15 @@ func (e env) services(opts Options) (service.Manager, error) {
 	return service.New(home, e.data), nil
 }
 
+// systemServices returns the manager for services in system scope.
+func systemServices(opts Options) service.Manager {
+	if opts.Services != nil {
+		return opts.Services
+	}
+
+	return service.NewSystem()
+}
+
 // definition turns a manifest's service into what the manager runs. Paths and
 // {{prefix}} resolve inside the package's store path.
 func (e env) definition(pkg profile.Package, svc manifest.Service) (service.Definition, error) {
@@ -42,6 +51,10 @@ func (e env) definition(pkg profile.Package, svc manifest.Service) (service.Defi
 		Restart: svc.Restart,
 		Env:     map[string]string{},
 		LogFile: filepath.Join(e.data, "logs", svc.Name+".log"),
+	}
+
+	if pkg.System {
+		d.LogFile = filepath.Join(service.SystemLogDir, svc.Name+".log")
 	}
 
 	vars := map[string]string{"prefix": pkg.StorePath, "version": pkg.Version}
@@ -70,9 +83,14 @@ func (e env) definition(pkg profile.Package, svc manifest.Service) (service.Defi
 // serviceItems lists the services of pkgs as ledger items, and returns their
 // definitions by name for the handler.
 func (e env) serviceItems(
-	manager service.Manager,
+	opts Options,
 	pkgs []profile.Package,
 ) ([]expose.Item, map[string]service.Definition, error) {
+	user, err := e.services(opts)
+	if err != nil {
+		return nil, nil, err
+	}
+
 	var items []expose.Item
 
 	defs := map[string]service.Definition{}
@@ -98,10 +116,15 @@ func (e env) serviceItems(
 				)
 			}
 
+			manager := user
+			if pkg.System {
+				manager = systemServices(opts)
+			}
+
 			defs[d.Name] = d
 			items = append(items, expose.Item{
 				Kind: "service", Package: pkg.Name, Source: d.Program,
-				Target: manager.File(d), Name: d.Name, Enabled: pkg.Service,
+				Target: manager.File(d), Name: d.Name, Enabled: pkg.Service, System: pkg.System,
 			})
 		}
 	}
@@ -150,45 +173,54 @@ start and stop act on this login session only.`,
 		{"status", "Show whether a service is enabled and running"},
 		{"logs", "Show the last lines a service printed"},
 	} {
-		cmd.AddCommand(&cobra.Command{
+		sub := &cobra.Command{
 			Use:   action.name + " <name>",
 			Short: action.short,
 			Args:  cobra.ExactArgs(1),
 			RunE: func(cmd *cobra.Command, args []string) error {
 				return controlService(cmd, opts, action.name, args[0])
 			},
-		})
+		}
+
+		if action.name != "status" {
+			sub.Flags().
+				Bool(systemFlag, false, "control a service in system scope, which needs administrator rights")
+		}
+
+		cmd.AddCommand(sub)
 	}
 
 	return cmd
 }
 
 // globalServices returns the services of the global profile's active generation.
-func globalServices(
-	opts Options,
-) (env, service.Manager, map[string]service.Definition, []expose.Item, error) {
+func globalServices(opts Options) (env, map[string]service.Definition, []expose.Item, error) {
 	e, err := loadEnv()
 	if err != nil {
-		return e, nil, nil, nil, err
-	}
-
-	manager, err := e.services(opts)
-	if err != nil {
-		return e, nil, nil, nil, err
+		return e, nil, nil, err
 	}
 
 	pkgs, err := e.globalProfile().Packages()
 	if err != nil {
-		return e, nil, nil, nil, err
+		return e, nil, nil, err
 	}
 
-	items, defs, err := e.serviceItems(manager, pkgs)
+	items, defs, err := e.serviceItems(opts, pkgs)
 
-	return e, manager, defs, items, err
+	return e, defs, items, err
+}
+
+// managerFor returns the manager that runs item.
+func (e env) managerFor(opts Options, item expose.Item) (service.Manager, error) {
+	if item.System {
+		return systemServices(opts), nil
+	}
+
+	return e.services(opts)
 }
 
 func listServices(cmd *cobra.Command, opts Options) error {
-	_, manager, defs, items, err := globalServices(opts)
+	e, defs, items, err := globalServices(opts)
 	if err != nil {
 		return err
 	}
@@ -202,25 +234,46 @@ func listServices(cmd *cobra.Command, opts Options) error {
 	w := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 0, 2, ' ', 0)
 
 	for _, item := range items {
+		manager, err := e.managerFor(opts, item)
+		if err != nil {
+			return err
+		}
+
 		status, err := manager.Status(cmd.Context(), defs[item.Name])
 		if err != nil {
 			return err
 		}
 
-		fmt.Fprintf(w, "%s\t%s\t%s\n", item.Name, item.Package, describeStatus(status))
+		fmt.Fprintf(w, "%s\t%s\t%s\n", item.Name, item.Package, describeStatus(status, item.System))
 	}
 
 	return w.Flush()
 }
 
-func describeStatus(status service.Status) string {
+// rootManager starts and stops a system service through "oku system-apply".
+type rootManager struct {
+	service.Manager
+	run func(action string) error
+}
+
+func (m rootManager) Start(context.Context, service.Definition) error { return m.run("start") }
+func (m rootManager) Stop(context.Context, service.Definition) error  { return m.run("stop") }
+
+func describeStatus(status service.Status, system bool) string {
 	parts := []string{"stopped"}
 	if status.Running {
 		parts = []string{"running"}
 	}
 
-	if status.Enabled {
+	switch {
+	case status.Enabled && system:
+		parts = append(parts, "starts at boot")
+	case status.Enabled:
 		parts = append(parts, "starts at login")
+	}
+
+	if system {
+		parts = append(parts, "system scope")
 	}
 
 	if status.Detail != "" {
@@ -231,7 +284,7 @@ func describeStatus(status service.Status) string {
 }
 
 func controlService(cmd *cobra.Command, opts Options, action, name string) error {
-	_, manager, defs, _, err := globalServices(opts)
+	e, defs, items, err := globalServices(opts)
 	if err != nil {
 		return err
 	}
@@ -246,6 +299,38 @@ func controlService(cmd *cobra.Command, opts Options, action, name string) error
 
 	ctx, out := cmd.Context(), cmd.OutOrStdout()
 
+	item := items[slices.IndexFunc(items, func(item expose.Item) bool { return item.Name == name })]
+
+	manager, err := e.managerFor(opts, item)
+	if err != nil {
+		return err
+	}
+
+	system, _ := cmd.Flags().GetBool(systemFlag)
+
+	// Reading a system service's log needs root on Linux, where it is in the
+	// system journal, so logs takes the flag too and works without it on macOS.
+	if item.System && action == "logs" && system {
+		return e.applyAsRoot(ctx, opts, "logs", systemChange{item, d})
+	}
+
+	if item.System && action != "status" && action != "logs" {
+		if !system {
+			return fmt.Errorf(
+				"%s runs in system scope, so %s needs administrator rights: run \"oku service %s %s --system\"",
+				name,
+				action,
+				action,
+				name,
+			)
+		}
+
+		// Only root can control a system service, so oku runs itself as root.
+		manager = rootManager{Manager: manager, run: func(action string) error {
+			return e.applyAsRoot(ctx, opts, action, systemChange{item, d})
+		}}
+	}
+
 	switch action {
 	case "start":
 		err = manager.Start(ctx, d)
@@ -259,6 +344,12 @@ func controlService(cmd *cobra.Command, opts Options, action, name string) error
 		var text string
 		if text, err = manager.Logs(ctx, d, 50); err == nil {
 			fmt.Fprintln(out, text)
+		} else if item.System {
+			err = fmt.Errorf(
+				"%w\nif that is a permission error, run \"oku service logs %s --system\"",
+				err,
+				name,
+			)
 		}
 
 		return err
@@ -273,7 +364,7 @@ func controlService(cmd *cobra.Command, opts Options, action, name string) error
 		return err
 	}
 
-	fmt.Fprintf(out, "%s: %s\n", name, describeStatus(status))
+	fmt.Fprintf(out, "%s: %s\n", name, describeStatus(status, item.System))
 
 	return nil
 }

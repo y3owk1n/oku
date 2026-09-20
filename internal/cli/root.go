@@ -12,6 +12,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/y3owk1n/oku/internal/dirs"
+	"github.com/y3owk1n/oku/internal/expose"
 	"github.com/y3owk1n/oku/internal/infer"
 	"github.com/y3owk1n/oku/internal/list"
 	"github.com/y3owk1n/oku/internal/lock"
@@ -38,6 +39,8 @@ type Options struct {
 	Services service.Manager
 	// SystemRoot replaces the shared store root that "oku setup --system" creates.
 	SystemRoot string
+	// SystemDirs replaces the directories for apps and fonts in system scope.
+	SystemDirs *expose.Dirs
 	// Elevate replaces how oku runs a command with administrator rights. Tests
 	// set it.
 	Elevate func(ctx context.Context, argv []string) error
@@ -82,6 +85,7 @@ func NewRootCmd(opts Options) *cobra.Command {
 		newWhyCmd(opts),
 		newInfoCmd(opts),
 		newSetupCmd(opts),
+		newSystemApplyCmd(opts),
 		newSelfCmd(opts),
 	)
 

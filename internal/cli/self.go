@@ -8,12 +8,14 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 
 	"github.com/spf13/cobra"
 
 	"github.com/y3owk1n/oku/internal/expose"
+	"github.com/y3owk1n/oku/internal/service"
 )
 
 // listFiles are what --keep-list leaves in the config directory.
@@ -82,10 +84,21 @@ func runUninstall(
 		fmt.Fprintf(out, "  shared store root   %s (needs administrator rights)\n", e.root)
 	}
 
-	if ledger, err := expose.ReadLedger(e.data); err == nil {
-		for _, item := range ledger.Items {
-			fmt.Fprintf(out, "  %-19s %s\n", item.Kind, item.Target)
+	ledger, err := expose.ReadLedger(e.data)
+	if err != nil {
+		return err
+	}
+
+	needsRoot := e.root != e.data
+
+	for _, item := range ledger.Items {
+		note := ""
+		if item.System {
+			needsRoot = true
+			note = " (needs administrator rights)"
 		}
+
+		fmt.Fprintf(out, "  %-19s %s%s\n", item.Kind, item.Target, note)
 	}
 
 	if len(kept) > 0 {
@@ -99,27 +112,23 @@ func runUninstall(
 	}
 
 	// --yes alone never elevates.
-	if e.root != e.data && !yes {
-		system = confirm(
-			in,
-			out,
-			fmt.Sprintf("remove %s with administrator rights? [y/N] ", e.root),
-		)
+	if needsRoot && !yes {
+		system = confirm(in, out, "remove what needs administrator rights? [y/N] ")
 	}
 
 	// Files outside oku's directories go first, while the ledger still exists.
-	ledger, err := expose.ReadLedger(e.data)
+	handlers, err := e.handlers(cmd.Context(), opts, nil)
 	if err != nil {
 		return err
 	}
 
-	manager, err := e.services(opts)
-	if err != nil {
-		return err
+	// Without administrator rights the items in system scope stay.
+	var stay []expose.Item
+	if !system {
+		stay = keepSystem(ledger.Items, nil)
 	}
 
-	handlers := map[string]expose.Handler{"service": serviceHandler(manager, nil)}
-	if err := ledger.RemoveAll(handlers); err != nil {
+	if err := ledger.Sync(stay, handlers); err != nil {
 		return err
 	}
 
@@ -130,7 +139,7 @@ func runUninstall(
 		}
 	}
 
-	left, err := removeSharedRoot(cmd.Context(), opts, e, system)
+	emptyRoot, err := removeSharedRoot(cmd.Context(), opts, e, system)
 	if err != nil {
 		return err
 	}
@@ -145,8 +154,31 @@ func runUninstall(
 
 	fmt.Fprintln(out, "oku is uninstalled")
 
-	if left != "" {
-		fmt.Fprintf(out, "left in place, empty:\n  %s\nremove it with: sudo rmdir %s\n", left, left)
+	if emptyRoot != "" {
+		fmt.Fprintf(
+			out,
+			"left in place, empty:\n  %s\nremove it with: sudo rmdir %s\n",
+			emptyRoot,
+			emptyRoot,
+		)
+	}
+
+	if len(stay) > 0 {
+		fmt.Fprintln(out, "left in place, because removing them needs administrator rights:")
+
+		for _, item := range stay {
+			fmt.Fprintf(out, "  %-8s %s\n", item.Kind, item.Target)
+		}
+
+		fmt.Fprintln(out, "remove them with:")
+
+		for _, item := range stay {
+			if item.Kind == "service" {
+				fmt.Fprintf(out, "  %s\n", stopCommand(item.Name))
+			}
+
+			fmt.Fprintf(out, "  sudo rm -rf %q\n", item.Target)
+		}
 	}
 
 	if lines := hookLines(); len(lines) > 0 {
@@ -162,6 +194,15 @@ func runUninstall(
 	}
 
 	return nil
+}
+
+// stopCommand is what stops a system service by hand once oku is gone.
+func stopCommand(name string) string {
+	if runtime.GOOS == "darwin" {
+		return "sudo launchctl bootout system/" + service.Definition{Name: name}.Label()
+	}
+
+	return "sudo systemctl disable --now oku-" + name + ".service"
 }
 
 // removeSharedRoot empties the shared store root, which the user owns, and then
