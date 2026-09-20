@@ -357,14 +357,16 @@ Check 'remove without --system leaves system scope alone and says so' {
     (Get-ScheduledTask -TaskName 'oku-sysdemo' -ErrorAction SilentlyContinue)
 }
 
-'y' | & $oku sync --system | Out-Null
-Start-Sleep -Seconds 2
-Check 'sync --system removes the shortcut, the font, its registry value and the task' {
-    -not (Test-Path $sysShortcut) -and -not (Test-Path $sysFont) -and
-    -not ((Get-ItemProperty $sysFontsKey).PSObject.Properties.Name -contains 'oku OkuSystem.ttf') -and
-    -not (Get-ScheduledTask -TaskName 'oku-sysdemo' -ErrorAction SilentlyContinue) -and
-    -not (Get-Process sysdemo -ErrorAction SilentlyContinue)
+$removal = ('y' | & $oku sync --system 2>&1) -join "`n"
+Write-Host $removal
+Start-Sleep -Seconds 3
+Check 'sync --system removes the shortcut' { -not (Test-Path $sysShortcut) }
+Check 'sync --system removes the font' { -not (Test-Path $sysFont) }
+Check 'sync --system removes the font from the registry' {
+    -not ((Get-ItemProperty $sysFontsKey).PSObject.Properties.Name -contains 'oku OkuSystem.ttf')
 }
+Check 'sync --system removes the task' { -not (Get-ScheduledTask -TaskName 'oku-sysdemo' -ErrorAction SilentlyContinue) }
+Check 'sync --system stops the program' { -not (Get-Process sysdemo -ErrorAction SilentlyContinue) }
 
 # The shared store root.
 $shared = Join-Path $env:ProgramData 'oku'
