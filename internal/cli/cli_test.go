@@ -1011,3 +1011,145 @@ func TestB19RelativeRefsStartAtTheListAndRemoteListsRejectLocalPaths(t *testing.
 		t.Fatalf("want a remote list naming a local path to fail, got %v", err)
 	}
 }
+
+// releaseServer fakes the GitHub releases API for owner/tool. The test changes
+// tags between calls, and hits counts the requests.
+type releaseServer struct {
+	*httptest.Server
+
+	tags []string
+	hits int
+}
+
+func newReleaseServer(t *testing.T, tags ...string) *releaseServer {
+	t.Helper()
+
+	rs := &releaseServer{tags: tags}
+	rs.Server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/repos/owner/tool/releases" {
+			http.NotFound(w, r)
+
+			return
+		}
+
+		rs.hits++
+
+		var items []string
+
+		for _, tag := range rs.tags {
+			items = append(items, fmt.Sprintf(
+				`{"tag_name": %q, "draft": %t, "prerelease": %t}`,
+				tag, strings.HasSuffix(tag, "-draft"), strings.Contains(tag, "-rc"),
+			))
+		}
+
+		_, _ = w.Write([]byte("[" + strings.Join(items, ",") + "]"))
+	}))
+	t.Cleanup(rs.Close)
+
+	return rs
+}
+
+// discoveredManifest writes a manifest whose versions come from the release
+// server, plus one archive per version.
+func (m machine) discoveredManifest(t *testing.T, versions ...string) string {
+	t.Helper()
+
+	for _, version := range versions {
+		m.archive(
+			t,
+			"tool-v"+version,
+			map[string]string{"tool": "#!/bin/sh\necho " + version + "\n"},
+		)
+	}
+
+	path := filepath.Join(m.fixtures, "tool.toml")
+	must(t, os.WriteFile(path, []byte(fmt.Sprintf(
+		"[package]\nname = \"tool\"\n"+
+			"[version]\nfrom = \"github-releases\"\nrepo = \"owner/tool\"\nstrip_prefix = \"v\"\n"+
+			"[[artifact]]\nurl = \"file://%s/tool-{{tag}}.tar.gz\"\nbin = [\"tool\"]\n",
+		m.fixtures,
+	)), 0o644))
+
+	return path
+}
+
+func (m machine) toolOutput(t *testing.T) string {
+	t.Helper()
+
+	out, err := exec.Command(m.profile("bin", "tool")).Output()
+	must(t, err)
+
+	return strings.TrimSpace(string(out))
+}
+
+func TestB20AddPicksNewestDiscoveredVersionOrThePinnedOne(t *testing.T) {
+	m := newMachine(t)
+	server := newReleaseServer(t, "v1.2.0", "v1.10.0", "v2.0.0-rc1", "v3.0.0-draft", "nightly")
+	m.opts.GitHubAPI = server.URL + "/api"
+
+	ref := m.discoveredManifest(t, "1.2.0", "1.10.0")
+
+	_, err := m.run(t, "", "add", ref)
+	must(t, err)
+
+	if got := m.toolOutput(t); got != "1.10.0" {
+		t.Fatalf("add installed %s, want the newest release 1.10.0", got)
+	}
+
+	_, err = m.run(t, "", "add", ref+"@1.2.0")
+	must(t, err)
+
+	if got := m.toolOutput(t); got != "1.2.0" {
+		t.Fatalf("add @1.2.0 installed %s", got)
+	}
+
+	_, err = m.run(t, "", "add", ref+"@9.9.9")
+	if err == nil || !strings.Contains(err.Error(), "1.10.0") {
+		t.Fatalf("want an unknown version to fail and name the newest, got %v", err)
+	}
+}
+
+func TestB21VersionsOnlyMoveOnUpdate(t *testing.T) {
+	m := newMachine(t)
+	server := newReleaseServer(t, "v1.0.0")
+	m.opts.GitHubAPI = server.URL + "/api"
+
+	ref := m.discoveredManifest(t, "1.0.0", "1.1.0")
+
+	_, err := m.run(t, "", "add", ref)
+	must(t, err)
+
+	server.tags = append(server.tags, "v1.1.0")
+	server.hits = 0
+
+	must(t, os.RemoveAll(m.data))
+
+	_, err = m.run(t, "", "sync")
+	must(t, err)
+
+	if got := m.toolOutput(t); got != "1.0.0" {
+		t.Fatalf("sync moved tool to %s", got)
+	}
+
+	if server.hits != 0 {
+		t.Fatalf("sync listed releases %d times, want the locked version used as is", server.hits)
+	}
+
+	out, err := m.run(t, "", "update")
+	must(t, err)
+
+	if got := m.toolOutput(t); got != "1.1.0" || !strings.Contains(out, "1.0.0 -> 1.1.0") {
+		t.Fatalf("update left tool at %s:\n%s", got, out)
+	}
+
+	_, err = m.run(t, "", "add", ref+"@1.0.0")
+	must(t, err)
+
+	_, err = m.run(t, "", "update")
+	must(t, err)
+
+	if got := m.toolOutput(t); got != "1.0.0" {
+		t.Fatalf("update moved a package pinned to 1.0.0 to %s", got)
+	}
+}

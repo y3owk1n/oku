@@ -22,8 +22,9 @@ Installs the package a [ref](refs.md) points at.
 
 Adding a package that is already installed replaces it.
 
-`@version` must equal the manifest's version. It is recorded in `oku.toml` as
-`{ ref = "...", version = "..." }`.
+Without `@version`, oku installs the newest version the manifest offers.
+`@version` picks one, see [Pinning a version](refs.md#pinning-a-version). The
+pin is recorded in `oku.toml` as `{ ref = "...", version = "..." }`.
 
 Output:
 
@@ -44,7 +45,8 @@ Common failures:
 | `... building from source is not supported so far` | The manifest only offers a `[build]`. |
 | `checksum mismatch for <url>` | The download differs from the expected sha256. Nothing was installed. |
 | `<a> and <b> both provide bin/<x>` | Two packages ship a file of the same name. The second install is refused. |
-| `<ref> provides version X, not Y` | The `@version` suffix does not match the manifest. |
+| `the manifest provides version X, not Y` | The `@version` suffix does not match a manifest with a fixed version. |
+| `... has no version X, the newest are ...` | The `@version` suffix names a release that upstream does not have. |
 
 A failed `add` leaves the previous profile active and the list and lock
 unchanged.
@@ -89,8 +91,9 @@ pinned in `oku.lock`.
 - An included list is read at the commit in the lock.
 - A package installed but not in the list is dropped from the profile and from
   the lock.
-- A `github:` or `git+` package is read at the commit in the lock, so a newer
-  upstream release is ignored until `oku update`.
+- A `github:` or `git+` package is read at the commit in the lock.
+- Every package is installed at the version in the lock. oku does not ask
+  upstream for versions, so a newer release is ignored until `oku update`.
 - A package in the list with no lock entry is resolved fresh and locked.
 - On a platform the lock has not seen, oku resolves the package for that
   platform and adds an entry. Entries for other platforms are not touched.
@@ -149,8 +152,12 @@ oku update [name...]
 
 Re-resolves packages from their refs and rewrites `oku.lock`. With no names it
 updates every package in `oku.toml`. It reads the newest commit of `github:`
-and `git+` refs, accepts changed manifests, and accepts a new checksum when the
-manifest states one. Then it syncs.
+and `git+` refs, moves each package to the newest version its manifest offers,
+accepts changed manifests, and accepts a new checksum when the manifest states
+one. Then it syncs.
+
+A package pinned with `version` in `oku.toml` stays on that version. A version
+changes only when you run `update`.
 
 It prints one line per package that changed:
 

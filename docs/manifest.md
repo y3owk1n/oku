@@ -19,12 +19,13 @@ homepage = "https://github.com/BurntSushi/ripgrep"
 license = "MIT"
 
 [version]
-value = "14.1.1"
+from = "github-releases"
+repo = "BurntSushi/ripgrep"
 
 [[artifact]]
 match = { os = "linux", arch = "amd64" }
-url = "https://github.com/BurntSushi/ripgrep/releases/download/{{version}}/ripgrep-{{version}}-x86_64-unknown-linux-musl.tar.gz"
-sha256_url = "https://github.com/BurntSushi/ripgrep/releases/download/{{version}}/ripgrep-{{version}}-x86_64-unknown-linux-musl.tar.gz.sha256"
+url = "https://github.com/BurntSushi/ripgrep/releases/download/{{tag}}/ripgrep-{{version}}-x86_64-unknown-linux-musl.tar.gz"
+sha256_url = "https://github.com/BurntSushi/ripgrep/releases/download/{{tag}}/ripgrep-{{version}}-x86_64-unknown-linux-musl.tar.gz.sha256"
 strip = 1
 bin = ["rg"]
 man = ["doc/rg.1"]
@@ -42,12 +43,38 @@ completions = { fish = "complete/rg.fish", zsh = "complete/_rg" }
 
 ## [version]
 
-| Key | Required | Meaning |
-|---|---|---|
-| `value` | yes | The version this manifest installs. |
+A manifest either fixes one version or discovers versions from upstream.
+Discovery is the better choice for a published manifest, because a new release
+needs no manifest change.
 
-`from`, for discovering versions from releases or tags, is not supported yet.
-A manifest that sets it is rejected.
+| Key | Meaning |
+|---|---|
+| `value` | The one version this manifest installs. |
+| `from` | `github-releases` or `git-tags`. Not together with `value`. |
+| `repo` | `owner/repo` for `github-releases`, a git URL for `git-tags`. Required with `from`. |
+| `strip_prefix` | Text cut off the front of a tag to get the version, such as `"v"`. A tag without the prefix is ignored. |
+
+```toml
+[version]
+from = "github-releases"
+repo = "sharkdp/fd"
+strip_prefix = "v"
+```
+
+How oku turns tags into versions:
+
+- `github-releases` reads the newest 100 releases and skips drafts and
+  prereleases. `git-tags` reads every tag with `git ls-remote`, so it needs
+  `git` on `PATH`.
+- After `strip_prefix`, a tag that does not start with a digit is ignored. That
+  drops tags such as `nightly`.
+- The newest version is the highest by its dot-separated numbers, so `1.10.0` is
+  newer than `1.9.0`. A version with a `-` suffix, such as `2.0.0-rc1`, is older
+  than `2.0.0`.
+
+`oku add` installs the newest version, and `oku add <ref>@1.2.0` installs that
+one. The user's `oku.lock` records the version and its tag, and `oku sync`
+installs the locked version without asking upstream again.
 
 ## [[artifact]]
 
@@ -75,8 +102,19 @@ Each artifact needs at least one of `bin`, `man` and `completions`.
 
 ### Template variables
 
-`url` and `sha256_url` expand `{{version}}`, `{{os}}`, `{{arch}}` and
-`{{libc}}`. An unknown variable is an error.
+`url` and `sha256_url` expand these variables. An unknown variable is an error.
+
+| Variable | Value |
+|---|---|
+| `{{version}}` | The version being installed, such as `10.2.0`. |
+| `{{tag}}` | The upstream tag of that version, such as `v10.2.0`. With a fixed version it equals `{{version}}`. |
+| `{{os}}`, `{{arch}}`, `{{libc}}` | The machine, with the same values `match` uses. |
+
+Release URLs often hold the tag in one place and the version in another:
+
+```toml
+url = "https://github.com/sharkdp/fd/releases/download/{{tag}}/fd-{{tag}}-aarch64-apple-darwin.tar.gz"
+```
 
 ### Downloads oku can unpack
 

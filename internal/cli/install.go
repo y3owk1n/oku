@@ -11,6 +11,7 @@ import (
 	"github.com/y3owk1n/oku/internal/platform"
 	"github.com/y3owk1n/oku/internal/profile"
 	"github.com/y3owk1n/oku/internal/ref"
+	"github.com/y3owk1n/oku/internal/resolve"
 )
 
 var errManifestChanged = errors.New("the manifest changed since oku.lock was written")
@@ -35,6 +36,9 @@ type request struct {
 	// acceptDigest lets a digest stated by the manifest replace the one pinned in
 	// previous. "oku update" sets it.
 	acceptDigest bool
+	// keepVersion installs the version in previous without listing versions
+	// again. "oku sync" sets it.
+	keepVersion bool
 }
 
 // install fetches the manifest, realizes the host's artifact and returns the
@@ -56,11 +60,24 @@ func (e env) install(ctx context.Context, opts Options, req request) (installed,
 		return installed{}, errManifestChanged
 	}
 
-	if r.Version != "" && r.Version != m.Version.Value {
-		return installed{}, fmt.Errorf(
-			"%s provides version %s, not %s", r, m.Version.Value, r.Version,
-		)
+	// A pin in the list decides the version. Without one, sync stays on the locked
+	// version, and add and update take the newest.
+	release := resolve.Release{Version: previous.Version, Tag: previous.Tag}
+
+	keep := req.keepVersion && previous.Version != "" &&
+		(r.Version == "" || r.Version == previous.Version)
+	if !keep {
+		release, err = e.resolver(opts).Pick(ctx, m.Version, r.Version)
+		if err != nil {
+			return installed{}, fmt.Errorf("%s: %w", r, err)
+		}
 	}
+
+	if release.Tag == "" {
+		release.Tag = release.Version
+	}
+
+	m.Version.Value, m.Tag = release.Version, release.Tag
 
 	host := platform.Host()
 
@@ -100,7 +117,8 @@ func (e env) install(ctx context.Context, opts Options, req request) (installed,
 	// Entries for other platforms stay while they describe the same manifest.
 	platforms := map[string]lock.Platform{}
 
-	if previous.ManifestSHA256 == m.SHA256 && previous.Ref == r.String() {
+	if previous.ManifestSHA256 == m.SHA256 && previous.Ref == r.String() &&
+		previous.Version == m.Version.Value {
 		for name, at := range previous.Platforms {
 			platforms[name] = at
 		}
@@ -125,6 +143,7 @@ func (e env) install(ctx context.Context, opts Options, req request) (installed,
 			Commit:         fetched.Commit,
 			ManifestSHA256: m.SHA256,
 			Version:        m.Version.Value,
+			Tag:            tagFor(m),
 			Platforms:      platforms,
 		},
 		firstUse: realized.FirstUse,
@@ -142,4 +161,13 @@ func (e env) reportFirstUse(w io.Writer, got installed) {
 		"%s publishes no checksum, so oku trusted this download and pinned sha256 %s in %s\n",
 		got.lock.Name, got.lock.Platforms[platform.Host().String()].SHA256, e.lockPath(),
 	)
+}
+
+// tagFor returns the tag to lock. A tag equal to the version is left out.
+func tagFor(m *manifest.Manifest) string {
+	if m.Tag == m.Version.Value {
+		return ""
+	}
+
+	return m.Tag
 }

@@ -25,8 +25,14 @@ Add `@version` to any ref:
 oku add github:owner/repo@1.4.0
 ```
 
-Manifests carry one fixed version today, so the pin only checks that the
-manifest provides that version. A mismatch fails and names both versions.
+With a manifest that [discovers versions](manifest.md#version), `@1.4.0` picks
+that release. An unknown version fails and names the five newest. With a
+manifest that fixes one version, the pin only checks that the manifest provides
+it.
+
+`oku.toml` records the pin as `{ ref = "...", version = "1.4.0" }`, and
+`oku update` leaves a pinned package on its version. Without a pin, `oku add`
+and `oku update` take the newest version.
 
 ## How each kind is fetched
 
