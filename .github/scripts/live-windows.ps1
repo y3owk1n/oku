@@ -191,6 +191,12 @@ Check 'remove takes the shortcut, the font and its registry value away' {
     -not ((Get-ItemProperty $fontsKey).PSObject.Properties.Name -contains 'oku OkuLive.ttf')
 }
 
+# The package comes back, so that uninstall has an app and a font to remove.
+Oku add (Join-Path $fixtures 'hello.toml') --yes
+Check 'adding the package again brings the shortcut and the font back' {
+    (Test-Path $shortcut) -and (Test-Path $font)
+}
+
 # An .msi download, which oku unpacks with "msiexec /a" and never installs.
 Set-Content (Join-Path $fixtures 'gh.toml') @'
 [package]
@@ -219,6 +225,10 @@ Check 'oku.exe is no longer at its path' { -not (Test-Path $oku) }
 Check 'data, cache and config are gone' {
     -not (Test-Path "$env:XDG_DATA_HOME\oku") -and -not (Test-Path "$env:XDG_CACHE_HOME\oku") -and
     -not (Test-Path "$env:XDG_CONFIG_HOME\oku")
+}
+Check 'uninstall took the shortcut, the font and its registry value away' {
+    -not (Test-Path $shortcut) -and -not (Test-Path $font) -and
+    -not ((Get-ItemProperty $fontsKey).PSObject.Properties.Name -contains 'oku OkuLive.ttf')
 }
 Check 'the project list and lock are untouched' {
     (Test-Path "$project\oku.toml") -and (Test-Path "$project\oku.lock")
