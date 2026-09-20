@@ -14,7 +14,7 @@ import (
 const fontsKey = `HKCU\Software\Microsoft\Windows NT\CurrentVersion\Fonts`
 
 // placeShortcut writes a Start Menu shortcut to target through the shell's COM
-// object, which is the one interface Windows gives for the .lnk format. The
+// object, which is the interface Windows provides for writing a .lnk file. The
 // paths go through the environment, so no quoting rule applies to them.
 func placeShortcut(program, shortcut string) error {
 	cmd := exec.Command("powershell", "-NoProfile", "-NonInteractive", "-Command",
@@ -37,7 +37,7 @@ func registerFont(path string) error {
 }
 
 // unregisterFont asks first whether the value exists. reg reports a missing value
-// only in the language of the Windows install, so its text is no test.
+// only in the language of the Windows install, so oku cannot match its text.
 func unregisterFont(path string) error {
 	if reg("query", fontsKey, "/v", fontValue(path)) != nil {
 		return nil
