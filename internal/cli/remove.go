@@ -1,9 +1,14 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/spf13/cobra"
+
+	"github.com/y3owk1n/oku/internal/list"
+	"github.com/y3owk1n/oku/internal/lock"
+	"github.com/y3owk1n/oku/internal/profile"
 )
 
 func newRemoveCmd() *cobra.Command {
@@ -17,7 +22,35 @@ func newRemoveCmd() *cobra.Command {
 				return err
 			}
 
-			if err := e.globalProfile().Remove(args[0]); err != nil {
+			name := args[0]
+
+			listed, err := list.Read(e.listPath())
+			if err != nil {
+				return err
+			}
+
+			locked, err := lock.Read(e.lockPath())
+			if err != nil {
+				return err
+			}
+
+			_, inList := listed.Packages[name]
+			_, inLock := locked.Find(name)
+
+			// A package can be listed without being in the profile, for example
+			// after the data directory was deleted. Remove still has to clear it.
+			err = e.globalProfile().Remove(name)
+			if err != nil && (!errors.Is(err, profile.ErrNotInstalled) || (!inList && !inLock)) {
+				return err
+			}
+
+			if err := list.Delete(e.listPath(), name); err != nil {
+				return err
+			}
+
+			locked.Delete(name)
+
+			if err := locked.Write(e.lockPath()); err != nil {
 				return err
 			}
 

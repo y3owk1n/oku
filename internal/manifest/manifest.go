@@ -41,6 +41,7 @@ type Artifact struct {
 	Match       platform.Selector `toml:"match"`
 	URL         string            `toml:"url"`
 	SHA256      string            `toml:"sha256"`
+	SHA256URL   string            `toml:"sha256_url"`
 	Strip       int               `toml:"strip"`
 	Bin         []string          `toml:"bin"`
 	Man         []string          `toml:"man"`
@@ -95,11 +96,15 @@ func (m *Manifest) validate() error {
 			errs = append(errs, fmt.Errorf("artifact[%d]: url is required", i))
 		}
 
-		if !sha256Re.MatchString(a.SHA256) {
+		if a.SHA256 != "" && !sha256Re.MatchString(a.SHA256) {
 			errs = append(errs, fmt.Errorf(
 				"artifact[%d]: sha256 must be 64 lowercase hex characters",
 				i,
 			))
+		}
+
+		if a.SHA256 != "" && a.SHA256URL != "" {
+			errs = append(errs, fmt.Errorf("artifact[%d]: set sha256 or sha256_url, not both", i))
 		}
 
 		if len(a.Bin)+len(a.Man)+len(a.Completions) == 0 {
@@ -123,24 +128,28 @@ func (m *Manifest) HasBuild() bool {
 }
 
 // Select returns the first artifact whose selector matches p and expands the
-// template variables in its URL.
+// template variables in its URLs.
 func (m *Manifest) Select(p platform.Platform) (Artifact, bool, error) {
 	for _, a := range m.Artifacts {
 		if !a.Match.Matches(p) {
 			continue
 		}
 
-		url, err := expand(a.URL, map[string]string{
+		vars := map[string]string{
 			"version": m.Version.Value,
 			"os":      p.OS,
 			"arch":    p.Arch,
 			"libc":    p.Libc,
-		})
-		if err != nil {
+		}
+
+		var err error
+		if a.URL, err = expand(a.URL, vars); err != nil {
 			return Artifact{}, false, fmt.Errorf("artifact url: %w", err)
 		}
 
-		a.URL = url
+		if a.SHA256URL, err = expand(a.SHA256URL, vars); err != nil {
+			return Artifact{}, false, fmt.Errorf("artifact sha256_url: %w", err)
+		}
 
 		return a, true, nil
 	}

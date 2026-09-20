@@ -8,6 +8,8 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/y3owk1n/oku/internal/list"
+	"github.com/y3owk1n/oku/internal/lock"
 	"github.com/y3owk1n/oku/internal/manifest"
 	"github.com/y3owk1n/oku/internal/platform"
 	"github.com/y3owk1n/oku/internal/profile"
@@ -78,7 +80,22 @@ func runAdd(cmd *cobra.Command, opts Options, arg string) error {
 		return fmt.Errorf("%s has no artifact for %s", m.Package.Name, host)
 	}
 
-	storePath, err := e.store().Realize(cmd.Context(), m, artifact, host)
+	locked, err := lock.Read(e.lockPath())
+	if err != nil {
+		return err
+	}
+
+	// A digest that oku.lock pinned for this version and URL still applies, even
+	// when the manifest gives none.
+	previous, _ := locked.Find(m.Package.Name)
+
+	pinned := ""
+	if at := previous.Platforms[host.String()]; previous.Version == m.Version.Value &&
+		at.URL == artifact.URL {
+		pinned = at.SHA256
+	}
+
+	realized, err := e.store().Realize(cmd.Context(), m, artifact, host, pinned)
 	if err != nil {
 		return err
 	}
@@ -89,10 +106,48 @@ func runAdd(cmd *cobra.Command, opts Options, arg string) error {
 		Name:      m.Package.Name,
 		Version:   m.Version.Value,
 		Ref:       r.String(),
-		StorePath: storePath,
+		StorePath: realized.Path,
 	})
 	if err != nil {
 		return err
+	}
+
+	// Entries for other platforms stay while they describe the same manifest.
+	platforms := map[string]lock.Platform{}
+	if previous.ManifestSHA256 == m.SHA256 && previous.Ref == r.String() {
+		platforms = previous.Platforms
+	}
+
+	platforms[host.String()] = lock.Platform{
+		Strategy: "artifact",
+		URL:      artifact.URL,
+		SHA256:   realized.SHA256,
+	}
+
+	locked.Set(lock.Package{
+		Name:           m.Package.Name,
+		Ref:            r.String(),
+		Commit:         fetched.Commit,
+		ManifestSHA256: m.SHA256,
+		Version:        m.Version.Value,
+		Platforms:      platforms,
+	})
+
+	err = list.Set(e.listPath(), m.Package.Name, list.Entry{Ref: r.String(), Version: r.Version})
+	if err != nil {
+		return err
+	}
+
+	if err := locked.Write(e.lockPath()); err != nil {
+		return err
+	}
+
+	if realized.FirstUse {
+		fmt.Fprintf(
+			cmd.ErrOrStderr(),
+			"%s publishes no checksum, so oku trusted this download and pinned sha256 %s in %s\n",
+			m.Package.Name, realized.SHA256, e.lockPath(),
+		)
 	}
 
 	fmt.Fprintf(cmd.OutOrStdout(), "added %s %s\n", m.Package.Name, m.Version.Value)

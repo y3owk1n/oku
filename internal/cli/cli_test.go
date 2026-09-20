@@ -72,14 +72,8 @@ func (m machine) run(t *testing.T, stdin string, args ...string) (string, error)
 	return out.String(), err
 }
 
-// manifest writes an archive holding files and a manifest that points at it.
-// artifact is the TOML after url and sha256, such as `bin = ["tool"]`.
-func (m machine) manifest(
-	t *testing.T,
-	name string,
-	files map[string]string,
-	artifact string,
-) string {
+// archive writes a tar.gz holding files and returns its path and sha256.
+func (m machine) archive(t *testing.T, name string, files map[string]string) (string, string) {
 	t.Helper()
 
 	var buf bytes.Buffer
@@ -97,14 +91,28 @@ func (m machine) manifest(
 	must(t, tw.Close())
 	must(t, gz.Close())
 
-	archive := filepath.Join(m.fixtures, name+".tar.gz")
-	must(t, os.WriteFile(archive, buf.Bytes(), 0o644))
+	path := filepath.Join(m.fixtures, name+".tar.gz")
+	must(t, os.WriteFile(path, buf.Bytes(), 0o644))
 
 	sum := sha256.Sum256(buf.Bytes())
 
+	return path, hex.EncodeToString(sum[:])
+}
+
+// manifest writes an archive holding files and a manifest that points at it.
+// artifact is the TOML after url and sha256, such as `bin = ["tool"]`.
+func (m machine) manifest(
+	t *testing.T,
+	name string,
+	files map[string]string,
+	artifact string,
+) string {
+	t.Helper()
+
+	archive, sum := m.archive(t, name, files)
+
 	return m.rawManifest(t, name, fmt.Sprintf(
-		"[[artifact]]\nurl = \"file://%s\"\nsha256 = \"%s\"\n%s\n",
-		archive, hex.EncodeToString(sum[:]), artifact,
+		"[[artifact]]\nurl = \"file://%s\"\nsha256 = \"%s\"\n%s\n", archive, sum, artifact,
 	))
 }
 
@@ -496,5 +504,124 @@ func TestB10AddAcceptsEveryRefKind(t *testing.T) {
 
 	if _, err := m.run(t, "", "add", "github:owner/missing"); err == nil {
 		t.Fatal("adding a repo that does not exist succeeded")
+	}
+}
+
+func TestB11AddWritesListAndLock(t *testing.T) {
+	m := newMachine(t)
+	listPath := filepath.Join(m.config, "oku.toml")
+	lockPath := filepath.Join(m.config, "oku.lock")
+
+	must(t, os.MkdirAll(m.config, 0o755))
+	must(
+		t,
+		os.WriteFile(
+			listPath,
+			[]byte("# my tools\n[packages]\nother = \"./other.toml\" # keep\n"),
+			0o644,
+		),
+	)
+
+	ref := m.manifest(t, "tool", map[string]string{"tool": script}, `bin = ["tool"]`)
+
+	_, err := m.run(t, "", "add", ref)
+	must(t, err)
+
+	listed, err := os.ReadFile(listPath)
+	must(t, err)
+
+	for _, want := range []string{"# my tools", `other = "./other.toml" # keep`, fmt.Sprintf("tool = %q", ref)} {
+		if !strings.Contains(string(listed), want) {
+			t.Fatalf("oku.toml lacks %q:\n%s", want, listed)
+		}
+	}
+
+	locked, err := os.ReadFile(lockPath)
+	must(t, err)
+
+	for _, want := range []string{"name = 'tool'", "version = '1.2.3'", "manifest_sha256", platform.Host().String(), "sha256 = '"} {
+		if !strings.Contains(string(locked), want) {
+			t.Fatalf("oku.lock lacks %q:\n%s", want, locked)
+		}
+	}
+
+	_, err = m.run(t, "", "remove", "tool")
+	must(t, err)
+
+	listed, err = os.ReadFile(listPath)
+	must(t, err)
+
+	locked, err = os.ReadFile(lockPath)
+	must(t, err)
+
+	if strings.Contains(string(listed), "tool =") || strings.Contains(string(locked), "'tool'") {
+		t.Fatalf("remove left tool behind:\n%s\n%s", listed, locked)
+	}
+
+	if !strings.Contains(string(listed), "# my tools") {
+		t.Fatalf("remove dropped the user's comment:\n%s", listed)
+	}
+}
+
+func TestB14FirstUseChecksumIsPinnedAndEnforced(t *testing.T) {
+	m := newMachine(t)
+	archive, sum := m.archive(t, "tool", map[string]string{"tool": script})
+	ref := m.rawManifest(t, "tool", fmt.Sprintf(
+		"[[artifact]]\nurl = \"file://%s\"\nbin = [\"tool\"]\n", archive,
+	))
+
+	out, err := m.run(t, "", "add", ref)
+	must(t, err)
+
+	if !strings.Contains(out, sum) {
+		t.Fatalf("add did not report the pinned checksum:\n%s", out)
+	}
+
+	locked, err := os.ReadFile(filepath.Join(m.config, "oku.lock"))
+	must(t, err)
+
+	if !strings.Contains(string(locked), sum) {
+		t.Fatalf("oku.lock lacks the checksum:\n%s", locked)
+	}
+
+	// The same URL now serves different bytes, on a machine with an empty store.
+	m.archive(t, "tool", map[string]string{"tool": script + "# tampered\n"})
+	must(t, os.RemoveAll(m.data))
+	must(t, os.RemoveAll(m.cache))
+
+	_, err = m.run(t, "", "add", ref)
+	if err == nil || !strings.Contains(err.Error(), "checksum mismatch") {
+		t.Fatalf("want checksum mismatch, got %v", err)
+	}
+}
+
+func TestArtifactChecksumComesFromSHA256URL(t *testing.T) {
+	m := newMachine(t)
+	archive, sum := m.archive(t, "tool", map[string]string{"tool": script})
+	sums := filepath.Join(m.fixtures, "checksums.txt")
+
+	must(t, os.WriteFile(sums, []byte(
+		strings.Repeat("1", 64)+"  other.tar.gz\n"+sum+"  tool.tar.gz\n",
+	), 0o644))
+
+	ref := m.rawManifest(t, "tool", fmt.Sprintf(
+		"[[artifact]]\nurl = \"file://%s\"\nsha256_url = \"file://%s\"\nbin = [\"tool\"]\n",
+		archive, sums,
+	))
+
+	out, err := m.run(t, "", "add", ref)
+	must(t, err)
+
+	if strings.Contains(out, "trusted") {
+		t.Fatalf("add fell back to first-use trust:\n%s", out)
+	}
+
+	must(t, os.WriteFile(sums, []byte(strings.Repeat("2", 64)+"  tool.tar.gz\n"), 0o644))
+	must(t, os.RemoveAll(m.data))
+	must(t, os.RemoveAll(m.cache))
+	must(t, os.RemoveAll(m.config))
+
+	if _, err := m.run(t, "", "add", ref); err == nil {
+		t.Fatal("a download that differs from the published checksum was accepted")
 	}
 }

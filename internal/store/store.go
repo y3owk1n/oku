@@ -54,47 +54,86 @@ func New(dataDir, cacheDir string) *Store {
 	}
 }
 
-// Realize downloads, verifies and unpacks artifact a of manifest m, and returns
-// its store path. It returns an existing store path untouched, and it leaves
-// the store unchanged on any failure.
+// Realized is a package in the store.
+type Realized struct {
+	Path string
+	// SHA256 is the digest of the artifact download.
+	SHA256 string
+	// FirstUse reports that neither the manifest nor the caller gave a digest, so
+	// oku accepted the download unverified.
+	FirstUse bool
+}
+
+// Realize downloads, verifies and unpacks artifact a of manifest m. It returns
+// an existing store path untouched, and it leaves the store unchanged on any
+// failure.
+//
+// Realize expects the first digest it finds in a.SHA256, the file at
+// a.SHA256URL, and pinned. pinned is the digest oku.lock recorded earlier. With
+// none of them, Realize trusts the download.
 func (s *Store) Realize(
 	ctx context.Context,
 	m *manifest.Manifest,
 	a manifest.Artifact,
 	p platform.Platform,
-) (string, error) {
-	sum := sha256.Sum256([]byte(strings.Join(
-		[]string{m.SHA256, m.Version.Value, p.String(), "artifact", a.SHA256}, "\n",
-	)))
-	final := filepath.Join(s.dir, fmt.Sprintf(
-		"%s-%s-%s", m.Package.Name, m.Version.Value, hex.EncodeToString(sum[:])[:16],
-	))
+	pinned string,
+) (Realized, error) {
+	want := a.SHA256
+	if want == "" && a.SHA256URL != "" {
+		published, err := s.publishedSHA256(ctx, a.SHA256URL, path.Base(a.URL))
+		if err != nil {
+			return Realized{}, err
+		}
 
-	if _, err := os.Stat(final); err == nil {
-		return final, nil
+		want = published
 	}
 
-	download, err := s.fetch(ctx, a.URL, a.SHA256)
+	if want != "" && pinned != "" && want != pinned {
+		return Realized{}, fmt.Errorf(
+			"%s: the manifest now says sha256 %s, but oku.lock pinned %s",
+			m.Package.Name, want, pinned,
+		)
+	}
+
+	if want == "" {
+		want = pinned
+	}
+
+	if want != "" {
+		if final := s.pathFor(m, p, want); exists(final) {
+			return Realized{Path: final, SHA256: want}, nil
+		}
+	}
+
+	download, got, err := s.fetch(ctx, a.URL, want)
 	if err != nil {
-		return "", err
+		return Realized{}, err
 	}
+
+	realized := Realized{Path: s.pathFor(m, p, got), SHA256: got, FirstUse: want == ""}
+	if exists(realized.Path) {
+		return realized, nil
+	}
+
+	a.SHA256 = got
+	final := realized.Path
 
 	if err := os.MkdirAll(s.dir, 0o755); err != nil {
-		return "", fmt.Errorf("create store: %w", err)
+		return Realized{}, fmt.Errorf("create store: %w", err)
 	}
 
 	tmp, err := os.MkdirTemp(s.dir, ".tmp-")
 	if err != nil {
-		return "", fmt.Errorf("create store: %w", err)
+		return Realized{}, fmt.Errorf("create store: %w", err)
 	}
 	defer os.RemoveAll(tmp)
 
 	if err := unpack(download, tmp, a); err != nil {
-		return "", fmt.Errorf("unpack %s: %w", a.URL, err)
+		return Realized{}, fmt.Errorf("unpack %s: %w", a.URL, err)
 	}
 
 	if err := expose(tmp, a); err != nil {
-		return "", err
+		return Realized{}, err
 	}
 
 	meta, err := toml.Marshal(Meta{
@@ -105,18 +144,34 @@ func (s *Store) Realize(
 		SHA256:   a.SHA256,
 	})
 	if err != nil {
-		return "", fmt.Errorf("write %s: %w", metaFile, err)
+		return Realized{}, fmt.Errorf("write %s: %w", metaFile, err)
 	}
 
 	if err := os.WriteFile(filepath.Join(tmp, metaFile), meta, 0o644); err != nil {
-		return "", fmt.Errorf("write %s: %w", metaFile, err)
+		return Realized{}, fmt.Errorf("write %s: %w", metaFile, err)
 	}
 
 	if err := os.Rename(tmp, final); err != nil {
-		return "", fmt.Errorf("move package into store: %w", err)
+		return Realized{}, fmt.Errorf("move package into store: %w", err)
 	}
 
-	return final, nil
+	return realized, nil
+}
+
+func (s *Store) pathFor(m *manifest.Manifest, p platform.Platform, artifactSHA string) string {
+	sum := sha256.Sum256([]byte(strings.Join(
+		[]string{m.SHA256, m.Version.Value, p.String(), "artifact", artifactSHA}, "\n",
+	)))
+
+	return filepath.Join(s.dir, fmt.Sprintf(
+		"%s-%s-%s", m.Package.Name, m.Version.Value, hex.EncodeToString(sum[:])[:16],
+	))
+}
+
+func exists(path string) bool {
+	_, err := os.Stat(path)
+
+	return err == nil
 }
 
 // unpack fills <tmp>/pkg from the download. A download that is not an archive
