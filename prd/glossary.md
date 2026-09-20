@@ -42,7 +42,10 @@
   allowed project.
 - **Generation**: a numbered snapshot of a profile, including exposed apps,
   fonts and enabled services.
-- **Shim**: the Windows stand-in for a symlink in a profile `bin`.
+- **Shim**: the Windows stand-in for a symlink in a profile `bin`. A copy of
+  `oku.exe` under the program's name, beside a `<name>.shim` file.
+- **Junction**: the Windows directory link that a normal user may create. A
+  profile's `current` is one.
 - **Activation**: the shell hook applying a project profile's PATH and `[env]`
   while the shell is inside that project.
 - **Allow**: the user's recorded trust of one project `oku.toml`, by path and

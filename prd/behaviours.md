@@ -176,7 +176,8 @@ order step in `prd/product.md`.
   arguments, stdio and exit code passed through.
 - B81 [9] A binary with DLL deps in other store paths starts from any working
   directory.
-- B82 [9] `oku hook pwsh` gives B61 to B68 in PowerShell.
+- B82 [9] `oku hook pwsh` gives B61 to B68 in PowerShell, on Windows, macOS
+  and Linux, and keeps `$LASTEXITCODE` across the prompt.
 
 ## Cache and signing
 
@@ -223,4 +224,5 @@ order step in `prd/product.md`.
   error.
 - B102 [1] When the global profile `bin` is on PATH, uninstall ends by
   printing that PATH entry for the user to remove.
-- B101 [9] On Windows the oku binary is gone once the command has exited.
+- B101 [9] On Windows the oku binary is gone from its path once the command has
+  exited, and the renamed file a few seconds later.
