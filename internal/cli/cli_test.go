@@ -4214,3 +4214,90 @@ func TestB104PatchStepChangesTheSourceAndAHunkThatDoesNotFitFailsTheBuild(t *tes
 		t.Fatalf("lint accepted a patch step without a file:\n%s", report)
 	}
 }
+
+func TestB51FetchStepNeedsASha256AndDownloadsWithOne(t *testing.T) {
+	m := newMachine(t)
+
+	source := filepath.Join(m.fixtures, "tool.sh")
+	must(t, os.WriteFile(source, []byte(script), 0o644))
+
+	digest := sha256.Sum256([]byte(script))
+	build := "[[build.step]]\nrun = \"cp tool.sh tool && chmod +x tool\"\nshell = \"sh\"\n" + installTool
+
+	unpinned := m.buildManifest(t, false, "", fmt.Sprintf(
+		"[[build.step]]\nfetch = { url = \"file://%s\", to = \"tool.sh\" }\n", source,
+	)+build)
+
+	report, err := m.run(t, "", "manifest", "lint", unpinned)
+	if err == nil || !strings.Contains(report, "a fetch step needs sha256") {
+		t.Fatalf("lint accepted a fetch step without sha256:\n%s", report)
+	}
+
+	pinned := m.buildManifest(t, false, "", fmt.Sprintf(
+		"[[build.step]]\nfetch = { url = \"file://%s\", sha256 = %q, to = \"tool.sh\" }\n",
+		source, hex.EncodeToString(digest[:]),
+	)+build)
+
+	_, err = m.run(t, "", "manifest", "lint", pinned)
+	must(t, err)
+
+	_, err = m.run(t, "", "add", pinned, "--yes")
+	must(t, err)
+
+	if got := m.toolOutput(t); got != "hello from tool" {
+		t.Fatalf("the program built from the fetched file printed %q", got)
+	}
+
+	wrong := newMachine(t)
+	must(
+		t,
+		os.WriteFile(filepath.Join(wrong.fixtures, "tool.sh"), []byte(script+"# changed\n"), 0o644),
+	)
+
+	changed := wrong.buildManifest(t, false, "", fmt.Sprintf(
+		"[[build.step]]\nfetch = { url = \"file://%s\", sha256 = %q, to = \"tool.sh\" }\n",
+		filepath.Join(wrong.fixtures, "tool.sh"), hex.EncodeToString(digest[:]),
+	)+build)
+
+	if _, err := wrong.run(t, "", "add", changed, "--yes"); err == nil {
+		t.Fatal("a fetched file that does not match its sha256 was accepted")
+	}
+
+	if len(wrong.storeEntries(t)) != 0 {
+		t.Fatal("a build whose fetch failed left something in the store")
+	}
+}
+
+func TestB97UninstallLeavesAProjectsListAndLockAlone(t *testing.T) {
+	m := newMachine(t)
+	project := m.hookProject(t)
+
+	read := func() string {
+		var both []string
+
+		for _, name := range []string{"oku.toml", "oku.lock"} {
+			data, err := os.ReadFile(filepath.Join(project, name))
+			must(t, err)
+
+			both = append(both, string(data))
+		}
+
+		return strings.Join(both, "\n---\n")
+	}
+
+	before := read()
+	if !strings.Contains(before, "ptool") {
+		t.Fatalf("the project has no list and lock to protect:\n%s", before)
+	}
+
+	_, err := m.run(t, "", "self", "uninstall", "--yes")
+	must(t, err)
+
+	if exists(m.data) {
+		t.Fatal("uninstall left the data directory, so this test proves nothing")
+	}
+
+	if after := read(); after != before {
+		t.Fatalf("uninstall changed the project's files:\n%s\nwas\n%s", after, before)
+	}
+}
