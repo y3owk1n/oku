@@ -138,6 +138,7 @@ oku recognises a download by its content, not by its file name.
 |---|---|
 | tar, tar.gz, tar.bz2, tar.xz, tar.zst | |
 | zip | |
+| 7z | An archive made on Windows carries no unix file modes. A program from it still runs, because oku marks every `bin` as executable. |
 | `.deb` | oku unpacks only the data archive. Its files are at `usr/bin/...`. |
 | `.rpm` | oku unpacks only the file payload. Its files are at `usr/bin/...`. |
 | `.dmg` | macOS only. oku mounts the image read-only, copies it, and unmounts it. |
@@ -155,7 +156,7 @@ define any.
 For a download that is the executable itself, the artifact must list exactly one
 `bin` and nothing else, and the file is installed under that name.
 
-`strip` applies to tar, zip, deb and rpm. oku copies a `.dmg`, a `.pkg` and an
+`strip` applies to tar, zip, 7z, deb and rpm. oku copies a `.dmg`, a `.pkg` and an
 `.msi` whole. From a `.dmg` it leaves out the hidden Finder files and any link that
 points out of the image, such as the shortcut to `/Applications`.
 

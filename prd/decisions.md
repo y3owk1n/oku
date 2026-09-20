@@ -372,12 +372,11 @@ shell the user opens.
 
 ## D16. Installers are unpacked, never executed
 
-oku understands tar, zip, dmg, pkg, deb, rpm and AppImage, and `.msi` from step
-9. It reads deb and rpm in Go, so they unpack on any OS. It reads dmg and pkg
-with `hdiutil` and `pkgutil`, so those unpack on macOS only. 7z is not built
-yet. Why:
-running a vendor installer writes outside the store, needs root, and cannot be
-rolled back.
+oku understands tar, zip, 7z, dmg, pkg, msi, deb, rpm and AppImage. It reads
+7z, deb and rpm in Go, so they unpack on any OS. It reads dmg and pkg with
+`hdiutil` and `pkgutil`, so those unpack on macOS only, and msi with `msiexec`
+on Windows only (D52). Why: running a vendor installer writes outside the store,
+needs root, and cannot be rolled back.
 
 ## D41. One ledger, made to match the active generation
 

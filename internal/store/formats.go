@@ -16,6 +16,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/bodgit/sevenzip"
 	"github.com/cavaliergopher/cpio"
 	"github.com/cavaliergopher/rpm"
 	"github.com/klauspost/compress/zstd"
@@ -31,6 +32,7 @@ var (
 	magicAr    = []byte("!<arch>\n")
 	magicRPM   = []byte{0xed, 0xab, 0xee, 0xdb}
 	magicXar   = []byte("xar!")
+	magic7z    = []byte{'7', 'z', 0xbc, 0xaf, 0x27, 0x1c}
 	// magicOLE starts an OLE compound file, which is what an .msi is.
 	magicOLE = []byte{0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1}
 )
@@ -63,6 +65,61 @@ func decompress(r io.Reader) (io.Reader, error) {
 	default:
 		return buffered, nil
 	}
+}
+
+// un7z unpacks a 7z archive. An archive made on Windows carries no unix modes,
+// and its files then come out as plain files.
+func un7z(f *os.File, root *os.Root, strip int) error {
+	info, err := f.Stat()
+	if err != nil {
+		return err
+	}
+
+	archive, err := sevenzip.NewReader(f, info.Size())
+	if err != nil {
+		return err
+	}
+
+	for _, entry := range archive.File {
+		name, ok, err := stripPath(entry.Name, strip)
+		if err != nil {
+			return err
+		}
+
+		if !ok {
+			continue
+		}
+
+		if err := un7zEntry(root, name, entry); err != nil {
+			return fmt.Errorf("extract %s: %w", entry.Name, err)
+		}
+	}
+
+	return nil
+}
+
+func un7zEntry(root *os.Root, name string, entry *sevenzip.File) error {
+	mode := entry.Mode()
+	if mode.IsDir() {
+		return root.MkdirAll(name, 0o755)
+	}
+
+	rc, err := entry.Open()
+	if err != nil {
+		return err
+	}
+	defer rc.Close()
+
+	if mode&fs.ModeSymlink != 0 {
+		target, err := io.ReadAll(rc)
+		if err != nil {
+			return err
+		}
+
+		return writeSymlink(root, name, string(target))
+	}
+
+	return writeFile(root, name, mode, rc)
 }
 
 // undeb unpacks the data archive of a Debian package. It never reads the

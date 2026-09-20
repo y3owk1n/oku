@@ -49,6 +49,8 @@ func extract(src, dest string, strip int) error {
 	switch {
 	case bytes.HasPrefix(head, magicZip):
 		return unzip(f, root, strip)
+	case bytes.HasPrefix(head, magic7z):
+		return un7z(f, root, strip)
 	case bytes.HasPrefix(head, magicAr):
 		return undeb(f, root, strip)
 	case bytes.HasPrefix(head, magicRPM):

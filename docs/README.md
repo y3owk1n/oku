@@ -23,7 +23,7 @@ in [`../prd/`](../prd/).
 - Linux and macOS, amd64 and arm64.
 - Windows, in part. Prebuilt packages install, run, roll back and uninstall, see
   [Windows](windows.md) for what is missing.
-- Packages that ship a prebuilt download: tar in any common compression, zip,
+- Packages that ship a prebuilt download: tar in any common compression, zip, 7z,
   `.deb`, `.rpm`, a single binary or AppImage, on macOS `.dmg` and `.pkg`, and
   on Windows `.msi`.
   oku unpacks installers and never runs them.

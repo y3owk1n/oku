@@ -323,6 +323,23 @@ Check 'the copy of the msi that msiexec leaves behind is gone' {
     -not (Get-ChildItem "$env:XDG_DATA_HOME\oku\store\gh-*\pkg\*.msi")
 }
 
+# A .7z download, made by 7-Zip on Windows, so it carries no unix modes.
+Set-Content (Join-Path $fixtures 'sevenzip.toml') @'
+[package]
+name = "sevenzip-extra"
+[version]
+value = "26.03"
+[[artifact]]
+match = { os = "windows", arch = "amd64" }
+url = "https://github.com/ip7z/7zip/releases/download/{{version}}/7z2603-extra.7z"
+sha256 = "191894e6acb3647ffb69ce630479ff318523b2e2b9890aa7f05c1127c2e59b8f"
+bin = ["x64/7za.exe"]
+'@
+
+Oku add (Join-Path $fixtures 'sevenzip.toml')
+$banner = (& "$bin\7za.exe") -join ' '
+Check 'a program from a 7z archive runs through its shim' { $banner -match '7-Zip \(a\) 26\.03' }
+
 # Uninstall, which has to delete the running oku.exe and the junctions.
 Set-Location $env:RUNNER_TEMP
 Oku self uninstall --yes
