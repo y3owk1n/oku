@@ -15,7 +15,8 @@ import (
 
 // applyPatch applies a unified diff to the files under src. It is written in Go
 // and does not call the patch program, so a step behaves the same on every OS.
-// A hunk that does not fit fails the step, and oku never applies one loosely.
+// A hunk that does not fit fails the step. oku applies no hunk at an offset or
+// with fuzz.
 func applyPatch(src string, step manifest.Patch) error {
 	if !filepath.IsLocal(filepath.FromSlash(step.File)) {
 		return fmt.Errorf("patch file %s is outside the source directory", step.File)
@@ -115,8 +116,8 @@ func applyFile(src string, file *gitdiff.File, strip int) error {
 	return nil
 }
 
-// missing explains a file that the diff names and the source does not have, which
-// is nearly always a wrong strip.
+// missing explains a file that the diff names and the source does not have. A
+// wrong strip is the usual cause.
 func missing(err error, name string) error {
 	if !errors.Is(err, os.ErrNotExist) {
 		return err

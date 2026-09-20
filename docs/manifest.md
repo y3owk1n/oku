@@ -459,7 +459,7 @@ A patch can change, create, delete and rename files, and change a file's mode.
 oku applies it in Go and never calls the `patch` program, so the step works the
 same on Windows. Every hunk has to fit exactly. oku does not apply a hunk at an
 offset or with fuzz, and a hunk that does not fit fails the build and names the
-file. Line endings count: a patch with Windows line endings fits a source that
+file. Line endings count. A patch with Windows line endings fits a source that
 has them too, and not one with unix line endings.
 
 Any step may also set:
