@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/y3owk1n/oku/internal/cli"
 )
@@ -11,7 +12,17 @@ import (
 var version = "dev"
 
 func main() {
-	if err := cli.NewRootCmd(version).Execute(); err != nil {
+	executable, err := os.Executable()
+	if err == nil {
+		executable, err = filepath.EvalSymlinks(executable)
+	}
+
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "oku: locate the running binary:", err)
+		os.Exit(1)
+	}
+
+	if err := cli.NewRootCmd(version, executable).Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, "oku:", err)
 		os.Exit(1)
 	}
