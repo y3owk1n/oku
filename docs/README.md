@@ -19,6 +19,8 @@ in [`../prd/`](../prd/).
   so treat it as not supported yet.
 - Packages that ship a prebuilt download: tar, tar.gz, tar.bz2, zip, or a
   single binary.
+- `oku add github:owner/repo` for a repo that has no oku manifest, by reading
+  its newest release.
 - Manifests with a fixed version, or with versions discovered from GitHub
   releases or git tags.
 - One `oku.toml` for several machines, with `include` and per-platform `when`.
@@ -30,7 +32,7 @@ in [`../prd/`](../prd/).
 
 - Building from source. A `[build]` table in a manifest is recognised and
   refused.
-- Installing from a repo that has no manifest.
-- Source aliases (`alias/name` refs) and `oku search`.
+- Source aliases (`alias/name` refs), `oku search`, `oku manifest lint` and
+  `oku manifest bump`.
 - Per-project lists and the shell hook.
 - `.tar.xz` and `.tar.zst` archives.

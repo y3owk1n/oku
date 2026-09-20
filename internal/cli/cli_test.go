@@ -1262,3 +1262,151 @@ func TestB23GCDeletesOnlyStorePathsNoGenerationUses(t *testing.T) {
 		}
 	}
 }
+
+// inferServer fakes a GitHub repo owner/tool that has releases and no manifest.
+// assets maps an asset name to the local file that holds it.
+func inferServer(t *testing.T, m *machine, assets map[string]string) {
+	t.Helper()
+
+	var items []string
+	for name, file := range assets {
+		items = append(
+			items,
+			fmt.Sprintf(`{"name": %q, "browser_download_url": "file://%s"}`, name, file),
+		)
+	}
+
+	latest := `{"tag_name": "v1.4.0", "assets": [` + strings.Join(items, ",") + `]}`
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/repos/owner/tool/commits/HEAD":
+			_, _ = w.Write([]byte("5555555555555555555555555555555555555555"))
+		case "/api/repos/owner/tool/releases/latest":
+			_, _ = w.Write([]byte(latest))
+		case "/api/repos/owner/tool/releases":
+			_, _ = w.Write([]byte(`[{"tag_name": "v1.4.0"}]`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(server.Close)
+
+	m.opts.GitHubAPI = server.URL + "/api"
+	m.opts.GitHubRaw = server.URL + "/raw"
+}
+
+// hostAssetName names a release asset the way upstream projects do for the
+// machine that runs the test.
+func hostAssetName() string {
+	host := platform.Host()
+	arch := map[string]string{"amd64": "x86_64", "arm64": "aarch64"}[host.Arch]
+	os := map[string]string{"darwin": "apple-darwin", "linux": "unknown-linux-musl"}[host.OS]
+
+	return "tool-v1.4.0-" + arch + "-" + os + ".tar.gz"
+}
+
+func TestB25AddInfersAManifestForARepoWithoutOne(t *testing.T) {
+	m := newMachine(t)
+	archive, _ := m.archive(t, strings.TrimSuffix(hostAssetName(), ".tar.gz"), map[string]string{
+		"tool-1.4.0/tool":       "#!/bin/sh\necho inferred\n",
+		"tool-1.4.0/doc/tool.1": ".TH",
+	})
+
+	inferServer(t, &m, map[string]string{
+		hostAssetName():                 archive,
+		"tool-v1.4.0-riscv64-plan9.zip": archive,
+		"tool-v1.4.0.deb":               archive,
+	})
+
+	out, err := m.run(t, "", "add", "github:owner/tool")
+	if err != nil {
+		t.Fatalf("add: %v\n%s", err, out)
+	}
+
+	for _, want := range []string{
+		"has no manifest", `from = "github-releases"`, `strip_prefix = "v"`,
+		"tool-{{tag}}-", "strip = 1", `bin = ["tool"]`, `man = ["doc/tool.1"]`,
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("add did not print the inferred manifest, missing %q:\n%s", want, out)
+		}
+	}
+
+	if got := m.toolOutput(t); got != "inferred" {
+		t.Fatalf("tool printed %q", got)
+	}
+
+	locked, err := os.ReadFile(filepath.Join(m.config, "oku.lock"))
+	must(t, err)
+
+	if !strings.Contains(string(locked), "inferred = true") {
+		t.Fatalf("oku.lock does not mark the package inferred:\n%s", locked)
+	}
+
+	// A new machine installs from the manifest text in the lock.
+	must(t, os.RemoveAll(m.data))
+
+	out, err = m.run(t, "", "sync")
+	if err != nil || strings.Contains(out, "has no manifest") {
+		t.Fatalf("sync inferred again or failed: %v\n%s", err, out)
+	}
+
+	if got := m.toolOutput(t); got != "inferred" {
+		t.Fatalf("tool printed %q after sync", got)
+	}
+}
+
+func TestB26InferenceWithoutAHostAssetListsWhatItSaw(t *testing.T) {
+	m := newMachine(t)
+	archive, _ := m.archive(t, "release", map[string]string{"tool": script})
+
+	inferServer(t, &m, map[string]string{
+		"tool-v1.4.0-riscv64-plan9.tar.gz": archive,
+		"tool-v1.4.0.deb":                  archive,
+	})
+
+	_, err := m.run(t, "", "add", "github:owner/tool")
+	if err == nil {
+		t.Fatal("add succeeded without an asset for this machine")
+	}
+
+	for _, want := range []string{platform.Host().String(), "tool-v1.4.0-riscv64-plan9.tar.gz", "tool-v1.4.0.deb"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("error lacks %q: %v", want, err)
+		}
+	}
+}
+
+func TestB27ManifestInitWritesTheInferredManifest(t *testing.T) {
+	m := newMachine(t)
+	archive, _ := m.archive(t, "release", map[string]string{"tool": script})
+
+	inferServer(t, &m, map[string]string{hostAssetName(): archive})
+
+	target := filepath.Join(m.fixtures, "oku.pkg.toml")
+
+	_, err := m.run(t, "", "manifest", "init", "--from", "owner/tool", "-o", target)
+	must(t, err)
+
+	if _, err := m.run(t, "", "add", target); err != nil {
+		t.Fatalf("the written manifest does not install: %v", err)
+	}
+
+	if got := m.toolOutput(t); got != "hello from tool" {
+		t.Fatalf("tool printed %q", got)
+	}
+
+	if _, err := m.run(
+		t,
+		"",
+		"manifest",
+		"init",
+		"--from",
+		"owner/tool",
+		"-o",
+		target,
+	); err == nil {
+		t.Fatal("manifest init replaced an existing file without --force")
+	}
+}

@@ -19,8 +19,36 @@ version stamped in.
 
 ## Install a package
 
-oku installs from a manifest, a small TOML file that says where a package's
-downloads are. Save this as `ripgrep.toml`:
+Point oku at a GitHub repo:
+
+```
+$ oku add github:BurntSushi/ripgrep
+github:BurntSushi/ripgrep has no manifest, so oku inferred this one from its newest release:
+
+[package]
+name = "ripgrep"
+...
+added ripgrep 15.2.0
+add /home/you/.local/share/oku/profiles/global/current/bin to PATH to run it
+```
+
+The ripgrep repo has no oku manifest. oku read its newest release, matched the
+release files to operating systems and CPU types, found the published
+checksums, and opened the download to find the program inside. It printed the
+manifest it wrote before it installed anything. See
+[Inferred manifests](manifest.md#inferred-manifests) for when this works.
+
+To pick a version, add `@version`:
+
+```
+$ oku add github:BurntSushi/ripgrep@14.1.1
+```
+
+## Write a manifest yourself
+
+A manifest is a small TOML file that says where a package's downloads are.
+Write one when inference gets a package wrong, or to install something that is
+not on GitHub. Save this as `ripgrep.toml`:
 
 ```toml
 [package]
@@ -50,14 +78,9 @@ Then:
 ```
 $ oku add ./ripgrep.toml
 added ripgrep 15.2.0
-add /home/you/.local/share/oku/profiles/global/current/bin to PATH to run it
 ```
 
-oku installed the newest ripgrep release. To pick one, add `@version`:
-
-```
-$ oku add ./ripgrep.toml@14.1.1
-```
+The [manifest reference](manifest.md) lists every key.
 
 ## Put the profile on PATH
 
@@ -87,7 +110,7 @@ ripgrep 15.2.0
 
 ```
 $ oku list
-ripgrep  15.2.0  /home/you/ripgrep.toml
+ripgrep  15.2.0  github:BurntSushi/ripgrep
 
 $ oku remove ripgrep
 removed ripgrep
@@ -118,7 +141,7 @@ adopted github:you/machines with 1 locked package
 profile now holds 1 package
 ```
 
-Use URL or repo refs in a list you publish. The `./ripgrep.toml` ref above only
+Use URL or repo refs in a list you publish. A ref such as `./ripgrep.toml` only
 works on the machine that has that file.
 
 See [List and lock](list-and-lock.md#a-new-machine).

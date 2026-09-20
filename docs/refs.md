@@ -7,7 +7,7 @@ one per package.
 |---|---|
 | `./ripgrep.toml`, `/abs/ripgrep.toml` | A local file. oku stores the absolute path. |
 | `https://host/ripgrep.toml` | A URL. `http://` works too. |
-| `github:owner/repo` | `oku.pkg.toml` at the root of the repo's default branch. |
+| `github:owner/repo` | `oku.pkg.toml` at the root of the repo's default branch. Without one, oku [infers a manifest](manifest.md#inferred-manifests) from the newest release. |
 | `github:owner/repo#name` | `name.toml` at the root, else `packages/name.toml`. |
 | `git+https://host/repo` | `oku.pkg.toml` at the root of any git repo. |
 | `git+https://host/repo#dir/name.toml` | That file in the repo. |
@@ -57,5 +57,5 @@ instead, and `oku sync` stops if the content changed.
 - A manifest may be at most 1 MiB.
 - A `#path` in a `git+` ref must stay inside the repository.
 - `alias/name` refs are not supported yet.
-- A repo without a manifest is not installable yet. `github:owner/repo` fails
-  with `no oku.pkg.toml at commit <sha>`.
+- Inference only covers `github:owner/repo`. A `github:owner/repo#name` ref or
+  a `git+` ref needs the manifest file to exist.
