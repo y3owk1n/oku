@@ -259,6 +259,7 @@ Check 'start starts it again' { (ServiceStatus) -match 'running' }
 
 Oku remove ticker
 Check 'remove deletes the task' { -not (Get-ScheduledTask -TaskName 'oku-ticker' -ErrorAction SilentlyContinue) }
+Start-Sleep -Seconds 2
 Check 'remove stops the program' { -not (Get-Process ticker -ErrorAction SilentlyContinue) }
 
 # An .msi download, which oku unpacks with "msiexec /a" and never installs.
