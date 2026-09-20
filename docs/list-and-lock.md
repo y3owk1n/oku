@@ -147,6 +147,10 @@ Keys of a `[[package]]` entry:
 | `platform.<name>` | One entry per platform that has resolved this package. |
 | `dep` | The packages this one depends on, pinned the same way. |
 
+A platform entry has `strategy`, which is `artifact` or `build`. An artifact
+also has `url` and `sha256`. A build has `impure = true` when one of its steps
+used `network = true`.
+
 Platform names are `os-arch`, plus `-glibc` or `-musl` on Linux.
 
 Deps are nested under the package that needs them, as `[[package.dep]]`, and a

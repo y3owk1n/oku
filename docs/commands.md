@@ -33,6 +33,10 @@ Adding a package that is already installed replaces it.
 
 `oku sync` and `oku update` take `--yes` and `--verbose` too.
 
+Build commands run in a [sandbox](manifest.md#the-sandbox). When the host
+cannot provide one, oku builds anyway and prints a warning on stderr that names
+the reason.
+
 Without `@version`, oku installs the newest version the manifest offers.
 `@version` picks one, see [Pinning a version](refs.md#pinning-a-version). The
 pin is recorded in `oku.toml` as `{ ref = "...", version = "..." }`.

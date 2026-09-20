@@ -13,6 +13,7 @@ import (
 	"github.com/y3owk1n/oku/internal/profile"
 	"github.com/y3owk1n/oku/internal/ref"
 	"github.com/y3owk1n/oku/internal/resolve"
+	"github.com/y3owk1n/oku/internal/sandbox"
 	"github.com/y3owk1n/oku/internal/store"
 )
 
@@ -54,6 +55,14 @@ func NewRootCmd(opts Options) *cobra.Command {
 		newWhyCmd(),
 		newSelfCmd(opts.Executable),
 	)
+
+	// The Linux sandbox re-runs oku inside new namespaces to finish the setup.
+	root.AddCommand(&cobra.Command{
+		Use:    sandbox.InitCommand,
+		Hidden: true,
+		Args:   cobra.NoArgs,
+		RunE:   func(*cobra.Command, []string) error { return sandbox.Init() },
+	})
 
 	return root
 }

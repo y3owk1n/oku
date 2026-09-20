@@ -19,6 +19,7 @@ import (
 
 	"github.com/y3owk1n/oku/internal/manifest"
 	"github.com/y3owk1n/oku/internal/platform"
+	"github.com/y3owk1n/oku/internal/sandbox"
 )
 
 // outputTail is how many lines of a failed step's output the error shows.
@@ -101,19 +102,34 @@ func (s *Store) Build(
 		"OKU_PREFIX=" + prefix, "OKU_SRC=" + src, "OKU_JOBS=" + vars["jobs"],
 	}...)
 
+	home, _ := os.UserHomeDir()
+	box := sandbox.Spec{
+		Home:     home,
+		Readable: append([]string{s.dir}, toolDirs...),
+		Writable: []string{work, prefix},
+	}
+
+	result := Realized{Path: prefix}
+
 	for i, step := range build.Steps {
 		if !step.When.Matches(p) {
 			continue
 		}
 
-		if err := s.runStep(ctx, step, src, prefix, vars, env, log); err != nil {
+		var err error
+
+		if step.Run != nil {
+			result.Impure = result.Impure || step.Network
+			result.Unsandboxed, err = runCommand(ctx, step, src, vars, env, box, log)
+		} else {
+			err = s.runStep(ctx, step, src, prefix, vars)
+		}
+
+		if err != nil {
 			os.RemoveAll(prefix)
 
 			return Realized{}, fmt.Errorf(
-				"build.step[%d] (%s) failed: %w",
-				i,
-				strings.Join(step.Kinds(), ","),
-				err,
+				"build.step[%d] (%s) failed: %w", i, strings.Join(step.Kinds(), ","), err,
 			)
 		}
 	}
@@ -124,9 +140,9 @@ func (s *Store) Build(
 		return Realized{}, errors.New("the build installed nothing, add an install step")
 	}
 
-	meta, err := toml.Marshal(
-		Meta{Name: m.Package.Name, Version: m.Version.Value, Platform: p.String()},
-	)
+	meta, err := toml.Marshal(Meta{
+		Name: m.Package.Name, Version: m.Version.Value, Platform: p.String(), Impure: result.Impure,
+	})
 	if err == nil {
 		err = os.WriteFile(filepath.Join(prefix, metaFile), meta, 0o644)
 	}
@@ -137,7 +153,7 @@ func (s *Store) Build(
 		return Realized{}, fmt.Errorf("write %s: %w", metaFile, err)
 	}
 
-	return Realized{Path: prefix}, nil
+	return result, nil
 }
 
 // findNeeds returns the directories of the needed tools, and fails on the first
@@ -211,17 +227,14 @@ func (s *Store) fetchSource(
 	}
 }
 
+// runStep runs a step that moves files. Run steps go through runCommand.
 func (s *Store) runStep(
 	ctx context.Context,
 	step manifest.Step,
 	src, prefix string,
 	vars map[string]string,
-	env []string,
-	log io.Writer,
 ) error {
 	switch {
-	case step.Run != nil:
-		return runCommand(ctx, step, src, vars, env, log)
 	case step.Install != nil:
 		return installFiles(*step.Install, src, prefix)
 	case step.Copy != nil:
@@ -254,23 +267,26 @@ func (s *Store) runStep(
 	}
 }
 
+// runCommand runs a run step in the sandbox. The string says why the step ran
+// without the sandbox, and is empty when it was sandboxed.
 func runCommand(
 	ctx context.Context,
 	step manifest.Step,
 	src string,
 	vars map[string]string,
 	env []string,
+	box sandbox.Spec,
 	log io.Writer,
-) error {
+) (string, error) {
 	script, err := manifest.Expand(*step.Run, vars)
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	shell := step.Shell
 	if shell == "" {
 		if runtime.GOOS == "windows" {
-			return errors.New("a run step needs shell on Windows")
+			return "", errors.New("a run step needs shell on Windows")
 		}
 
 		shell = "sh"
@@ -280,21 +296,24 @@ func runCommand(
 		"sh": {"-e", "-c"}, "bash": {"-e", "-c"}, "pwsh": {"-NoProfile", "-Command"}, "cmd": {"/C"},
 	}[shell]
 	if args == nil {
-		return fmt.Errorf("shell %q must be sh, bash, pwsh or cmd", shell)
+		return "", fmt.Errorf("shell %q must be sh, bash, pwsh or cmd", shell)
 	}
 
-	cmd := exec.CommandContext(ctx, shell, append(args, script)...)
-	cmd.Dir = src
-	cmd.Env = slices.Clone(env)
+	box.Argv = append(append([]string{shell}, args...), script)
+	box.Dir = src
+	box.Network = step.Network
+	box.Env = slices.Clone(env)
 
 	for key, value := range step.Env {
 		expanded, err := manifest.Expand(value, vars)
 		if err != nil {
-			return err
+			return "", err
 		}
 
-		cmd.Env = append(cmd.Env, key+"="+expanded)
+		box.Env = append(box.Env, key+"="+expanded)
 	}
+
+	cmd, why := sandbox.Command(ctx, box)
 
 	var output bytes.Buffer
 
@@ -309,10 +328,10 @@ func runCommand(
 			lines = lines[len(lines)-outputTail:]
 		}
 
-		return fmt.Errorf("%w\n%s", err, strings.Join(lines, "\n"))
+		return why, fmt.Errorf("%w\n%s", err, strings.Join(lines, "\n"))
 	}
 
-	return nil
+	return why, nil
 }
 
 // installFiles copies the named files from src into the package layout.

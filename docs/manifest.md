@@ -358,8 +358,44 @@ A `run` step does not see the user's environment. It gets:
 - `HOME` and `TMPDIR` pointing at empty temporary directories
 - `OKU_PREFIX`, `OKU_SRC`, `OKU_JOBS`, and the step's `env`
 
-A tool the build uses must therefore be in `needs`. The network is still
-reachable today. A sandbox that turns it off comes later.
+A tool the build uses must therefore be in `needs`.
+
+### The sandbox
+
+On macOS and Linux a `run` step runs in a sandbox:
+
+- It has no network.
+- It cannot read the user's home directory. The store and the directories of
+  the `needs` tools stay readable, even when they are inside it.
+- On macOS it can only write to the source directory, its temporary `HOME` and
+  `TMPDIR`, and `{{prefix}}`.
+
+So a build must get everything it downloads through `source` or a `fetch` step,
+which oku runs outside the sandbox and checks against a sha256. A build that
+calls `cargo build` or `go build` has to work offline.
+
+`network = true` on a `run` step gives that step the network and nothing else.
+oku shows it in the approval prompt as `(wants network)`, and marks the package
+`impure` in the store and in `oku.lock`. Use it only when a checksummed `fetch`
+is not enough.
+
+```toml
+[[build.step]]
+run = "npm ci"
+shell = "sh"
+network = true
+```
+
+A `needs` tool that is installed in the user's home directory and loads files
+from elsewhere in it, such as `~/.cargo/bin/cargo` with its toolchain in `~/.rustup`,
+cannot read them in the sandbox. Depend on a toolchain package, or on a
+system-wide install.
+
+oku uses `sandbox-exec` on macOS and user, mount and network namespaces on
+Linux. On a Linux host that forbids unprivileged user namespaces, which
+includes a default Docker container, and on Windows, the step runs with the
+scrubbed environment only. oku then prints a warning that the build could use
+the network and read the user's files.
 
 ### When a build fails
 
