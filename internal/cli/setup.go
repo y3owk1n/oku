@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"os/user"
 	"path/filepath"
 	"runtime"
@@ -86,8 +85,7 @@ func runSetup(cmd *cobra.Command, opts Options, yes bool) error {
 		return errors.New("setup cancelled, nothing was created")
 	}
 
-	argv := []string{"install", "-d", "-m", "0755", "-o", owner.Uid, "-g", owner.Gid, root}
-	if err := elevate(cmd.Context(), opts, argv); err != nil {
+	if err := elevate(cmd.Context(), opts, createRootArgv(root, owner)); err != nil {
 		return fmt.Errorf("create %s: %w", root, err)
 	}
 
@@ -123,18 +121,15 @@ func confirm(in *bufio.Reader, out io.Writer, question string) bool {
 	return a == "y" || a == "yes"
 }
 
-// elevate runs argv with administrator rights. As root it runs argv directly.
-// Otherwise sudo asks for the password on the terminal.
+// elevate runs argv with administrator rights. With those rights already, it
+// runs argv directly. Otherwise sudo asks for the password on unix, and Windows
+// shows its own prompt.
 func elevate(ctx context.Context, opts Options, argv []string) error {
 	if opts.Elevate != nil {
 		return opts.Elevate(ctx, argv)
 	}
 
-	if os.Geteuid() != 0 {
-		argv = append([]string{"sudo"}, argv...)
-	}
-
-	command := exec.CommandContext(ctx, argv[0], argv[1:]...)
+	command := elevatedCommand(ctx, argv)
 	command.Stdin, command.Stdout, command.Stderr = os.Stdin, os.Stdout, os.Stderr
 
 	if err := command.Run(); err != nil {

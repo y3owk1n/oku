@@ -198,8 +198,11 @@ func runUninstall(
 
 // stopCommand is what stops a system service by hand once oku is gone.
 func stopCommand(name string) string {
-	if runtime.GOOS == "darwin" {
+	switch runtime.GOOS {
+	case "darwin":
 		return "sudo launchctl bootout system/" + service.Definition{Name: name}.Label()
+	case "windows":
+		return "schtasks /Delete /F /TN oku-" + name + "  (in a terminal run as administrator)"
 	}
 
 	return "sudo systemctl disable --now oku-" + name + ".service"
@@ -228,7 +231,7 @@ func removeSharedRoot(ctx context.Context, opts Options, e env, elevated bool) (
 		return e.root, nil
 	}
 
-	if err := elevate(ctx, opts, []string{"rmdir", e.root}); err != nil {
+	if err := elevate(ctx, opts, removeDirArgv(e.root)); err != nil {
 		return "", fmt.Errorf("remove %s: %w", e.root, err)
 	}
 

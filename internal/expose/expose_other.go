@@ -10,5 +10,5 @@ func placeShortcut(_, _ string) error {
 
 // registerFont and unregisterFont do nothing here, because macOS and Linux find a
 // font by its directory.
-func registerFont(string) error   { return nil }
-func unregisterFont(string) error { return nil }
+func registerFont(Item) error   { return nil }
+func unregisterFont(Item) error { return nil }

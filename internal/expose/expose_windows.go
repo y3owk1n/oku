@@ -9,9 +9,17 @@ import (
 	"strings"
 )
 
-// fontsKey lists the fonts of the current user. Windows shows a per-user font to
-// programs only when it is named here.
-const fontsKey = `HKCU\Software\Microsoft\Windows NT\CurrentVersion\Fonts`
+// fontsKey names the registry key that lists fonts. Windows shows a font to
+// programs only when it is named there. A font for every user is under HKLM,
+// which only an administrator may write.
+func fontsKey(item Item) string {
+	hive := "HKCU"
+	if item.System {
+		hive = "HKLM"
+	}
+
+	return hive + `\Software\Microsoft\Windows NT\CurrentVersion\Fonts`
+}
 
 // placeShortcut writes a Start Menu shortcut to target through the shell's COM
 // object, which is the interface Windows provides for writing a .lnk file. The
@@ -30,20 +38,30 @@ func placeShortcut(program, shortcut string) error {
 	return nil
 }
 
-func fontValue(path string) string { return "oku " + filepath.Base(path) }
+func fontValue(item Item) string { return "oku " + filepath.Base(item.Target) }
 
-func registerFont(path string) error {
-	return reg("add", fontsKey, "/v", fontValue(path), "/t", "REG_SZ", "/d", path, "/f")
+func registerFont(item Item) error {
+	return reg(
+		"add",
+		fontsKey(item),
+		"/v",
+		fontValue(item),
+		"/t",
+		"REG_SZ",
+		"/d",
+		item.Target,
+		"/f",
+	)
 }
 
 // unregisterFont asks first whether the value exists. reg reports a missing value
 // only in the language of the Windows install, so oku cannot match its text.
-func unregisterFont(path string) error {
-	if reg("query", fontsKey, "/v", fontValue(path)) != nil {
+func unregisterFont(item Item) error {
+	if reg("query", fontsKey(item), "/v", fontValue(item)) != nil {
 		return nil
 	}
 
-	return reg("delete", fontsKey, "/v", fontValue(path), "/f")
+	return reg("delete", fontsKey(item), "/v", fontValue(item), "/f")
 }
 
 func reg(args ...string) error {

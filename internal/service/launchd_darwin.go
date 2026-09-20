@@ -36,7 +36,7 @@ func New(home, dataDir string) Manager {
 }
 
 // SystemLogDir is where a system service's output goes.
-const SystemLogDir = "/Library/Logs/oku"
+func SystemLogDir() string { return "/Library/Logs/oku" }
 
 // NewSystem returns the manager for services that run as root for the whole
 // machine. Everything but Status and Logs needs root.
@@ -102,8 +102,8 @@ func (l *launchd) Remove(ctx context.Context, d Definition) error {
 	// A user service's log and holding directory are inside oku's data directory.
 	// In system scope they are not, so oku deletes them here. Remove fails on a
 	// directory that another service still uses, which is what oku wants.
-	os.Remove(filepath.Join(SystemLogDir, d.Name+".log"))
-	os.Remove(SystemLogDir)
+	os.Remove(filepath.Join(SystemLogDir(), d.Name+".log"))
+	os.Remove(SystemLogDir())
 	os.Remove(l.holding)
 	os.Remove(filepath.Dir(l.holding))
 

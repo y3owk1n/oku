@@ -6,7 +6,7 @@ package service
 func New(_, _ string) Manager { return unsupported{} }
 
 // SystemLogDir is unused on this OS.
-const SystemLogDir = ""
+func SystemLogDir() string { return "" }
 
 // NewSystem returns the manager for services that run for the whole machine.
 func NewSystem() Manager { return unsupported{} }
