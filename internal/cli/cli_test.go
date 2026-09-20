@@ -46,7 +46,9 @@ func newMachine(t *testing.T) machine {
 		fixtures: filepath.Join(root, "fixtures"),
 	}
 
-	m.opts = cli.Options{Version: "test", Executable: m.exe}
+	// WorkDir keeps a stray oku.toml above the repo from turning tests into
+	// project runs.
+	m.opts = cli.Options{Version: "test", Executable: m.exe, WorkDir: m.fixtures}
 
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(root, "config"))
 	t.Setenv("XDG_DATA_HOME", filepath.Join(root, "data"))
@@ -2373,5 +2375,94 @@ func TestB55ManifestTestBuildsInAThrowawayStoreAndReportsTheFailingStep(t *testi
 		if exists(path) {
 			t.Fatalf("manifest test wrote %s", path)
 		}
+	}
+}
+
+func TestB60CommandsActOnTheProjectListUnlessGlobal(t *testing.T) {
+	m := newMachine(t)
+	first := m.namedManifest(t, "first", "first", "first")
+	second := m.namedManifest(t, "second", "second", "second")
+
+	project := filepath.Join(m.fixtures, "work", "api")
+	deep := filepath.Join(project, "src", "handlers")
+	must(t, os.MkdirAll(deep, 0o755))
+	must(t, os.WriteFile(filepath.Join(project, "oku.toml"), []byte("# api tools\n"), 0o644))
+
+	m.opts.WorkDir = deep
+
+	_, err := m.run(t, "", "add", first)
+	must(t, err)
+
+	_, err = m.run(t, "", "add", second, "--global")
+	must(t, err)
+
+	listed, err := os.ReadFile(filepath.Join(project, "oku.toml"))
+	must(t, err)
+
+	if !strings.Contains(string(listed), "first =") ||
+		strings.Contains(string(listed), "second =") ||
+		!strings.Contains(string(listed), "# api tools") {
+		t.Fatalf("the project list holds:\n%s", listed)
+	}
+
+	if !exists(filepath.Join(project, "oku.lock")) {
+		t.Fatal("the project has no oku.lock beside its list")
+	}
+
+	global, err := os.ReadFile(filepath.Join(m.config, "oku.toml"))
+	must(t, err)
+
+	if strings.Contains(string(global), "first =") ||
+		!strings.Contains(string(global), "second =") {
+		t.Fatalf("the global list holds:\n%s", global)
+	}
+
+	out, err := m.run(t, "", "list")
+	must(t, err)
+
+	if !strings.Contains(out, "first") || strings.Contains(out, "second ") {
+		t.Fatalf("list inside the project:\n%s", out)
+	}
+
+	out, err = m.run(t, "", "list", "--global")
+	must(t, err)
+
+	if strings.Contains(out, "first ") || !strings.Contains(out, "second") {
+		t.Fatalf("list --global inside the project:\n%s", out)
+	}
+
+	if exists(m.profile("bin", "first")) || !exists(m.profile("bin", "second")) {
+		t.Fatal("the global profile does not hold exactly the global package")
+	}
+
+	// A new checkout of the project gets its packages back from list and lock.
+	must(t, os.RemoveAll(m.data))
+
+	out, err = m.run(t, "", "sync")
+	if err != nil || !strings.Contains(out, "profile now holds 1 package") {
+		t.Fatalf("sync inside the project: %v\n%s", err, out)
+	}
+
+	_, err = m.run(t, "", "remove", "first")
+	must(t, err)
+
+	listed, err = os.ReadFile(filepath.Join(project, "oku.toml"))
+	must(t, err)
+
+	if strings.Contains(string(listed), "first =") {
+		t.Fatalf("remove left first in the project list:\n%s", listed)
+	}
+
+	// Outside the project the same commands act on the global list.
+	m.opts.WorkDir = m.fixtures
+
+	_, err = m.run(t, "", "sync")
+	must(t, err)
+
+	out, err = m.run(t, "", "list")
+	must(t, err)
+
+	if !strings.Contains(out, "second") || strings.Contains(out, "first ") {
+		t.Fatalf("list outside the project:\n%s", out)
 	}
 }

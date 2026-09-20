@@ -8,7 +8,8 @@ guarantees, unlike nix in what it asks you to learn.
 > manifest can also build from source with tools already on the machine. oku
 > records packages in `oku.toml` and `oku.lock`, and
 > `oku sync github:you/machines` sets up another machine from those two files.
-> Build commands run in a sandbox. Per-project lists do not work yet.
+> Build commands run in a sandbox. A repo can carry its own list, lock and
+> profile.
 
 Start with [Getting started](docs/getting-started.md). All user documentation
 is in [`docs/`](docs/README.md).

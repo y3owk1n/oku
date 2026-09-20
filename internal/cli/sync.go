@@ -29,9 +29,17 @@ oku.toml yet.`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) == 1 {
-				e, err := loadEnv()
+				e, err := scopedEnv(cmd, opts)
 				if err != nil {
 					return err
+				}
+
+				if e.project != "" {
+					return fmt.Errorf(
+						"`oku sync <list-ref>` sets up the global list, and this is the project %s\n"+
+							"add the ref to the project's include array, or pass --global",
+						e.project,
+					)
 				}
 
 				if err := adopt(cmd, opts, e, args[0]); err != nil {
@@ -77,7 +85,7 @@ func reconcile(
 	names []string,
 	update bool,
 ) error {
-	e, err := loadEnv()
+	e, err := scopedEnv(cmd, opts)
 	if err != nil {
 		return err
 	}
@@ -185,7 +193,7 @@ func reconcile(
 		return err
 	}
 
-	changed, err := e.globalProfile().Replace(pkgs, lockData)
+	changed, err := e.profile().Replace(pkgs, lockData)
 	if err != nil {
 		return err
 	}

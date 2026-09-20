@@ -3,8 +3,10 @@
 Every command exits with status 0 on success. On failure it prints
 `oku: <reason>` to stderr and exits with status 1.
 
-All commands act on the global list and the global profile. Per-project lists
-do not exist yet.
+Inside a directory tree that has an `oku.toml`, the commands that read or change
+a list act on that [project](projects.md) and print `project <dir>` on stderr.
+`--global`, or `-g`, makes them use the global list instead. It works on every
+command.
 
 ## oku add
 

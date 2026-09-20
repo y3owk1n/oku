@@ -15,18 +15,18 @@ import (
 	"github.com/y3owk1n/oku/internal/profile"
 )
 
-func newGenerationsCmd() *cobra.Command {
+func newGenerationsCmd(opts Options) *cobra.Command {
 	return &cobra.Command{
 		Use:   "generations",
 		Short: "List the profile's generations",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			e, err := loadEnv()
+			e, err := scopedEnv(cmd, opts)
 			if err != nil {
 				return err
 			}
 
-			gens, err := e.globalProfile().Generations()
+			gens, err := e.profile().Generations()
 			if err != nil {
 				return err
 			}
@@ -73,7 +73,7 @@ func describe(pkgs []profile.Package) string {
 	return strings.Join(names, ", ")
 }
 
-func newRollbackCmd() *cobra.Command {
+func newRollbackCmd(opts Options) *cobra.Command {
 	return &cobra.Command{
 		Use:   "rollback [generation]",
 		Short: "Switch the profile and oku.lock back to an earlier generation",
@@ -83,17 +83,19 @@ Without a number, rollback goes to the generation before the current one. The
 switch is one link change, because every generation's packages are still in
 the store. Rollback does not change oku.toml.`,
 		Args: cobra.MaximumNArgs(1),
-		RunE: runRollback,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runRollback(cmd, opts, args)
+		},
 	}
 }
 
-func runRollback(cmd *cobra.Command, args []string) error {
-	e, err := loadEnv()
+func runRollback(cmd *cobra.Command, opts Options, args []string) error {
+	e, err := scopedEnv(cmd, opts)
 	if err != nil {
 		return err
 	}
 
-	prof := e.globalProfile()
+	prof := e.profile()
 
 	gens, err := prof.Generations()
 	if err != nil {

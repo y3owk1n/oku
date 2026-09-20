@@ -10,7 +10,7 @@ import (
 	"github.com/y3owk1n/oku/internal/store"
 )
 
-func newWhyCmd() *cobra.Command {
+func newWhyCmd(opts Options) *cobra.Command {
 	return &cobra.Command{
 		Use:   "why <name>",
 		Short: "Say why a package is in the store",
@@ -21,12 +21,12 @@ names the installed packages that depend on it, directly or through another
 dep.`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			e, err := loadEnv()
+			e, err := scopedEnv(cmd, opts)
 			if err != nil {
 				return err
 			}
 
-			pkgs, err := e.globalProfile().Packages()
+			pkgs, err := e.profile().Packages()
 			if err != nil {
 				return err
 			}
