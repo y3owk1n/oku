@@ -35,8 +35,8 @@ func runService(cmd *cobra.Command, path string) error {
 
 	d := stored.Definition
 
-	// Task Scheduler gives a console program a window. oku lets go of it, and the
-	// program below starts without one.
+	// Task Scheduler gives a console program a window. oku detaches from it, and
+	// the program below starts without one.
 	_, _, _ = syscall.NewLazyDLL("kernel32.dll").NewProc("FreeConsole").Call()
 
 	log, err := os.OpenFile(d.LogFile, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
@@ -107,6 +107,6 @@ func killWithParent(pid int) error {
 	}
 	defer windows.CloseHandle(process)
 
-	// The job handle stays open for the life of oku, which is the point.
+	// The job handle stays open while oku runs, because closing it ends the program.
 	return windows.AssignProcessToJobObject(job, process)
 }
