@@ -148,9 +148,9 @@ oku recognises a download by its content, not by its file name.
 oku unpacks installers and never runs them. It never executes a `.deb`'s
 maintainer scripts, an `.rpm`'s scriptlets, a `.pkg`'s install scripts or an
 `.msi`'s install sequence, so a package that depends on its post-install script
-will not work from oku. One exception: an `.msi` can carry actions for the
-administrative install itself, and `msiexec /a` runs those. Few packages have
-any.
+will not work from oku. There is one exception. An `.msi` can define actions
+for the administrative install itself, and `msiexec /a` runs those. Few packages
+define any.
 
 For a download that is the executable itself, the artifact must list exactly one
 `bin` and nothing else, and the file is installed under that name.
