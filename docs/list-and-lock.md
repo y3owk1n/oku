@@ -161,16 +161,40 @@ again on its next sync.
 
 ## A new machine
 
-Put `oku.toml` and `oku.lock` into `~/.config/oku/`, by copying them or by
-symlinking that directory from your dotfiles repo. Then:
+Publish `oku.toml` and `oku.lock` side by side in a repo, then run one command
+on the new machine:
 
 ```
-oku sync
+$ oku sync github:you/machines
+adopted github:you/machines with 23 locked packages
+profile now holds 23 packages
 ```
 
-`sync` reads `github:` and `git+` manifests at the locked commit and checks
-every download against the locked sha256, so the new machine gets the same
-versions and the same bytes.
+oku reads both files at the same commit. `sync` then reads `github:` and `git+`
+manifests at their locked commits and checks every download against the locked
+sha256, so the new machine gets the same versions, the same bytes, and the same
+store paths.
+
+The new machine's own `oku.toml` holds one line, `include = ["github:you/machines"]`.
+The published list decides what every machine installs:
+
+- `oku update` on any machine picks up what the published list gained or lost.
+- `oku add` on a machine writes to that machine's own `oku.toml` only. To share
+  a package, add it to the published list.
+- To publish new versions, run `oku update` on the machine whose config
+  directory is the repo, and commit the lock.
+
+`oku sync <list-ref>` reads the published lock once, when it sets the machine
+up. Afterwards `oku update` on that machine resolves packages fresh, so it can
+install newer versions than the published lock. To keep several machines on exactly the
+published lock over time, clone the repo to `~/.config/oku/` on each one, and
+run `git pull` and `oku sync` to update them together.
+
+Packages in a published list must use URL or repo refs. A local path in it is
+an error on every other machine.
+
+You can also copy the two files into `~/.config/oku/` yourself, or symlink that
+directory from a dotfiles repo, and run `oku sync` with no argument.
 
 ## Moving versions
 

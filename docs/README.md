@@ -21,6 +21,8 @@ in [`../prd/`](../prd/).
   single binary.
 - Manifests with a fixed version.
 - One `oku.toml` for several machines, with `include` and per-platform `when`.
+- Setting up a new machine from a published list and lock with
+  `oku sync <list-ref>`.
 
 ## What does not work yet
 

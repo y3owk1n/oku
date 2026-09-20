@@ -16,10 +16,26 @@ import (
 
 func newSyncCmd(opts Options) *cobra.Command {
 	return &cobra.Command{
-		Use:   "sync",
+		Use:   "sync [list-ref]",
 		Short: "Make the profile match oku.toml at the versions in oku.lock",
-		Args:  cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, _ []string) error {
+		Long: `Make the profile match oku.toml at the versions in oku.lock.
+
+With a list ref, such as github:you/machines, sync first sets this machine up
+from that list and the lock beside it. That needs a machine with no global
+oku.toml yet.`,
+		Args: cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if len(args) == 1 {
+				e, err := loadEnv()
+				if err != nil {
+					return err
+				}
+
+				if err := adopt(cmd, opts, e, args[0]); err != nil {
+					return err
+				}
+			}
+
 			return reconcile(cmd, opts, nil, false)
 		},
 	}
