@@ -143,7 +143,7 @@ The line does three things:
 
 It names `oku` by its full path, because `oku` is not on `PATH` before the line
 has run. It does nothing when that file is gone, so it is safe in a dotfiles
-repo that other machines share. Loading it twice adds nothing twice. oku never
+repo that other machines share. Loading it twice changes nothing. oku never
 edits a startup file itself.
 
 If you chose another directory with `OKU_INSTALL_DIR`, the line has that path.

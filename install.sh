@@ -107,7 +107,7 @@ if [ -z "$line" ]; then
 fi
 
 pretty="~${rc#"$HOME"}"
-echo "one step left. Add this line to $pretty:"
+echo "There is one step left. Add this line to $pretty:"
 echo
 echo "  $line"
 echo

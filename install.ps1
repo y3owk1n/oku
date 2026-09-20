@@ -45,7 +45,7 @@ if ($oku.StartsWith($HOME, [StringComparison]::OrdinalIgnoreCase)) { $oku = '$HO
 $line = "if (Test-Path `"$oku`") { Invoke-Expression ((& `"$oku`" hook pwsh) -join [Environment]::NewLine) }"
 
 Write-Host ''
-Write-Host 'one step left. Add this line to the file that $PROFILE names:'
+Write-Host 'There is one step left. Add this line to the file that $PROFILE names:'
 Write-Host ''
 Write-Host "  $line"
 Write-Host ''
