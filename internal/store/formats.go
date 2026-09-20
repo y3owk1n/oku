@@ -90,36 +90,12 @@ func un7z(f *os.File, root *os.Root, strip int) error {
 			continue
 		}
 
-		if err := un7zEntry(root, name, entry); err != nil {
+		if err := unpackEntry(root, name, entry); err != nil {
 			return fmt.Errorf("extract %s: %w", entry.Name, err)
 		}
 	}
 
 	return nil
-}
-
-func un7zEntry(root *os.Root, name string, entry *sevenzip.File) error {
-	mode := entry.Mode()
-	if mode.IsDir() {
-		return root.MkdirAll(name, 0o755)
-	}
-
-	rc, err := entry.Open()
-	if err != nil {
-		return err
-	}
-	defer rc.Close()
-
-	if mode&fs.ModeSymlink != 0 {
-		target, err := io.ReadAll(rc)
-		if err != nil {
-			return err
-		}
-
-		return writeSymlink(root, name, string(target))
-	}
-
-	return writeFile(root, name, mode, rc)
 }
 
 // undeb unpacks the data archive of a Debian package. It never reads the

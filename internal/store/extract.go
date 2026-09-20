@@ -148,7 +148,7 @@ func unzip(f *os.File, root *os.Root, strip int) error {
 			continue
 		}
 
-		if err := unzipEntry(root, name, entry); err != nil {
+		if err := unpackEntry(root, name, entry); err != nil {
 			return fmt.Errorf("extract %s: %w", entry.Name, err)
 		}
 	}
@@ -156,7 +156,14 @@ func unzip(f *os.File, root *os.Root, strip int) error {
 	return nil
 }
 
-func unzipEntry(root *os.Root, name string, entry *zip.File) error {
+// archiveEntry is what a zip entry and a 7z entry have in common.
+type archiveEntry interface {
+	Mode() fs.FileMode
+	Open() (io.ReadCloser, error)
+}
+
+// unpackEntry writes one entry of a zip or a 7z archive under root.
+func unpackEntry(root *os.Root, name string, entry archiveEntry) error {
 	mode := entry.Mode()
 	if mode.IsDir() {
 		return root.MkdirAll(name, 0o755)
