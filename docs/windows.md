@@ -138,9 +138,9 @@ Windows consent prompt, once per file. The consent prompt path is not tested,
 because the test machine has no desktop to show it on.
 
 A system service is a task, as a user service is, and not a Windows service. A
-program has to speak the service control protocol to be a Windows service, and a
-package's program does not. The task runs from boot with no user logged on,
-which is what a service is for.
+program has to implement the service control protocol to be a Windows service,
+and a package's program does not. The task runs from boot with no user logged
+on, which a service needs.
 
 ## Builds
 

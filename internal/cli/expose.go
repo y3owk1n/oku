@@ -281,8 +281,8 @@ func (e env) applyAsRoot(
 		}
 	}
 
-	// JSON is full of quotes, and no quoting survives the Windows consent prompt.
-	// So on Windows the change goes through a file.
+	// JSON holds many quotes, and the Windows consent prompt does not keep the
+	// quotes of an argument. So on Windows the change goes through a file.
 	if runtime.GOOS == "windows" {
 		file, err := os.CreateTemp("", "oku-change-*.json")
 		if err != nil {

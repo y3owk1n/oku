@@ -531,12 +531,13 @@ still holds. Task Scheduler restarts only after a failure, so `always` behaves
 like `on-failure`.
 
 A system service is the same task, run as the `SYSTEM` account with a boot
-trigger. D14 said "Windows service". A Windows service has to speak the service
-control protocol, which a package's program does not, and a task from boot with
-no user logged on gives the same result with the code that user services
-already test. Windows has no `sudo`, so an elevated oku does the privileged step
-directly, and otherwise starts it through the consent prompt. The change goes
-through a file, because no quoting survives that prompt.
+trigger. D14 said "Windows service". A Windows service has to implement the
+service control protocol, which a package's program does not, and a task from
+boot with no user logged on gives the same result with the code that user
+services already test. Windows has no `sudo`, so an elevated oku does the
+privileged step directly, and otherwise starts it through the consent prompt.
+The change goes through a file, because that prompt does not keep the quotes of
+an argument.
 
 ## D55. The sandbox probe runs the real setup
 
