@@ -29,6 +29,7 @@ Adding a package that is already installed replaces it.
 
 | Flag | Effect |
 |---|---|
+| `--service` | Runs the package's [services](services.md) now and at every login, and writes `service = true` to `oku.toml`. |
 | `--from-source` | Builds from source even when a prebuilt download fits. `oku.lock` records the choice, so `oku sync` builds too. |
 | `--yes`, `-y` | Approves the manifest's build commands without asking, see [Build commands](trust.md#build-commands). |
 | `--verbose`, `-v` | Shows the output of build commands as they run. |
@@ -248,6 +249,17 @@ gained are installed and packages they lost are dropped. With names, includes
 stay pinned.
 
 A name that is in neither `oku.toml` nor its includes fails.
+
+## oku service
+
+```
+oku service list
+oku service start|stop|restart|status|logs <name>
+```
+
+Controls the services of installed packages through launchd or systemd. See
+[Services](services.md) for what each one does and for how to enable a service
+at login.
 
 ## oku hook
 
@@ -544,7 +556,8 @@ oku self uninstall [--keep-list] [--yes]
 
 Lists what it will delete, asks once, then removes:
 
-- every app and font oku placed outside its directories, each listed by path
+- every app, font and service oku set up outside its directories, each listed
+  by path. Services are stopped first.
 - the data directory (store and profiles)
 - the cache directory
 - the config directory

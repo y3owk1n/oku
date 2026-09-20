@@ -1,0 +1,80 @@
+# Services
+
+A package can ship a long-running program, such as a database or a sync daemon.
+oku runs it through your OS's service manager, which is launchd on macOS and
+systemd on Linux. There is no oku daemon.
+
+## Turn a service on
+
+A package's services are installed with it and stay stopped. To run them now and
+at every login, enable them for that package:
+
+```
+$ oku add github:you/recipes#postgres --service
+service postgres is running and starts at login
+added postgres 17.2
+```
+
+`--service` writes `service = true` to the package's entry in `oku.toml`. You can
+also write it yourself and run `oku sync`:
+
+```toml
+[packages]
+postgres = { ref = "github:you/recipes#postgres", service = true }
+```
+
+Because it is in the list, a new machine that runs `oku sync` gets the service
+running too. To turn it off, remove `service = true` and sync. `oku rollback`
+restores which services were enabled along with the packages.
+
+## Control a service
+
+```
+$ oku service list
+postgres  postgres  running, starts at login, pid 9449
+
+$ oku service stop postgres
+postgres: stopped
+$ oku service start postgres
+postgres: running, starts at login, pid 9501
+$ oku service logs postgres
+```
+
+| Command | Effect |
+|---|---|
+| `oku service list` | Every service of your installed packages, the package it belongs to, and its state. |
+| `oku service start <name>` | Starts it. For a service that is not enabled, this lasts until you log out. |
+| `oku service stop <name>` | Stops it. An enabled service starts again at the next login. |
+| `oku service restart <name>` | Stops it and starts it again. |
+| `oku service status <name>` | Whether it is running and whether it starts at login. |
+| `oku service logs <name>` | The last 50 lines it printed. |
+
+The commands work the same on macOS and Linux. An unknown name fails and lists
+the services you have.
+
+## What oku writes
+
+| | macOS | Linux |
+|---|---|---|
+| Enabled | `~/Library/LaunchAgents/dev.oku.<name>.plist`, loaded into your login session | `<config home>/systemd/user/oku-<name>.service`, enabled and started |
+| Installed, not enabled | `<data>/oku/services/dev.oku.<name>.plist`, which launchd does not read | the same unit file, disabled |
+| Output | `<data>/oku/logs/<name>.log` | the user journal, `journalctl --user -u oku-<name>` |
+
+`<config home>` is `$XDG_CONFIG_HOME`, or `~/.config`.
+
+Each of these files is in oku's [ledger](files.md#outside-okus-directories).
+`oku remove` stops the service and deletes its file, and `oku self uninstall`
+does that for every service.
+
+On Linux a user service only runs while you are logged in, unless lingering is
+on for your account (`loginctl enable-linger`). That is a systemd setting, and
+oku does not change it.
+
+Services come from your global list only. A package in a
+[project](projects.md) installs its programs, and oku says that its services
+were skipped. Services that run as root, for the whole machine, are not
+supported yet.
+
+## For package authors
+
+See [`[[service]]`](manifest.md#service) in the manifest reference.

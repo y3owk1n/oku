@@ -18,6 +18,7 @@ import (
 	"github.com/y3owk1n/oku/internal/ref"
 	"github.com/y3owk1n/oku/internal/resolve"
 	"github.com/y3owk1n/oku/internal/sandbox"
+	"github.com/y3owk1n/oku/internal/service"
 	"github.com/y3owk1n/oku/internal/store"
 )
 
@@ -30,6 +31,9 @@ type Options struct {
 	// WorkDir is where oku looks for a project list. Empty means the working
 	// directory. Tests set it.
 	WorkDir string
+	// Services replaces the OS's service manager. Tests set it, because a real
+	// one changes the user's login session.
+	Services service.Manager
 	// Interactive overrides the check for a terminal on stdin. Tests set it.
 	Interactive *bool
 	// GitHubAPI and GitHubRaw replace the github.com URLs when set.
@@ -59,6 +63,7 @@ func NewRootCmd(opts Options) *cobra.Command {
 		newGenerationsCmd(opts),
 		newRollbackCmd(opts),
 		newGCCmd(),
+		newServiceCmd(opts),
 		newHookCmd(),
 		newEnvCmd(opts),
 		newAllowCmd(opts),
@@ -69,7 +74,7 @@ func NewRootCmd(opts Options) *cobra.Command {
 		newListCmd(opts),
 		newWhyCmd(opts),
 		newInfoCmd(opts),
-		newSelfCmd(opts.Executable),
+		newSelfCmd(opts),
 	)
 
 	// The Linux sandbox re-runs oku inside new namespaces to finish the setup.

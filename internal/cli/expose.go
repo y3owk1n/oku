@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 
 	"github.com/y3owk1n/oku/internal/expose"
 	"github.com/y3owk1n/oku/internal/store"
@@ -21,10 +22,10 @@ func (e env) userDirs() (expose.Dirs, error) {
 	return expose.UserDirs(home, filepath.Dir(e.data)), nil
 }
 
-// syncExposed makes the apps and fonts on this machine match the active
+// syncExposed makes the apps, fonts and services on this machine match the active
 // generation of the global profile. Project profiles expose nothing, because an
 // app or a font is visible to the whole user account, not to one directory.
-func (e env) syncExposed(notice io.Writer) error {
+func (e env) syncExposed(opts Options, notice io.Writer) error {
 	pkgs, err := e.profile().Packages()
 	if err != nil {
 		return err
@@ -51,11 +52,23 @@ func (e env) syncExposed(notice io.Writer) error {
 		wanted = append(wanted, expose.Wanted(pkg.Name, pkg.StorePath, launchers, dirs)...)
 	}
 
+	manager, err := e.services(opts)
+	if err != nil {
+		return err
+	}
+
+	services, defs, err := e.serviceItems(manager, pkgs)
+	if err != nil {
+		return err
+	}
+
+	wanted = append(wanted, services...)
+
 	if e.project != "" {
 		if len(wanted) > 0 {
 			fmt.Fprintln(
 				notice,
-				"apps and fonts are only exposed from the global list, not from a project",
+				"apps, fonts and services are only set up from the global list, not from a project",
 			)
 		}
 
@@ -67,14 +80,27 @@ func (e env) syncExposed(notice io.Writer) error {
 		return err
 	}
 
-	before := len(ledger.Items)
+	before := slices.Clone(ledger.Items)
 
-	if err := ledger.Sync(wanted); err != nil {
+	handlers := map[string]expose.Handler{"service": serviceHandler(manager, defs)}
+	if err := ledger.Sync(wanted, handlers); err != nil {
 		return err
 	}
 
-	for _, item := range ledger.Items[min(before, len(ledger.Items)):] {
-		fmt.Fprintf(notice, "exposed %s %s\n", item.Kind, item.Target)
+	for _, item := range ledger.Items {
+		// An item that changed, such as a service that was just enabled, is new too.
+		if slices.Contains(before, item) {
+			continue
+		}
+
+		switch {
+		case item.Kind != "service":
+			fmt.Fprintf(notice, "exposed %s %s\n", item.Kind, item.Target)
+		case item.Enabled:
+			fmt.Fprintf(notice, "service %s is running and starts at login\n", item.Name)
+		default:
+			fmt.Fprintf(notice, "service %s is installed and stopped\n", item.Name)
+		}
 	}
 
 	return nil

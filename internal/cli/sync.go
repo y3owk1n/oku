@@ -148,6 +148,7 @@ func reconcile(
 			wantManifest: wantManifest,
 			acceptDigest: fresh,
 			keepVersion:  !fresh && previous.Ref == r.String(),
+			service:      wanted[name].entry.Service,
 			approve:      e.approver(cmd, opts, flags),
 			log:          buildLog(cmd, flags),
 		})
@@ -198,7 +199,7 @@ func reconcile(
 		return err
 	}
 
-	if err := e.syncExposed(cmd.ErrOrStderr()); err != nil {
+	if err := e.syncExposed(opts, cmd.ErrOrStderr()); err != nil {
 		return err
 	}
 

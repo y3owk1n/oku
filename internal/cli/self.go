@@ -18,7 +18,9 @@ import (
 // listFiles are what --keep-list leaves in the config directory.
 var listFiles = []string{"oku.toml", "oku.lock"}
 
-func newSelfCmd(executable string) *cobra.Command {
+func newSelfCmd(opts Options) *cobra.Command {
+	executable := opts.Executable
+
 	self := &cobra.Command{
 		Use:   "self",
 		Short: "Manage the oku installation itself",
@@ -31,7 +33,7 @@ func newSelfCmd(executable string) *cobra.Command {
 		Short: "Remove oku and everything it installed",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			return runUninstall(cmd, executable, keepList, yes)
+			return runUninstall(cmd, opts, executable, keepList, yes)
 		},
 	}
 	uninstall.Flags().
@@ -43,7 +45,12 @@ func newSelfCmd(executable string) *cobra.Command {
 	return self
 }
 
-func runUninstall(cmd *cobra.Command, executable string, keepList, yes bool) error {
+func runUninstall(
+	cmd *cobra.Command,
+	opts Options,
+	executable string,
+	keepList, yes bool,
+) error {
 	e, err := loadEnv()
 	if err != nil {
 		return err
@@ -93,7 +100,13 @@ func runUninstall(cmd *cobra.Command, executable string, keepList, yes bool) err
 		return err
 	}
 
-	if err := ledger.RemoveAll(); err != nil {
+	manager, err := e.services(opts)
+	if err != nil {
+		return err
+	}
+
+	handlers := map[string]expose.Handler{"service": serviceHandler(manager, nil)}
+	if err := ledger.RemoveAll(handlers); err != nil {
 		return err
 	}
 

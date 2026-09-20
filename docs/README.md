@@ -9,6 +9,7 @@ in [`../prd/`](../prd/).
 | [Commands](commands.md) | Every command, its flags, and what it prints |
 | [Refs](refs.md) | The ways to point oku at a manifest, and sources |
 | [Manifest reference](manifest.md) | Every key a package manifest accepts, for people publishing software |
+| [Services](services.md) | Running a package's daemon with launchd or systemd |
 | [Projects](projects.md) | A list, a lock and a profile that belong to one repo |
 | [List and lock](list-and-lock.md) | `oku.toml`, `oku.lock`, and moving a setup to another machine |
 | [Trust and checksums](trust.md) | What oku verifies, what it pins, and when it stops |
@@ -24,6 +25,8 @@ in [`../prd/`](../prd/).
 - Packages that ship a macOS app, a Linux desktop launcher, or fonts. oku puts
   them in your per-user folders and takes them away on remove, rollback and
   uninstall.
+- Services: a package's daemon runs under launchd or systemd for your user,
+  enabled with `service = true` in your list.
 - Packages built from source with `[build]` steps, after you approve their
   commands. The build uses tools already on your machine.
 - A build sandbox on macOS and Linux: build commands get no network and cannot
@@ -52,4 +55,4 @@ in [`../prd/`](../prd/).
 
 - `patch` build steps.
 - `.msi` packages.
-- Services, and installing anything system-wide.
+- Installing anything system-wide, including services that run as root.

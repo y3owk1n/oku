@@ -49,6 +49,8 @@ type Meta struct {
 	Impure bool `toml:"impure,omitempty"`
 	// Launchers are the package's Linux desktop entries.
 	Launchers []manifest.App `toml:"launcher,omitempty"`
+	// Services are the package's long-running programs.
+	Services []manifest.Service `toml:"service,omitempty"`
 }
 
 // New returns the store under dataDir that caches downloads under cacheDir.
@@ -158,6 +160,7 @@ func (s *Store) Realize(
 		URL:       a.URL,
 		SHA256:    a.SHA256,
 		Launchers: m.Apps,
+		Services:  m.Services,
 	})
 	if err != nil {
 		return Realized{}, fmt.Errorf("write %s: %w", metaFile, err)

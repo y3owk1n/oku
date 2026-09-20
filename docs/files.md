@@ -1,7 +1,8 @@
 # Files and directories
 
 oku writes under three directories of its own, and needs no root. The only files
-it writes anywhere else are the apps and fonts of packages you installed, see
+it writes anywhere else are the apps, fonts and service definitions of packages
+you installed, see
 [Outside oku's directories](#outside-okus-directories).
 
 | Directory | Default | With the variable set |
@@ -49,6 +50,8 @@ export XDG_CACHE_HOME=/tmp/oku-try/cache
       current -> gen-2         the active generation
     project-2d27013d8c67/      one per project, same layout
   exposed.toml                 every file oku wrote outside these directories
+  services/                    definitions of services that are not enabled (macOS)
+  logs/                        output of services (macOS)
   trust/
     approvals.toml             manifests you allowed to run build commands
     allow.toml                 projects the shell hook may apply
@@ -101,6 +104,7 @@ out of the store:
 |---|---|---|
 | Apps | `~/Applications/` | `<data home>/applications/oku-<name>.desktop` |
 | Fonts | `~/Library/Fonts/` | `<data home>/fonts/oku/` |
+| Enabled services | `~/Library/LaunchAgents/dev.oku.<name>.plist` | `<config home>/systemd/user/oku-<name>.service` |
 
 Every such file is written to the ledger `exposed.toml` before oku creates it,
 with the package and the store path it came from. `oku remove`, `oku rollback`

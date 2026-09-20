@@ -31,6 +31,15 @@ You can also edit the file by hand and run `oku sync`.
 A relative file ref such as `"./recipes/fd.toml"` starts at the directory of the
 list that contains it, not at your working directory.
 
+### Services
+
+`service = true` runs the package's [services](services.md) now and at every
+login:
+
+```toml
+postgres = { ref = "github:you/recipes#postgres", service = true }
+```
+
 ### Packages for some platforms only
 
 `when` limits a package to matching machines:
