@@ -11,10 +11,6 @@ import (
 // is running, but it lets one be renamed. So oku moves itself aside, and a
 // detached cmd deletes that file a few seconds after oku has exited.
 func removeBinary(path string) error {
-	if _, err := os.Stat(path); err != nil {
-		return err
-	}
-
 	aside := path + ".uninstalled"
 	os.Remove(aside)
 
