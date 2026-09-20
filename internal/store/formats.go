@@ -67,8 +67,8 @@ func decompress(r io.Reader) (io.Reader, error) {
 	}
 }
 
-// un7z unpacks a 7z archive. An archive made on Windows carries no unix modes,
-// and its files then come out as plain files.
+// un7z unpacks a 7z archive. An archive made on Windows has no unix modes, so
+// oku writes its files with the default mode.
 func un7z(f *os.File, root *os.Root, strip int) error {
 	info, err := f.Stat()
 	if err != nil {

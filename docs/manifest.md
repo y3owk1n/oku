@@ -138,7 +138,7 @@ oku recognises a download by its content, not by its file name.
 |---|---|
 | tar, tar.gz, tar.bz2, tar.xz, tar.zst | |
 | zip | |
-| 7z | An archive made on Windows carries no unix file modes. A program from it still runs, because oku marks every `bin` as executable. |
+| 7z | An archive made on Windows has no unix file modes. A program from it still runs, because oku marks every `bin` as executable. |
 | `.deb` | oku unpacks only the data archive. Its files are at `usr/bin/...`. |
 | `.rpm` | oku unpacks only the file payload. Its files are at `usr/bin/...`. |
 | `.dmg` | macOS only. oku mounts the image read-only, copies it, and unmounts it. |
