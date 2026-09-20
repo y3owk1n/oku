@@ -13,6 +13,10 @@ New-Item -ItemType Directory -Force $root | Out-Null
 go build -o $oku ./cmd/oku
 if ($LASTEXITCODE -ne 0) { throw 'go build failed' }
 
+# The checkout has an oku.toml, which would make every command below act on
+# that project and not on the global profile.
+Set-Location $root
+
 function Check($what, [scriptblock]$test) {
     if (-not (& $test)) { throw "FAILED: $what" }
     Write-Host "ok: $what"
