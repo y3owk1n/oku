@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.2](https://github.com/y3owk1n/oku/compare/v0.2.1...v0.2.2) (2026-09-20)
+
+
+### Bug Fixes
+
+* **hook:** stop asking for a sync when the lock holds relative refs ([#72](https://github.com/y3owk1n/oku/issues/72)) ([074b88a](https://github.com/y3owk1n/oku/commit/074b88ae28026210d6e130f8fe1b2f56960b9b61))
+
 ## [0.2.1](https://github.com/y3owk1n/oku/compare/v0.2.0...v0.2.1) (2026-09-20)
 
 
