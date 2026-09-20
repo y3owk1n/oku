@@ -112,10 +112,10 @@ func (s *Store) Build(
 		vars["dep."+dep.Name+".prefix"] = dep.Prefix
 	}
 
-	env := append(linkEnv(deps), []string{
-		"PATH=" + joinPaths(append(append(depDirs(deps, "bin"), toolDirs...), "/usr/bin", "/bin")),
-		"HOME=" + filepath.Join(work, "home"),
-		"TMPDIR=" + filepath.Join(work, "tmp"),
+	systemDirs, hostVars := hostEnv(filepath.Join(work, "home"), filepath.Join(work, "tmp"))
+
+	env := append(append(linkEnv(deps), hostVars...), []string{
+		"PATH=" + joinPaths(append(append(depDirs(deps, "bin"), toolDirs...), systemDirs...)),
 		"OKU_PREFIX=" + prefix, "OKU_SRC=" + src, "OKU_JOBS=" + vars["jobs"],
 	}...)
 

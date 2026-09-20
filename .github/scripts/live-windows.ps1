@@ -104,6 +104,71 @@ Set-Location $root
 prompt | Out-Null
 Check 'leaving the project takes fd away again' { -not (Get-Command fd -ErrorAction SilentlyContinue) }
 
+# A build from source: a dep, a needs tool, pwsh and cmd steps, and an install.
+$fixtures = Join-Path $root 'fixtures'
+New-Item -ItemType Directory -Force $fixtures | Out-Null
+$greetRef = (Join-Path $fixtures 'greet.toml') -replace '\\', '/'
+
+Set-Content (Join-Path $fixtures 'greet.toml') @'
+[package]
+name = "greet"
+[version]
+value = "1.0.0"
+[build]
+[[build.step]]
+run = "New-Item -ItemType Directory -Force '{{prefix}}/share' | Out-Null; Set-Content '{{prefix}}/share/greeting.txt' 'hello from a dep'"
+shell = "pwsh"
+'@
+
+Set-Content (Join-Path $fixtures 'main.go') @'
+package main
+
+import (
+	"fmt"
+	"os"
+)
+
+func main() {
+	text, _ := os.ReadFile(os.Args[1])
+	fmt.Print(string(text))
+}
+'@
+$mainGo = (Join-Path $fixtures 'main.go') -replace '\\', '/'
+
+Set-Content (Join-Path $fixtures 'hello.toml') @"
+[package]
+name = "hello"
+[version]
+value = "1.0.0"
+[build]
+needs = ["go"]
+deps = [{ ref = "$greetRef" }]
+[[build.step]]
+run = "Copy-Item '$mainGo' main.go; Set-Content go.mod 'module hello'"
+shell = "pwsh"
+[[build.step]]
+run = "echo home=%USERPROFILE% > where.txt && go build -o hello.exe ."
+shell = "cmd"
+[[build.step]]
+install = { bin = ["hello.exe"], share = ["where.txt"] }
+"@
+
+Set-Location $root
+Oku add (Join-Path $fixtures 'hello.toml') --yes --verbose
+$shimSpec = Get-Content "$bin\hello.shim"
+Check 'the shim lists the bin directory of the dep' {
+    ($shimSpec -join "`n") -match 'dir = .*greet-1\.0\.0-.*bin'
+}
+
+$greeting = Get-ChildItem "$env:XDG_DATA_HOME\oku\store\greet-*\share\greeting.txt"
+$said = & "$bin\hello.exe" $greeting.FullName
+Check 'the built program runs and reads the dep' { ($said -join ' ') -match 'hello from a dep' }
+
+$where = Get-Content (Get-ChildItem "$env:XDG_DATA_HOME\oku\store\hello-*\share\where.txt").FullName
+Check 'the build saw a scratch home, not the real profile' {
+    ($where -match 'oku-build-') -and ($where -notmatch [regex]::Escape($env:USERPROFILE))
+}
+
 # Uninstall, which has to delete the running oku.exe and the junctions.
 Set-Location $env:RUNNER_TEMP
 Oku self uninstall --yes
