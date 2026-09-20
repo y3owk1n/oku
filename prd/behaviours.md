@@ -24,7 +24,7 @@ order step in `prd/product.md`.
 
 ## Refs, list and lock
 
-- B10 [2] `add` accepts file, https, `github:`, `git+` and `alias/name` refs.
+- B10 [2] `add` accepts file, https, `github:` and `git+` refs.
 - B11 [2] `add` writes the package to `oku.toml` and its resolution to
   `oku.lock`.
 - B12 [2] `oku sync` makes the profile match `oku.toml`: missing packages are
@@ -36,12 +36,16 @@ order step in `prd/product.md`.
 - B15 [2] `sync` on a platform missing from the lock resolves it and appends a
   platform entry without touching existing ones.
 - B16 [2] `include` merges the named lists. A local entry overrides an
-  included entry of the same name.
+  included entry of the same name. `sync` stops when an included list changed
+  since the lock, and `remove` refuses a package only an include declares.
 - B17 [2] An entry whose `when` does not match the host is skipped by `sync`
   and stays in the lock for other platforms.
 - B18 [2] `oku sync <ref>` on a machine with no global list adopts that list
   and its lock, then syncs. Two machines of the same platform doing so end
-  with identical store hashes.
+  with identical store hashes. On a machine that has a global list it refuses
+  and changes nothing.
+- B19 [2] A relative file ref in a list resolves against that list's
+  directory. A list from a URL or a repo that names a local path is an error.
 
 ## Versions and generations
 
@@ -68,7 +72,7 @@ order step in `prd/product.md`.
 - B29 [4] `oku manifest bump` rewrites a static version and its checksums to
   the newest upstream release.
 - B30 [4] `oku source add <alias> <ref>` makes `alias/name` resolve to the
-  manifest `name` in that collection.
+  manifest `name` in that collection, and `add` accepts `alias/name` refs.
 - B31 [4] `oku search <term>` matches names and descriptions across the user's
   sources, and nothing else.
 

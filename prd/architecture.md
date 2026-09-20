@@ -34,12 +34,23 @@ and `oku-meta.toml` (closure, env, services). A profile generation mirrors
 
 ## Ref resolution
 
-- `github:owner/repo` reads `oku.pkg.toml` at the repo root. When absent, the
-  manifest is inferred from releases (D13).
-- `github:owner/repo#name` reads `<name>.toml` or `packages/<name>.toml`.
+A ref is read as a manifest or as a list. The kind sets the file names.
+
+| Ref | As a manifest | As a list |
+|---|---|---|
+| `github:owner/repo` | `oku.pkg.toml` | `oku.toml` |
+| `github:owner/repo#name` | `name.toml`, else `packages/name.toml` | `name.toml`, else `lists/name.toml` |
+| `git+<url>` | `oku.pkg.toml` | `oku.toml` |
+| `git+<url>#path` | that path | that path |
+| file path, `https://` URL | that file | that file |
+
+- A `github:` repo with no manifest is inferred from releases (D13).
 - `alias/name` expands the alias from `config.toml`, then as above.
-- A ref given to `sync` or `include` reads `oku.toml` and the `oku.lock`
-  beside it.
+- The lock beside a list has the list's name with `.lock`.
+- A relative file ref inside a list starts at that list's directory. A list
+  that came from a URL or a repo may not name local paths.
+- Includes merge in order, the including list's own packages win, nesting
+  stops at 8 levels, and a list included twice is an error.
 
 ## Manifest schema
 
@@ -197,7 +208,7 @@ internal/shellhook/ hook and env output per shell
 ```
 oku add <ref>[@version] [--from-source] [--global]
 oku remove <name> [--global]
-oku sync [ref | -f file]
+oku sync [list-ref]
 oku update [name]
 oku list | info <ref> | why <name> | search <term>
 oku generations | rollback [n] | gc

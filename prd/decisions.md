@@ -133,6 +133,46 @@ hard uninstall (volumes, daemon users, rc edits) is the counterexample. A
 plain TOML ledger also means a person can finish the job by hand if the
 binary is already gone.
 
+## D18. A machine adopts a published list by including it
+
+`oku sync <ref>` writes a global `oku.toml` that holds `include = ["<ref>"]`
+and an `oku.lock` that starts from the lock beside the list. It does not copy
+the list. It refuses when the global list already has content. Why: a copy
+stops matching the repo as soon as either side changes. With an include, the
+published list decides what every machine installs, and `oku update` picks up
+what it gained or lost. Because the command refuses to overwrite, it cannot
+delete a user's list.
+
+Known limit: the published lock is read once, at adoption. A later `oku update`
+on that machine resolves fresh and can install newer versions than the
+published lock. Machines that must stay on one lock share the config directory
+through git instead.
+
+## D19. oku uses only the lock beside the user's own list
+
+oku uses the `oku.lock` beside the user's own `oku.toml`. It pins every
+included list by commit and sha256, and ignores a lock beside an included
+list. `oku update` with no names reads includes fresh. `oku update <name>`
+keeps includes pinned. Why: one lock per machine records everything that
+machine installed in one file. Updating a single package must not add or drop
+other packages as a side effect.
+
+## D20. oku.toml is edited as text, oku.lock is rewritten whole
+
+`add` and `remove` change one line of `oku.toml` and leave comments, ordering
+and other tables unchanged. `oku.lock` is regenerated with packages sorted by
+name. Why: the user writes the list and oku writes the lock. Stable lock bytes
+keep diffs small. A package written as a `[packages.<name>]` table is read but
+never edited.
+
+## D21. github refs use https, git+ refs use git
+
+A `github:` ref resolves the default branch to a commit through the GitHub API
+and reads files at that commit from raw.githubusercontent.com. A `git+` ref
+shells out to `git` for a depth-1 fetch. Why: a fresh machine may have no git,
+and `github:` is the common case. Other hosts share no HTTP API, so `git` is
+the only portable way to read them.
+
 ## D16. Installers are unpacked, never executed
 
 `extract` understands tar, zip, 7z, dmg, pkg, msi, deb, rpm and AppImage. Why:
