@@ -158,15 +158,16 @@ order step in `prd/product.md`.
   `remove` and `rollback` take it away again.
 - B71 [8] A package `font` is usable by applications for the current user.
   `remove` and `rollback` take it away again.
-- B72 [8] `extract` unpacks dmg, pkg, msi, deb, rpm and AppImage without
-  executing anything inside them.
+- B72 [8] oku unpacks dmg, pkg, deb, rpm and AppImage downloads without
+  executing anything inside them. `.msi` follows in step 9.
 - B73 [8] A package with `service = true` in `oku.toml` is running after
   `sync` and after the next login. Without it, the service is installed and
   stopped.
 - B74 [8] `oku service start|stop|restart|status|logs` behave the same on all
   three OSes.
 - B75 [8] System scope needs `--system`. oku names what it will write and
-  prompts before elevating. Without the flag oku never elevates.
+  prompts before elevating. Without the flag oku never elevates. It leaves
+  system scope unchanged and lists what is pending.
 - B76 [8] Rolling back to a generation restores which services are enabled.
 
 ## Windows

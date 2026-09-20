@@ -372,6 +372,64 @@ shell the user opens.
 
 ## D16. Installers are unpacked, never executed
 
-`extract` understands tar, zip, 7z, dmg, pkg, msi, deb, rpm and AppImage. Why:
+oku understands tar, zip, dmg, pkg, deb, rpm and AppImage, and `.msi` from step
+9. It reads deb and rpm in Go, so they unpack on any OS. It reads dmg and pkg
+with `hdiutil` and `pkgutil`, so those unpack on macOS only. 7z is not built
+yet. Why:
 running a vendor installer writes outside the store, needs root, and cannot be
 rolled back.
+
+## D41. One ledger, made to match the active generation
+
+Every file oku writes outside its directories is in `<data>/oku/exposed.toml`,
+written before the file exists. The ledger is not part of a generation. A
+generation records packages, and oku derives the wanted files from the active
+one and syncs the ledger to it. Each kind has a handler: apps and fonts are
+copies, a service goes through the service manager. Why: one file is what
+`self uninstall` replays, and a derived ledger cannot disagree with the
+generation after a crash. Only the global profile exposes anything, because an
+app, a font or a service is visible to the whole account, not to one directory.
+
+oku copies apps and fonts. Finder, Spotlight and the font services do not treat
+a symlink into the store as installed.
+
+## D42. A service that is not enabled is installed and stopped
+
+Installing a package never starts its service. `service = true` on the list
+entry runs it now and at login. On macOS a service that is not enabled keeps its
+plist in `<data>/oku/services`, because launchd loads everything in
+`~/Library/LaunchAgents` at login. `oku service start` and `stop` last for the
+session. Why: a user does not expect a daemon to start because a package
+arrived as a dep, and the list is the one place that says what runs.
+
+## D43. System scope is in the list, and only a flag elevates
+
+`system = true` on a list entry puts that package's apps, fonts and services in
+system scope. `--system` on `add`, `sync`, `update` and the `oku service`
+actions is the only thing that makes oku call `sudo`. Without it oku leaves
+system scope unchanged and lists what is pending, also on `remove` and
+`rollback`. Why: the list must describe the whole machine, and a sync from a
+script must never stop at a password prompt.
+
+oku elevates one file at a time by running the hidden `oku system-apply` through
+`sudo`. That command refuses a target outside the system directories. Why: the
+ledger records each file before it exists, and the part that runs as root stays
+small. When oku runs as root it does not call `sudo`.
+
+## D44. The shared root belongs to the user
+
+`oku setup --system` creates `/opt/oku` with `sudo` and makes the current user
+its owner. It is the only elevated step, and `store_root` in `config.toml`
+records it. Profiles, the ledger and approvals stay in the data directory.
+Packages already installed stay in the old store until `sync` installs them
+under the new root, and `gc` covers both stores. Why: a root-owned store would
+make every install need `sudo`, and D3 wants the shared root only for
+equal store paths across machines, not for sharing between users.
+
+## D45. Declining elevation on uninstall still removes user scope
+
+`self uninstall` asks one second question for everything that needs `sudo`.
+After a no it removes user scope, empties the shared root, which the user owns,
+and prints the `sudo` commands for what is left. `--yes` alone counts as no.
+Why: uninstall must not fail half way because the user cannot enter a password, and
+oku is gone afterwards, so the printed commands are the only way left.

@@ -52,3 +52,8 @@
 - **Cache**: a static host or directory of signed, store-hash-keyed build
   results.
 - **Scope**: `user` or `system`. Where apps, fonts and services are exposed.
+  `system = true` on a list entry selects system scope.
+- **Ledger**: `exposed.toml`, the record of every file oku wrote outside its
+  own directories.
+- **Shared root**: `/opt/oku`, the store root that `oku setup --system` creates
+  so that every machine has the same store paths.

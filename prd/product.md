@@ -83,7 +83,7 @@ These are permanent edges of the product, not deferrals.
 ## Build order
 
 Everything below is in scope. The order is dependency order, not priority.
-Steps 1 to 7 are built. `docs/` describes what works today.
+Steps 1 to 8 are built. `docs/` describes what works today.
 
 1. Core: local ref, artifact, store, global profile. `add`, `remove`, `list`.
 2. Refs, `oku.toml`, `oku.lock`, `sync`, list `include` and `when`, bootstrap
@@ -94,6 +94,6 @@ Steps 1 to 7 are built. `docs/` describes what works today.
 6. Sandboxed builds, `vendor` steps, `manifest test`.
 7. Projects: `hook`, `env`, `allow`, `deny`, package `[env]`.
 8. Apps, fonts, services, system scope.
-9. Windows parity: shims, DLL search path, pwsh hook.
+9. Windows parity: shims, DLL search path, pwsh hook, `.msi` unpacking.
 10. Build cache and signing.
 11. `oku shell`, `doctor`, `self update`, install script.
