@@ -101,6 +101,15 @@ func UserDirs(home, dataHome string) Dirs {
 		}
 	}
 
+	if runtime.GOOS == "windows" {
+		return Dirs{
+			Apps: filepath.Join(
+				os.Getenv("APPDATA"), "Microsoft", "Windows", "Start Menu", "Programs",
+			),
+			Fonts: filepath.Join(os.Getenv("LOCALAPPDATA"), "Microsoft", "Windows", "Fonts"),
+		}
+	}
+
 	return Dirs{
 		Apps:  filepath.Join(dataHome, "applications"),
 		Fonts: filepath.Join(dataHome, "fonts", "oku"),
@@ -123,14 +132,24 @@ func SystemDirs() Dirs {
 func Wanted(name, storePath string, launchers []Launcher, dirs Dirs, system bool) []Item {
 	var items []Item
 
-	if runtime.GOOS == "darwin" {
+	switch runtime.GOOS {
+	case "darwin":
 		for _, bundle := range children(filepath.Join(storePath, "apps")) {
 			items = append(items, Item{
 				Kind: "app", Package: name, Source: bundle, System: system,
 				Target: filepath.Join(dirs.Apps, filepath.Base(bundle)),
 			})
 		}
-	} else {
+	case "windows":
+		// A shortcut shows the icon of its program, so the launcher's icon is unused.
+		for _, launcher := range launchers {
+			items = append(items, Item{
+				Kind: "app", Package: name, System: system,
+				Source: filepath.Join(storePath, filepath.FromSlash(launcher.Exec)),
+				Target: filepath.Join(dirs.Apps, "oku-"+slug(launcher.Name)+shortcutExt),
+			})
+		}
+	default:
 		for _, launcher := range launchers {
 			items = append(items, Item{
 				Kind: "app", Package: name, System: system,
@@ -201,7 +220,7 @@ func (l *Ledger) RemoveAll(handlers map[string]Handler) error {
 }
 
 func (l *Ledger) remove(item Item, handler Handler) error {
-	removeItem := func(item Item) error { return os.RemoveAll(item.Target) }
+	removeItem := Remove
 	if handler.Remove != nil {
 		removeItem = handler.Remove
 	}
@@ -215,10 +234,28 @@ func (l *Ledger) remove(item Item, handler Handler) error {
 	return l.write()
 }
 
+// shortcutExt ends a Windows Start Menu shortcut.
+const shortcutExt = ".lnk"
+
+// Remove deletes an app or a font. A Windows font also leaves the registry.
+func Remove(item Item) error {
+	if item.Kind == "font" {
+		if err := unregisterFont(item.Target); err != nil {
+			return err
+		}
+	}
+
+	return os.RemoveAll(item.Target)
+}
+
 // Place copies an app or a font to its target.
 func Place(item Item) error {
 	if err := os.MkdirAll(filepath.Dir(item.Target), 0o755); err != nil {
 		return err
+	}
+
+	if strings.HasSuffix(item.Target, shortcutExt) {
+		return placeShortcut(item.Source, item.Target)
 	}
 
 	// A Linux launcher's source is the text of the desktop entry.
@@ -233,7 +270,15 @@ func Place(item Item) error {
 
 	// oku copies, because Finder, Spotlight and font services do not treat a
 	// symlinked bundle or font as installed.
-	return CopyTree(source, item.Target)
+	if err := CopyTree(source, item.Target); err != nil {
+		return err
+	}
+
+	if item.Kind == "font" {
+		return registerFont(item.Target)
+	}
+
+	return nil
 }
 
 func desktopEntry(l Launcher, storePath string) string {

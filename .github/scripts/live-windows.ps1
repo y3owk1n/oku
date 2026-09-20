@@ -144,13 +144,16 @@ value = "1.0.0"
 needs = ["go"]
 deps = [{ ref = "$greetRef" }]
 [[build.step]]
-run = "Copy-Item '$mainGo' main.go; Set-Content go.mod 'module hello'"
+run = "Copy-Item '$mainGo' main.go; Set-Content go.mod 'module hello'; Copy-Item (Join-Path `$env:SystemRoot 'Fonts/arial.ttf') OkuLive.ttf"
 shell = "pwsh"
 [[build.step]]
 run = "echo home=%USERPROFILE% > where.txt && go build -o hello.exe ."
 shell = "cmd"
 [[build.step]]
-install = { bin = ["hello.exe"], share = ["where.txt"] }
+install = { bin = ["hello.exe"], share = ["where.txt"], font = ["OkuLive.ttf"] }
+[[app]]
+name = "Oku Hello"
+exec = "bin/hello.exe"
 "@
 
 Set-Location $root
@@ -167,6 +170,25 @@ Check 'the built program runs and reads the dep' { ($said -join ' ') -match 'hel
 $where = Get-Content (Get-ChildItem "$env:XDG_DATA_HOME\oku\store\hello-*\share\where.txt").FullName
 Check 'the build saw a scratch home, not the real profile' {
     ($where -match 'oku-build-') -and ($where -notmatch [regex]::Escape($env:USERPROFILE))
+}
+
+# The app and the font of that package, for the current user.
+$shortcut = Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\oku-oku-hello.lnk'
+$font = Join-Path $env:LOCALAPPDATA 'Microsoft\Windows\Fonts\OkuLive.ttf'
+$fontsKey = 'HKCU:\Software\Microsoft\Windows NT\CurrentVersion\Fonts'
+
+Check 'the Start Menu has a shortcut to the program in the store' {
+    (Test-Path $shortcut) -and
+    ((New-Object -ComObject WScript.Shell).CreateShortcut($shortcut).TargetPath -like '*store*hello-1.0.0-*hello.exe')
+}
+Check 'the font is in the user font folder and in the registry' {
+    (Test-Path $font) -and ((Get-ItemProperty $fontsKey).'oku OkuLive.ttf' -eq $font)
+}
+
+Oku remove hello
+Check 'remove takes the shortcut, the font and its registry value away' {
+    -not (Test-Path $shortcut) -and -not (Test-Path $font) -and
+    -not ((Get-ItemProperty $fontsKey).PSObject.Properties.Name -contains 'oku OkuLive.ttf')
 }
 
 # An .msi download, which oku unpacks with "msiexec /a" and never installs.
