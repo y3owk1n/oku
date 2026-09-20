@@ -28,9 +28,11 @@ XDG on unix, `%APPDATA%` and `%LOCALAPPDATA%` on Windows. `<root>` is
 <cache>/oku/downloads/, git/
 ```
 
-A store path holds `bin/`, `lib/`, `include/`, `share/`, `apps/`, `fonts/`
-and `oku-meta.toml` (closure, env, services). A profile generation mirrors
-`bin/` and `share/` with links.
+A store path holds `pkg/` (the whole unpacked download), `bin/`, `lib/`,
+`include/`, `share/`, `apps/`, `fonts/` and `oku-meta.toml` (closure, env,
+services). The output directories hold relative links into `pkg/`. A profile
+generation mirrors `bin/` and `share/` with links, and holds `oku-gen.toml`
+(time, packages) and a copy of `oku.lock`.
 
 ## Ref resolution
 
@@ -126,7 +128,7 @@ Step types: `run`, `install` (bin, lib, include, man, completions, share, app,
 font), `patch` (file, strip), `fetch` (url, sha256, to), `extract` (file, to,
 strip), `copy` (from, to), `vendor`. Exactly one type key per step.
 
-Template variables: `{{version}}`, `{{os}}`, `{{arch}}`, `{{libc}}`,
+Template variables: `{{version}}`, `{{tag}}`, `{{os}}`, `{{arch}}`, `{{libc}}`,
 `{{prefix}}`, `{{src}}`, `{{jobs}}`, `{{dep.<name>.prefix}}`. Values for `os`
 and `arch` follow GOOS and GOARCH.
 
@@ -158,6 +160,7 @@ manifest_sha256 = ""
 inferred = false
 signing_key = ""
 version = "14.1.0"
+tag = "v14.1.0"             # only when it differs from version
 
 [package.platform."linux-amd64-musl"]
 strategy = "artifact"       # artifact | build
@@ -211,7 +214,7 @@ oku remove <name> [--global]
 oku sync [list-ref]
 oku update [name]
 oku list | info <ref> | why <name> | search <term>
-oku generations | rollback [n] | gc
+oku generations | rollback [n] | gc [--keep N] [--dry-run]
 oku source add|remove|list
 oku hook <bash|zsh|fish|pwsh> | env | allow [path] | deny [path]
 oku shell <ref>...
