@@ -20,7 +20,8 @@ func removeBinary(path string) error {
 
 	const detachedProcess = 0x00000008
 
-	// ping is the wait that every Windows has. CmdLine is given whole, because
+	// cmd has no sleep command and every Windows has ping, so ping is the wait.
+	// CmdLine is given whole, because
 	// cmd does not parse the quoting that Go applies to arguments.
 	cmd := exec.Command("cmd")
 	cmd.SysProcAttr = &syscall.SysProcAttr{
