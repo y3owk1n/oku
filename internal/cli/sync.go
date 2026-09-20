@@ -8,11 +8,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/y3owk1n/oku/internal/list"
 	"github.com/y3owk1n/oku/internal/lock"
 	"github.com/y3owk1n/oku/internal/platform"
 	"github.com/y3owk1n/oku/internal/profile"
-	"github.com/y3owk1n/oku/internal/ref"
 	"github.com/y3owk1n/oku/internal/store"
 )
 
@@ -49,39 +47,43 @@ func reconcile(cmd *cobra.Command, opts Options, names []string, update bool) er
 		return err
 	}
 
-	listed, err := list.Read(e.listPath())
-	if err != nil {
-		return err
-	}
-
 	locked, err := lock.Read(e.lockPath())
 	if err != nil {
 		return err
 	}
 
+	// Updating everything also refreshes includes. Updating named packages keeps
+	// them pinned, so the package set stays the same.
+	wanted, includes, err := e.loadList(cmd.Context(), opts, locked, update && len(names) == 0)
+	if err != nil {
+		return err
+	}
+
 	for _, name := range names {
-		if _, ok := listed.Packages[name]; !ok {
-			return fmt.Errorf("%s is not in %s", name, e.listPath())
+		if _, ok := wanted[name]; !ok {
+			return fmt.Errorf("%s is not in %s or its includes", name, e.listPath())
 		}
 	}
 
 	out := cmd.OutOrStdout()
-	host := platform.Host().String()
-	next := &lock.Lock{}
+	host := platform.Host()
+	next := &lock.Lock{Includes: includes}
 
 	var pkgs []profile.Package
 
-	for _, name := range slices.Sorted(maps.Keys(listed.Packages)) {
-		entry := listed.Packages[name]
+	for _, name := range slices.Sorted(maps.Keys(wanted)) {
+		r := wanted[name].ref
+		previous, _ := locked.Find(name)
 
-		r, err := ref.Parse(entry.Ref)
-		if err != nil {
-			return fmt.Errorf("%s: %w", name, err)
+		// A package for another platform keeps its lock entry and is not installed.
+		if !wanted[name].entry.When.Matches(host) {
+			if previous.Name != "" {
+				next.Set(previous)
+			}
+
+			continue
 		}
 
-		r.Version = entry.Version
-
-		previous, _ := locked.Find(name)
 		fresh := update && (len(names) == 0 || slices.Contains(names, name))
 
 		commit := previous.Commit
@@ -125,8 +127,8 @@ func reconcile(cmd *cobra.Command, opts Options, names []string, update bool) er
 			fmt.Fprintf(out, "%s %s -> %s\n", name, previous.Version, got.lock.Version)
 		case previous.ManifestSHA256 != got.lock.ManifestSHA256:
 			fmt.Fprintf(out, "%s %s, manifest changed\n", name, got.lock.Version)
-		case previous.Platforms[host] != (lock.Platform{}) &&
-			previous.Platforms[host].SHA256 != got.lock.Platforms[host].SHA256:
+		case previous.Platforms[host.String()] != (lock.Platform{}) &&
+			previous.Platforms[host.String()].SHA256 != got.lock.Platforms[host.String()].SHA256:
 			fmt.Fprintf(out, "%s %s, checksum changed\n", name, got.lock.Version)
 		}
 

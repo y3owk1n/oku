@@ -28,6 +28,64 @@ end of `[packages]`.
 
 You can also edit the file by hand and run `oku sync`.
 
+A relative file ref such as `"./recipes/fd.toml"` starts at the directory of the
+list that contains it, not at your working directory.
+
+### Packages for some platforms only
+
+`when` limits a package to matching machines:
+
+```toml
+[packages]
+rectangle = { ref = "github:you/recipes#rectangle", when = { os = "darwin" } }
+patchelf = { ref = "github:you/recipes#patchelf", when = { os = "linux", libc = "glibc" } }
+```
+
+The keys are `os`, `arch` and `libc`, with the values described in the
+[manifest reference](manifest.md#match-values). A missing key matches anything.
+Any other key is an error.
+
+`oku sync` skips a package whose `when` does not match the machine. If the lock
+already has an entry for it from another machine, that entry stays.
+
+### Including other lists
+
+`include` merges other lists under this one:
+
+```toml
+include = [
+  "github:you/machines#base",
+  "./work.toml",
+]
+
+[packages]
+ripgrep = "./my-ripgrep.toml"
+```
+
+Each item is a ref to a list:
+
+| Ref | Reads |
+|---|---|
+| `./work.toml` | That file, relative to the including list. |
+| `https://host/base.toml` | That URL. |
+| `github:you/machines` | `oku.toml` at the root of the repo. |
+| `github:you/machines#base` | `base.toml` at the root, else `lists/base.toml`. |
+| `git+https://host/repo` | `oku.toml` at the root of the repo. |
+| `git+https://host/repo#dir/base.toml` | That file in the repo. |
+
+Rules:
+
+- Includes merge in order, so a later include overrides an earlier one.
+- A package in your own `[packages]` overrides the same name from any include.
+- An included list may include others, up to 8 levels deep. A list that is
+  included twice, or that includes itself, is an error.
+- A list from a URL or a repo can only point at URLs and repos. A local path
+  inside it is an error, because the path refers to the list author's machine.
+- oku never edits an included list. `oku remove` refuses a package that only
+  an include declares. Remove it there, or take the include out.
+- oku uses only the `oku.lock` beside your own `oku.toml`. It ignores a lock
+  beside an included list.
+
 One form is not editable by oku. A package written as its own table,
 `[packages.fd]`, makes `oku add fd` and `oku remove fd` stop and ask you to
 edit it by hand. `oku sync` reads that form.
@@ -55,6 +113,28 @@ strategy = 'artifact'
 url = '...'
 sha256 = '...'
 ```
+
+The lock pins each included list too:
+
+```toml
+[[include]]
+ref = 'github:you/machines#base'
+commit = 'dc2478ae14dc9931336430027ff284d4dc8e4d44'
+sha256 = 'd60f12df...'
+```
+
+`oku sync` reads an included list at its pinned commit and stops if its content
+no longer has the pinned sha256:
+
+```
+oku: include github:you/machines#base: the included list changed since oku.lock was written
+run `oku update` to accept it
+```
+
+`oku update` with no names reads includes fresh. `oku update <name>` keeps them
+pinned, so it never adds or drops packages.
+
+Keys of a `[[package]]` entry:
 
 | Key | Meaning |
 |---|---|

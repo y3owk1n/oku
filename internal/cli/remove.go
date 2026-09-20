@@ -37,6 +37,14 @@ func newRemoveCmd() *cobra.Command {
 			_, inList := listed.Packages[name]
 			_, inLock := locked.Find(name)
 
+			if !inList && len(listed.Include) > 0 && inLock {
+				return fmt.Errorf(
+					"%s is not in %s, so it comes from an include\n"+
+						"oku does not edit included lists, so remove it there",
+					name, e.listPath(),
+				)
+			}
+
 			// A package can be listed without being in the profile, for example
 			// after the data directory was deleted. Remove still has to clear it.
 			err = e.globalProfile().Remove(name)

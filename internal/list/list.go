@@ -11,6 +11,8 @@ import (
 	"strings"
 
 	"github.com/pelletier/go-toml/v2"
+
+	"github.com/y3owk1n/oku/internal/platform"
 )
 
 // FileName is the list's file name.
@@ -20,10 +22,14 @@ const FileName = "oku.toml"
 type Entry struct {
 	Ref     string
 	Version string
+	// When limits the package to matching platforms. The zero value matches all.
+	When platform.Selector
 }
 
 // List is a parsed oku.toml.
 type List struct {
+	// Include holds refs of other lists to merge under this one.
+	Include  []string
 	Packages map[string]Entry
 }
 
@@ -34,20 +40,26 @@ func Read(path string) (*List, error) {
 		return nil, fmt.Errorf("read %s: %w", path, err)
 	}
 
+	return Parse(data, path)
+}
+
+// Parse reads list data. origin names the data in error messages.
+func Parse(data []byte, origin string) (*List, error) {
 	var raw struct {
+		Include  []string       `toml:"include"`
 		Packages map[string]any `toml:"packages"`
 	}
 
 	if err := toml.Unmarshal(data, &raw); err != nil {
-		return nil, fmt.Errorf("parse %s: %w", path, err)
+		return nil, fmt.Errorf("parse %s: %w", origin, err)
 	}
 
-	l := &List{Packages: map[string]Entry{}}
+	l := &List{Include: raw.Include, Packages: map[string]Entry{}}
 
 	for name, value := range raw.Packages {
 		entry, err := toEntry(value)
 		if err != nil {
-			return nil, fmt.Errorf("%s: packages.%s: %w", path, name, err)
+			return nil, fmt.Errorf("%s: packages.%s: %w", origin, name, err)
 		}
 
 		l.Packages[name] = entry
@@ -56,7 +68,7 @@ func Read(path string) (*List, error) {
 	return l, nil
 }
 
-// toEntry accepts the short form "ref" and the table form { ref, version }.
+// toEntry accepts the short form "ref" and the table form { ref, version, when }.
 func toEntry(value any) (Entry, error) {
 	switch v := value.(type) {
 	case string:
@@ -69,6 +81,19 @@ func toEntry(value any) (Entry, error) {
 
 		if e.Ref == "" {
 			return e, errors.New("ref is required")
+		}
+
+		when, _ := v["when"].(map[string]any)
+		for key, field := range map[string]*string{
+			"os": &e.When.OS, "arch": &e.When.Arch, "libc": &e.When.Libc,
+		} {
+			*field, _ = when[key].(string)
+		}
+
+		for key := range when {
+			if key != "os" && key != "arch" && key != "libc" {
+				return e, fmt.Errorf("when.%s is not a selector key, use os, arch or libc", key)
+			}
 		}
 
 		return e, nil
