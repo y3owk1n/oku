@@ -27,6 +27,8 @@ in [`../prd/`](../prd/).
   uninstall.
 - Services: a package's daemon runs under launchd or systemd for your user,
   enabled with `service = true` in your list.
+- A shared store root at `/opt/oku` with `oku setup --system`, the only command
+  that asks for administrator rights.
 - Packages built from source with `[build]` steps, after you approve their
   commands. The build uses tools already on your machine.
 - A build sandbox on macOS and Linux: build commands get no network and cannot

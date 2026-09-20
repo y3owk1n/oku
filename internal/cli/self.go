@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bufio"
+	"context"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -26,19 +27,21 @@ func newSelfCmd(opts Options) *cobra.Command {
 		Short: "Manage the oku installation itself",
 	}
 
-	var keepList, yes bool
+	var keepList, yes, system bool
 
 	uninstall := &cobra.Command{
 		Use:   "uninstall",
 		Short: "Remove oku and everything it installed",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			return runUninstall(cmd, opts, executable, keepList, yes)
+			return runUninstall(cmd, opts, executable, keepList, yes, system)
 		},
 	}
 	uninstall.Flags().
 		BoolVar(&keepList, "keep-list", false, "keep the global oku.toml and oku.lock")
 	uninstall.Flags().BoolVarP(&yes, "yes", "y", false, "do not ask for confirmation")
+	uninstall.Flags().
+		BoolVar(&system, "system", false, "with --yes, also remove what needs administrator rights")
 
 	self.AddCommand(uninstall)
 
@@ -49,7 +52,7 @@ func runUninstall(
 	cmd *cobra.Command,
 	opts Options,
 	executable string,
-	keepList, yes bool,
+	keepList, yes, system bool,
 ) error {
 	e, err := loadEnv()
 	if err != nil {
@@ -75,6 +78,10 @@ func runUninstall(
 	fmt.Fprintf(out, "  config              %s\n", e.config)
 	fmt.Fprintf(out, "  binary              %s\n", executable)
 
+	if e.root != e.data {
+		fmt.Fprintf(out, "  shared store root   %s (needs administrator rights)\n", e.root)
+	}
+
 	if ledger, err := expose.ReadLedger(e.data); err == nil {
 		for _, item := range ledger.Items {
 			fmt.Fprintf(out, "  %-19s %s\n", item.Kind, item.Target)
@@ -85,13 +92,19 @@ func runUninstall(
 		fmt.Fprintf(out, "keeps:\n  %s\n", strings.Join(kept, "\n  "))
 	}
 
-	if !yes {
-		fmt.Fprint(out, "continue? [y/N] ")
+	in := bufio.NewReader(cmd.InOrStdin())
 
-		answer, _ := bufio.NewReader(cmd.InOrStdin()).ReadString('\n')
-		if a := strings.ToLower(strings.TrimSpace(answer)); a != "y" && a != "yes" {
-			return errors.New("uninstall cancelled, nothing was removed")
-		}
+	if !yes && !confirm(in, out, "continue? [y/N] ") {
+		return errors.New("uninstall cancelled, nothing was removed")
+	}
+
+	// --yes alone never elevates.
+	if e.root != e.data && !yes {
+		system = confirm(
+			in,
+			out,
+			fmt.Sprintf("remove %s with administrator rights? [y/N] ", e.root),
+		)
 	}
 
 	// Files outside oku's directories go first, while the ledger still exists.
@@ -117,6 +130,11 @@ func runUninstall(
 		}
 	}
 
+	left, err := removeSharedRoot(cmd.Context(), opts, e, system)
+	if err != nil {
+		return err
+	}
+
 	if err := removeConfig(e.config, keepList); err != nil {
 		return fmt.Errorf("remove %s: %w", e.config, err)
 	}
@@ -126,6 +144,10 @@ func runUninstall(
 	}
 
 	fmt.Fprintln(out, "oku is uninstalled")
+
+	if left != "" {
+		fmt.Fprintf(out, "left in place, empty:\n  %s\nremove it with: sudo rmdir %s\n", left, left)
+	}
 
 	if lines := hookLines(); len(lines) > 0 {
 		fmt.Fprintf(
@@ -140,6 +162,36 @@ func runUninstall(
 	}
 
 	return nil
+}
+
+// removeSharedRoot empties the shared store root, which the user owns, and then
+// deletes the directory itself, which needs administrator rights. Without
+// elevated it returns the directory it left behind.
+func removeSharedRoot(ctx context.Context, opts Options, e env, elevated bool) (string, error) {
+	if e.root == e.data {
+		return "", nil
+	}
+
+	entries, err := os.ReadDir(e.root)
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return "", fmt.Errorf("read %s: %w", e.root, err)
+	}
+
+	for _, entry := range entries {
+		if err := os.RemoveAll(filepath.Join(e.root, entry.Name())); err != nil {
+			return "", fmt.Errorf("remove %s: %w", e.root, err)
+		}
+	}
+
+	if !elevated {
+		return e.root, nil
+	}
+
+	if err := elevate(ctx, opts, []string{"rmdir", e.root}); err != nil {
+		return "", fmt.Errorf("remove %s: %w", e.root, err)
+	}
+
+	return "", nil
 }
 
 // removeConfig deletes the config directory. With keepList it deletes

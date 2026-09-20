@@ -97,24 +97,27 @@ func runGC(cmd *cobra.Command, keep int, dryRun bool) error {
 		}
 	}
 
-	st := e.store()
-
-	unused, err := st.Unreferenced(used)
-	if err != nil {
-		return err
-	}
+	unused := map[string]int64{}
 
 	var freed int64
 
-	for _, path := range slices.Sorted(maps.Keys(unused)) {
-		if !dryRun {
-			if err := st.Remove(path); err != nil {
-				return fmt.Errorf("delete %s: %w", path, err)
-			}
+	for _, st := range e.stores() {
+		found, err := st.Unreferenced(used)
+		if err != nil {
+			return err
 		}
 
-		freed += unused[path]
-		fmt.Fprintf(out, "%s %s (%s)\n", verb, filepath.Base(path), formatSize(unused[path]))
+		for _, path := range slices.Sorted(maps.Keys(found)) {
+			if !dryRun {
+				if err := st.Remove(path); err != nil {
+					return fmt.Errorf("delete %s: %w", path, err)
+				}
+			}
+
+			unused[path] = found[path]
+			freed += found[path]
+			fmt.Fprintf(out, "%s %s (%s)\n", verb, filepath.Base(path), formatSize(found[path]))
+		}
 	}
 
 	if len(unused) == 0 {

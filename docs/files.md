@@ -3,7 +3,8 @@
 oku writes under three directories of its own, and needs no root. The only files
 it writes anywhere else are the apps, fonts and service definitions of packages
 you installed, see
-[Outside oku's directories](#outside-okus-directories).
+[Outside oku's directories](#outside-okus-directories), and the shared store
+root when you ask for one, see [A shared store root](#a-shared-store-root).
 
 | Directory | Default | With the variable set |
 |---|---|---|
@@ -29,7 +30,7 @@ export XDG_CACHE_HOME=/tmp/oku-try/cache
 <config>/oku/
   oku.toml                     your package list
   oku.lock                     what oku resolved
-  config.toml                  your source aliases
+  config.toml                  your source aliases and the store root
 
 <data>/oku/
   store/
@@ -80,6 +81,13 @@ directory.
 `oku remove` leaves store paths in place, because older generations still use
 them. `oku gc` deletes the store paths that no generation uses, see
 [Commands](commands.md#oku-gc).
+
+### A shared store root
+
+[`oku setup --system`](commands.md#oku-setup) moves the store to
+`/opt/oku/store`. It sets `store_root = "/opt/oku"` in `<config>/oku/config.toml`.
+Everything else stays where it was. Delete that line to go back to the store in
+the data directory, then run `oku sync`.
 
 ## Profiles and generations
 

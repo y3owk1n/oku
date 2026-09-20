@@ -3357,3 +3357,125 @@ func TestB76RollbackRestoresWhichServicesAreEnabled(t *testing.T) {
 		t.Fatalf("uninstall left services behind: %v", m.services.state)
 	}
 }
+
+// sharedRoot gives the machine a shared store root and an Elevate that records
+// what oku ran with administrator rights instead of calling sudo.
+func (m *machine) sharedRoot(t *testing.T) (string, *[][]string) {
+	t.Helper()
+
+	root := filepath.Join(filepath.Dir(m.fixtures), "opt", "oku")
+	elevated := &[][]string{}
+
+	m.opts.SystemRoot = root
+	m.opts.Elevate = func(_ context.Context, argv []string) error {
+		*elevated = append(*elevated, argv)
+
+		if argv[0] == "rmdir" {
+			return os.Remove(root)
+		}
+
+		return os.MkdirAll(root, 0o755)
+	}
+
+	return root, elevated
+}
+
+func TestB75SetupSystemNamesTheRootAndAsksBeforeElevating(t *testing.T) {
+	m := newMachine(t)
+	root, elevated := m.sharedRoot(t)
+	ref := m.manifest(t, "tool", map[string]string{"tool": script}, `bin = ["tool"]`)
+
+	_, err := m.run(t, "", "add", ref)
+	must(t, err)
+
+	if len(*elevated) != 0 {
+		t.Fatalf("add elevated without --system: %v", *elevated)
+	}
+
+	if _, err := m.run(t, "", "setup"); err == nil {
+		t.Fatal("setup ran without --system")
+	}
+
+	out, err := m.run(t, "n\n", "setup", "--system")
+	if err == nil || len(*elevated) != 0 || exists(root) {
+		t.Fatalf("answering no still elevated: %v\n%s", *elevated, out)
+	}
+
+	if !strings.Contains(out, root) || !strings.Contains(out, "administrator rights") {
+		t.Fatalf("setup did not name what it creates:\n%s", out)
+	}
+
+	_, err = m.run(t, "y\n", "setup", "--system")
+	must(t, err)
+
+	if len(*elevated) != 1 {
+		t.Fatalf("want one elevated command, got %v", *elevated)
+	}
+
+	_, err = m.run(t, "", "sync")
+	must(t, err)
+
+	entries, err := os.ReadDir(filepath.Join(root, "store"))
+	must(t, err)
+
+	if len(entries) != 1 {
+		t.Fatalf("sync did not install into the shared root: %v", entries)
+	}
+
+	target, err := filepath.EvalSymlinks(m.profile("bin", "tool"))
+	must(t, err)
+
+	resolved, err := filepath.EvalSymlinks(root)
+	must(t, err)
+
+	if !strings.HasPrefix(target, resolved) {
+		t.Fatalf("the profile points at %s, outside the shared root", target)
+	}
+
+	_, err = m.run(t, "", "gc", "--keep", "1")
+	must(t, err)
+
+	if left := m.storeEntries(t); len(left) != 0 {
+		t.Fatalf("gc kept the old copies in the data directory: %v", left)
+	}
+}
+
+func TestB98UninstallNamesTheSharedRootAndAsksBeforeElevating(t *testing.T) {
+	m := newMachine(t)
+	root, elevated := m.sharedRoot(t)
+	ref := m.manifest(t, "tool", map[string]string{"tool": script}, `bin = ["tool"]`)
+
+	_, err := m.run(t, "", "setup", "--system", "--yes")
+	must(t, err)
+	_, err = m.run(t, "", "add", ref)
+	must(t, err)
+
+	*elevated = nil
+
+	out, err := m.run(t, "y\nn\n", "self", "uninstall")
+	must(t, err)
+
+	if len(*elevated) != 0 {
+		t.Fatalf("declining still elevated: %v", *elevated)
+	}
+
+	if !strings.Contains(out, "left in place") || !strings.Contains(out, root) {
+		t.Fatalf("uninstall did not print what is left:\n%s", out)
+	}
+
+	if entries, _ := os.ReadDir(root); len(entries) != 0 || exists(m.data) {
+		t.Fatalf("declining left user-scope files behind: %v", entries)
+	}
+
+	m2 := newMachine(t)
+	root, elevated = m2.sharedRoot(t)
+
+	_, err = m2.run(t, "", "setup", "--system", "--yes")
+	must(t, err)
+	_, err = m2.run(t, "y\ny\n", "self", "uninstall")
+	must(t, err)
+
+	if exists(root) || len(*elevated) != 2 {
+		t.Fatalf("accepting did not remove %s: %v", root, *elevated)
+	}
+}
