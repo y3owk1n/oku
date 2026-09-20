@@ -968,3 +968,46 @@ func TestB18SyncRefAdoptsListAndLockWithIdenticalStoreHashes(t *testing.T) {
 		}
 	}
 }
+
+func TestB19RelativeRefsStartAtTheListAndRemoteListsRejectLocalPaths(t *testing.T) {
+	const commit = "4444444444444444444444444444444444444444"
+
+	m := newMachine(t)
+	m.namedManifest(t, "tool", "tool", "tool")
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/repos/me/lists/commits/HEAD":
+			_, _ = w.Write([]byte(commit))
+		case "/raw/me/lists/" + commit + "/oku.toml":
+			_, _ = w.Write([]byte("[packages]\ntool = \"./tool.toml\"\n"))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	m.opts.GitHubAPI = server.URL + "/api"
+	m.opts.GitHubRaw = server.URL + "/raw"
+
+	listPath := filepath.Join(m.config, "oku.toml")
+	must(t, os.MkdirAll(m.config, 0o755))
+
+	// The list is in the config directory and the test runs elsewhere, so
+	// "../../fixtures" only resolves when it starts at the list.
+	must(
+		t,
+		os.WriteFile(listPath, []byte("[packages]\ntool = \"../../fixtures/tool.toml\"\n"), 0o644),
+	)
+
+	if out, err := m.run(t, "", "sync"); err != nil {
+		t.Fatalf("sync with a relative ref: %v\n%s", err, out)
+	}
+
+	must(t, os.WriteFile(listPath, []byte("include = [\"github:me/lists\"]\n"), 0o644))
+
+	_, err := m.run(t, "", "sync")
+	if err == nil || !strings.Contains(err.Error(), "local path") {
+		t.Fatalf("want a remote list naming a local path to fail, got %v", err)
+	}
+}
