@@ -1138,7 +1138,12 @@ func TestB19AddStoresAFileInsideTheProjectRelativeToIt(t *testing.T) {
 
 	t.Setenv("PATH", "/usr/bin:/bin")
 
-	if out := m.apply(t); !strings.Contains(os.Getenv("PATH"), filepath.Dir(m.projectBin(t, "tool"))) {
+	if out := m.apply(
+		t,
+	); !strings.Contains(
+		os.Getenv("PATH"),
+		filepath.Dir(m.projectBin(t, "tool")),
+	) {
 		t.Fatalf("the hook did not apply the project right after add:\n%s", out)
 	}
 
@@ -1304,6 +1309,221 @@ func TestB21VersionsOnlyMoveOnUpdate(t *testing.T) {
 
 	if got := m.toolOutput(t); got != "1.0.0" {
 		t.Fatalf("update moved a package pinned to 1.0.0 to %s", got)
+	}
+}
+
+// nightlyServer fakes GitHub for owner/tool's moving tag "nightly" and serves
+// its one asset. publish moves the tag, and hits counts the API requests.
+type nightlyServer struct {
+	*httptest.Server
+
+	commit string
+	body   []byte
+	// digest is what the API reports for the asset.
+	digest string
+	hits   int
+}
+
+func newNightlyServer(t *testing.T) *nightlyServer {
+	t.Helper()
+
+	ns := &nightlyServer{}
+	ns.Server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/repos/owner/tool/releases/tags/nightly":
+			ns.hits++
+
+			fmt.Fprintf(
+				w,
+				`{"draft": false, "prerelease": true, "published_at": "2026-09-20T05:23:16Z",`+
+					`"assets": [{"browser_download_url": %q, "digest": "sha256:%s"}]}`,
+				ns.URL+"/dl/tool.tar.gz", ns.digest,
+			)
+		case "/api/repos/owner/tool/commits/nightly":
+			ns.hits++
+
+			fmt.Fprintf(w, `{"sha": %q}`, ns.commit)
+		case "/dl/tool.tar.gz":
+			_, _ = w.Write(ns.body)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(ns.Close)
+
+	return ns
+}
+
+// publish moves the tag to commit with a tool that prints say.
+func (ns *nightlyServer) publish(t *testing.T, m machine, commit, say string) {
+	t.Helper()
+
+	path, sum := m.archive(t, "nightly", map[string]string{"tool": "#!/bin/sh\necho " + say + "\n"})
+
+	body, err := os.ReadFile(path)
+	must(t, err)
+
+	ns.commit, ns.body, ns.digest = commit, body, sum
+}
+
+// manifest writes a manifest that follows the tag and states no checksum.
+func (ns *nightlyServer) manifest(t *testing.T, m machine) string {
+	t.Helper()
+
+	path := filepath.Join(m.fixtures, "tool.toml")
+	must(t, os.WriteFile(path, []byte(fmt.Sprintf(
+		"[package]\nname = \"tool\"\n"+
+			"[version]\nfrom = \"github-releases\"\nrepo = \"owner/tool\"\ntag = \"nightly\"\n"+
+			"[[artifact]]\nurl = \"%s/dl/tool.tar.gz\"\nbin = [\"tool\"]\n",
+		ns.URL,
+	)), 0o644))
+
+	return path
+}
+
+const (
+	nightlyCommitA = "aaaaaaa1111111111111111111111111111111111"
+	nightlyCommitB = "bbbbbbb2222222222222222222222222222222222"
+)
+
+func TestB106AMovingTagInstallsUpdatesAndRollsBack(t *testing.T) {
+	m := newMachine(t)
+	server := newNightlyServer(t)
+	m.opts.GitHubAPI = server.URL + "/api"
+	server.publish(t, m, nightlyCommitA, "monday")
+
+	_, err := m.run(t, "", "add", server.manifest(t, m))
+	must(t, err)
+
+	out, err := m.run(t, "", "list")
+	must(t, err)
+
+	if got := m.toolOutput(t); got != "monday" || !strings.Contains(out, "2026.09.20-aaaaaaa") {
+		t.Fatalf("add installed %s:\n%s", got, out)
+	}
+
+	out, err = m.run(t, "", "update")
+	must(t, err)
+
+	if strings.Contains(out, "tool") {
+		t.Fatalf("update changed a tag that did not move:\n%s", out)
+	}
+
+	server.publish(t, m, nightlyCommitB, "tuesday")
+
+	out, err = m.run(t, "", "update")
+	must(t, err)
+
+	if got := m.toolOutput(t); got != "tuesday" ||
+		!strings.Contains(out, "2026.09.20-aaaaaaa -> 2026.09.20-bbbbbbb") {
+		t.Fatalf("update left tool at %s:\n%s", got, out)
+	}
+
+	server.body = nil
+
+	_, err = m.run(t, "", "rollback")
+	must(t, err)
+
+	if got := m.toolOutput(t); got != "monday" {
+		t.Fatalf("rollback left tool at %s", got)
+	}
+}
+
+func TestB107AMovingTagDownloadMustMatchTheAPIDigest(t *testing.T) {
+	m := newMachine(t)
+	server := newNightlyServer(t)
+	m.opts.GitHubAPI = server.URL + "/api"
+	server.publish(t, m, nightlyCommitA, "monday")
+	server.digest = strings.Repeat("0", 64)
+
+	_, err := m.run(t, "", "add", server.manifest(t, m))
+	if err == nil {
+		t.Fatal("add accepted a download that does not match the API digest")
+	}
+
+	if entries, _ := os.ReadDir(filepath.Join(m.data, "oku", "store")); len(entries) != 0 {
+		t.Fatalf("the rejected download left %d store entries", len(entries))
+	}
+
+	if _, err := os.Lstat(m.profile("bin", "tool")); err == nil {
+		t.Fatal("the rejected download reached the profile")
+	}
+}
+
+func TestB108SyncFailsOnceTheLockedMovingTagMoved(t *testing.T) {
+	m := newMachine(t)
+	server := newNightlyServer(t)
+	m.opts.GitHubAPI = server.URL + "/api"
+	server.publish(t, m, nightlyCommitA, "monday")
+
+	_, err := m.run(t, "", "add", server.manifest(t, m))
+	must(t, err)
+
+	server.publish(t, m, nightlyCommitB, "tuesday")
+	server.hits = 0
+
+	_, err = m.run(t, "", "sync")
+	must(t, err)
+
+	if server.hits != 0 {
+		t.Fatalf("sync asked upstream %d times with the store path present", server.hits)
+	}
+
+	must(t, os.RemoveAll(m.data))
+
+	_, err = m.run(t, "", "sync")
+	if err == nil || !strings.Contains(err.Error(), "oku update tool") {
+		t.Fatalf("want sync to fail and name oku update tool, got %v", err)
+	}
+
+	if _, err := os.Lstat(m.profile("bin", "tool")); err == nil {
+		t.Fatal("sync installed a newer build under the locked version")
+	}
+}
+
+func TestB109AMovingTagPinFailsWhenUpstreamIsElsewhere(t *testing.T) {
+	m := newMachine(t)
+	server := newNightlyServer(t)
+	m.opts.GitHubAPI = server.URL + "/api"
+	server.publish(t, m, nightlyCommitB, "tuesday")
+
+	_, err := m.run(t, "", "add", server.manifest(t, m)+"@2026.09.20-aaaaaaa")
+	if err == nil || !strings.Contains(err.Error(), "2026.09.20-bbbbbbb") {
+		t.Fatalf("want the pin to fail and name the version upstream is at, got %v", err)
+	}
+}
+
+func TestB110LintAndBumpRefuseAMisplacedTag(t *testing.T) {
+	m := newMachine(t)
+
+	cases := map[string]string{
+		"from = \"git-tags\"\nrepo = \"https://example.com/tool\"\ntag = \"nightly\"":                "github-releases",
+		"value = \"1.0.0\"\ntag = \"nightly\"":                                                       "github-releases",
+		"from = \"github-releases\"\nrepo = \"owner/tool\"\nstrip_prefix = \"v\"\ntag = \"nightly\"": "strip_prefix",
+	}
+
+	path := filepath.Join(m.fixtures, "tool.toml")
+
+	write := func(version string) {
+		must(t, os.WriteFile(path, []byte(
+			"[package]\nname = \"tool\"\ndescription = \"a tool\"\n[version]\n"+version+
+				"\n[[artifact]]\nurl = \"https://example.com/tool.tar.gz\"\nbin = [\"tool\"]\n",
+		), 0o644))
+	}
+
+	for version, want := range cases {
+		write(version)
+
+		out, err := m.run(t, "", "manifest", "lint", path)
+		if err == nil || !strings.Contains(out, want) {
+			t.Errorf("lint accepted %q, or did not say %q: %v\n%s", version, want, err, out)
+		}
+	}
+
+	write("from = \"github-releases\"\nrepo = \"owner/tool\"\ntag = \"nightly\"")
+
+	if _, err := m.run(t, "", "manifest", "bump", path); err == nil {
+		t.Fatal("bump accepted a manifest that follows a moving tag")
 	}
 }
 

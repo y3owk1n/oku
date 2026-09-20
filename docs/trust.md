@@ -11,7 +11,9 @@ digest from the first of these that exists:
 
 1. `sha256` in the manifest.
 2. The checksum file at the manifest's `sha256_url`.
-3. The digest `oku.lock` pinned for the same package version and URL.
+3. For a [moving tag](manifest.md#a-moving-tag), the sha256 that the GitHub API
+   reports for the file.
+4. The digest `oku.lock` pinned for the same package version and URL.
 
 A download that does not match is deleted, and nothing is installed:
 
@@ -21,13 +23,13 @@ oku: checksum mismatch for <url>: expected <digest>, download is <digest>
 
 ## Trust on first use
 
-When none of the three exists, oku accepts the download and says so:
+When none of the four exists, oku accepts the download and says so:
 
 ```
 hello publishes no checksum, so oku trusted this download and pinned sha256 667f61a0... in ~/.config/oku/oku.lock
 ```
 
-From then on source 3 applies. The same URL serving different bytes fails on
+From then on source 4 applies. The same URL serving different bytes fails on
 every machine that uses your lock.
 
 If you see this notice, the first download is the one you trusted. Prefer

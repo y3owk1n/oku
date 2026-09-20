@@ -63,6 +63,7 @@ needs no manifest change.
 | `from` | `github-releases` or `git-tags`. Not together with `value`. |
 | `repo` | `owner/repo` for `github-releases`, a git URL for `git-tags`. Required with `from`. |
 | `strip_prefix` | Text cut off the front of a tag to get the version, such as `"v"`. A tag without the prefix is ignored. |
+| `tag` | One tag that upstream moves, such as `"nightly"`. Only with `github-releases`, and not together with `strip_prefix`. See [A moving tag](#a-moving-tag). |
 
 ```toml
 [version]
@@ -85,6 +86,51 @@ How oku turns tags into versions:
 `oku add` installs the newest version, and `oku add <ref>@1.2.0` installs that
 one. The user's `oku.lock` records the version and its tag, and `oku sync`
 installs the locked version without asking upstream again.
+
+### A moving tag
+
+Some projects publish every nightly build under one tag and replace its files
+each time. Name that tag, and oku follows it:
+
+```toml
+[version]
+from = "github-releases"
+repo = "neovim/neovim"
+tag = "nightly"
+
+[[artifact]]
+match = { os = "darwin", arch = "arm64" }
+url = "https://github.com/neovim/neovim/releases/download/{{tag}}/nvim-macos-arm64.tar.gz"
+strip = 1
+bin = ["bin/nvim"]
+```
+
+- oku reads that one release and accepts it when it is a prerelease. A draft
+  fails.
+- Each build is its own version, `<date>-<commit>`, such as
+  `2026.09.20-a73243f`. The date is the day upstream published the release,
+  in UTC, and the commit is the one the tag points at. `{{tag}}` stays `nightly`.
+- `oku update` moves the package when the tag points at another commit. Every
+  build has its own store path, so `oku rollback` returns to the earlier build
+  without a download.
+- When the artifact has no `sha256` and no `sha256_url`, oku checks the download
+  against the sha256 that the GitHub API reports for that file. `url` must be
+  the file's GitHub download URL for that.
+- A `[build]` whose `source` clones `{{tag}}` fails when the clone is not at the
+  commit of the version.
+
+Upstream deletes the old build when it moves the tag. `oku sync` on a machine
+that lacks the locked build can therefore only download it until then.
+Afterwards it stops, and installs no newer build under the locked version:
+
+```
+oku: nvim: upstream moved the tag nightly to 2026.09.21-0c1f2aa since oku.lock was written, and the locked build 2026.09.20-a73243f is gone
+run `oku update nvim` to take the new build
+```
+
+`oku add <ref>@2026.09.20-a73243f` works only while upstream is at that build.
+A [cache](caches.md) does not keep old builds, because it holds no plain
+downloads.
 
 ## [[artifact]]
 

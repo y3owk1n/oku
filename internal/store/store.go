@@ -81,6 +81,11 @@ type Realized struct {
 	VendorSHA256 string
 }
 
+// Has reports whether the artifact of m with that digest is in the store.
+func (s *Store) Has(m *manifest.Manifest, p platform.Platform, sha256 string) bool {
+	return sha256 != "" && exists(s.pathFor(m, p, sha256))
+}
+
 // Realize downloads, verifies and unpacks artifact a of manifest m. It returns
 // an existing store path untouched, and it leaves the store unchanged on any
 // failure.

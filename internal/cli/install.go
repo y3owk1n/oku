@@ -117,7 +117,9 @@ func (e env) install(ctx context.Context, opts Options, req request) (installed,
 
 	// A pin in the list decides the version. Without one, sync stays on the locked
 	// version, and add and update take the newest.
-	release := resolve.Release{Version: previous.Version, Tag: previous.Tag}
+	release := resolve.Release{
+		Version: previous.Version, Tag: previous.Tag, Commit: previous.TagCommit,
+	}
 
 	keep := req.keepVersion && previous.Version != "" &&
 		(r.Version == "" || r.Version == previous.Version)
@@ -137,7 +139,13 @@ func (e env) install(ctx context.Context, opts Options, req request) (installed,
 		release.Tag = release.Version
 	}
 
-	m.Version.Value, m.Tag = release.Version, release.Tag
+	// Upstream may publish the same commit again on a later day. That is the
+	// same build, so it keeps its version.
+	if release.Commit != "" && release.Commit == previous.TagCommit && r.Version == "" {
+		release.Version = previous.Version
+	}
+
+	m.Version.Value, m.Tag, m.TagCommit = release.Version, release.Tag, release.Commit
 
 	host := platform.Host()
 
@@ -229,6 +237,29 @@ func (e env) install(ctx context.Context, opts Options, req request) (installed,
 			pinned = at.SHA256
 		}
 
+		// The locked build of a moving tag is gone once upstream moved the tag, so
+		// a download would be a newer build under the locked version.
+		if keep && m.Version.Tag != "" && !e.store().Has(m, host, pinned) {
+			now, err := e.resolver(opts).Pick(ctx, m.Version, "")
+			if err != nil {
+				return installed{}, fmt.Errorf("%s: %w", r, err)
+			}
+
+			if now.Commit != previous.TagCommit {
+				return installed{}, fmt.Errorf(
+					"upstream moved the tag %s to %s since oku.lock was written, "+
+						"and the locked build %s is gone\nrun `oku update %s` to take the new build",
+					m.Version.Tag, now.Version, previous.Version, m.Package.Name,
+				)
+			}
+
+			release.Digests = now.Digests
+		}
+
+		if artifact.SHA256 == "" && artifact.SHA256URL == "" {
+			artifact.SHA256 = release.Digests[artifact.URL]
+		}
+
 		if req.acceptDigest && (artifact.SHA256 != "" || artifact.SHA256URL != "") {
 			pinned = ""
 		}
@@ -288,6 +319,7 @@ func (e env) install(ctx context.Context, opts Options, req request) (installed,
 			Version:        m.Version.Value,
 			SigningKey:     m.Package.SigningKey,
 			Tag:            tagFor(m),
+			TagCommit:      m.TagCommit,
 			Inferred:       inferred != "" || req.previous.Inferred && req.keepVersion,
 			Manifest:       inferredText(inferred, req),
 			Platforms:      platforms,

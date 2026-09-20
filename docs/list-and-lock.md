@@ -169,6 +169,7 @@ Keys of a `[[package]]` entry:
 | `signing_key` | The manifest's minisign key, when it has one. oku refuses a manifest with another key until you pass `--accept-key`. |
 | `version` | The version installed. |
 | `tag` | The upstream tag of that version, when it differs, such as `v10.2.0`. |
+| `tag_commit` | The full commit a [moving tag](manifest.md#a-moving-tag) pointed at for that version. |
 | `inferred`, `manifest` | Set for a package whose repo has no manifest. `manifest` holds the full text oku inferred. |
 | `platform.<name>` | One entry per platform that has resolved this package. |
 | `dep` | The packages this one depends on, pinned the same way. |

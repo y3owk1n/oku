@@ -71,6 +71,7 @@ signing_key = ""            # minisign public key, optional
 from = "github-releases"    # github-releases | git-tags
 repo = "BurntSushi/ripgrep"
 strip_prefix = "v"
+# tag = "nightly"           # with github-releases, follow one moving tag (D57)
 # or a fixed version, not together with from:
 # value = "14.1.0"
 
@@ -170,6 +171,7 @@ manifest = ""               # the inferred manifest text, when inferred
 signing_key = ""
 version = "14.1.0"
 tag = "v14.1.0"             # only when it differs from version
+tag_commit = ""             # full commit of a moving tag (D57)
 
 [package.platform."linux-amd64-musl"]
 strategy = "artifact"       # artifact | build

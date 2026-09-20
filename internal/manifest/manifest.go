@@ -36,6 +36,9 @@ type Manifest struct {
 	SHA256 string `toml:"-"`
 	// Tag is the upstream tag of the chosen version. {{tag}} expands to it.
 	Tag string `toml:"-"`
+	// TagCommit is the commit a moving tag pointed at when the version was
+	// chosen.
+	TagCommit string `toml:"-"`
 }
 
 type Package struct {
@@ -61,6 +64,9 @@ type Version struct {
 	// StripPrefix is cut off a tag to get the version, such as "v". A tag
 	// without it is ignored.
 	StripPrefix string `toml:"strip_prefix"`
+	// Tag names one tag that upstream moves, such as "nightly". oku follows that
+	// release instead of listing releases.
+	Tag string `toml:"tag"`
 }
 
 const (
@@ -225,6 +231,14 @@ func (m *Manifest) validate() error {
 			"version.from %q must be %q or %q",
 			m.Version.From, FromGitHubReleases, FromGitTags,
 		))
+	}
+
+	switch {
+	case m.Version.Tag == "":
+	case m.Version.From != FromGitHubReleases:
+		errs = append(errs, errors.New(`version.tag needs version.from = "github-releases"`))
+	case m.Version.StripPrefix != "":
+		errs = append(errs, errors.New("set version.tag or version.strip_prefix, not both"))
 	}
 
 	for i, a := range m.Artifacts {
