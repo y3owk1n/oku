@@ -41,7 +41,8 @@ export XDG_CACHE_HOME=/tmp/oku-try/cache
       gen-2/
         bin/rg -> <store path>/bin/rg
         share/...
-        oku-gen.toml           when it was written and the packages in it
+        oku-gen.toml           when it was written, the packages in it, and
+                               the store paths of their deps
         oku.lock               a copy of oku.lock as it was at that time
       current -> gen-2         the active generation
   trust/

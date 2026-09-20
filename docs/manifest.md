@@ -252,7 +252,7 @@ install = { bin = ["tree"], man = ["doc/tree.1"] }
 |---|---|
 | `needs` | Tools that must be on the user's `PATH`, such as `cc` or `cargo`. oku checks them before any step runs and never installs them. |
 | `source` | `{ git, tag }` clones that tag at depth 1 and needs `git`. `{ url, sha256, strip }` downloads and unpacks an archive, and `sha256` is required. Without `source` the build starts in an empty directory. |
-| `deps` | Other oku packages. Not supported yet, and a manifest that lists any fails to build. |
+| `deps` | Other oku packages the build uses, see [Dependencies](#dependencies). |
 
 ### Steps
 
@@ -294,11 +294,67 @@ A `run` step may write into `{{prefix}}` itself, so a project with a working
 `make install` needs no `install` step. A build that leaves `{{prefix}}` empty
 fails.
 
+### Dependencies
+
+A dep is another oku package, given as a [ref](refs.md). `build.deps` are
+installed before the build and are visible to it. `runtime.deps` are installed
+with the package, for prebuilt artifacts too.
+
+```toml
+[build]
+deps = [
+  "github:someone/recipes#zlib",
+  { ref = "github:someone/recipes#openssl", version = ">=3, <4" },
+]
+
+[runtime]
+deps = ["github:someone/recipes#ca-certificates"]
+```
+
+A dep is a ref string, or a table with `ref` and an optional `version`
+constraint. A constraint is one or more comma-separated parts, and all must
+hold. A part is `>=`, `>`, `<=`, `<` or `=` followed by a version, and a bare
+version means `=`. oku picks the newest version that satisfies it. When none
+does, the error names the constraint and the versions it found.
+
+A relative file ref starts at the directory of the manifest that names it. A
+manifest that came from a URL or a repo cannot depend on a local path. A
+dependency cycle is an error.
+
+Deps are not linked into the user's profile, so their programs are not added
+to the user's `PATH`. Each package gets its own deps, and two packages may use
+different versions of the same one. `oku why <name>` shows what uses a dep.
+
+For every build dep, a `run` step gets these variables, so compilers, linkers,
+pkg-config and cmake find it with no flags in your manifest:
+
+| Variable | Holds, for each dep |
+|---|---|
+| `PATH` | `<dep>/bin`, ahead of the `needs` tools |
+| `CPATH` | `<dep>/include` |
+| `LIBRARY_PATH` | `<dep>/lib` |
+| `LD_RUN_PATH` | `<dep>/lib`. The GNU linker records it, so the result finds the dep's shared libraries at runtime. |
+| `PKG_CONFIG_PATH` | `<dep>/lib/pkgconfig` and `<dep>/share/pkgconfig` |
+| `CMAKE_PREFIX_PATH` | `<dep>` |
+
+`{{dep.<name>.prefix}}` expands to a dep's directory when you need the path
+itself.
+
+On macOS the linker has no `LD_RUN_PATH`. A shared library must record its own
+absolute install name, which cmake and autotools do when they are given
+`{{prefix}}`. With a bare compiler call it is
+`cc -dynamiclib -install_name {{prefix}}/lib/libfoo.dylib ...`.
+
+A package's store path depends on the deps it was built against, so a new dep
+version leads to a new build instead of changing an installed package.
+
 ### The build environment
 
 A `run` step does not see the user's environment. It gets:
 
-- `PATH` with the directories of the `needs` tools, then `/usr/bin` and `/bin`
+- `PATH` with each dep's `bin`, the directories of the `needs` tools, then
+  `/usr/bin` and `/bin`
+- the [dependency variables](#dependencies) above
 - `HOME` and `TMPDIR` pointing at empty temporary directories
 - `OKU_PREFIX`, `OKU_SRC`, `OKU_JOBS`, and the step's `env`
 

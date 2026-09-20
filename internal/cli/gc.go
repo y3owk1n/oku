@@ -89,6 +89,10 @@ func runGC(cmd *cobra.Command, keep int, dryRun bool) error {
 
 			for _, pkg := range gen.Packages {
 				used[pkg.StorePath] = true
+
+				for _, dep := range pkg.Closure {
+					used[dep] = true
+				}
 			}
 		}
 	}

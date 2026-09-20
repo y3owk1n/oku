@@ -56,6 +56,8 @@ Common failures:
 | `<name> has no [build], so it cannot be built from source` | `--from-source` on a manifest with artifacts only. |
 | `the build needs "<tool>", which is not on PATH` | Install that tool yourself. oku does not install `needs`. |
 | `<name> needs approval to run them, and this is not a terminal` | The manifest runs build commands and stdin is not a terminal. Pass `--yes` after reading them. |
+| `dep <ref>: no version satisfies ">=9"` | A dep's version constraint matches nothing upstream. The versions found follow. |
+| `dependency cycle: a -> b -> a` | Two manifests depend on each other. |
 | `build.step[N] (run) failed` | A build step failed. The last 40 lines of its output follow. |
 | `checksum mismatch for <url>` | The download differs from the expected sha256. Nothing was installed. |
 | `<alias> is not a source and <arg> is not a file` | The argument looks like `alias/name`, but no such source exists. See `oku source list`. |
@@ -91,6 +93,25 @@ oku list
 
 Prints one line per installed package: name, version, ref. With nothing
 installed it prints `no packages installed`.
+
+## oku why
+
+```
+oku why <name>
+```
+
+Says why a package is in the store. Deps are not linked into your profile, so
+`oku list` does not show them. `why` names the installed packages that depend
+on one, directly or through another dep.
+
+```
+$ oku why openssl
+openssl 3.4.0 is needed by curl 8.11.0
+openssl 1.1.1w is needed by legacy-tool 2.0
+```
+
+For a package in your own list it prints the ref it came from. It fails for a
+name that nothing installed uses.
 
 ## oku sync
 
@@ -265,6 +286,8 @@ freed 4.6 MiB from 1 store path
 
 With nothing to delete it prints
 `nothing to delete, every store path is used by a generation`.
+
+A dep counts as used while any generation holds a package that depends on it.
 
 `gc` does not touch the download cache, `oku.toml`, `oku.lock`, or the
 temporary directory of an install that is still running. You cannot roll back

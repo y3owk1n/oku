@@ -60,6 +60,8 @@ run them? [y/N]
   manifest that changed asks again.
 - When stdin is not a terminal, oku does not ask. It refuses, and `--yes`
   approves. Use `--yes` in scripts only for manifests you have read.
+- A dep that builds from source asks for its own approval, before the package
+  that needs it.
 - An approval applies to one machine. `oku sync` on a new machine asks again.
 - A manifest with only `install`, `copy`, `fetch` and `extract` steps runs no
   commands and needs no approval.

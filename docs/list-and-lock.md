@@ -145,8 +145,14 @@ Keys of a `[[package]]` entry:
 | `tag` | The upstream tag of that version, when it differs, such as `v10.2.0`. |
 | `inferred`, `manifest` | Set for a package whose repo has no manifest. `manifest` holds the full text oku inferred. |
 | `platform.<name>` | One entry per platform that has resolved this package. |
+| `dep` | The packages this one depends on, pinned the same way. |
 
 Platform names are `os-arch`, plus `-glibc` or `-musl` on Linux.
+
+Deps are nested under the package that needs them, as `[[package.dep]]`, and a
+dep's own deps nest under it. Each package pins its own, so two packages can
+pin different versions of the same dep. `oku sync` installs every dep at its
+pinned version, and `oku update` re-resolves them with their parent.
 
 Packages are sorted by name, so the same state always writes the same bytes
 and diffs stay small.

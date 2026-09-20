@@ -79,6 +79,84 @@ func (r *Resolver) Pick(ctx context.Context, v manifest.Version, want string) (R
 	)
 }
 
+// PickWithin returns the newest release of v that satisfies constraint, such as
+// ">=3" or ">=1.2, <2". An empty constraint accepts every version.
+func (r *Resolver) PickWithin(
+	ctx context.Context,
+	v manifest.Version,
+	constraint string,
+) (Release, error) {
+	releases := []Release{{Version: v.Value, Tag: v.Value}}
+
+	if v.From != "" {
+		var err error
+		if releases, err = r.List(ctx, v); err != nil {
+			return Release{}, err
+		}
+	}
+
+	var seen []string
+
+	for _, release := range releases {
+		ok, err := Satisfies(release.Version, constraint)
+		if err != nil {
+			return Release{}, err
+		}
+
+		if ok {
+			return release, nil
+		}
+
+		if len(seen) < 5 {
+			seen = append(seen, release.Version)
+		}
+	}
+
+	return Release{}, fmt.Errorf(
+		"no version satisfies %q, the versions found are %s", constraint, strings.Join(seen, ", "),
+	)
+}
+
+// Satisfies reports whether version meets every comma-separated part of
+// constraint. A part is an operator (>=, >, <=, <, =) and a version, and a bare
+// version means "=".
+func Satisfies(version, constraint string) (bool, error) {
+	for _, part := range strings.Split(constraint, ",") {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+
+		op := "="
+
+		for _, candidate := range []string{">=", "<=", ">", "<", "="} {
+			if rest, ok := strings.CutPrefix(part, candidate); ok {
+				op, part = candidate, strings.TrimSpace(rest)
+
+				break
+			}
+		}
+
+		if part == "" || !unicode.IsDigit(rune(part[0])) {
+			return false, fmt.Errorf(
+				"version constraint %q: want an operator and a version, such as >=1.2",
+				constraint,
+			)
+		}
+
+		order := Compare(version, part)
+
+		met := map[string]bool{
+			">=": order >= 0, ">": order > 0, "<=": order <= 0, "<": order < 0, "=": order == 0,
+		}[op]
+		if !met {
+			return false, nil
+		}
+	}
+
+	return true, nil
+}
+
 // List returns the releases of v, newest first.
 func (r *Resolver) List(ctx context.Context, v manifest.Version) ([]Release, error) {
 	var (

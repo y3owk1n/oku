@@ -21,6 +21,8 @@ in [`../prd/`](../prd/).
   single binary.
 - Packages built from source with `[build]` steps, after you approve their
   commands. The build uses tools already on your machine.
+- Dependencies between packages, with version constraints. A build finds its
+  deps' headers and libraries with no flags in the manifest.
 - `oku add github:owner/repo` for a repo that has no oku manifest, by reading
   its newest release.
 - `oku manifest init`, `lint` and `bump` for people who publish a manifest.
@@ -35,7 +37,7 @@ in [`../prd/`](../prd/).
 
 ## What does not work yet
 
-- Build `deps` on other oku packages, `patch` and `vendor` steps, and a build
-  sandbox. Builds can use the network and read your files.
+- `patch` and `vendor` build steps, and a build sandbox. Builds can use the
+  network and read your files.
 - Per-project lists and the shell hook.
 - `.tar.xz` and `.tar.zst` archives.

@@ -31,6 +31,9 @@ type Package struct {
 	Version   string `toml:"version"`
 	Ref       string `toml:"ref"`
 	StorePath string `toml:"store_path"`
+	// Closure holds the store paths of every package this one depends on. They
+	// are not linked into the profile, and they keep gc from deleting them.
+	Closure []string `toml:"closure,omitempty"`
 }
 
 type state struct {
@@ -128,7 +131,12 @@ func (p *Profile) Replace(pkgs []Package, lockData []byte) (bool, error) {
 	pkgs = slices.Clone(pkgs)
 	slices.SortFunc(pkgs, func(a, b Package) int { return strings.Compare(a.Name, b.Name) })
 
-	if slices.Equal(have, pkgs) {
+	same := func(a, b Package) bool {
+		return a.Name == b.Name && a.Version == b.Version && a.Ref == b.Ref &&
+			a.StorePath == b.StorePath && slices.Equal(a.Closure, b.Closure)
+	}
+
+	if slices.EqualFunc(have, pkgs, same) {
 		return false, nil
 	}
 

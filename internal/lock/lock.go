@@ -58,6 +58,20 @@ type Package struct {
 	Manifest string `toml:"manifest,omitempty"`
 	// Platforms is keyed by platform.Platform.String(), such as "linux-amd64-musl".
 	Platforms map[string]Platform `toml:"platform"`
+	// Deps pins the packages this one depends on. Each package pins its own, so
+	// two packages may hold different versions of the same dep.
+	Deps []Package `toml:"dep,omitempty"`
+}
+
+// FindDep returns the pinned dep that came from ref.
+func (p Package) FindDep(ref string) Package {
+	for _, dep := range p.Deps {
+		if dep.Ref == ref {
+			return dep
+		}
+	}
+
+	return Package{}
 }
 
 // Platform pins what one platform installs.
