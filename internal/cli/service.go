@@ -54,7 +54,7 @@ func (e env) definition(pkg profile.Package, svc manifest.Service) (service.Defi
 	}
 
 	if pkg.System {
-		d.LogFile = filepath.Join(service.SystemLogDir, svc.Name+".log")
+		d.LogFile = filepath.Join(service.SystemLogDir(), svc.Name+".log")
 	}
 
 	vars := map[string]string{"prefix": pkg.StorePath, "version": pkg.Version}

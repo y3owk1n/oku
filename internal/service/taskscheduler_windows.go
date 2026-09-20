@@ -18,8 +18,11 @@ import (
 // both and then runs the service's program.
 const RunCommand = "service-run"
 
-// SystemLogDir is unused on Windows, where system scope is not built yet.
-const SystemLogDir = ""
+// systemDir is where oku keeps the definitions and logs of system services.
+func systemDir() string { return filepath.Join(os.Getenv("ProgramData"), "oku") }
+
+// SystemLogDir is where a system service's output goes.
+func SystemLogDir() string { return filepath.Join(systemDir(), "logs") }
 
 // taskScheduler runs a service as a scheduled task of the current user. An
 // enabled service has a logon trigger. One that is only installed has no
@@ -27,6 +30,9 @@ const SystemLogDir = ""
 type taskScheduler struct {
 	// dir holds one JSON file per service, which "oku service-run" reads.
 	dir string
+	// system makes the task run as the SYSTEM account from boot, with no user
+	// logged on. Registering such a task needs administrator rights.
+	system bool
 }
 
 // New returns the service manager for this OS. dataDir is oku's data directory.
@@ -35,7 +41,9 @@ func New(_, dataDir string) Manager {
 }
 
 // NewSystem returns the manager for services that run for the whole machine.
-func NewSystem() Manager { return unsupported{} }
+func NewSystem() Manager {
+	return &taskScheduler{dir: filepath.Join(systemDir(), "services"), system: true}
+}
 
 // Stored is what "oku service-run" needs to start a service.
 type Stored struct {
@@ -92,7 +100,7 @@ func (t *taskScheduler) Install(ctx context.Context, d Definition, enabled bool)
 	definition := filepath.Join(t.dir, d.Name+".xml")
 	if err := os.WriteFile(
 		definition,
-		utf16File(taskXML(d, self, t.File(d), owner.Username, enabled)),
+		utf16File(taskXML(d, self, t.File(d), owner.Username, enabled, t.system)),
 		0o644,
 	); err != nil {
 		return err
@@ -203,7 +211,7 @@ func utf16File(text string) []byte {
 // taskXML renders the Task Scheduler definition. The task runs with the user's
 // own rights and only while that user is logged on. Task Scheduler restarts a task only after a failure, so "always"
 // and "on-failure" are the same here.
-func taskXML(d Definition, self, stored, account string, enabled bool) string {
+func taskXML(d Definition, self, stored, account string, enabled, system bool) string {
 	esc := func(s string) string {
 		var b strings.Builder
 
@@ -218,6 +226,18 @@ func taskXML(d Definition, self, stored, account string, enabled bool) string {
 			"</UserId></LogonTrigger>"
 	}
 
+	principal := "<UserId>" + esc(account) + "</UserId>\n    " +
+		"<LogonType>InteractiveToken</LogonType>\n    <RunLevel>LeastPrivilege</RunLevel>"
+
+	// S-1-5-18 is the SYSTEM account, which needs no password and no logon.
+	if system {
+		principal = "<UserId>S-1-5-18</UserId>\n    <RunLevel>HighestAvailable</RunLevel>"
+
+		if enabled {
+			trigger = "<BootTrigger><Enabled>true</Enabled></BootTrigger>"
+		}
+	}
+
 	restart := ""
 	if d.Restart == "always" || d.Restart == "on-failure" {
 		restart = "<RestartOnFailure><Interval>PT1M</Interval><Count>999</Count></RestartOnFailure>"
@@ -228,9 +248,7 @@ func taskXML(d Definition, self, stored, account string, enabled bool) string {
   <RegistrationInfo><Description>` + esc(d.Name) + `, installed by oku</Description></RegistrationInfo>
   <Triggers>` + trigger + `</Triggers>
   <Principals><Principal id="Author">
-    <UserId>` + esc(account) + `</UserId>
-    <LogonType>InteractiveToken</LogonType>
-    <RunLevel>LeastPrivilege</RunLevel>
+    ` + principal + `
   </Principal></Principals>
   <Settings>
     <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>

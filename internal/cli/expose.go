@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 
@@ -280,6 +281,26 @@ func (e env) applyAsRoot(
 		}
 	}
 
+	// JSON holds many quotes, and the Windows consent prompt does not keep the
+	// quotes of an argument. So on Windows the change goes through a file.
+	if runtime.GOOS == "windows" {
+		file, err := os.CreateTemp("", "oku-change-*.json")
+		if err != nil {
+			return err
+		}
+		defer os.Remove(file.Name())
+
+		if _, err := file.Write(payload); err != nil {
+			return err
+		}
+
+		if err := file.Close(); err != nil {
+			return err
+		}
+
+		return elevate(ctx, opts, []string{executable, systemApply, action, "@" + file.Name()})
+	}
+
 	return elevate(ctx, opts, []string{executable, systemApply, action, string(payload)})
 }
 
@@ -291,8 +312,20 @@ func newSystemApplyCmd(opts Options) *cobra.Command {
 		Hidden: true,
 		Args:   cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			payload := []byte(args[1])
+
+			// Windows passes the change in a file, see applyAsRoot.
+			if path, isFile := strings.CutPrefix(args[1], "@"); isFile {
+				data, err := os.ReadFile(path)
+				if err != nil {
+					return err
+				}
+
+				payload = data
+			}
+
 			var change systemChange
-			if err := json.Unmarshal([]byte(args[1]), &change); err != nil {
+			if err := json.Unmarshal(payload, &change); err != nil {
 				return fmt.Errorf("read the change: %w", err)
 			}
 
@@ -343,7 +376,7 @@ func applySystem(cmd *cobra.Command, opts Options, action string, change systemC
 	case "place":
 		return expose.Place(item)
 	case "remove":
-		if err := os.RemoveAll(item.Target); err != nil {
+		if err := expose.Remove(item); err != nil {
 			return err
 		}
 

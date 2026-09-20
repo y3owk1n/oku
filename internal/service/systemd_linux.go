@@ -31,7 +31,7 @@ func New(home, _ string) Manager {
 }
 
 // SystemLogDir is empty because the journal holds a system service's output.
-const SystemLogDir = ""
+func SystemLogDir() string { return "" }
 
 // NewSystem returns the manager for services that run as root for the whole
 // machine. Everything but Status and Logs needs root.

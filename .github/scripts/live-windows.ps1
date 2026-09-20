@@ -302,6 +302,81 @@ Check 'remove deletes the task' { -not (Get-ScheduledTask -TaskName 'oku-ticker'
 Start-Sleep -Seconds 2
 Check 'remove stops the program' { -not (Get-Process ticker -ErrorAction SilentlyContinue) }
 
+# System scope: an app, a font and a service for the whole machine. The runner is
+# already an administrator, so oku runs the privileged step directly.
+Set-Content (Join-Path $fixtures 'sysdemo.toml') @"
+[package]
+name = "sysdemo"
+[version]
+value = "1.0.0"
+[build]
+needs = ["go"]
+[[build.step]]
+run = "Copy-Item '$tickerGo' main.go; Set-Content go.mod 'module sysdemo'; go build -o sysdemo.exe .; Copy-Item (Join-Path `$env:SystemRoot 'Fonts/arial.ttf') OkuSystem.ttf"
+shell = "pwsh"
+[[build.step]]
+install = { bin = ["sysdemo.exe"], font = ["OkuSystem.ttf"] }
+[[app]]
+name = "Oku System Demo"
+exec = "bin/sysdemo.exe"
+[[service]]
+name = "sysdemo"
+command = "bin/sysdemo.exe"
+args = ["--system"]
+env = { PORT = "9090" }
+"@
+
+$sysShortcut = Join-Path $env:ProgramData 'Microsoft\Windows\Start Menu\Programs\oku-oku-system-demo.lnk'
+$sysFont = Join-Path $env:SystemRoot 'Fonts\OkuSystem.ttf'
+$sysFontsKey = 'HKLM:\Software\Microsoft\Windows NT\CurrentVersion\Fonts'
+
+$asked = ('y' | & $oku add (Join-Path $fixtures 'sysdemo.toml') --yes --system --service 2>&1) -join "`n"
+if ($LASTEXITCODE -ne 0) { throw "oku add --system failed: $asked" }
+Check 'add --system names what it writes before it writes it' {
+    ($asked -match 'administrator rights') -and ($asked -match [regex]::Escape($sysFont))
+}
+Start-Sleep -Seconds 3
+Check 'the shortcut and the font are in the machine-wide places' {
+    (Test-Path $sysShortcut) -and (Test-Path $sysFont) -and
+    ((Get-ItemProperty $sysFontsKey).'oku OkuSystem.ttf' -eq $sysFont)
+}
+Check 'the service task runs as SYSTEM from boot' {
+    $task = Get-ScheduledTask -TaskName 'oku-sysdemo'
+    ($task.Principal.UserId -eq 'SYSTEM') -and ($task.Triggers[0].CimClass.CimClassName -eq 'MSFT_TaskBootTrigger')
+}
+Check 'the program runs as SYSTEM' {
+    (Get-Process sysdemo -IncludeUserName).UserName -match 'SYSTEM'
+}
+Check 'its log is under ProgramData' {
+    (Get-Content (Join-Path $env:ProgramData 'oku\logs\sysdemo.log')) -match 'PORT=9090 and --system'
+}
+
+$left = (& $oku remove sysdemo 2>&1) -join "`n"
+Check 'remove without --system leaves system scope alone and says so' {
+    ($left -match 'oku sync --system') -and (Test-Path $sysFont) -and
+    (Get-ScheduledTask -TaskName 'oku-sysdemo' -ErrorAction SilentlyContinue)
+}
+
+$removal = ('y' | & $oku sync --system 2>&1) -join "`n"
+Write-Host $removal
+Start-Sleep -Seconds 3
+Check 'sync --system removes the shortcut' { -not (Test-Path $sysShortcut) }
+Check 'sync --system removes the font' { -not (Test-Path $sysFont) }
+Check 'sync --system removes the font from the registry' {
+    -not ((Get-ItemProperty $sysFontsKey).PSObject.Properties.Name -contains 'oku OkuSystem.ttf')
+}
+Check 'sync --system removes the task' { -not (Get-ScheduledTask -TaskName 'oku-sysdemo' -ErrorAction SilentlyContinue) }
+Check 'sync --system stops the program' { -not (Get-Process sysdemo -ErrorAction SilentlyContinue) }
+
+# The shared store root.
+$shared = Join-Path $env:ProgramData 'oku'
+Oku setup --system --yes
+Check 'setup --system creates the shared root and lets the user write to it' {
+    (Test-Path $shared) -and ((Get-Content "$env:XDG_CONFIG_HOME\oku\config.toml") -match 'store_root')
+}
+Oku sync
+Check 'sync installs into the shared root' { Get-ChildItem (Join-Path $shared 'store') }
+
 # An .msi download, which oku unpacks with "msiexec /a" and never installs.
 Set-Content (Join-Path $fixtures 'gh.toml') @'
 [package]
@@ -342,7 +417,8 @@ Check 'a program from a 7z archive runs through its shim' { $banner -match '7-Zi
 
 # Uninstall, which has to delete the running oku.exe and the junctions.
 Set-Location $env:RUNNER_TEMP
-Oku self uninstall --yes
+Oku self uninstall --yes --system
+Check 'uninstall --system removes the shared root' { -not (Test-Path (Join-Path $env:ProgramData 'oku')) }
 Check 'oku.exe is no longer at its path' { -not (Test-Path $oku) }
 Check 'data, cache and config are gone' {
     -not (Test-Path "$env:XDG_DATA_HOME\oku") -and -not (Test-Path "$env:XDG_CACHE_HOME\oku") -and

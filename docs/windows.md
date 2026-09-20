@@ -14,14 +14,26 @@ Tested on a GitHub Actions `windows-latest` machine with real releases:
   stdin, stdout and exit code unchanged.
 - Apps and fonts for your user, see [Apps and fonts](#apps-and-fonts).
 - Services for your user, see [Services](#services).
+- [System scope](#system-scope): apps, fonts and services for the whole machine,
+  and the shared store root.
 - Building from source, see [Builds](#builds).
 - `oku self uninstall`, see [Uninstalling](#uninstalling).
 - [Projects](projects.md) with the PowerShell hook: `oku allow`, and a project's
   programs on `PATH` while you are inside it.
 
-## What does not work yet
+## What is not verified
 
-- [System scope](system-scope.md): apps, fonts and services for the whole machine.
+Everything the spec promises for Windows is built. These parts are built and
+have not run on a real machine of the kind they are for:
+
+- The Windows consent prompt for [system scope](#system-scope). The test machine
+  is already an administrator and has no desktop.
+- Registering a service task as a standard user. The test machine is an
+  administrator.
+- A program that loads a DLL from a dep, see [Shims](#shims).
+
+Windows has no sandbox that oku can use, so a build from source can reach the
+network and read your files, see [Builds](#builds).
 
 ## Put oku's programs on PATH
 
@@ -105,6 +117,30 @@ rely on that.
 Task Scheduler restarts a task only after it fails. So `restart = "always"`
 behaves like `restart = "on-failure"` here: one minute after a failure the task
 starts again. A program that exits with code 0 stays stopped.
+
+## System scope
+
+[System scope](system-scope.md) works as on the other systems: `system = true`
+in the list, `--system` on the command, and oku lists every file and asks before
+it writes.
+
+| | Where |
+|---|---|
+| Apps | `%ProgramData%\Microsoft\Windows\Start Menu\Programs\oku-<name>.lnk` |
+| Fonts | `%SystemRoot%\Fonts\<file>`, and a value `oku <file>` under `HKLM\Software\Microsoft\Windows NT\CurrentVersion\Fonts` |
+| Services | a scheduled task `oku-<name>` that runs as the `SYSTEM` account, with a trigger at boot when enabled |
+| Service definitions and output | `%ProgramData%\oku\services\` and `%ProgramData%\oku\logs\` |
+| Shared store root | `%ProgramData%\oku`, from `oku setup --system`, with full control for your user |
+
+Windows has no `sudo`. In a terminal that runs as administrator oku does the
+privileged step directly. In a normal terminal it starts that step through the
+Windows consent prompt, once per file. The consent prompt path is not tested,
+because the test machine has no desktop to show it on.
+
+A system service is a task, as a user service is, and not a Windows service. A
+program has to implement the service control protocol to be a Windows service,
+and a package's program does not. The task runs from boot with no user logged
+on, which a service needs.
 
 ## Builds
 

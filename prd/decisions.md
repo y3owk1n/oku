@@ -528,8 +528,16 @@ window inside a job object with kill-on-close. Why: `schtasks /End` kills only
 the task's own process, and without the job a stopped service keeps running.
 The wrapper exits when the service's program exits, so D14's "no oku daemon"
 still holds. Task Scheduler restarts only after a failure, so `always` behaves
-like `on-failure`. System scope on Windows, which D14 maps to a Windows service,
-is not built.
+like `on-failure`.
+
+A system service is the same task, run as the `SYSTEM` account with a boot
+trigger. D14 said "Windows service". A Windows service has to implement the
+service control protocol, which a package's program does not, and a task from
+boot with no user logged on gives the same result with the code that user
+services already test. Windows has no `sudo`, so an elevated oku does the
+privileged step directly, and otherwise starts it through the consent prompt.
+The change goes through a file, because that prompt does not keep the quotes of
+an argument.
 
 ## D55. The sandbox probe runs the real setup
 

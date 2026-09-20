@@ -119,8 +119,16 @@ func UserDirs(home, dataHome string) Dirs {
 // SystemDirs returns the directories this OS reads apps and fonts from for
 // every user. Only root can write to them.
 func SystemDirs() Dirs {
-	if runtime.GOOS == "darwin" {
+	switch runtime.GOOS {
+	case "darwin":
 		return Dirs{Apps: "/Applications", Fonts: "/Library/Fonts"}
+	case "windows":
+		return Dirs{
+			Apps: filepath.Join(
+				os.Getenv("ProgramData"), "Microsoft", "Windows", "Start Menu", "Programs",
+			),
+			Fonts: filepath.Join(os.Getenv("SystemRoot"), "Fonts"),
+		}
 	}
 
 	return Dirs{Apps: "/usr/local/share/applications", Fonts: "/usr/local/share/fonts/oku"}
@@ -240,7 +248,7 @@ const shortcutExt = ".lnk"
 // Remove deletes an app or a font. A Windows font also leaves the registry.
 func Remove(item Item) error {
 	if item.Kind == "font" {
-		if err := unregisterFont(item.Target); err != nil {
+		if err := unregisterFont(item); err != nil {
 			return err
 		}
 	}
@@ -275,7 +283,7 @@ func Place(item Item) error {
 	}
 
 	if item.Kind == "font" {
-		return registerFont(item.Target)
+		return registerFont(item)
 	}
 
 	return nil
