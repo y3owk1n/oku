@@ -3199,6 +3199,17 @@ func TestB72UnpacksPackageFormatsWithoutRunningAnythingInside(t *testing.T) {
 		"hello from rpm",
 	)
 
+	// The archive was made with 7-Zip and holds tool-1.0/bin/tool, a data file and
+	// a symlink.
+	sevenZip, err := os.ReadFile(filepath.Join("testdata", "tool.7z"))
+	must(t, err)
+
+	m.installAndRun(
+		t,
+		m.fileManifest(t, "tool.7z", sevenZip, "strip = 1\nbin = [\"bin/tool\"]"),
+		"hello from 7z",
+	)
+
 	for _, path := range []string{marker, "/tmp/oku-rpm-scriptlet-ran"} {
 		if exists(path) {
 			t.Fatalf("oku ran a package script, %s exists", path)

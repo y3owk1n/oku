@@ -68,7 +68,8 @@ var (
 	// unpackable are the archive endings oku can unpack. A name with no known
 	// ending is taken as a single binary.
 	unpackable = []string{
-		".tar.gz", ".tgz", ".tar.bz2", ".tbz2", ".tar.xz", ".txz", ".tar.zst", ".zip", ".tar",
+		".tar.gz", ".tgz", ".tar.bz2", ".tbz2", ".tar.xz", ".txz", ".tar.zst", ".zip", ".7z",
+		".tar",
 	}
 	// skipped are endings of files that are not the package itself, or that oku
 	// cannot unpack yet.
@@ -289,7 +290,7 @@ func rank(name string) int {
 	lower := strings.ToLower(name)
 
 	switch {
-	case strings.HasSuffix(lower, ".zip"):
+	case strings.HasSuffix(lower, ".zip"), strings.HasSuffix(lower, ".7z"):
 		return 1
 	case isArchive(lower):
 		return 0

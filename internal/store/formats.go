@@ -16,6 +16,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/bodgit/sevenzip"
 	"github.com/cavaliergopher/cpio"
 	"github.com/cavaliergopher/rpm"
 	"github.com/klauspost/compress/zstd"
@@ -31,6 +32,7 @@ var (
 	magicAr    = []byte("!<arch>\n")
 	magicRPM   = []byte{0xed, 0xab, 0xee, 0xdb}
 	magicXar   = []byte("xar!")
+	magic7z    = []byte{'7', 'z', 0xbc, 0xaf, 0x27, 0x1c}
 	// magicOLE starts an OLE compound file, which is what an .msi is.
 	magicOLE = []byte{0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1}
 )
@@ -63,6 +65,37 @@ func decompress(r io.Reader) (io.Reader, error) {
 	default:
 		return buffered, nil
 	}
+}
+
+// un7z unpacks a 7z archive. An archive made on Windows has no unix modes, so
+// oku writes its files with the default mode.
+func un7z(f *os.File, root *os.Root, strip int) error {
+	info, err := f.Stat()
+	if err != nil {
+		return err
+	}
+
+	archive, err := sevenzip.NewReader(f, info.Size())
+	if err != nil {
+		return err
+	}
+
+	for _, entry := range archive.File {
+		name, ok, err := stripPath(entry.Name, strip)
+		if err != nil {
+			return err
+		}
+
+		if !ok {
+			continue
+		}
+
+		if err := unpackEntry(root, name, entry); err != nil {
+			return fmt.Errorf("extract %s: %w", entry.Name, err)
+		}
+	}
+
+	return nil
 }
 
 // undeb unpacks the data archive of a Debian package. It never reads the
