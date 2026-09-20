@@ -2796,7 +2796,7 @@ func TestB66EnvPrintsTheExportsForEachShell(t *testing.T) {
 	_, err := m.run(t, "", "allow")
 	must(t, err)
 
-	for shell, want := range map[string]string{"bash": "export PTOOL_HOME='", "zsh": "export PTOOL_HOME='", "fish": "set -gx PTOOL_HOME '"} {
+	for shell, want := range map[string]string{"bash": "export PTOOL_HOME='", "zsh": "export PTOOL_HOME='", "fish": "set -gx PTOOL_HOME '", "pwsh": "$env:PTOOL_HOME = '"} {
 		out, err := m.run(t, "", "env", "--shell", shell)
 		must(t, err)
 

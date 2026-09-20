@@ -12,10 +12,11 @@ Tested on a GitHub Actions `windows-latest` machine with real releases:
   `windows` asset for your CPU.
 - Programs start through the profile from any directory, with their arguments,
   stdin, stdout and exit code unchanged.
+- [Projects](projects.md) with the PowerShell hook: `oku allow`, and a project's
+  programs on `PATH` while you are inside it.
 
 ## What does not work yet
 
-- The shell hook for PowerShell, so [projects](projects.md) do not activate.
 - Building from source. `run` steps need a `shell`, and there is no sandbox on
   Windows.
 - Apps, fonts and services.

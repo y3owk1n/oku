@@ -20,7 +20,7 @@ import (
 
 func newHookCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "hook <bash|zsh|fish>",
+		Use:   "hook <bash|zsh|fish|pwsh>",
 		Short: "Print the shell code that applies a project's environment",
 		Long: `Print the shell code that applies a project's environment.
 
@@ -29,6 +29,7 @@ Add one line to your shell's startup file. oku never edits that file.
   bash, in ~/.bashrc:                 ` + shellhook.Line("bash") + `
   zsh, in ~/.zshrc:                   ` + shellhook.Line("zsh") + `
   fish, in ~/.config/fish/config.fish: ` + shellhook.Line("fish") + `
+  PowerShell, in the file $PROFILE names: ` + shellhook.Line("pwsh") + `
 
 The line does nothing when oku is not installed, so it is safe to leave behind.`,
 		Args: cobra.ExactArgs(1),
@@ -304,6 +305,9 @@ func hookLines() []string {
 
 	for _, name := range []string{
 		".bashrc", ".bash_profile", ".profile", ".zshrc", ".zprofile", ".config/fish/config.fish",
+		".config/powershell/Microsoft.PowerShell_profile.ps1",
+		"Documents/PowerShell/Microsoft.PowerShell_profile.ps1",
+		"Documents/WindowsPowerShell/Microsoft.PowerShell_profile.ps1",
 	} {
 		file := filepath.Join(home, filepath.FromSlash(name))
 

@@ -72,5 +72,38 @@ Oku gc --keep 1
 $listed = & $oku list
 Check 'list no longer shows ripgrep' { ($listed -join "`n") -notmatch 'ripgrep' }
 
+# The PowerShell hook, with a project that needs fd.
+$project = Join-Path $root 'project'
+New-Item -ItemType Directory -Force $project | Out-Null
+Set-Content (Join-Path $project 'oku.toml') "[packages]`nfd = `"github:sharkdp/fd`"`n"
+$env:PATH = "$root;$env:PATH"
+
+Set-Location $project
+Oku sync
+Oku allow
+Set-Location $root
+
+Invoke-Expression ((& oku hook pwsh) -join [Environment]::NewLine)
+Invoke-Expression ((& oku hook pwsh) -join [Environment]::NewLine)
+Check 'the hook wrapped the prompt' { Test-Path Function:\_oku_prompt }
+
+prompt | Out-Null
+Check 'outside the project fd is not on PATH' { -not (Get-Command fd -ErrorAction SilentlyContinue) }
+
+Set-Location $project
+cmd /c exit 7
+prompt | Out-Null
+Check 'the prompt keeps LASTEXITCODE' { $LASTEXITCODE -eq 7 }
+Check 'inside the project fd comes from the project profile' {
+    (Get-Command fd).Source -like '*profiles*project-*'
+}
+$fdVersion = & fd --version
+Check 'fd runs through its shim' { $fdVersion -match '^fd \d' }
+
+Set-Location $root
+prompt | Out-Null
+Check 'leaving the project takes fd away again' { -not (Get-Command fd -ErrorAction SilentlyContinue) }
+
+Set-Location $env:RUNNER_TEMP
 Remove-Item -Recurse -Force $root
 Write-Host 'live test passed'
