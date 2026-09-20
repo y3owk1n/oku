@@ -16,17 +16,18 @@ var version = "dev"
 func main() {
 	executable, err := os.Executable()
 	if err == nil {
+		// On Windows a profile's bin holds copies of oku under other names. The
+		// check uses the path as started, because the shim file is beside that name.
+		if code, handled := shim.Run(executable, os.Args[1:]); handled {
+			os.Exit(code)
+		}
+
 		executable, err = filepath.EvalSymlinks(executable)
 	}
 
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "oku: locate the running binary:", err)
 		os.Exit(1)
-	}
-
-	// On Windows a profile's bin holds copies of oku under other names.
-	if code, handled := shim.Run(executable, os.Args[1:]); handled {
-		os.Exit(code)
 	}
 
 	if err := cli.NewRootCmd(cli.Options{Version: version, Executable: executable}).
