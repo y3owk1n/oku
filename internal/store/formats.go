@@ -31,6 +31,8 @@ var (
 	magicAr    = []byte("!<arch>\n")
 	magicRPM   = []byte{0xed, 0xab, 0xee, 0xdb}
 	magicXar   = []byte("xar!")
+	// magicOLE starts an OLE compound file, which is what an .msi is.
+	magicOLE = []byte{0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1}
 )
 
 // decompress wraps r according to the compression its first bytes show. Plain
@@ -231,6 +233,31 @@ func copyImage(mount, dest string) error {
 			return copyFileMode(path, target, info.Mode().Perm()|0o600)
 		}
 	})
+}
+
+// unmsi unpacks a Windows installer package with "msiexec /a", the administrative
+// install. It copies the package's files into dest and runs none of the
+// install actions: no registry writes, no services, no shortcuts.
+func unmsi(src, dest string) error {
+	if runtime.GOOS != "windows" {
+		return errors.New("oku unpacks an .msi on Windows only, because it uses msiexec")
+	}
+
+	// msiexec wants the .msi ending, and the download cache names files by digest.
+	named := filepath.Join(filepath.Dir(dest), "package.msi")
+	if err := copyFileMode(src, named, 0o644); err != nil {
+		return err
+	}
+	defer os.Remove(named)
+
+	out, err := exec.Command("msiexec", "/a", named, "/qn", "/norestart", "TARGETDIR="+dest).
+		CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("msiexec /a: %w: %s", err, strings.TrimSpace(string(out)))
+	}
+
+	// The administrative install also puts a copy of the package into dest.
+	return os.Remove(filepath.Join(dest, "package.msi"))
 }
 
 // unpkg expands a macOS installer package into its payload files. pkgutil
