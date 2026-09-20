@@ -78,9 +78,14 @@ case ":$PATH:" in
 *) echo "add $dir to PATH to run it" ;;
 esac
 
-case "$(basename "${SHELL:-sh}")" in
-bash | zsh | fish)
-	echo "to use oku in projects, add this line to your shell's startup file:"
-	echo "  $("$dir/oku" hook --help | sed -n "s/^ *$(basename "$SHELL"),[^:]*: *//p")"
-	;;
+shell="$(basename "${SHELL:-sh}")"
+case "$shell" in
+bash | zsh) line="command -v oku >/dev/null 2>&1 && eval \"\$(oku hook $shell)\"" ;;
+fish) line="command -q oku; and oku hook fish | source" ;;
+*) line="" ;;
 esac
+
+if [ -n "$line" ]; then
+	echo "to use oku in projects, add this line to your $shell startup file:"
+	echo "  $line"
+fi

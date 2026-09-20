@@ -4409,7 +4409,7 @@ func TestB93InstallScriptPutsOneBinaryInPlaceAndEditsNothing(t *testing.T) {
 	must(t, os.WriteFile(filepath.Join(home, ".zshrc"), []byte("# mine\n"), 0o644))
 
 	name := "oku-" + runtime.GOOS + "-" + runtime.GOARCH
-	body := []byte("#!/bin/sh\necho \"  zsh, in ~/.zshrc: the hook line\"\n")
+	body := []byte("#!/bin/sh\necho oku\n")
 	must(t, os.WriteFile(filepath.Join(download, name), body, 0o644))
 
 	digest := sha256.Sum256(body)
@@ -4441,7 +4441,7 @@ func TestB93InstallScriptPutsOneBinaryInPlaceAndEditsNothing(t *testing.T) {
 		t.Fatalf("no executable at %s:\n%s", installed, out)
 	}
 
-	if !strings.Contains(out, "the hook line") || !strings.Contains(out, "to PATH") {
+	if !strings.Contains(out, shellhook.Line("zsh")) || !strings.Contains(out, "to PATH") {
 		t.Fatalf("install.sh did not print the PATH hint and the hook line:\n%s", out)
 	}
 
