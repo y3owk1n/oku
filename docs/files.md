@@ -26,6 +26,7 @@ export XDG_CACHE_HOME=/tmp/oku-try/cache
 <config>/oku/
   oku.toml                     your package list
   oku.lock                     what oku resolved
+  config.toml                  your source aliases
 
 <data>/oku/
   store/

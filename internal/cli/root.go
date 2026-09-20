@@ -46,6 +46,8 @@ func NewRootCmd(opts Options) *cobra.Command {
 		newRollbackCmd(),
 		newGCCmd(),
 		newManifestCmd(opts),
+		newSourceCmd(),
+		newSearchCmd(opts),
 		newListCmd(),
 		newSelfCmd(opts.Executable),
 	)

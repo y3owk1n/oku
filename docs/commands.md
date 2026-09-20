@@ -45,6 +45,7 @@ Common failures:
 | `<name> has no artifact for darwin-arm64` | No `[[artifact]]` matches this machine. |
 | `... building from source is not supported so far` | The manifest only offers a `[build]`. |
 | `checksum mismatch for <url>` | The download differs from the expected sha256. Nothing was installed. |
+| `<alias> is not a source and <arg> is not a file` | The argument looks like `alias/name`, but no such source exists. See `oku source list`. |
 | `<a> and <b> both provide bin/<x>` | Two packages ship a file of the same name. The second install is refused. |
 | `the manifest provides version X, not Y` | The `@version` suffix does not match a manifest with a fixed version. |
 | `... has no version X, the newest are ...` | The `@version` suffix names a release that upstream does not have. |
@@ -256,6 +257,43 @@ With nothing to delete it prints
 temporary directory of an install that is still running. You cannot roll back
 to a deleted generation. You can install a deleted package again, and oku
 reuses its cached download when the cache still has it.
+
+## oku source
+
+```
+oku source add <alias> <ref>
+oku source remove <alias>
+oku source list
+```
+
+Manages your aliases for manifest collections, see [Sources](refs.md#sources).
+
+`add` takes a ref to a whole collection, so it refuses a `#name` or an
+`@version`. An alias is lowercase letters, digits, `_` or `-`. Adding an alias
+that exists replaces it. `remove` fails for an alias that is not defined.
+
+## oku search
+
+```
+oku search <term>
+```
+
+Prints the packages in your sources whose name or description contains the
+term. Case does not matter. It searches your sources and nothing else.
+
+```
+$ oku search grep
+core/ripgrep  Recursively search directories for a regex pattern
+```
+
+Each line starts with what to pass to `oku add`. With no match it prints
+`nothing in your sources matches "<term>"`. With no sources it fails and says
+how to add one.
+
+A source that cannot be listed, such as a URL, is skipped with a notice on
+stderr. TOML files in a collection that are not manifests are ignored. For a
+`github:` source, search reads the repo's file list and then each manifest, so
+a large collection takes one request per manifest.
 
 ## oku manifest init
 

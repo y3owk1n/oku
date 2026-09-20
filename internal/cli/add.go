@@ -11,6 +11,7 @@ import (
 	"github.com/y3owk1n/oku/internal/list"
 	"github.com/y3owk1n/oku/internal/lock"
 	"github.com/y3owk1n/oku/internal/ref"
+	"github.com/y3owk1n/oku/internal/source"
 )
 
 func newAddCmd(opts Options) *cobra.Command {
@@ -23,7 +24,8 @@ func newAddCmd(opts Options) *cobra.Command {
   https://host/pkg.toml               a URL
   github:owner/repo                   oku.pkg.toml in a GitHub repo
   github:owner/repo#name              name.toml or packages/name.toml in it
-  git+https://host/repo#path/pkg.toml a file in any git repo`,
+  git+https://host/repo#path/pkg.toml a file in any git repo
+  alias/name                          a package in a source, see "oku source"`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runAdd(cmd, opts, args[0])
@@ -32,12 +34,24 @@ func newAddCmd(opts Options) *cobra.Command {
 }
 
 func runAdd(cmd *cobra.Command, opts Options, arg string) error {
-	r, err := ref.Parse(arg)
+	e, err := loadEnv()
 	if err != nil {
 		return err
 	}
 
-	e, err := loadEnv()
+	sources, err := source.Read(e.configPath())
+	if err != nil {
+		return err
+	}
+
+	// oku.toml gets the expanded ref, so a list works on a machine that does not
+	// define the alias.
+	expanded, err := sources.Expand(arg)
+	if err != nil {
+		return err
+	}
+
+	r, err := ref.Parse(expanded)
 	if err != nil {
 		return err
 	}
