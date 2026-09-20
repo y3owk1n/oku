@@ -194,7 +194,7 @@ func reconcile(
 		pkgs = append(pkgs, got.profile)
 	}
 
-	lockData, err := next.Bytes()
+	lockData, err := next.Bytes(e.lockPath())
 	if err != nil {
 		return err
 	}

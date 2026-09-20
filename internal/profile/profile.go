@@ -3,6 +3,7 @@
 package profile
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -144,7 +145,8 @@ func (p *Profile) Remove(name string, lockData []byte) error {
 }
 
 // Replace activates a new generation holding exactly pkgs. It does nothing when
-// the active generation already holds them, and reports whether it changed.
+// the active generation already holds them with the same lock, and reports
+// whether it changed.
 func (p *Profile) Replace(pkgs []Package, lockData []byte) (bool, error) {
 	have, err := p.Packages()
 	if err != nil {
@@ -160,7 +162,7 @@ func (p *Profile) Replace(pkgs []Package, lockData []byte) (bool, error) {
 			maps.Equal(a.Env, b.Env) && a.Service == b.Service && a.System == b.System
 	}
 
-	if slices.EqualFunc(have, pkgs, same) {
+	if slices.EqualFunc(have, pkgs, same) && bytes.Equal(lockData, p.LockSnapshotOfCurrent()) {
 		return false, nil
 	}
 
