@@ -449,7 +449,18 @@ $digest = (Get-FileHash (Join-Path $download 'oku-windows-amd64.exe') -Algorithm
 Set-Content (Join-Path $download 'checksums.txt') "$digest  oku-windows-amd64.exe"
 
 $server = Start-Process python -ArgumentList '-m', 'http.server', '18767', '--directory', $served -PassThru -WindowStyle Hidden
-Start-Sleep -Seconds 2
+
+# The server needs a moment, and how long differs from run to run.
+$up = $false
+foreach ($attempt in 1..30) {
+    try {
+        Invoke-WebRequest 'http://127.0.0.1:18767/latest/download/checksums.txt' -UseBasicParsing | Out-Null
+        $up = $true
+        break
+    }
+    catch { Start-Sleep -Seconds 1 }
+}
+if (-not $up) { throw 'the local release server did not start within 30 seconds' }
 try {
     $env:OKU_RELEASE_URL = 'http://127.0.0.1:18767'
     $env:OKU_INSTALL_DIR = Join-Path $env:RUNNER_TEMP 'oku-installed'
