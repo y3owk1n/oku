@@ -10,7 +10,7 @@ import (
 )
 
 // Shells are the shells oku can write a hook for.
-var Shells = []string{"bash", "zsh", "fish"}
+var Shells = []string{"bash", "zsh", "fish", "pwsh"}
 
 // State variables. The hook keeps what it applied in the environment, so the
 // next run can undo exactly that.
@@ -46,9 +46,14 @@ func Render(shell string, change Change) (string, error) {
 	var b strings.Builder
 
 	quote := quoter(shell)
-	export, unset := "export %s=%s\n", "unset %s\n"
-	if shell == "fish" {
+	export, unset, hint := "export %s=%s\n", "unset %s\n", "echo %s >&2\n"
+
+	switch shell {
+	case "fish":
 		export, unset = "set -gx %s %s\n", "set -e %s\n"
+	case "pwsh":
+		export, unset = "$env:%s = %s\n", "Remove-Item Env:%s -ErrorAction SilentlyContinue\n"
+		hint = "[Console]::Error.WriteLine(%s)\n"
 	}
 
 	for _, name := range change.Unset {
@@ -75,7 +80,7 @@ func Render(shell string, change Change) (string, error) {
 	}
 
 	if change.Hint != "" {
-		fmt.Fprintf(&b, "echo %s >&2\n", quote(change.Hint))
+		fmt.Fprintf(&b, hint, quote(change.Hint))
 	}
 
 	return b.String(), nil
@@ -110,6 +115,21 @@ fi
     command -q oku; and oku env --shell fish | source
 end
 `, nil
+	case "pwsh":
+		// The wrapped prompt keeps $LASTEXITCODE, which "oku env" would overwrite.
+		return `if (-not (Test-Path Function:\_oku_prompt)) {
+  Copy-Item Function:\prompt Function:\_oku_prompt
+  function global:prompt {
+    $okuLast = $global:LASTEXITCODE
+    if (Get-Command oku -ErrorAction SilentlyContinue) {
+      $okuCode = (& oku env --shell pwsh) -join [Environment]::NewLine
+      if ($okuCode) { Invoke-Expression $okuCode }
+    }
+    $global:LASTEXITCODE = $okuLast
+    _oku_prompt
+  }
+}
+`, nil
 	default:
 		return "", fmt.Errorf("shell %q must be one of %s", shell, strings.Join(Shells, ", "))
 	}
@@ -118,8 +138,12 @@ end
 // Line returns the line a user adds to the shell's startup file. It does nothing
 // when oku is not installed, so it is safe to leave behind.
 func Line(shell string) string {
-	if shell == "fish" {
+	switch shell {
+	case "fish":
 		return "command -q oku; and oku hook fish | source"
+	case "pwsh":
+		return "if (Get-Command oku -ErrorAction SilentlyContinue) " +
+			"{ Invoke-Expression ((& oku hook pwsh) -join [Environment]::NewLine) }"
 	}
 
 	return fmt.Sprintf(`command -v oku >/dev/null 2>&1 && eval "$(oku hook %s)"`, shell)
@@ -129,9 +153,15 @@ func Line(shell string) string {
 // fish escapes a quote inside them with a backslash. bash and zsh cannot, so the
 // string is closed, an escaped quote added, and reopened.
 func quoter(shell string) func(string) string {
-	if shell == "fish" {
+	switch shell {
+	case "fish":
 		return func(s string) string {
 			return "'" + strings.NewReplacer(`\`, `\\`, "'", `\'`).Replace(s) + "'"
+		}
+	case "pwsh":
+		// PowerShell doubles a quote inside single quotes.
+		return func(s string) string {
+			return "'" + strings.ReplaceAll(s, "'", "''") + "'"
 		}
 	}
 

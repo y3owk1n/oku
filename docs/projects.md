@@ -76,6 +76,7 @@ Load the oku hook in your shell once. Add one line to the startup file:
 | bash | `~/.bashrc` | `command -v oku >/dev/null 2>&1 && eval "$(oku hook bash)"` |
 | zsh | `~/.zshrc` | `command -v oku >/dev/null 2>&1 && eval "$(oku hook zsh)"` |
 | fish | `~/.config/fish/config.fish` | `command -q oku; and oku hook fish \| source` |
+| PowerShell | the file `$PROFILE` names | `if (Get-Command oku -ErrorAction SilentlyContinue) { Invoke-Expression ((& oku hook pwsh) -join [Environment]::NewLine) }` |
 
 oku never edits that file. The line does nothing when oku is not installed, so
 it is safe to leave in a dotfiles repo.

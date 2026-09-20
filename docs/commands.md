@@ -270,7 +270,7 @@ at login. A service in [system scope](system-scope.md) needs `--system` for
 ## oku hook
 
 ```
-oku hook <bash|zsh|fish>
+oku hook <bash|zsh|fish|pwsh>
 ```
 
 Prints the shell code that applies a [project's](projects.md) environment. You
@@ -278,12 +278,13 @@ load it from your shell's startup file with one line, which `oku hook --help`
 and [Projects](projects.md#using-the-projects-programs) show for each shell. oku
 never edits that file.
 
-The hook runs `oku env` before each prompt.
+The hook runs `oku env` before each prompt. In PowerShell it wraps your `prompt`
+function, keeps `$LASTEXITCODE`, and works on Windows, macOS and Linux.
 
 ## oku env
 
 ```
-oku env [--shell bash|zsh|fish]
+oku env [--shell bash|zsh|fish|pwsh]
 ```
 
 Prints the environment changes for the directory you are in: `PATH`, the
