@@ -2,9 +2,13 @@
 package cli
 
 import (
+	"path/filepath"
+
 	"github.com/spf13/cobra"
 
 	"github.com/y3owk1n/oku/internal/dirs"
+	"github.com/y3owk1n/oku/internal/list"
+	"github.com/y3owk1n/oku/internal/lock"
 	"github.com/y3owk1n/oku/internal/profile"
 	"github.com/y3owk1n/oku/internal/ref"
 	"github.com/y3owk1n/oku/internal/store"
@@ -65,6 +69,14 @@ func loadEnv() (env, error) {
 	e.cache, err = dirs.Cache()
 
 	return e, err
+}
+
+func (e env) listPath() string {
+	return filepath.Join(e.config, list.FileName)
+}
+
+func (e env) lockPath() string {
+	return filepath.Join(e.config, lock.FileName)
 }
 
 func (e env) store() *store.Store {
