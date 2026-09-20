@@ -782,3 +782,110 @@ func TestB15SyncAppendsMissingPlatformAndKeepsOthers(t *testing.T) {
 		t.Fatalf("sync rewrote the plan9-mips entry:\n%s", locked)
 	}
 }
+
+// namedManifest writes a manifest for package name into file, shipping one
+// executable called bin.
+func (m machine) namedManifest(t *testing.T, file, name, bin string) string {
+	t.Helper()
+
+	archive, sum := m.archive(t, file, map[string]string{bin: script})
+	path := filepath.Join(m.fixtures, file+".toml")
+
+	must(t, os.WriteFile(path, []byte(fmt.Sprintf(
+		"[package]\nname = %q\n[version]\nvalue = \"1.2.3\"\n"+
+			"[[artifact]]\nurl = \"file://%s\"\nsha256 = %q\nbin = [%q]\n",
+		name, archive, sum, bin,
+	)), 0o644))
+
+	return path
+}
+
+func TestB16IncludeMergesListsAndLocalEntryWins(t *testing.T) {
+	m := newMachine(t)
+	m.namedManifest(t, "extra", "extra", "extra")
+	m.namedManifest(t, "shared-base", "shared", "shared-base")
+	local := m.namedManifest(t, "shared-local", "shared", "shared-local")
+
+	base := filepath.Join(m.fixtures, "base.toml")
+	must(t, os.WriteFile(base, []byte(
+		"[packages]\nextra = \"./extra.toml\"\nshared = \"./shared-base.toml\"\n",
+	), 0o644))
+
+	must(t, os.MkdirAll(m.config, 0o755))
+	must(t, os.WriteFile(filepath.Join(m.config, "oku.toml"), []byte(fmt.Sprintf(
+		"include = [%q]\n\n[packages]\nshared = %q\n", base, local,
+	)), 0o644))
+
+	if out, err := m.run(t, "", "sync"); err != nil {
+		t.Fatalf("sync: %v\n%s", err, out)
+	}
+
+	if !exists(m.profile("bin", "extra")) || !exists(m.profile("bin", "shared-local")) ||
+		exists(m.profile("bin", "shared-base")) {
+		t.Fatal("profile does not hold extra plus the local shared")
+	}
+
+	locked, err := os.ReadFile(filepath.Join(m.config, "oku.lock"))
+	must(t, err)
+
+	if !strings.Contains(string(locked), "[[include]]") || !strings.Contains(string(locked), base) {
+		t.Fatalf("oku.lock does not pin the include:\n%s", locked)
+	}
+
+	_, err = m.run(t, "", "remove", "extra")
+	if err == nil || !strings.Contains(err.Error(), "include") {
+		t.Fatalf("want remove to refuse an included package, got %v", err)
+	}
+
+	must(t, os.WriteFile(base, []byte("[packages]\nshared = \"./shared-base.toml\"\n"), 0o644))
+
+	_, err = m.run(t, "", "sync")
+	if err == nil || !strings.Contains(err.Error(), "oku update") {
+		t.Fatalf("want sync to stop on a changed include, got %v", err)
+	}
+
+	if out, err := m.run(t, "", "update"); err != nil {
+		t.Fatalf("update: %v\n%s", err, out)
+	}
+
+	if exists(m.profile("bin", "extra")) {
+		t.Fatal("extra left the include but stayed in the profile")
+	}
+}
+
+func TestB17WhenSkipsOtherPlatformsAndKeepsTheirLockEntry(t *testing.T) {
+	m := newMachine(t)
+	here := m.namedManifest(t, "here", "here", "here")
+	elsewhere := m.namedManifest(t, "elsewhere", "elsewhere", "elsewhere")
+
+	must(t, os.MkdirAll(m.config, 0o755))
+	must(t, os.WriteFile(filepath.Join(m.config, "oku.toml"), []byte(fmt.Sprintf(
+		"[packages]\nhere = { ref = %q, when = { os = %q } }\n"+
+			"elsewhere = { ref = %q, when = { os = \"plan9\" } }\n",
+		here, platform.Host().OS, elsewhere,
+	)), 0o644))
+
+	lockPath := filepath.Join(m.config, "oku.lock")
+	must(t, os.WriteFile(lockPath, []byte(fmt.Sprintf(
+		"[[package]]\nname = 'elsewhere'\nref = '%s'\nmanifest_sha256 = 'abc'\nversion = '1.2.3'\n"+
+			"[package.platform.plan9-mips]\nstrategy = 'artifact'\nurl = 'file:///x'\nsha256 = 'def'\n",
+		elsewhere,
+	)), 0o644))
+
+	if out, err := m.run(t, "", "sync"); err != nil {
+		t.Fatalf("sync: %v\n%s", err, out)
+	}
+
+	if !exists(m.profile("bin", "here")) || exists(m.profile("bin", "elsewhere")) {
+		t.Fatal("profile does not hold exactly the matching package")
+	}
+
+	locked, err := os.ReadFile(lockPath)
+	must(t, err)
+
+	for _, want := range []string{"'elsewhere'", "plan9-mips", "sha256 = 'def'", "'here'"} {
+		if !strings.Contains(string(locked), want) {
+			t.Fatalf("oku.lock lacks %s:\n%s", want, locked)
+		}
+	}
+}

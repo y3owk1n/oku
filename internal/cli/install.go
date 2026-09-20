@@ -42,7 +42,7 @@ type request struct {
 func (e env) install(ctx context.Context, opts Options, req request) (installed, error) {
 	r, commit, previous, wantManifest := req.ref, req.commit, req.previous, req.wantManifest
 
-	fetched, err := e.fetcher(opts).Fetch(ctx, r, commit)
+	fetched, err := e.fetcher(opts).Fetch(ctx, r, commit, ref.Manifest)
 	if err != nil {
 		return installed{}, err
 	}

@@ -20,6 +20,7 @@ in [`../prd/`](../prd/).
 - Packages that ship a prebuilt download: tar, tar.gz, tar.bz2, zip, or a
   single binary.
 - Manifests with a fixed version.
+- One `oku.toml` for several machines, with `include` and per-platform `when`.
 
 ## What does not work yet
 

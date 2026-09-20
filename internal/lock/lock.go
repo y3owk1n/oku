@@ -21,7 +21,25 @@ const header = "# Written by oku. Commit this file, and change it with oku comma
 
 // Lock is a parsed oku.lock.
 type Lock struct {
+	Includes []Include `toml:"include"`
 	Packages []Package `toml:"package"`
+}
+
+// Include pins one included list.
+type Include struct {
+	Ref    string `toml:"ref"`
+	Commit string `toml:"commit,omitempty"`
+	SHA256 string `toml:"sha256"`
+}
+
+// FindInclude returns the pin of the included list at ref.
+func (l *Lock) FindInclude(ref string) (Include, bool) {
+	i := slices.IndexFunc(l.Includes, func(inc Include) bool { return inc.Ref == ref })
+	if i < 0 {
+		return Include{}, false
+	}
+
+	return l.Includes[i], true
 }
 
 // Package pins one package of the list.

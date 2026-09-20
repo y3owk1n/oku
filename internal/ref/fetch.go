@@ -51,14 +51,14 @@ func NewFetcher(cacheDir string) *Fetcher {
 	}
 }
 
-// Fetch reads the manifest r points at. A non-empty commit pins GitHub and Git
-// refs to it. An empty commit means the default branch's newest commit.
-func (f *Fetcher) Fetch(ctx context.Context, r Ref, commit string) (Fetched, error) {
+// Fetch reads the file r points at as a t. A non-empty commit pins GitHub and
+// Git refs to it. An empty commit means the default branch's newest commit.
+func (f *Fetcher) Fetch(ctx context.Context, r Ref, commit string, t Target) (Fetched, error) {
 	switch r.Kind {
 	case File:
 		data, err := os.ReadFile(r.Location)
 		if err != nil {
-			return Fetched{}, fmt.Errorf("read manifest: %w", err)
+			return Fetched{}, fmt.Errorf("read %s: %w", r.Location, err)
 		}
 
 		return Fetched{Data: data}, nil
@@ -70,13 +70,18 @@ func (f *Fetcher) Fetch(ctx context.Context, r Ref, commit string) (Fetched, err
 
 		return Fetched{Data: data}, nil
 	case GitHub:
-		return f.fetchGitHub(ctx, r, commit)
+		return f.fetchGitHub(ctx, r, commit, t)
 	default:
-		return f.fetchGit(ctx, r, commit)
+		return f.fetchGit(ctx, r, commit, t)
 	}
 }
 
-func (f *Fetcher) fetchGitHub(ctx context.Context, r Ref, commit string) (Fetched, error) {
+func (f *Fetcher) fetchGitHub(
+	ctx context.Context,
+	r Ref,
+	commit string,
+	t Target,
+) (Fetched, error) {
 	if commit == "" {
 		sha, err := f.get(
 			ctx,
@@ -90,7 +95,7 @@ func (f *Fetcher) fetchGitHub(ctx context.Context, r Ref, commit string) (Fetche
 		commit = strings.TrimSpace(string(sha))
 	}
 
-	for _, path := range manifestPaths(r.Fragment) {
+	for _, path := range t.paths(r.Fragment) {
 		data, err := f.get(ctx, f.GitHubRaw+"/"+r.Location+"/"+commit+"/"+path, nil)
 		if errors.Is(err, errNotFound) {
 			continue
@@ -105,17 +110,17 @@ func (f *Fetcher) fetchGitHub(ctx context.Context, r Ref, commit string) (Fetche
 
 	return Fetched{}, fmt.Errorf(
 		"%s: no %s at commit %s",
-		r, strings.Join(manifestPaths(r.Fragment), " or "), commit,
+		r, strings.Join(t.paths(r.Fragment), " or "), commit,
 	)
 }
 
-// manifestPaths lists where a GitHub ref's manifest may be, in lookup order.
-func manifestPaths(name string) []string {
+// paths lists where a GitHub ref's file may be, in lookup order.
+func (t Target) paths(name string) []string {
 	if name == "" {
-		return []string{DefaultManifest}
+		return []string{t.Default}
 	}
 
-	return []string{name + ".toml", "packages/" + name + ".toml"}
+	return []string{name + ".toml", t.Dir + "/" + name + ".toml"}
 }
 
 func (f *Fetcher) get(ctx context.Context, url string, headers map[string]string) ([]byte, error) {
@@ -161,9 +166,14 @@ func (f *Fetcher) get(ctx context.Context, url string, headers map[string]string
 	return data, nil
 }
 
-// fetchGit reads the manifest from a shallow clone kept in the cache. It needs
+// fetchGit reads the file from a shallow clone kept in the cache. It needs
 // the git binary, because git hosts share no HTTP API.
-func (f *Fetcher) fetchGit(ctx context.Context, r Ref, commit string) (Fetched, error) {
+func (f *Fetcher) fetchGit(
+	ctx context.Context,
+	r Ref,
+	commit string,
+	t Target,
+) (Fetched, error) {
 	if _, err := exec.LookPath("git"); err != nil {
 		return Fetched{}, fmt.Errorf("%s: git+ refs need git on PATH", r)
 	}
@@ -211,7 +221,7 @@ func (f *Fetcher) fetchGit(ctx context.Context, r Ref, commit string) (Fetched, 
 
 	path := r.Fragment
 	if path == "" {
-		path = DefaultManifest
+		path = t.Default
 	}
 
 	// os.Root refuses to follow a symlink in the repository that points outside it.

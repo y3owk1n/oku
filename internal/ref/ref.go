@@ -20,8 +20,21 @@ const (
 	Git
 )
 
-// DefaultManifest is the file a repo ref reads when it names no manifest.
-const DefaultManifest = "oku.pkg.toml"
+// Target is the kind of file Fetch reads a ref as. It sets the file names Fetch
+// looks for in a repo.
+type Target struct {
+	// Default is the file read when the ref has no fragment.
+	Default string
+	// Dir is the directory searched for "<fragment>.toml" after the repo root.
+	Dir string
+}
+
+var (
+	// Manifest reads a package manifest.
+	Manifest = Target{Default: "oku.pkg.toml", Dir: "packages"}
+	// List reads a package list.
+	List = Target{Default: "oku.toml", Dir: "lists"}
+)
 
 // Ref is a parsed pointer to a manifest.
 type Ref struct {
@@ -45,14 +58,28 @@ var (
 // Parse reads a ref such as "./rg.toml", "https://host/rg.toml",
 // "github:owner/repo#name@1.2.0" or "git+https://host/repo#path/rg.toml".
 func Parse(s string) (Ref, error) {
+	return ParseIn("", s)
+}
+
+// ParseIn is Parse with relative file paths resolved against dir. An empty dir
+// means the working directory.
+func ParseIn(dir, s string) (Ref, error) {
 	if s == "" {
 		return Ref{}, errors.New("empty ref")
 	}
 
 	var r Ref
 
+	inDir := func(path string) string {
+		if dir == "" || filepath.IsAbs(path) || strings.Contains(path, ":") {
+			return path
+		}
+
+		return filepath.Join(dir, path)
+	}
+
 	body := s
-	if _, err := os.Stat(s); err != nil {
+	if _, err := os.Stat(inDir(s)); err != nil {
 		body, r.Version = splitVersion(s)
 	}
 
@@ -85,7 +112,7 @@ func Parse(s string) (Ref, error) {
 	case strings.Contains(body, "://"):
 		return Ref{}, fmt.Errorf("%s: unsupported scheme", s)
 	default:
-		abs, err := filepath.Abs(body)
+		abs, err := filepath.Abs(inDir(body))
 		if err != nil {
 			return Ref{}, err
 		}

@@ -62,6 +62,10 @@ It also works when only the list or the lock still names the package, which
 happens after the data directory was deleted. A name found nowhere fails with
 `<name>: not installed`.
 
+`remove` refuses a package that only an
+[included list](list-and-lock.md#including-other-lists) declares, because oku
+does not edit included lists.
+
 ## oku list
 
 ```
@@ -77,9 +81,12 @@ installed it prints `no packages installed`.
 oku sync
 ```
 
-Makes the profile match `oku.toml`, at the versions pinned in `oku.lock`.
+Makes the profile match `oku.toml` and the lists it includes, at the versions
+pinned in `oku.lock`.
 
 - A package in the list but not installed is installed.
+- A package whose `when` does not match this machine is skipped.
+- An included list is read at the commit in the lock.
 - A package installed but not in the list is dropped from the profile and from
   the lock.
 - A `github:` or `git+` package is read at the commit in the lock, so a newer
@@ -88,8 +95,8 @@ Makes the profile match `oku.toml`, at the versions pinned in `oku.lock`.
 - On a platform the lock has not seen, oku resolves the package for that
   platform and adds an entry. Entries for other platforms are not touched.
 
-`sync` stops, before downloading anything, when a manifest no longer has the
-hash in the lock:
+`sync` stops, before downloading anything, when a manifest or an included list
+no longer has the hash in the lock:
 
 ```
 oku: ripgrep: the manifest changed since oku.lock was written
@@ -120,7 +127,11 @@ ripgrep 14.1.1, manifest changed
 tool 1.0.0, checksum changed
 ```
 
-A name that is not in `oku.toml` fails.
+With no names, `update` also reads included lists fresh, so packages they
+gained are installed and packages they lost are dropped. With names, includes
+stay pinned.
+
+A name that is in neither `oku.toml` nor its includes fails.
 
 ## oku self uninstall
 

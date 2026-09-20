@@ -14,6 +14,9 @@ one per package.
 
 `git+` also accepts `git+ssh://`, `git+http://` and `git+file://`.
 
+The same forms point at a list in an `include`. Only the file names differ, see
+[Including other lists](list-and-lock.md#including-other-lists).
+
 ## Pinning a version
 
 Add `@version` to any ref:
