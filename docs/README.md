@@ -18,8 +18,9 @@ in [`../prd/`](../prd/).
 
 - Linux and macOS, amd64 and arm64. Windows builds, but profiles need symlinks,
   so treat it as not supported yet.
-- Packages that ship a prebuilt download: tar, tar.gz, tar.bz2, zip, or a
-  single binary.
+- Packages that ship a prebuilt download: tar in any common compression, zip,
+  `.deb`, `.rpm`, a single binary or AppImage, and on macOS `.dmg` and `.pkg`.
+  oku unpacks installers and never runs them.
 - Packages that ship a macOS app, a Linux desktop launcher, or fonts. oku puts
   them in your per-user folders and takes them away on remove, rollback and
   uninstall.
@@ -50,7 +51,5 @@ in [`../prd/`](../prd/).
 ## What does not work yet
 
 - `patch` build steps.
-- Apps shipped as `.dmg`, `.pkg`, `.deb`, `.rpm` or AppImage. oku unpacks tar,
-  zip and single files today.
+- `.msi` packages.
 - Services, and installing anything system-wide.
-- `.tar.xz` and `.tar.zst` archives.

@@ -130,11 +130,33 @@ url = "https://github.com/sharkdp/fd/releases/download/{{tag}}/fd-{{tag}}-aarch6
 
 ### Downloads oku can unpack
 
-tar, tar.gz, tar.bz2 and zip, recognised by content, not by file name.
+oku recognises a download by its content, not by its file name.
 
-A download that is none of these is taken as the executable itself. The
-artifact must then list exactly one `bin` and nothing else, and the file is
-installed under that name.
+| Format | Notes |
+|---|---|
+| tar, tar.gz, tar.bz2, tar.xz, tar.zst | |
+| zip | |
+| `.deb` | oku unpacks only the data archive. Its files are at `usr/bin/...`. |
+| `.rpm` | oku unpacks only the file payload. Its files are at `usr/bin/...`. |
+| `.dmg` | macOS only. oku mounts the image read-only, copies it, and unmounts it. |
+| `.pkg` | macOS only. Its files are at `<component>.pkg/Payload/...`. |
+| anything else | oku treats it as the executable itself. This covers a plain binary and an AppImage. |
+
+oku unpacks installers and never runs them. It never executes a `.deb`'s
+maintainer scripts, an `.rpm`'s scriptlets or a `.pkg`'s install scripts, so a
+package that depends on its post-install script will not work from oku.
+
+For a download that is the executable itself, the artifact must list exactly one
+`bin` and nothing else, and the file is installed under that name.
+
+`strip` applies to tar, zip, deb and rpm. oku copies a `.dmg` and a `.pkg`
+whole. From a `.dmg` it leaves out the hidden Finder files and any link that
+points out of the image, such as the shortcut to `/Applications`.
+
+To find the paths inside an installer, run `oku manifest test --keep` and look
+in the `pkg/` directory of the store path it prints.
+
+`.msi` is not supported yet.
 
 ### Paths
 
@@ -177,8 +199,8 @@ OS looks for them, and removes them again when the package is removed.
 ```toml
 [[artifact]]
 match = { os = "darwin" }
-url = "https://github.com/p0deje/Maccy/releases/download/{{tag}}/Maccy.app.zip"
-app = ["Maccy.app"]
+url = "https://github.com/rxhanson/Rectangle/releases/download/{{tag}}/Rectangle{{version}}.dmg"
+app = ["Rectangle.app"]
 ```
 
 ```toml
@@ -257,10 +279,10 @@ How inference reads a release:
 - On Linux it writes the glibc build first and the musl build second with no
   `libc` in its `match`, so glibc machines with no build of their own use the
   musl build.
-- It takes tar, tar.gz, tar.bz2 and zip archives and single binaries. It skips
-  packages and formats oku cannot unpack, such as `.deb`, `.rpm`, `.msi`,
-  `.dmg`, `.tar.xz` and `.tar.zst`. With several candidates it prefers a tar
-  archive over a zip, then the shortest name.
+- It takes tar archives in any compression oku knows, zip archives and single
+  binaries. It skips installers such as `.deb`, `.rpm`, `.msi`, `.dmg` and
+  `.pkg`, because the paths inside them cannot be guessed. With several
+  candidates it prefers a tar archive over a zip, then the shortest name.
 - It uses `<asset>.sha256` as `sha256_url` when that exists, else a release file
   with `checksum` or `sha256sum` in its name. With neither, the package is
   [trusted on first use](trust.md#trust-on-first-use).

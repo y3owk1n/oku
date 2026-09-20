@@ -140,6 +140,7 @@ read the lock diff before you commit it.
 
 ## Archives
 
-oku unpacks archives itself and never runs anything a package ships during
-install. It refuses entries that are absolute or contain `..`, and symlinks
+oku unpacks archives and installers itself and never runs anything a package
+ships during install. That includes the maintainer scripts of a `.deb`, the
+scriptlets of an `.rpm`, and the install scripts of a macOS `.pkg`. It refuses entries that are absolute or contain `..`, and symlinks
 that resolve outside the package.

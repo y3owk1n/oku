@@ -67,13 +67,15 @@ var (
 	}
 	// unpackable are the archive endings oku can unpack. A name with no known
 	// ending is taken as a single binary.
-	unpackable = []string{".tar.gz", ".tgz", ".tar.bz2", ".tbz2", ".zip", ".tar"}
+	unpackable = []string{
+		".tar.gz", ".tgz", ".tar.bz2", ".tbz2", ".tar.xz", ".txz", ".tar.zst", ".zip", ".tar",
+	}
 	// skipped are endings of files that are not the package itself, or that oku
 	// cannot unpack yet.
 	skipped = []string{
 		".sha256", ".sha256sum", ".sha512", ".md5", ".sig", ".asc", ".pem", ".sbom", ".json",
-		".txt", ".deb", ".rpm", ".apk", ".msi", ".pkg", ".dmg", ".appimage", ".tar.xz", ".txz",
-		".tar.zst", ".7z", ".minisig", ".crt", ".intoto.jsonl",
+		".txt", ".deb", ".rpm", ".apk", ".msi", ".pkg", ".dmg", ".appimage",
+		".7z", ".minisig", ".crt", ".intoto.jsonl",
 	}
 )
 

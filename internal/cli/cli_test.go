@@ -17,6 +17,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/klauspost/compress/zstd"
+	"github.com/ulikunitz/xz"
+
 	"github.com/y3owk1n/oku/internal/cli"
 	"github.com/y3owk1n/oku/internal/platform"
 	"github.com/y3owk1n/oku/internal/sandbox"
@@ -2943,5 +2946,234 @@ func TestB95UninstallRemovesExposedAppsAndFonts(t *testing.T) {
 
 	if !strings.Contains(out, font) {
 		t.Fatalf("uninstall did not list what it removes outside its directories:\n%s", out)
+	}
+}
+
+// tarOf returns an uncompressed tar holding files, each executable.
+func tarOf(t *testing.T, files map[string]string) []byte {
+	t.Helper()
+
+	var buf bytes.Buffer
+
+	tw := tar.NewWriter(&buf)
+	for path, body := range files {
+		must(t, tw.WriteHeader(&tar.Header{Name: path, Mode: 0o755, Size: int64(len(body))}))
+
+		_, err := tw.Write([]byte(body))
+		must(t, err)
+	}
+
+	must(t, tw.Close())
+
+	return buf.Bytes()
+}
+
+// fileManifest writes data as a download and a manifest for "tool" that points
+// at it. artifact is the TOML after the url.
+func (m machine) fileManifest(t *testing.T, fileName string, data []byte, artifact string) string {
+	t.Helper()
+
+	download := filepath.Join(m.fixtures, fileName)
+	must(t, os.WriteFile(download, data, 0o644))
+
+	return m.rawManifest(
+		t,
+		"tool",
+		fmt.Sprintf("[[artifact]]\nurl = \"file://%s\"\n%s\n", download, artifact),
+	)
+}
+
+func (m machine) installAndRun(t *testing.T, ref, want string) {
+	t.Helper()
+
+	if out, err := m.run(t, "", "add", ref); err != nil {
+		t.Fatalf("add %s: %v\n%s", ref, err, out)
+	}
+
+	if got := m.toolOutput(t); got != want {
+		t.Fatalf("tool printed %q, want %q", got, want)
+	}
+
+	_, err := m.run(t, "", "remove", "tool")
+	must(t, err)
+}
+
+func TestB72UnpacksPackageFormatsWithoutRunningAnythingInside(t *testing.T) {
+	m := newMachine(t)
+	plain := tarOf(t, map[string]string{"tool": "#!/bin/sh\necho from tar\n"})
+
+	var xzBuf, zstBuf bytes.Buffer
+
+	xw, err := xz.NewWriter(&xzBuf)
+	must(t, err)
+	_, err = xw.Write(plain)
+	must(t, err)
+	must(t, xw.Close())
+
+	zw, err := zstd.NewWriter(&zstBuf)
+	must(t, err)
+	_, err = zw.Write(plain)
+	must(t, err)
+	must(t, zw.Close())
+
+	m.installAndRun(
+		t,
+		m.fileManifest(t, "tool.tar.xz", xzBuf.Bytes(), `bin = ["tool"]`),
+		"from tar",
+	)
+	m.installAndRun(
+		t,
+		m.fileManifest(t, "tool.tar.zst", zstBuf.Bytes(), `bin = ["tool"]`),
+		"from tar",
+	)
+
+	// A .deb is an ar archive. Its control archive holds a script that would
+	// leave a marker if oku ran it.
+	marker := filepath.Join(m.fixtures, "maintainer-script-ran")
+
+	var gz bytes.Buffer
+
+	zipper := gzip.NewWriter(&gz)
+	_, err = zipper.Write(
+		tarOf(t, map[string]string{"./usr/bin/tool": "#!/bin/sh\necho from deb\n"}),
+	)
+	must(t, err)
+	must(t, zipper.Close())
+
+	var deb bytes.Buffer
+
+	deb.WriteString("!<arch>\n")
+
+	for _, member := range []struct {
+		name string
+		data []byte
+	}{
+		{"debian-binary", []byte("2.0\n")},
+		{"control.tar", tarOf(t, map[string]string{"./postinst": "#!/bin/sh\ntouch " + marker + "\n"})},
+		{"data.tar.gz", gz.Bytes()},
+	} {
+		fmt.Fprintf(
+			&deb,
+			"%-16s%-12s%-6s%-6s%-8s%-10d`\n",
+			member.name,
+			"0",
+			"0",
+			"0",
+			"100644",
+			len(member.data),
+		)
+		deb.Write(member.data)
+
+		if len(member.data)%2 == 1 {
+			deb.WriteByte('\n')
+		}
+	}
+
+	m.installAndRun(
+		t,
+		m.fileManifest(t, "tool.deb", deb.Bytes(), `bin = ["usr/bin/tool"]`),
+		"from deb",
+	)
+
+	rpmData, err := os.ReadFile(filepath.Join("testdata", "tool.rpm"))
+	must(t, err)
+
+	m.installAndRun(
+		t,
+		m.fileManifest(
+			t,
+			"tool.rpm",
+			rpmData,
+			"bin = [\"usr/bin/tool\"]\nman = [\"usr/share/man/man1/tool.1\"]",
+		),
+		"hello from rpm",
+	)
+
+	for _, path := range []string{marker, "/tmp/oku-rpm-scriptlet-ran"} {
+		if exists(path) {
+			t.Fatalf("oku ran a package script, %s exists", path)
+		}
+	}
+}
+
+func TestB72UnpacksMacOSDiskImagesAndInstallerPackages(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("dmg and pkg are unpacked with macOS tools")
+	}
+
+	m := newMachine(t)
+	marker := filepath.Join(m.fixtures, "pkg-script-ran")
+
+	payload := filepath.Join(m.fixtures, "payload")
+	must(t, os.MkdirAll(filepath.Join(payload, "Tool.app", "Contents", "MacOS"), 0o755))
+	must(
+		t,
+		os.WriteFile(
+			filepath.Join(payload, "Tool.app", "Contents", "MacOS", "tool"),
+			[]byte("#!/bin/sh\necho from image\n"),
+			0o755,
+		),
+	)
+	must(t, os.Symlink("/Applications", filepath.Join(payload, "Applications")))
+
+	dmg := filepath.Join(m.fixtures, "tool.dmg")
+	if out, err := exec.Command("/usr/bin/hdiutil", "create", "-quiet", "-volname", "Tool", "-srcfolder", payload, "-format", "UDZO", dmg).
+		CombinedOutput(); err != nil {
+		t.Skipf("cannot create a disk image here: %v\n%s", err, out)
+	}
+
+	image, err := os.ReadFile(dmg)
+	must(t, err)
+
+	m.installAndRun(
+		t,
+		m.fileManifest(
+			t,
+			"image.dmg",
+			image,
+			"bin = [\"Tool.app/Contents/MacOS/tool\"]\napp = [\"Tool.app\"]",
+		),
+		"from image",
+	)
+
+	scripts := filepath.Join(m.fixtures, "scripts")
+	must(t, os.MkdirAll(scripts, 0o755))
+	must(
+		t,
+		os.WriteFile(
+			filepath.Join(scripts, "postinstall"),
+			[]byte("#!/bin/sh\ntouch "+marker+"\n"),
+			0o755,
+		),
+	)
+	must(t, os.Remove(filepath.Join(payload, "Applications")))
+
+	pkg := filepath.Join(m.fixtures, "tool.pkg")
+	if out, err := exec.Command("/usr/bin/pkgbuild", "--quiet", "--root", payload, "--scripts", scripts,
+		"--identifier", "test.oku.tool", "--version", "1", "--install-location", "/Applications", pkg).
+		CombinedOutput(); err != nil {
+		t.Skipf("cannot build an installer package here: %v\n%s", err, out)
+	}
+
+	installer, err := os.ReadFile(pkg)
+	must(t, err)
+
+	m.installAndRun(
+		t,
+		m.fileManifest(
+			t,
+			"installer.pkg",
+			installer,
+			"bin = [\"Payload/Tool.app/Contents/MacOS/tool\"]",
+		),
+		"from image",
+	)
+
+	if exists(marker) {
+		t.Fatal("oku ran the installer package's postinstall script")
+	}
+
+	if left, _ := filepath.Glob("/Volumes/Tool*"); len(left) != 0 {
+		t.Fatalf("a disk image is still mounted: %v", left)
 	}
 }

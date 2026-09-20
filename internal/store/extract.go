@@ -4,8 +4,6 @@ import (
 	"archive/tar"
 	"archive/zip"
 	"bytes"
-	"compress/bzip2"
-	"compress/gzip"
 	"errors"
 	"fmt"
 	"io"
@@ -19,7 +17,8 @@ var errNotArchive = errors.New("not an archive")
 
 // extract unpacks the archive at src into the directory dest, dropping the
 // first strip path components of every entry. It returns errNotArchive when src
-// is not a tar, tar.gz, tar.bz2 or zip file. Every write goes through an
+// is not an archive oku knows: tar (plain, gz, bz2, xz, zst), zip, deb, rpm,
+// and on macOS dmg and pkg. Every write goes through an
 // os.Root, so extract cannot write outside dest.
 func extract(src, dest string, strip int) error {
 	f, err := os.Open(src)
@@ -48,19 +47,29 @@ func extract(src, dest string, strip int) error {
 	defer root.Close()
 
 	switch {
-	case bytes.HasPrefix(head, []byte{0x1f, 0x8b}):
-		gz, err := gzip.NewReader(f)
-		if err != nil {
-			return err
-		}
-
-		return untar(gz, root, strip)
-	case bytes.HasPrefix(head, []byte("BZh")):
-		return untar(bzip2.NewReader(f), root, strip)
-	case bytes.HasPrefix(head, []byte("PK\x03\x04")):
+	case bytes.HasPrefix(head, magicZip):
 		return unzip(f, root, strip)
+	case bytes.HasPrefix(head, magicAr):
+		return undeb(f, root, strip)
+	case bytes.HasPrefix(head, magicRPM):
+		return unrpm(f, root, strip)
+	case bytes.HasPrefix(head, magicXar):
+		return unpkg(src, dest)
+	case isDiskImage(f):
+		return undmg(src, dest)
 	case len(head) > 262 && string(head[257:262]) == "ustar":
 		return untar(f, root, strip)
+	}
+
+	for _, magic := range [][]byte{magicGzip, magicBzip2, magicXZ, magicZstd} {
+		if bytes.HasPrefix(head, magic) {
+			data, err := decompress(f)
+			if err != nil {
+				return err
+			}
+
+			return untar(data, root, strip)
+		}
 	}
 
 	return errNotArchive
