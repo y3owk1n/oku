@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -24,6 +25,12 @@ func main() {
 
 	if err := cli.NewRootCmd(cli.Options{Version: version, Executable: executable}).
 		Execute(); err != nil {
+		// "oku shell -- command" exits with the command's code and adds no message.
+		var exit cli.ExitError
+		if errors.As(err, &exit) {
+			os.Exit(exit.Code)
+		}
+
 		fmt.Fprintln(os.Stderr, "oku:", err)
 		os.Exit(1)
 	}

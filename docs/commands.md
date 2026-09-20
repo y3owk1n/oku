@@ -557,6 +557,44 @@ It edits the file as text, so comments and layout stay:
 At the newest version it prints `<name> is already at <version>` and changes
 nothing. A manifest that uses `version.from` needs no bump, and bump says so.
 
+## oku shell
+
+```
+oku shell <ref>... [-- command [args...]]
+```
+
+Tries packages without installing them. oku puts each package in the store and
+starts `$SHELL` with the packages' programs first on `PATH` and their `[env]`
+set. It changes no `oku.toml`, no `oku.lock` and no profile.
+
+```
+$ oku shell github:BurntSushi/ripgrep github:sharkdp/fd
+oku shell with github:BurntSushi/ripgrep, github:sharkdp/fd, leave it with exit
+$ rg --version
+ripgrep 15.2.0
+$ exit
+```
+
+After `--` oku runs that command in place of a shell, and exits with the
+command's exit code:
+
+```
+$ oku shell github:BurntSushi/ripgrep -- rg TODO src/
+```
+
+oku finds the command on the new `PATH`, so `rg` above is the package's `rg`.
+
+Inside, `OKU_SHELL` holds the refs. Your shell's startup files still run, so a
+startup file that resets `PATH` removes the packages from it.
+
+A ref takes `@version` as in `oku add`. `--yes`, `--verbose` and `--accept-key`
+work as in `oku add`.
+
+The packages stay in the store. The next `oku shell` with the same refs reuses
+them without a download when the manifest publishes a checksum. Without one, oku
+downloads the file again and trusts it again, because shell writes no lock to pin
+it in. No generation uses the packages, so `oku gc` deletes them.
+
 ## oku cache, oku key
 
 ```
