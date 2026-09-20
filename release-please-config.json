@@ -20,5 +20,6 @@
 		{ "type": "ci", "section": "CI", "hidden": true },
 		{ "type": "build", "section": "Build System", "hidden": true },
 		{ "type": "style", "section": "Styles", "hidden": true }
-	]
+	],
+	"bootstrap-sha": "3f6d9b75326346cad72c48f0d67829086cf19597"
 }

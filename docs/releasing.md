@@ -16,8 +16,12 @@ This page is for the maintainer. Users install a release with the scripts in
    `checksums.txt`, signs every file with minisign, and uploads them to the
    release.
 
-`.release-please-manifest.json` holds the last released version. It starts at
-`0.0.0`, so the first release is `v0.1.0`.
+`.release-please-manifest.json` holds the last released version and started at
+`0.0.0`. release-please finds the git tag `v0.0.0` on the first commit and takes
+`0.0.0` as the last release, so the first `feat` makes `v0.1.0`. Without that
+tag it reads the repo as never released and proposes `1.0.0`.
+`bootstrap-sha` in `release-please-config.json` names the same commit, which is
+where the first changelog starts.
 
 ## Secrets
 
