@@ -53,6 +53,7 @@ func NewRootCmd(opts Options) *cobra.Command {
 		newSearchCmd(opts),
 		newListCmd(),
 		newWhyCmd(),
+		newInfoCmd(),
 		newSelfCmd(opts.Executable),
 	)
 

@@ -2197,6 +2197,13 @@ func TestB53NetworkStepIsShownInThePromptAndMarksThePackageImpure(t *testing.T) 
 	if !strings.Contains(string(locked), "impure = true") {
 		t.Fatalf("oku.lock does not mark the build impure:\n%s", locked)
 	}
+
+	out, err = m.run(t, "", "info", "probe")
+	must(t, err)
+
+	if !strings.Contains(out, "impure") {
+		t.Fatalf("info does not mark the package impure:\n%s", out)
+	}
 }
 
 func TestB54BuildEnvironmentHoldsOnlyOkuVariables(t *testing.T) {
@@ -2233,6 +2240,13 @@ func TestB52VendorOutputIsPinnedAndAMismatchFailsTheBuild(t *testing.T) {
 
 	m := newMachine(t)
 
+	// Go marks its module cache read-only, and the first run step below does the
+	// same in the build's HOME. A build directory that oku fails to delete would
+	// stay in here.
+	tmp := filepath.Join(m.fixtures, "tmp")
+	must(t, os.Mkdir(tmp, 0o755))
+	t.Setenv("TMPDIR", tmp)
+
 	// The vendored module comes from a local directory, so the test needs no
 	// network. Changing it later stands in for upstream changing a package.
 	lib := filepath.Join(m.fixtures, "greet")
@@ -2262,6 +2276,7 @@ value = "1.0.0"
 needs = ["go"]
 [[build.step]]
 run = """
+mkdir -p "$HOME/cache/mod" && touch "$HOME/cache/mod/file" && chmod -R a-w "$HOME/cache"
 printf 'module example.com/gotool\\n\\ngo 1.21\\n\\nrequire example.com/greet v0.0.0\\n\\nreplace example.com/greet => %s\\n' > go.mod
 printf 'package main\\n\\nimport (\\n\\t"fmt"\\n\\n\\t"example.com/greet"\\n)\\n\\nfunc main() { fmt.Println(greet.Text()) }\\n' > main.go
 """
@@ -2314,5 +2329,49 @@ install = { bin = ["gotool"] }
 
 	if got := m.output(t, "gotool"); got != "something else" {
 		t.Fatalf("gotool after update printed %q", got)
+	}
+
+	if left, _ := filepath.Glob(filepath.Join(tmp, "oku-build-*")); len(left) != 0 {
+		t.Fatalf("oku left build directories behind: %v", left)
+	}
+}
+
+func TestB55ManifestTestBuildsInAThrowawayStoreAndReportsTheFailingStep(t *testing.T) {
+	m := newMachine(t)
+	good := m.buildManifest(t, true, "", writeTool+installTool)
+
+	out, err := m.run(t, "", "manifest", "test", good, "--yes")
+	if err != nil {
+		t.Fatalf("manifest test: %v\n%s", err, out)
+	}
+
+	for _, want := range []string{"[1/2] run", "[2/2] install", "ok", "tool 1.0.0 works", "(build)", "bin/tool"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("manifest test output lacks %q:\n%s", want, out)
+		}
+	}
+
+	bad := filepath.Join(m.fixtures, "bad.toml")
+
+	body, err := os.ReadFile(good)
+	must(t, err)
+	must(t, os.WriteFile(bad, bytes.Replace(
+		body,
+		[]byte(installTool),
+		[]byte("[[build.step]]\nrun = \"exit 4\"\nshell = \"sh\"\n"+installTool),
+		1,
+	), 0o644))
+
+	out, err = m.run(t, "", "manifest", "test", bad, "--yes")
+	if err == nil || !strings.Contains(out, "[2/3] run") || !strings.Contains(out, "FAILED") ||
+		!strings.Contains(err.Error(), "build.step[1]") {
+		t.Fatalf("want the failing step reported, got %v\n%s", err, out)
+	}
+
+	// The user's own store, profile, list and lock were never touched.
+	for _, path := range []string{m.data, filepath.Join(m.config, "oku.toml"), filepath.Join(m.config, "oku.lock")} {
+		if exists(path) {
+			t.Fatalf("manifest test wrote %s", path)
+		}
 	}
 }

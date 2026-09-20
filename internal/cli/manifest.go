@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -79,7 +80,7 @@ this machine to find the executable, so run it where a release asset exists.`,
 	init.Flags().BoolVar(&force, "force", false, "replace the output file when it exists")
 	_ = init.MarkFlagRequired("from")
 
-	cmd.AddCommand(init, newLintCmd(), newBumpCmd(opts))
+	cmd.AddCommand(init, newLintCmd(), newBumpCmd(opts), newTestCmd(opts))
 
 	return cmd
 }
@@ -291,6 +292,130 @@ func runBump(cmd *cobra.Command, opts Options, file, repo, prefix, to string) er
 		updated,
 		file,
 	)
+
+	return nil
+}
+
+func newTestCmd(opts Options) *cobra.Command {
+	var (
+		flags buildFlags
+		keep  bool
+	)
+
+	cmd := &cobra.Command{
+		Use:   "test [file]",
+		Short: "Install a manifest into a throwaway store to see that it works",
+		Long: `Install a manifest into a throwaway store to see that it works.
+
+Without a file it tests oku.pkg.toml. A manifest with a [build] is built from
+source, deps included, in the same sandbox a user gets. A manifest with only
+artifacts installs the artifact for this machine. Your own store, profile,
+oku.toml and oku.lock are not touched. Downloads still go to your cache.`,
+		Args: cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			file := ref.Manifest.Default
+			if len(args) == 1 {
+				file = args[0]
+			}
+
+			return runManifestTest(cmd, opts, file, &flags, keep)
+		},
+	}
+
+	flags.register(cmd)
+	cmd.Flags().BoolVar(&keep, "keep", false, "keep the throwaway store and print where it is")
+
+	return cmd
+}
+
+func runManifestTest(
+	cmd *cobra.Command,
+	opts Options,
+	file string,
+	flags *buildFlags,
+	keep bool,
+) error {
+	r, err := ref.Parse(file)
+	if err != nil {
+		return err
+	}
+
+	data, err := os.ReadFile(r.Location)
+	if err != nil {
+		return err
+	}
+
+	m, err := manifest.Parse(data, file)
+	if err != nil {
+		return err
+	}
+
+	own, err := loadEnv()
+	if err != nil {
+		return err
+	}
+
+	scratch, err := os.MkdirTemp("", "oku-test-")
+	if err != nil {
+		return err
+	}
+
+	if !keep {
+		defer os.RemoveAll(scratch)
+	}
+
+	// Only the store is throwaway. The cache is content-addressed, so sharing it
+	// is safe and saves downloads.
+	e := env{config: scratch + "/config", data: scratch + "/data", cache: own.cache}
+	out := cmd.OutOrStdout()
+
+	got, err := e.install(cmd.Context(), opts, request{
+		ref:        r,
+		fromSource: m.HasBuild(),
+		approve:    e.approver(cmd, opts, flags),
+		log:        buildLog(cmd, flags),
+		progress: func(step, total int, kind string, err error) {
+			result := "ok"
+			if err != nil {
+				result = "FAILED"
+			}
+
+			fmt.Fprintf(out, "[%d/%d] %-8s %s\n", step+1, total, kind, result)
+		},
+	})
+	if err != nil {
+		return err
+	}
+
+	reportUnsandboxed(cmd.ErrOrStderr(), got)
+
+	strategy := got.lock.Platforms[platform.Host().String()].Strategy
+	fmt.Fprintf(
+		out,
+		"%s %s works on %s (%s)\n",
+		got.lock.Name,
+		got.lock.Version,
+		platform.Host(),
+		strategy,
+	)
+
+	for _, sub := range []string{"bin", "share/man", "share/completions"} {
+		_ = filepath.WalkDir(
+			filepath.Join(got.profile.StorePath, sub),
+			func(path string, entry fs.DirEntry, err error) error {
+				if err == nil && !entry.IsDir() {
+					rel, _ := filepath.Rel(got.profile.StorePath, path)
+					fmt.Fprintf(out, "  %s\n", filepath.ToSlash(rel))
+				}
+
+				return nil
+			},
+		)
+	}
+
+	if keep {
+		fmt.Fprintf(out, "kept %s\n", got.profile.StorePath)
+	}
 
 	return nil
 }

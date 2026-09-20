@@ -63,6 +63,9 @@ type request struct {
 	// constraint limits the version of a dep, such as ">=3". A version pin in ref
 	// overrides it.
 	constraint string
+	// progress reports each build step of this package, and may be nil. Deps do
+	// not inherit it.
+	progress func(step, total int, kind string, err error)
 	// stack holds the refs being installed above this one. A ref that is already
 	// in it is a dependency cycle.
 	stack []string
@@ -164,7 +167,7 @@ func (e env) install(ctx context.Context, opts Options, req request) (installed,
 		}
 
 		realized, err = e.store().Build(ctx, m, host, store.BuildOptions{
-			Deps: deps.prefixes, Log: req.log, PinnedVendor: pinnedVendor,
+			Deps: deps.prefixes, Log: req.log, PinnedVendor: pinnedVendor, Progress: req.progress,
 		})
 		if err != nil {
 			return installed{}, fmt.Errorf("%s: %w", m.Package.Name, err)
