@@ -64,6 +64,9 @@ func NewRootCmd(opts Options) *cobra.Command {
 	root.PersistentFlags().BoolP(
 		globalFlag, "g", false, "use the global list even inside a project",
 	)
+	root.PersistentFlags().Bool(
+		jsonFlag, false, "print data as JSON, on the commands that print data",
+	)
 
 	root.AddCommand(
 		newAddCmd(opts),

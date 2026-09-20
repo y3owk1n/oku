@@ -51,6 +51,12 @@ Check 'a second generation holds both programs' {
     (Test-Path "$bin\rg.exe") -and (Test-Path "$bin\fd.exe")
 }
 
+$asJson = (& $oku list --json) -join "`n" | ConvertFrom-Json
+Check 'list --json parses, and names both packages with their store paths' {
+    ($asJson.Count -eq 2) -and ($asJson[0].name -eq 'fd') -and
+    ($asJson[1].store_path -like '*store*ripgrep-*')
+}
+
 Oku sync
 Oku update
 Check 'sync and update keep both programs' {

@@ -3,7 +3,6 @@ package cli
 import (
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -28,38 +27,43 @@ doctor reads local files only. It prints one line per check, and exits with
 code 1 when a check found a problem.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			return runDoctor(cmd.OutOrStdout())
+			return runDoctor(cmd)
 		},
 	}
 }
 
-// report prints the checks and counts the problems.
+// check is one line of the report. Status is "ok", "note" or "problem".
+type check struct {
+	Status  string `json:"status"`
+	Message string `json:"message"`
+}
+
+// report collects the checks and counts the problems.
 type report struct {
-	out      io.Writer
+	checks   []check
 	problems int
 }
 
-func (r *report) ok(format string, args ...any) {
-	fmt.Fprintf(r.out, "ok       "+format+"\n", args...)
+func (r *report) add(status, format string, args ...any) {
+	r.checks = append(r.checks, check{status, fmt.Sprintf(format, args...)})
 }
 
-func (r *report) note(format string, args ...any) {
-	fmt.Fprintf(r.out, "note     "+format+"\n", args...)
-}
+func (r *report) ok(format string, args ...any)   { r.add("ok", format, args...) }
+func (r *report) note(format string, args ...any) { r.add("note", format, args...) }
 
 func (r *report) problem(format string, args ...any) {
 	r.problems++
 
-	fmt.Fprintf(r.out, "problem  "+format+"\n", args...)
+	r.add("problem", format, args...)
 }
 
-func runDoctor(out io.Writer) error {
+func runDoctor(cmd *cobra.Command) error {
 	e, err := loadEnv()
 	if err != nil {
 		return err
 	}
 
-	r := &report{out: out}
+	r := &report{}
 
 	checkStore(r, e)
 	checkSandbox(r)
@@ -68,6 +72,19 @@ func runDoctor(out io.Writer) error {
 
 	if err := checkProfiles(r, e); err != nil {
 		return err
+	}
+
+	if wantJSON(cmd) {
+		if err := printJSON(cmd, struct {
+			Problems int     `json:"problems"`
+			Checks   []check `json:"checks"`
+		}{r.problems, r.checks}); err != nil {
+			return err
+		}
+	} else {
+		for _, c := range r.checks {
+			fmt.Fprintf(cmd.OutOrStdout(), "%-8s %s\n", c.Status, c.Message)
+		}
 	}
 
 	if r.problems > 0 {

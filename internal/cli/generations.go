@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 	"text/tabwriter"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -29,6 +30,33 @@ func newGenerationsCmd(opts Options) *cobra.Command {
 			gens, err := e.profile().Generations()
 			if err != nil {
 				return err
+			}
+
+			if wantJSON(cmd) {
+				type pkgRow struct {
+					Name    string `json:"name"`
+					Version string `json:"version"`
+				}
+
+				type row struct {
+					Number   int       `json:"number"`
+					Current  bool      `json:"current"`
+					Created  time.Time `json:"created"`
+					Packages []pkgRow  `json:"packages"`
+				}
+
+				rows := []row{}
+
+				for _, gen := range gens {
+					held := []pkgRow{}
+					for _, pkg := range gen.Packages {
+						held = append(held, pkgRow{pkg.Name, pkg.Version})
+					}
+
+					rows = append(rows, row{gen.Number, gen.Current, gen.Created, held})
+				}
+
+				return printJSON(cmd, rows)
 			}
 
 			if len(gens) == 0 {

@@ -106,6 +106,20 @@ with no sources.`,
 				return err
 			}
 
+			if wantJSON(cmd) {
+				type row struct {
+					Alias string `json:"alias"`
+					Ref   string `json:"ref"`
+				}
+
+				rows := []row{}
+				for _, alias := range slices.Sorted(maps.Keys(config.Sources)) {
+					rows = append(rows, row{alias, config.Sources[alias]})
+				}
+
+				return printJSON(cmd, rows)
+			}
+
 			if len(config.Sources) == 0 {
 				fmt.Fprintln(
 					cmd.OutOrStdout(),
@@ -156,6 +170,13 @@ func newSearchCmd(opts Options) *cobra.Command {
 			w := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 0, 2, ' ', 0)
 			hits := 0
 
+			type hit struct {
+				Ref         string `json:"ref"`
+				Description string `json:"description"`
+			}
+
+			found := []hit{}
+
 			for _, alias := range slices.Sorted(maps.Keys(config.Sources)) {
 				r, err := ref.Parse(config.Sources[alias])
 				if err != nil {
@@ -180,9 +201,14 @@ func newSearchCmd(opts Options) *cobra.Command {
 						strings.Contains(strings.ToLower(m.Package.Description), term) {
 						fmt.Fprintf(w, "%s/%s\t%s\n", alias, name, m.Package.Description)
 
+						found = append(found, hit{alias + "/" + name, m.Package.Description})
 						hits++
 					}
 				}
+			}
+
+			if wantJSON(cmd) {
+				return printJSON(cmd, found)
 			}
 
 			if hits == 0 {
