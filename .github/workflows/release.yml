@@ -1,0 +1,56 @@
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+
+      - name: Build a static binary for every OS and CPU
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          mkdir dist
+          for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64 windows/arm64; do
+            os="${target%/*}"
+            arch="${target#*/}"
+            name="oku-$os-$arch"
+            if [ "$os" = windows ]; then name="$name.exe"; fi
+            CGO_ENABLED=0 GOOS="$os" GOARCH="$arch" \
+              go build -trimpath -ldflags "-s -w -X main.version=$version" -o "dist/$name" ./cmd/oku
+          done
+          cp install.sh install.ps1 dist/
+          (cd dist && sha256sum * > checksums.txt)
+
+      # "oku self update" and the install scripts refuse a file without a signature
+      # of the release key, so a release without the secret would be useless.
+      - name: Sign every file with the release key
+        env:
+          MINISIGN_SECRET_KEY: ${{ secrets.MINISIGN_SECRET_KEY }}
+        run: |
+          if [ -z "$MINISIGN_SECRET_KEY" ]; then
+            echo "the MINISIGN_SECRET_KEY secret is not set" >&2
+            exit 1
+          fi
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq minisign
+          key="$RUNNER_TEMP/release.key"
+          printf '%s\n' "$MINISIGN_SECRET_KEY" > "$key"
+          for file in dist/*; do
+            minisign -S -s "$key" -m "$file" -t "oku $GITHUB_REF_NAME"
+          done
+          rm -f "$key"
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" dist/* --title "$GITHUB_REF_NAME" --generate-notes

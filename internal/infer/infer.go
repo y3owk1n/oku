@@ -35,7 +35,8 @@ type Inferrer struct {
 	Inspect   Inspector
 }
 
-type release struct {
+// Release is a GitHub release with its downloads.
+type Release struct {
 	Tag    string `json:"tag_name"`
 	Assets []struct {
 		Name string `json:"name"`
@@ -87,7 +88,7 @@ func (inf *Inferrer) Manifest(
 	repo string,
 	host platform.Platform,
 ) (string, error) {
-	rel, err := inf.latest(ctx, repo)
+	rel, err := inf.Latest(ctx, repo)
 	if err != nil {
 		return "", err
 	}
@@ -181,8 +182,9 @@ func (inf *Inferrer) Manifest(
 	return b.String(), nil
 }
 
-func (inf *Inferrer) latest(ctx context.Context, repo string) (release, error) {
-	var rel release
+// Latest returns the newest release of the GitHub repo "owner/name".
+func (inf *Inferrer) Latest(ctx context.Context, repo string) (Release, error) {
+	var rel Release
 
 	req, err := http.NewRequestWithContext(
 		ctx, http.MethodGet, inf.GitHubAPI+"/repos/"+repo+"/releases/latest", nil,

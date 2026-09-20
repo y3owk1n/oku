@@ -45,7 +45,7 @@ func newSelfCmd(opts Options) *cobra.Command {
 	uninstall.Flags().
 		BoolVar(&system, "system", false, "with --yes, also remove what needs administrator rights")
 
-	self.AddCommand(uninstall)
+	self.AddCommand(uninstall, newSelfUpdateCmd(opts))
 
 	return self
 }

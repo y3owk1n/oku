@@ -76,3 +76,35 @@ func verifyFile(key minisign.PublicKey, path string, signature []byte) (bool, er
 
 	return verifier.Verify(key, signature), nil
 }
+
+// Download saves url in the download cache and returns the file's path.
+func (s *Store) Download(ctx context.Context, url string) (string, error) {
+	path, _, err := s.fetch(ctx, url, "")
+
+	return path, err
+}
+
+// VerifyDetached checks the file at path against the minisign signature in the
+// file at signaturePath, made by the public key keyText.
+func VerifyDetached(keyText, path, signaturePath string) error {
+	var key minisign.PublicKey
+	if err := key.UnmarshalText([]byte(keyText)); err != nil {
+		return fmt.Errorf("public key %s: %w", keyText, err)
+	}
+
+	signature, err := os.ReadFile(signaturePath)
+	if err != nil {
+		return err
+	}
+
+	signed, err := verifyFile(key, path, signature)
+	if err != nil {
+		return err
+	}
+
+	if !signed {
+		return fmt.Errorf("%w: %s is not signed by %s", ErrSignature, path, keyText)
+	}
+
+	return nil
+}

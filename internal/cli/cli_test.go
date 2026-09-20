@@ -4312,3 +4312,86 @@ func TestB97UninstallLeavesAProjectsListAndLockAlone(t *testing.T) {
 		t.Fatalf("uninstall changed the project's files:\n%s\nwas\n%s", after, before)
 	}
 }
+
+// releaseWith serves release v1.4.0 of owner/tool with an oku binary for this
+// platform and its signature by secret.
+func (m *machine) releaseWith(t *testing.T, body string, secret minisign.PrivateKey) {
+	t.Helper()
+
+	name := "oku-" + runtime.GOOS + "-" + runtime.GOARCH
+	binary := filepath.Join(m.fixtures, name)
+	must(t, os.WriteFile(binary, []byte(body), 0o755))
+
+	reader := minisign.NewReader(strings.NewReader(body))
+	_, err := io.Copy(io.Discard, reader)
+	must(t, err)
+	must(t, os.WriteFile(binary+".minisig", reader.Sign(secret), 0o644))
+
+	inferServer(t, m, map[string]string{name: binary, name + ".minisig": binary + ".minisig"})
+	m.opts.ReleaseRepo = "owner/tool"
+}
+
+func TestB92SelfUpdateReplacesTheBinaryOnlyAfterItsSignatureChecksOut(t *testing.T) {
+	m := newMachine(t)
+
+	public, secret, err := minisign.GenerateKey(rand.Reader)
+	must(t, err)
+	_, stranger, err := minisign.GenerateKey(rand.Reader)
+	must(t, err)
+
+	current := func() string {
+		data, err := os.ReadFile(m.exe)
+		must(t, err)
+
+		return string(data)
+	}
+
+	m.releaseWith(t, "the new oku", secret)
+
+	if _, err := m.run(t, "", "self", "update"); err == nil ||
+		!strings.Contains(err.Error(), "no release key") {
+		t.Fatalf("a build without a release key should refuse, got %v", err)
+	}
+
+	m.opts.ReleaseKey = public.String()
+
+	out, err := m.run(t, "", "self", "update", "--check")
+	must(t, err)
+
+	if !strings.Contains(out, "1.4.0 is available") || current() != "binary" {
+		t.Fatalf("--check should report and change nothing:\n%s", out)
+	}
+
+	forged := newMachine(t)
+	forged.opts.ReleaseKey = public.String()
+	forged.releaseWith(t, "a forged oku", stranger)
+
+	if _, err := forged.run(t, "", "self", "update"); err == nil ||
+		!strings.Contains(err.Error(), "is not signed by") {
+		t.Fatalf("want a refusal for a release the key did not sign, got %v", err)
+	}
+
+	if data, _ := os.ReadFile(forged.exe); string(data) != "binary" {
+		t.Fatalf("a forged release replaced the binary with %q", data)
+	}
+
+	out, err = m.run(t, "", "self", "update")
+	must(t, err)
+
+	if current() != "the new oku" || !strings.Contains(out, "to 1.4.0") {
+		t.Fatalf("self update did not replace the binary:\n%s", out)
+	}
+
+	if info, err := os.Stat(m.exe); err != nil || info.Mode().Perm()&0o100 == 0 {
+		t.Fatal("the new binary is not executable")
+	}
+
+	m.opts.Version = "1.4.0"
+
+	out, err = m.run(t, "", "self", "update")
+	must(t, err)
+
+	if !strings.Contains(out, "is the newest release") {
+		t.Fatalf("an up to date oku should say so:\n%s", out)
+	}
+}
