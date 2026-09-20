@@ -706,6 +706,34 @@ keeps working. `oku gc` covers both stores.
 
 Profiles, the ledger and approvals stay in the data directory.
 
+## oku self update
+
+```
+oku self update [--check]
+```
+
+Replaces the `oku` binary with the newest release from
+`github.com/y3owk1n/oku`.
+
+oku downloads the file for your OS and CPU, `oku-<os>-<arch>`, and the minisign
+signature beside it. It replaces itself only when the release key that is built
+into the running binary made that signature. It writes nothing near the running
+binary before that check has passed, so a failed check leaves oku as it was.
+
+| Flag | Effect |
+|---|---|
+| `--check` | Says whether a newer release exists, and changes nothing. |
+
+At the newest release it prints `oku <version> is the newest release`.
+
+A binary that you built from source has no release key, and `oku self update`
+refuses with `this build of oku has no release key`. Install a released build
+once, and it updates itself from then on.
+
+On Windows the running `oku.exe` is renamed aside first, as in
+[uninstalling](windows.md#uninstalling), because Windows does not let a running
+program be replaced.
+
 ## oku self uninstall
 
 ```

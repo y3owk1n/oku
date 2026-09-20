@@ -4395,3 +4395,70 @@ func TestB92SelfUpdateReplacesTheBinaryOnlyAfterItsSignatureChecksOut(t *testing
 		t.Fatalf("an up to date oku should say so:\n%s", out)
 	}
 }
+
+func TestB93InstallScriptPutsOneBinaryInPlaceAndEditsNothing(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("install.ps1 is covered by the live test on the Windows runner")
+	}
+
+	root := t.TempDir()
+	home := filepath.Join(root, "home")
+	download := filepath.Join(root, "release", "latest", "download")
+	must(t, os.MkdirAll(download, 0o755))
+	must(t, os.MkdirAll(home, 0o755))
+	must(t, os.WriteFile(filepath.Join(home, ".zshrc"), []byte("# mine\n"), 0o644))
+
+	name := "oku-" + runtime.GOOS + "-" + runtime.GOARCH
+	body := []byte("#!/bin/sh\necho \"  zsh, in ~/.zshrc: the hook line\"\n")
+	must(t, os.WriteFile(filepath.Join(download, name), body, 0o644))
+
+	digest := sha256.Sum256(body)
+	must(t, os.WriteFile(filepath.Join(download, "checksums.txt"),
+		fmt.Appendf(nil, "%s  %s\n", hex.EncodeToString(digest[:]), name), 0o644))
+
+	server := httptest.NewServer(http.FileServer(http.Dir(filepath.Join(root, "release"))))
+	t.Cleanup(server.Close)
+
+	install := func(homeDir string) (string, error) {
+		cmd := exec.Command("sh", filepath.Join("..", "..", "install.sh"))
+		cmd.Env = []string{
+			"HOME=" + homeDir, "SHELL=/bin/zsh", "PATH=" + os.Getenv("PATH"),
+			"OKU_RELEASE_URL=" + server.URL,
+		}
+
+		out, err := cmd.CombinedOutput()
+
+		return string(out), err
+	}
+
+	out, err := install(home)
+	if err != nil {
+		t.Fatalf("install.sh: %v\n%s", err, out)
+	}
+
+	installed := filepath.Join(home, ".local", "bin", "oku")
+	if info, err := os.Stat(installed); err != nil || info.Mode().Perm()&0o100 == 0 {
+		t.Fatalf("no executable at %s:\n%s", installed, out)
+	}
+
+	if !strings.Contains(out, "the hook line") || !strings.Contains(out, "to PATH") {
+		t.Fatalf("install.sh did not print the PATH hint and the hook line:\n%s", out)
+	}
+
+	if rc, _ := os.ReadFile(filepath.Join(home, ".zshrc")); string(rc) != "# mine\n" {
+		t.Fatalf("install.sh edited the shell startup file: %q", rc)
+	}
+
+	must(t, os.WriteFile(filepath.Join(download, name), append(body, 'x'), 0o644))
+
+	other := filepath.Join(root, "other")
+	must(t, os.MkdirAll(other, 0o755))
+
+	if out, err := install(other); err == nil || !strings.Contains(out, "sha256") {
+		t.Fatalf("install.sh accepted a binary that does not match checksums.txt:\n%s", out)
+	}
+
+	if exists(filepath.Join(other, ".local", "bin", "oku")) {
+		t.Fatal("a refused install left a binary behind")
+	}
+}
