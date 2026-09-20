@@ -162,6 +162,7 @@ Keys of a `[[package]]` entry:
 | `ref` | The ref from `oku.toml`, without `@version`. |
 | `commit` | The commit the manifest was read at. Only for `github:` and `git+` refs. |
 | `manifest_sha256` | Digest of the manifest file. |
+| `signing_key` | The manifest's minisign key, when it has one. oku refuses a manifest with another key until you pass `--accept-key`. |
 | `version` | The version installed. |
 | `tag` | The upstream tag of that version, when it differs, such as `v10.2.0`. |
 | `inferred`, `manifest` | Set for a package whose repo has no manifest. `manifest` holds the full text oku inferred. |

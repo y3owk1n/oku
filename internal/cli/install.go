@@ -55,6 +55,9 @@ type request struct {
 	// acceptDigest lets a digest stated by the manifest replace the one pinned in
 	// previous. "oku update" sets it.
 	acceptDigest bool
+	// acceptKey lets the manifest's signing key differ from the one pinned in
+	// previous. "--accept-key" sets it.
+	acceptKey bool
 	// keepVersion installs the version in previous without listing versions
 	// again. "oku sync" sets it.
 	keepVersion bool
@@ -96,6 +99,20 @@ func (e env) install(ctx context.Context, opts Options, req request) (installed,
 
 	if wantManifest != "" && wantManifest != m.SHA256 {
 		return installed{}, errManifestChanged
+	}
+
+	if pinned := previous.SigningKey; pinned != "" && pinned != m.Package.SigningKey &&
+		!req.acceptKey {
+		now := "no signing key"
+		if m.Package.SigningKey != "" {
+			now = "the signing key " + m.Package.SigningKey
+		}
+
+		return installed{}, fmt.Errorf(
+			"%s: oku.lock pinned the signing key %s, and the manifest now has %s\n"+
+				"if the developer announced this change, run the command again with --accept-key",
+			m.Package.Name, pinned, now,
+		)
 	}
 
 	// A pin in the list decides the version. Without one, sync stays on the locked
@@ -269,6 +286,7 @@ func (e env) install(ctx context.Context, opts Options, req request) (installed,
 			Commit:         fetched.Commit,
 			ManifestSHA256: m.SHA256,
 			Version:        m.Version.Value,
+			SigningKey:     m.Package.SigningKey,
 			Tag:            tagFor(m),
 			Inferred:       inferred != "" || req.previous.Inferred && req.keepVersion,
 			Manifest:       inferredText(inferred, req),
@@ -437,6 +455,7 @@ func (e env) installDeps(
 			previous:     previous,
 			wantManifest: wantManifest,
 			acceptDigest: parent.acceptDigest,
+			acceptKey:    parent.acceptKey,
 			keepVersion:  keep,
 			approve:      parent.approve,
 			log:          parent.log,

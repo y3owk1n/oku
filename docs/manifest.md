@@ -49,6 +49,7 @@ completions = { fish = "complete/rg.fish", zsh = "complete/_rg" }
 | `description` | no | One line. |
 | `homepage` | no | URL. |
 | `license` | no | SPDX identifier. |
+| `signing_key` | no | Your minisign public key. oku then checks every artifact against its signature, see [Signatures](#signatures). |
 | `relocatable` | no | `true` when the built files contain no store path. A [cache](caches.md) then offers the package to machines with any store root. Default `false`. Only matters for `[build]`. |
 
 ## [version]
@@ -174,6 +175,37 @@ download and pins it. Publish one of the first two. See
 
 A `sha256_url` file may hold a single digest, or `digest  filename` lines such
 as `sha256sum` writes. oku picks the line that names the download's file.
+
+### Signatures
+
+A checksum in the manifest protects the download, but not the manifest. A
+signing key lets users notice when someone else publishes under your name:
+
+```toml
+[package]
+name = "foo"
+signing_key = "RWTr8koGkq7wBGTVdGedU8b7CkkiIu+LBp6uQLJ7ltH/7iGXMKNF1b27"
+```
+
+Create the key and sign each release file with
+[minisign](https://jedisct1.github.io/minisign/):
+
+```sh
+minisign -G                           # once, writes minisign.pub and the secret key
+minisign -S -m foo-1.2.0-linux.tar.gz # writes foo-1.2.0-linux.tar.gz.minisig
+```
+
+Upload each `.minisig` beside its file. oku downloads the artifact's URL with
+`.minisig` appended and refuses the artifact when the signature is missing or
+not from `signing_key`. It accepts the current and the legacy (`-l`) kind of
+signature. With a signing key, an artifact without `sha256` is no longer trust
+on first use, and `oku manifest lint` does not warn about it.
+
+The user's `oku.lock` pins the key at the first install. After that, oku refuses
+a manifest with another key, or with none, until the user passes `--accept-key`.
+Tell your users before you change the key.
+
+`signing_key` covers artifacts. It does not sign the sources of a `[build]`.
 
 ## What a package looks like once installed
 

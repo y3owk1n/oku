@@ -10,6 +10,8 @@ import (
 	"slices"
 	"strings"
 
+	"aead.dev/minisign"
+
 	"github.com/pelletier/go-toml/v2"
 
 	"github.com/y3owk1n/oku/internal/platform"
@@ -44,6 +46,9 @@ type Package struct {
 	// Relocatable declares that the built files contain no store path, so the
 	// result works under any store root.
 	Relocatable bool `toml:"relocatable"`
+	// SigningKey is the minisign public key that signs every artifact. The
+	// signature of an artifact is at its URL with ".minisig" appended.
+	SigningKey string `toml:"signing_key"`
 }
 
 // Version is either fixed by Value or discovered from From.
@@ -121,6 +126,16 @@ func Parse(data []byte, origin string) (*Manifest, error) {
 
 func (m *Manifest) validate() error {
 	var errs []error
+
+	if text := m.Package.SigningKey; text != "" {
+		var key minisign.PublicKey
+		if err := key.UnmarshalText([]byte(text)); err != nil {
+			errs = append(
+				errs,
+				fmt.Errorf("package.signing_key is not a minisign public key: %w", err),
+			)
+		}
+	}
 
 	if m.Build != nil {
 		for i, step := range m.Build.Steps {

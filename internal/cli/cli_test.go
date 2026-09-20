@@ -5,9 +5,11 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -21,6 +23,7 @@ import (
 	"github.com/klauspost/compress/zstd"
 	"github.com/ulikunitz/xz"
 
+	"aead.dev/minisign"
 	"github.com/y3owk1n/oku/internal/cli"
 	"github.com/y3owk1n/oku/internal/expose"
 	"github.com/y3owk1n/oku/internal/platform"
@@ -3742,5 +3745,115 @@ func TestB88NonRelocatableEntryFromAnotherStoreRootIsNotUsed(t *testing.T) {
 
 	if strings.Contains(out, "came from a cache") {
 		t.Fatalf("a package built under another store root was substituted:\n%s", out)
+	}
+}
+
+// signedManifest writes a manifest with the signing key public, or with none when
+// public is empty. It writes the artifact and the artifact's signature by secret.
+func (m machine) signedManifest(
+	t *testing.T,
+	public string,
+	secret minisign.PrivateKey,
+	legacy bool,
+) string {
+	t.Helper()
+
+	archive, _ := m.archive(t, "tool", map[string]string{"tool": script})
+	data, err := os.ReadFile(archive)
+	must(t, err)
+	// Sign writes the legacy kind of signature, and a Reader the current kind.
+	signature := minisign.Sign(secret, data)
+	if !legacy {
+		reader := minisign.NewReader(bytes.NewReader(data))
+		_, err = io.Copy(io.Discard, reader)
+		must(t, err)
+
+		signature = reader.Sign(secret)
+	}
+
+	must(t, os.WriteFile(archive+".minisig", signature, 0o644))
+
+	key := ""
+	if public != "" {
+		key = fmt.Sprintf("signing_key = %q\n", public)
+	}
+
+	path := filepath.Join(m.fixtures, "tool.toml")
+	must(t, os.WriteFile(path, fmt.Appendf(
+		nil,
+		"[package]\nname = \"tool\"\n%s[version]\nvalue = \"1.2.3\"\n"+
+			"[[artifact]]\nurl = \"file://%s\"\nbin = [\"tool\"]\n", key, archive,
+	), 0o644))
+
+	return path
+}
+
+func TestB89SigningKeyVerifiesArtifactsAndAChangedKeyStopsUntilAccepted(t *testing.T) {
+	m := newMachine(t)
+
+	public, secret, err := minisign.GenerateKey(rand.Reader)
+	must(t, err)
+	otherPublic, otherSecret, err := minisign.GenerateKey(rand.Reader)
+	must(t, err)
+
+	if _, err := m.run(
+		t,
+		"",
+		"add",
+		m.signedManifest(t, public.String(), otherSecret, false),
+	); err == nil ||
+		!strings.Contains(err.Error(), "is not signed by") {
+		t.Fatalf("want a refusal for an artifact the key did not sign, got %v", err)
+	}
+
+	if len(m.storeEntries(t)) != 0 {
+		t.Fatal("a package with a bad signature reached the store")
+	}
+
+	ref := m.signedManifest(t, public.String(), secret, false)
+
+	out, err := m.run(t, "", "add", ref)
+	must(t, err)
+
+	if strings.Contains(out, "first download") {
+		t.Fatalf("a signed artifact should not be trust on first use:\n%s", out)
+	}
+
+	lockText, err := os.ReadFile(filepath.Join(m.config, "oku.lock"))
+	must(t, err)
+
+	if !strings.Contains(string(lockText), public.String()) {
+		t.Fatalf("the lock does not pin the signing key:\n%s", lockText)
+	}
+
+	m.signedManifest(t, otherPublic.String(), otherSecret, false)
+
+	for _, command := range []string{"sync", "update"} {
+		if _, err := m.run(t, "", command); err == nil {
+			t.Fatalf("%s accepted a changed signing key", command)
+		}
+	}
+
+	m.signedManifest(t, "", secret, false)
+
+	if _, err := m.run(
+		t,
+		"",
+		"update",
+	); err == nil ||
+		!strings.Contains(err.Error(), "--accept-key") {
+		t.Fatalf("want a refusal that names --accept-key for a dropped key, got %v", err)
+	}
+
+	m.signedManifest(t, otherPublic.String(), otherSecret, true)
+
+	_, err = m.run(t, "", "update", "--accept-key")
+	must(t, err)
+
+	lockText, err = os.ReadFile(filepath.Join(m.config, "oku.lock"))
+	must(t, err)
+
+	if !strings.Contains(string(lockText), otherPublic.String()) {
+		t.Fatalf("the lock does not pin the accepted key:\n%s", lockText)
 	}
 }

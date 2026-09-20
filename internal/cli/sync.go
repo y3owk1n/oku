@@ -149,6 +149,7 @@ func reconcile(
 			previous:     previous,
 			wantManifest: wantManifest,
 			acceptDigest: fresh,
+			acceptKey:    flags.acceptKey,
 			keepVersion:  !fresh && previous.Ref == r.String(),
 			service:      wanted[name].entry.Service,
 			system:       wanted[name].entry.System,
