@@ -236,8 +236,9 @@ func copyImage(mount, dest string) error {
 }
 
 // unmsi unpacks a Windows installer package with "msiexec /a", the administrative
-// install. It copies the package's files into dest and runs none of the
-// install actions: no registry writes, no services, no shortcuts.
+// install. It copies the package's files into dest and skips the install
+// sequence, so it writes no registry entries, services or shortcuts. A package
+// can author actions for the administrative sequence, and msiexec runs those.
 func unmsi(src, dest string) error {
 	if runtime.GOOS != "windows" {
 		return errors.New("oku unpacks an .msi on Windows only, because it uses msiexec")

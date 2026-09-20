@@ -142,23 +142,25 @@ oku recognises a download by its content, not by its file name.
 | `.rpm` | oku unpacks only the file payload. Its files are at `usr/bin/...`. |
 | `.dmg` | macOS only. oku mounts the image read-only, copies it, and unmounts it. |
 | `.pkg` | macOS only. Its files are at `<component>.pkg/Payload/...`. |
+| `.msi` | Windows only. oku runs `msiexec /a`, the administrative install. It copies the files out and skips the install sequence, so it writes no registry entries, services or shortcuts. Its files are at paths such as `Program Files/<product>/...`. |
 | anything else | oku treats it as the executable itself. This covers a plain binary and an AppImage. |
 
 oku unpacks installers and never runs them. It never executes a `.deb`'s
-maintainer scripts, an `.rpm`'s scriptlets or a `.pkg`'s install scripts, so a
-package that depends on its post-install script will not work from oku.
+maintainer scripts, an `.rpm`'s scriptlets, a `.pkg`'s install scripts or an
+`.msi`'s install sequence, so a package that depends on its post-install script
+will not work from oku. One exception: an `.msi` can carry actions for the
+administrative install itself, and `msiexec /a` runs those. Few packages have
+any.
 
 For a download that is the executable itself, the artifact must list exactly one
 `bin` and nothing else, and the file is installed under that name.
 
-`strip` applies to tar, zip, deb and rpm. oku copies a `.dmg` and a `.pkg`
-whole. From a `.dmg` it leaves out the hidden Finder files and any link that
+`strip` applies to tar, zip, deb and rpm. oku copies a `.dmg`, a `.pkg` and an
+`.msi` whole. From a `.dmg` it leaves out the hidden Finder files and any link that
 points out of the image, such as the shortcut to `/Applications`.
 
 To find the paths inside an installer, run `oku manifest test --keep` and look
 in the `pkg/` directory of the store path it prints.
-
-`.msi` is not supported yet.
 
 ### Paths
 
