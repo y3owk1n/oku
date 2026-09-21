@@ -391,3 +391,69 @@ func TestB188UpdateKeepsThePinsOfABuildThatTheStoreHolds(t *testing.T) {
 		t.Fatalf("update changed the lock of a build that did not change:\n%s", after)
 	}
 }
+
+func TestB190SyncCompletesTheBuildPinsThatAnOlderOkuDidNotWrite(t *testing.T) {
+	m := newMachine(t)
+	other := otherPlatform()
+	archive, _ := m.archive(t, "src", map[string]string{"tool": script})
+
+	ref := m.rawManifest(t, "tool", fmt.Sprintf(
+		"[build]\nsource = { url = \"file://%s\" }\n"+
+			"[[build.step]]\ninstall = { bin = [\"tool\"] }\n", archive,
+	))
+
+	must(t, os.MkdirAll(m.config, 0o755))
+	must(t, os.WriteFile(filepath.Join(m.config, "oku.toml"), []byte(fmt.Sprintf(
+		"[lock]\nplatforms = [%q]\n\n[packages]\ntool = %q\n", other.String(), ref,
+	)), 0o644))
+
+	_, err := m.run(t, "", "sync", "--yes")
+	must(t, err)
+
+	lockPath := filepath.Join(m.config, "oku.lock")
+	full, err := os.ReadFile(lockPath)
+	must(t, err)
+
+	// An older oku wrote no source pin, neither into the lock nor beside the build.
+	strip := func(path string) {
+		data, err := os.ReadFile(path)
+		must(t, err)
+
+		var kept []string
+
+		for _, line := range strings.Split(string(data), "\n") {
+			if !strings.HasPrefix(line, "url = ") && !strings.HasPrefix(line, "sha256 = ") {
+				kept = append(kept, line)
+			}
+		}
+
+		must(t, os.Chmod(path, 0o644))
+		must(t, os.WriteFile(path, []byte(strings.Join(kept, "\n")), 0o644))
+	}
+
+	strip(lockPath)
+
+	metas, err := filepath.Glob(filepath.Join(m.data, "store", "tool-*", "oku-meta.toml"))
+	must(t, err)
+
+	for _, meta := range metas {
+		strip(meta)
+	}
+
+	before := m.storeEntries(t)
+
+	if out, err := m.run(t, "", "sync", "--yes"); err != nil {
+		t.Fatalf("sync: %v\n%s", err, out)
+	}
+
+	after, err := os.ReadFile(lockPath)
+	must(t, err)
+
+	if string(after) != string(full) {
+		t.Fatalf("sync did not complete the pins of both platforms:\n%s", after)
+	}
+
+	if got := m.storeEntries(t); len(got) != len(before) {
+		t.Fatalf("sync built again to pin: %v", got)
+	}
+}
