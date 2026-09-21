@@ -91,6 +91,11 @@ How oku turns tags into versions:
   newer than `1.9.0`. A version with a `-` suffix, such as `2.0.0-rc1`, is older
   than `2.0.0`. A number in the suffix counts as a number, so `7.1.2-31` is newer
   than `7.1.2-9`, and `rc10` is newer than `rc9`.
+- A tag list has no prerelease flag, so oku reads the version. A version with
+  the word `rc`, `alpha`, `beta`, `pre`, `preview`, `dev` or `snapshot` in it,
+  such as `1.27rc1` or `2.0.0-rc1`, is a prerelease. It is never the newest,
+  and `oku add <ref>@1.27rc1` still installs it. Other letters behind a number
+  make a newer version, so `1.1.1w` is newer than `1.1.1`.
 
 `oku add` installs the newest version, and `oku add <ref>@1.2.0` installs that
 one. The user's `oku.lock` records the version and its tag, and `oku sync`
