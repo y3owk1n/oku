@@ -3940,6 +3940,30 @@ func TestB68GlobalPackageEnvIsExportedInEveryShell(t *testing.T) {
 	}
 }
 
+func TestB128EnvPkgNamesTheFilesOfAnArtifact(t *testing.T) {
+	m := newMachine(t)
+	t.Setenv("PATH", "/usr/bin:/bin")
+
+	path := m.manifest(t, "jdk", map[string]string{
+		"jdk": script, "lib/jvm/release": "a jvm",
+	}, `bin = ["jdk"]`)
+
+	body, err := os.ReadFile(path)
+	must(t, err)
+	must(t, os.WriteFile(
+		path, append(body, []byte("\n[env]\nJDK_HOME = \"{{pkg}}/lib/jvm\"\n")...), 0o644,
+	))
+
+	_, err = m.run(t, "", "add", path)
+	must(t, err)
+
+	m.apply(t)
+
+	if _, err := os.Stat(filepath.Join(os.Getenv("JDK_HOME"), "release")); err != nil {
+		t.Fatalf("JDK_HOME is %q, which does not hold the download's files: %v", os.Getenv("JDK_HOME"), err)
+	}
+}
+
 func TestB99UninstallPrintsTheHookLineToDelete(t *testing.T) {
 	m := newMachine(t)
 	home := t.TempDir()

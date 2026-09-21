@@ -286,9 +286,16 @@ func (e env) install(ctx context.Context, opts Options, req request) (installed,
 
 	env := map[string]string{}
 
+	// A build puts its files at the top of the store path. An artifact's
+	// download is unpacked under "pkg".
+	files := realized.Path
+	if !build {
+		files = filepath.Join(realized.Path, "pkg")
+	}
+
 	for name, value := range m.Env {
 		expanded, err := manifest.Expand(value, map[string]string{
-			"prefix": realized.Path, "version": m.Version.Value, "tag": m.Tag,
+			"prefix": realized.Path, "pkg": files, "version": m.Version.Value, "tag": m.Tag,
 		})
 		if err != nil {
 			return installed{}, fmt.Errorf("env.%s: %w", name, err)
