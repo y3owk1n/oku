@@ -320,8 +320,8 @@ order step in `prd/product.md`.
   by the value from `[vars]`. The file is read-only.
 - B144 [14] A name that is not set fails before any change, with the file and
   the line.
-- B145 [14] A `base16` variable makes the colours of that scheme available
-  under the names tinted-theming templates use.
+- B145 [14] A table under `[vars]` gives names joined by a dot, and
+  `{{ name }}` with spaces is the same as `{{name}}`.
 - B146 [14] Changing a variable re-renders every file that uses it in one
   generation. `rollback` restores the bytes of the generation before.
 - B147 [14] `[vars]` of an include are overridden by a later include and by

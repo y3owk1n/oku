@@ -205,6 +205,12 @@ func TestB142AProjectListWithFilesIsAnError(t *testing.T) {
 	if exists(home(".ssh", "authorized_keys")) {
 		t.Fatal("a project list wrote into the home directory")
 	}
+
+	must(t, os.WriteFile(filepath.Join(project, "oku.toml"), []byte("[vars]\na = \"b\"\n"), 0o644))
+
+	if _, err := m.run(t, "", "sync"); err == nil || !strings.Contains(err.Error(), "[vars]") {
+		t.Fatalf("sync of a project with [vars] should fail, got %v", err)
+	}
 }
 
 func TestB95UninstallRemovesFilesAndKeepsTheirSources(t *testing.T) {

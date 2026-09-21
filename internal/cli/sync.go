@@ -122,10 +122,12 @@ func reconcile(
 
 	// Updating everything also refreshes includes. Updating named packages keeps
 	// them pinned, so the package set stays the same.
-	wanted, listedFiles, includes, err := e.loadList(cmd.Context(), opts, locked, update && len(names) == 0)
+	all, err := e.loadList(cmd.Context(), opts, locked, update && len(names) == 0)
 	if err != nil {
 		return err
 	}
+
+	wanted, includes := all.packages, all.includes
 
 	for _, name := range names {
 		if _, ok := wanted[name]; !ok {
@@ -222,7 +224,7 @@ func reconcile(
 		return err
 	}
 
-	files, err := e.resolveFiles(listedFiles, pkgs)
+	files, err := e.resolveFiles(all.files, all.vars, pkgs)
 	if err != nil {
 		return err
 	}

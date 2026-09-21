@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -14,6 +15,7 @@ import (
 	"github.com/y3owk1n/oku/internal/list"
 	"github.com/y3owk1n/oku/internal/platform"
 	"github.com/y3owk1n/oku/internal/profile"
+	"github.com/y3owk1n/oku/internal/render"
 )
 
 // listedFile is one [files] entry of the merged list.
@@ -47,8 +49,9 @@ func (e env) locations() (map[string]string, error) {
 	return vars, nil
 }
 
-// target expands the location variable that written starts with.
-func target(written string, locations map[string]string) (string, error) {
+// target expands the location variable that written starts with, and the
+// variables of the list in the rest of it.
+func target(written string, locations, vars map[string]string) (string, error) {
 	variable, isVariable := strings.CutPrefix(written, "{{")
 
 	name, rest, closed := strings.Cut(variable, "}}")
@@ -70,6 +73,11 @@ func target(written string, locations map[string]string) (string, error) {
 		)
 	case strings.Trim(rest, `/\`) == "":
 		return "", fmt.Errorf("the target is {{%s}} itself, name a path inside it", name)
+	}
+
+	rest, err := render.Text(rest, vars, "the target")
+	if err != nil {
+		return "", err
 	}
 
 	return filepath.Join(base, filepath.FromSlash(rest)), nil
@@ -107,12 +115,48 @@ func linkSource(f listedFile, pkgs []profile.Package) (string, error) {
 	return source, nil
 }
 
+// content returns the bytes of a text or a render entry, with the variables
+// filled in.
+func content(f listedFile, vars map[string]string) (string, error) {
+	if f.file.HasText {
+		return render.Text(f.file.Text, vars, fmt.Sprintf("files.%q", f.file.Target))
+	}
+
+	path := f.file.Render
+	if !filepath.IsAbs(path) {
+		path = filepath.Join(f.dir, filepath.FromSlash(path))
+	}
+
+	template, err := os.ReadFile(path)
+	if err != nil {
+		return "", fmt.Errorf("files.%q: %w", f.file.Target, err)
+	}
+
+	return render.Text(string(template), vars, path)
+}
+
 // resolveFiles turns the [files] of the merged list into the files of a
 // generation that holds pkgs. It changes nothing.
-func (e env) resolveFiles(listed []listedFile, pkgs []profile.Package) ([]profile.File, error) {
+func (e env) resolveFiles(
+	listed []listedFile,
+	listVars map[string]string,
+	pkgs []profile.Package,
+) ([]profile.File, error) {
 	locations, err := e.locations()
 	if err != nil {
 		return nil, err
+	}
+
+	// A template may name a location too, such as {{data}} for a path into oku's
+	// profile.
+	vars := maps.Clone(locations)
+
+	for name, value := range listVars {
+		if _, taken := locations[name]; taken {
+			return nil, fmt.Errorf("vars.%s has the name of a location, pick another name", name)
+		}
+
+		vars[name] = value
 	}
 
 	host := platform.Host()
@@ -125,7 +169,7 @@ func (e env) resolveFiles(listed []listedFile, pkgs []profile.Package) ([]profil
 			continue
 		}
 
-		path, err := target(f.file.Target, locations)
+		path, err := target(f.file.Target, locations, vars)
 		if err != nil {
 			return nil, fmt.Errorf("files.%q: %w", f.file.Target, err)
 		}
@@ -136,17 +180,21 @@ func (e env) resolveFiles(listed []listedFile, pkgs []profile.Package) ([]profil
 
 		owners[path] = f.file.Target
 
-		if f.file.HasText {
-			sum := sha256.Sum256([]byte(path))
+		if f.file.Link == "" {
+			text, err := content(f, vars)
+			if err != nil {
+				return nil, err
+			}
 
-			text := sha256.Sum256([]byte(f.file.Text))
+			sum := sha256.Sum256([]byte(path))
+			hash := sha256.Sum256([]byte(text))
 
 			files = append(files, profile.File{
 				Target:  path,
 				Content: hex.EncodeToString(sum[:])[:12] + "-" + filepath.Base(path),
 				Mode:    f.file.Mode,
-				Hash:    hex.EncodeToString(text[:]),
-				Text:    []byte(f.file.Text),
+				Hash:    hex.EncodeToString(hash[:]),
+				Text:    []byte(text),
 			})
 
 			continue
