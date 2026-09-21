@@ -217,7 +217,7 @@ name that nothing installed uses.
 ## oku sync
 
 ```
-oku sync [list-ref] [--system] [--dry-run]
+oku sync [list-ref] [--system] [--dry-run] [--locked]
 ```
 
 Makes the profile match `oku.toml` and the lists it includes, at the versions
@@ -245,6 +245,19 @@ no longer has the hash in the lock:
 oku: ripgrep: the manifest changed since oku.lock was written
 run `oku update ripgrep` to accept it
 ```
+
+`--locked` makes `sync` fail when it would change `oku.lock`. Use it in CI,
+which cannot commit the lock back:
+
+```
+oku: ./oku.lock does not pin ripgrep for linux-amd64-glibc
+run `oku sync` without --locked, and commit oku.lock
+```
+
+oku checks that before it downloads anything, so a locked sync never trusts a
+download on first use. It also fails, with `oku.lock is out of date`, when the
+lock holds a package that left the list, or lacks a platform that
+[`[lock]`](list-and-lock.md#one-lock-for-several-machines) names.
 
 If any package fails, `sync` leaves the profile unchanged. When an app, a font
 or a service cannot be set up, oku takes back the ones it had already changed.

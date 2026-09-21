@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -9,6 +10,7 @@ import (
 	"os"
 	"slices"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 
@@ -23,7 +25,10 @@ import (
 const (
 	dryRunFlag  = "dry-run"
 	dryRunUsage = "check everything and print what would change, without changing the machine"
+	lockedFlag  = "locked"
 )
+
+const lockedHint = "run `oku sync` without --locked, and commit oku.lock"
 
 func newSyncCmd(opts Options) *cobra.Command {
 	var flags buildFlags
@@ -84,6 +89,7 @@ oku.toml yet.`,
 	flags.register(cmd)
 	cmd.Flags().Bool(systemFlag, false, systemUsage)
 	cmd.Flags().Bool(dryRunFlag, false, dryRunUsage)
+	cmd.Flags().Bool(lockedFlag, false, "fail when oku.lock would change, for use in CI")
 
 	return cmd
 }
@@ -172,7 +178,11 @@ func reconcile(
 	var (
 		jobs []*job
 		deps = newDepCache()
+		// unpinned holds the packages that oku.lock does not pin for the host.
+		unpinned []string
 	)
+
+	frozen, _ := cmd.Flags().GetBool(lockedFlag)
 
 	for _, name := range slices.Sorted(maps.Keys(wanted)) {
 		r := wanted[name].ref
@@ -185,6 +195,10 @@ func reconcile(
 			}
 
 			continue
+		}
+
+		if previous.Ref != r.String() || previous.Platforms[host.String()] == (lock.Platform{}) {
+			unpinned = append(unpinned, name)
 		}
 
 		fresh := update && (len(names) == 0 || slices.Contains(names, name))
@@ -223,6 +237,14 @@ func reconcile(
 				deps:            deps,
 			},
 		})
+	}
+
+	// A locked sync downloads nothing that oku.lock does not pin.
+	if frozen && len(unpinned) > 0 {
+		return fmt.Errorf(
+			"%s does not pin %s for %s\n%s",
+			e.lockPath(), strings.Join(unpinned, ", "), host, lockedHint,
+		)
 	}
 
 	// The first failure stops the packages that are still installing.
@@ -314,6 +336,16 @@ func reconcile(
 	lockData, err := next.Bytes(e.lockPath())
 	if err != nil {
 		return err
+	}
+
+	if frozen {
+		// A missing lock reads as empty, which differs too.
+		onDisk, _ := os.ReadFile(e.lockPath())
+		if !bytes.Equal(onDisk, lockData) {
+			return fmt.Errorf(
+				"%s is out of date, and --locked does not change it\n%s", e.lockPath(), lockedHint,
+			)
+		}
 	}
 
 	files, err := e.resolveFiles(all.files, all.vars, all.secrets, pkgs)

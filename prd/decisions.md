@@ -897,3 +897,18 @@ Known limits: a `vendor_sha256` still comes from the first build on each
 platform (D34). oku pins the build deps of a platform that builds only when
 the host builds too. It does not resolve a package whose `when` leaves out the
 host.
+
+## D66. `sync --locked` refuses to change the lock
+
+`oku sync --locked` stops before any download when `oku.lock` has no entry of
+the host's platform for a package of the list. After resolving, it stops when
+the bytes of the lock would differ from the file. It writes nothing in both
+cases.
+
+Why: `sync` fills a missing platform entry without asking (B15), which suits a
+person who commits the lock afterwards. CI commits nothing, so there the same
+step trusts a download on every run, and nobody learns that the author forgot
+to complete the lock (D65). The check runs before the downloads so that CI
+never runs bytes that nobody pinned. The byte comparison afterwards finds the
+changes that the first check does not look for, such as a dep with no entry or
+a package that left the list.

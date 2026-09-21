@@ -125,3 +125,45 @@ func TestB180AProjectPinsEveryPlatformItCanAndTheGlobalListTheHost(t *testing.T)
 		t.Fatalf("the project lock does not pin the host and %s alone:\n%s", other, locked)
 	}
 }
+
+func TestB181LockedSyncFailsWhenTheLockWouldChange(t *testing.T) {
+	m := newMachine(t)
+	ref := m.manifest(t, "tool", map[string]string{"tool": script}, `bin = ["tool"]`)
+
+	_, err := m.run(t, "", "add", ref)
+	must(t, err)
+
+	if out, err := m.run(t, "", "sync", "--locked"); err != nil {
+		t.Fatalf("a locked sync of a complete lock failed: %v\n%s", err, out)
+	}
+
+	lockPath := filepath.Join(m.config, "oku.lock")
+	locked, err := os.ReadFile(lockPath)
+	must(t, err)
+
+	// The lock now looks as if another machine wrote it, on an empty store.
+	foreign := strings.ReplaceAll(string(locked), platform.Host().String(), "plan9-mips")
+	must(t, os.WriteFile(lockPath, []byte(foreign), 0o644))
+	must(t, os.RemoveAll(m.data))
+
+	_, err = m.run(t, "", "sync", "--locked")
+	if err == nil || !strings.Contains(err.Error(), "does not pin tool for "+platform.Host().String()) {
+		t.Fatalf("want an error that names tool and the host, got %v", err)
+	}
+
+	after, err := os.ReadFile(lockPath)
+	must(t, err)
+
+	if string(after) != foreign || len(m.storeEntries(t)) != 0 {
+		t.Fatalf("a locked sync changed the lock or the store: %v\n%s", m.storeEntries(t), after)
+	}
+
+	// A lock that holds a package the list dropped is out of date too.
+	must(t, os.WriteFile(lockPath, locked, 0o644))
+	must(t, os.WriteFile(filepath.Join(m.config, "oku.toml"), nil, 0o644))
+
+	_, err = m.run(t, "", "sync", "--locked")
+	if err == nil || !strings.Contains(err.Error(), "is out of date") {
+		t.Fatalf("want an out of date error, got %v", err)
+	}
+}

@@ -64,6 +64,10 @@ order step in `prd/product.md`.
   otherwise.
 - B180 [2] Without `[lock]`, `add` and `update` in a project pin every platform
   they can and skip the others, and the global list pins the host alone.
+- B181 [2] `sync --locked` fails before any download when the lock does not pin
+  a package of the list for the host, and names the packages and the platform.
+  It also fails when the lock would change in any other way. It never writes
+  the lock.
 - B16 [2] `include` merges the named lists. A local entry overrides an
   included entry of the same name. `sync` stops when a list from a URL or a
   repo changed since the lock, and reads a list on this machine as it is.
