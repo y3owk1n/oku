@@ -41,7 +41,7 @@
 - **Profile**: a directory of links into the store. One global, one per
   allowed project.
 - **Generation**: a numbered snapshot of a profile, including exposed apps,
-  fonts and enabled services.
+  fonts, enabled services, rendered files and wanted settings.
 - **Shim**: the Windows stand-in for a symlink in a profile `bin`. A copy of
   `oku.exe` under the program's name, beside a `<name>.shim` file.
 - **Junction**: the Windows directory link that a normal user may create. A
@@ -57,6 +57,17 @@
 - **Scope**: `user` or `system`. Where apps, fonts and services are exposed.
   `system = true` on a list entry selects system scope.
 - **Ledger**: `exposed.toml`, the record of every file oku wrote outside its
-  own directories.
+  own directories and of every setting it changed.
+- **Target**: the path in the home directory that a `[files]` entry writes.
+- **Location variable**: `{{home}}`, `{{config}}`, `{{data}}`, `{{appdata}}`
+  or `{{localappdata}}`, the start of a target.
+- **Variable**: a named string from `[vars]` that `render`, `text` and targets
+  expand.
+- **Scheme**: a base16 colour file loaded as variables.
+- **Setting**: one key of a per-user OS mechanism: a macOS preference domain,
+  dconf, or the current user's registry.
+- **Plan** and **apply**: the two parts of a change. The plan checks and
+  changes nothing visible. The apply changes the machine, and reverts on
+  failure.
 - **Shared root**: `/opt/oku`, the store root that `oku setup --system` creates
   so that every machine has the same store paths.
