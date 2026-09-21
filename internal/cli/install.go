@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -37,6 +38,8 @@ type installed struct {
 	// closure holds the store paths of every dep, direct and indirect.
 	closure  []string
 	firstUse bool
+	// firstUseOthers names the other platforms whose download oku trusted.
+	firstUseOthers []string
 	// inferred is the manifest text when oku inferred it during this install.
 	inferred string
 	// unsandboxed says why the build ran without the sandbox, or is empty.
@@ -75,6 +78,11 @@ type request struct {
 	system bool
 	// fromSource builds even when a prebuilt artifact fits the host.
 	fromSource bool
+	// platforms are the platforms besides the host that the lock entry covers.
+	// With strictPlatforms, one that install cannot pin is an error and sync pins
+	// the missing ones too. Without it, add and update pin the ones they can.
+	platforms       []platform.Platform
+	strictPlatforms bool
 	// approve decides whether a manifest may run its build commands.
 	approve func(m *manifest.Manifest, host platform.Platform) error
 	// log receives the output of build commands, or is nil.
@@ -432,6 +440,11 @@ func (e env) install(ctx context.Context, opts Options, req request) (installed,
 
 	platforms[host.String()] = entry
 
+	firstUseOthers, err := e.lockOthers(ctx, opts, req, m, release, platforms)
+	if err != nil {
+		return installed{}, err
+	}
+
 	return installed{
 		profile: profile.Package{
 			Name:      m.Package.Name,
@@ -457,13 +470,90 @@ func (e env) install(ctx context.Context, opts Options, req request) (installed,
 			Platforms:      platforms,
 			Deps:           deps.locks,
 		},
-		closure:     append([]string{realized.Path}, deps.closure...),
-		firstUse:    realized.FirstUse,
-		inferred:    inferred,
-		unsandboxed: realized.Unsandboxed,
-		substituted: deps.substituted,
-		cacheNotes:  deps.cacheNotes,
+		closure:        append([]string{realized.Path}, deps.closure...),
+		firstUse:       realized.FirstUse,
+		firstUseOthers: firstUseOthers,
+		inferred:       inferred,
+		unsandboxed:    realized.Unsandboxed,
+		substituted:    deps.substituted,
+		cacheNotes:     deps.cacheNotes,
 	}, nil
+}
+
+// lockOthers pins m in platforms for each platform of req that has no entry
+// yet. It installs nothing. It returns the platforms whose download it trusted
+// on first use.
+func (e env) lockOthers(
+	ctx context.Context,
+	opts Options,
+	req request,
+	m *manifest.Manifest,
+	release resolve.Release,
+	platforms map[string]lock.Platform,
+) ([]string, error) {
+	if req.keepVersion && !req.strictPlatforms {
+		return nil, nil
+	}
+
+	var firstUse []string
+
+	auth := e.fetcher(opts).Hosts.AuthFor(m.Version.From, m.Version.Repo)
+
+	for _, p := range req.platforms {
+		if _, ok := platforms[p.String()]; ok {
+			continue
+		}
+
+		entry, trusted, err := pinFor(ctx, e.store().As(auth), m, release, p)
+		if err != nil && req.strictPlatforms {
+			return nil, err
+		}
+
+		if err != nil {
+			continue
+		}
+
+		if trusted {
+			firstUse = append(firstUse, p.String())
+		}
+
+		platforms[p.String()] = entry
+	}
+
+	return firstUse, nil
+}
+
+// pinFor returns the lock entry of m for platform p, and whether oku trusted a
+// download for it.
+func pinFor(
+	ctx context.Context,
+	s *store.Store,
+	m *manifest.Manifest,
+	release resolve.Release,
+	p platform.Platform,
+) (lock.Platform, bool, error) {
+	artifact, ok, err := m.Select(p)
+
+	switch {
+	case err != nil:
+		return lock.Platform{}, false, err
+	case !ok && m.HasBuild():
+		return lock.Platform{Strategy: strategyBuild}, false, nil
+	case !ok:
+		return lock.Platform{}, false, fmt.Errorf("%s has no artifact for %s", m.Package.Name, p)
+	}
+
+	if artifact.SHA256 == "" && artifact.SHA256URL == "" {
+		artifact.SHA256 = release.Digests[artifact.URL]
+		artifact.Integrity = cmp.Or(artifact.Integrity, release.Integrity[artifact.URL])
+	}
+
+	sum, trusted, err := s.Pin(ctx, m, artifact)
+	if err != nil {
+		return lock.Platform{}, false, fmt.Errorf("%s for %s: %w", m.Package.Name, p, err)
+	}
+
+	return lock.Platform{Strategy: strategyArtifact, URL: artifact.URL, SHA256: sum}, trusted, nil
 }
 
 // manifestData returns the manifest for req. A GitHub repo without a manifest
@@ -673,6 +763,13 @@ func reportInferred(w io.Writer, got installed, verbose bool) {
 
 // reportFirstUse tells the user that oku trusted a download unverified.
 func (e env) reportFirstUse(w io.Writer, got installed) {
+	if len(got.firstUseOthers) > 0 {
+		fmt.Fprintf(
+			w, "%s publishes no checksum for %s, so oku trusted those downloads and pinned them in %s\n",
+			got.lock.Name, strings.Join(got.firstUseOthers, ", "), e.lockPath(),
+		)
+	}
+
 	if !got.firstUse {
 		return
 	}
@@ -750,23 +847,27 @@ func (e env) installDeps(
 
 		// Each package pins its own deps, so install reuses a dep only when the
 		// ref, the constraint and the lock entry all match.
-		key := fmt.Sprintf("%s %s %v %v %v", r, dep.Version, keep, parent.acceptDigest, previous)
+		key := fmt.Sprintf(
+			"%s %s %v %v %v %v", r, dep.Version, keep, parent.acceptDigest, previous, parent.platforms,
+		)
 
 		got, err := parent.deps.do(parent.root, key, func() (installed, error) {
 			return e.install(ctx, opts, request{
-				ref:          r,
-				commit:       commit,
-				previous:     previous,
-				wantManifest: wantManifest,
-				acceptDigest: parent.acceptDigest,
-				acceptKey:    parent.acceptKey,
-				keepVersion:  keep,
-				approve:      parent.approve,
-				log:          parent.log,
-				constraint:   dep.Version,
-				stack:        stack,
-				root:         parent.root,
-				deps:         parent.deps,
+				ref:             r,
+				commit:          commit,
+				previous:        previous,
+				wantManifest:    wantManifest,
+				acceptDigest:    parent.acceptDigest,
+				acceptKey:       parent.acceptKey,
+				keepVersion:     keep,
+				platforms:       parent.platforms,
+				strictPlatforms: parent.strictPlatforms,
+				approve:         parent.approve,
+				log:             parent.log,
+				constraint:      dep.Version,
+				stack:           stack,
+				root:            parent.root,
+				deps:            parent.deps,
 			})
 		})
 		if err != nil {

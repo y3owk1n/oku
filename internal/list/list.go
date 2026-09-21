@@ -92,6 +92,9 @@ type List struct {
 	// Vars holds [vars]. A nested table becomes names joined by a dot, so
 	// [vars.theme] with base00 is "theme.base00".
 	Vars map[string]string
+	// LockPlatforms holds the platforms of [lock], which oku.lock pins every
+	// package for besides the host.
+	LockPlatforms []platform.Platform
 }
 
 // Read parses the list at path. A missing file is an empty list.
@@ -118,6 +121,7 @@ func Parse(data []byte, origin string) (*List, error) {
 		ThisMac  map[string]any `toml:"defaults-currenthost"`
 		Registry map[string]any `toml:"registry"`
 		Dconf    map[string]any `toml:"dconf"`
+		Lock     map[string]any `toml:"lock"`
 	}
 
 	if err := toml.Unmarshal(data, &raw); err != nil {
@@ -127,6 +131,11 @@ func Parse(data []byte, origin string) (*List, error) {
 	l := &List{Include: raw.Include, Packages: map[string]Entry{}, Vars: map[string]string{}}
 
 	if err := flattenVars(l.Vars, "", raw.Vars); err != nil {
+		return nil, fmt.Errorf("%s: %w", origin, err)
+	}
+
+	var err error
+	if l.LockPlatforms, err = toLockPlatforms(raw.Lock); err != nil {
 		return nil, fmt.Errorf("%s: %w", origin, err)
 	}
 
@@ -204,6 +213,35 @@ func Parse(data []byte, origin string) (*List, error) {
 	}
 
 	return l, nil
+}
+
+// toLockPlatforms reads the [lock] table.
+func toLockPlatforms(table map[string]any) ([]platform.Platform, error) {
+	for key := range table {
+		if key != "platforms" {
+			return nil, fmt.Errorf("lock.%s is not a key of [lock], use platforms", key)
+		}
+	}
+
+	names, ok := table["platforms"].([]any)
+	if !ok && table["platforms"] != nil {
+		return nil, errors.New("lock.platforms wants an array of platform names")
+	}
+
+	platforms := make([]platform.Platform, 0, len(names))
+
+	for _, name := range names {
+		text, _ := name.(string)
+
+		p, err := platform.Parse(text)
+		if err != nil {
+			return nil, fmt.Errorf("lock.platforms: %w", err)
+		}
+
+		platforms = append(platforms, p)
+	}
+
+	return platforms, nil
 }
 
 // toSettings reads the domains of one settings table.

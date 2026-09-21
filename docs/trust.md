@@ -37,6 +37,14 @@ hello publishes no checksum, so oku trusted this download and pinned sha256 667f
 From then on source 4 applies. The same URL serving different bytes fails on
 every machine that uses your lock.
 
+When oku pins [other platforms](list-and-lock.md#one-lock-for-several-machines)
+it names them in one notice. It hashes those downloads and does not unpack
+them:
+
+```
+hello publishes no checksum for linux-amd64-glibc, windows-amd64, so oku trusted those downloads and pinned them in ./oku.lock
+```
+
 If you see this notice, the first download is the one you trusted. Prefer
 manifests that publish `sha256` or `sha256_url`.
 

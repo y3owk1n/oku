@@ -397,9 +397,43 @@ and diffs stay small.
 
 ## One lock for several machines
 
-Each machine adds its own platform entry the first time it runs `oku sync`, and
-does not change the other entries. Commit the lock back after syncing on a new
-kind of machine.
+The version, the manifest and the deps of a package are the same on every
+platform. Only the `platform` entries differ. A machine installs from the lock
+without changing it when the lock holds the entry of that machine's platform.
+
+`[lock]` in `oku.toml` names the platforms to pin besides your own:
+
+```toml
+[lock]
+platforms = ["darwin-arm64", "linux-amd64-glibc", "linux-arm64-glibc"]
+```
+
+`oku add`, `oku update` and `oku sync` then write an entry for each of them,
+from any machine. A Mac pins the Linux download, and the Linux machine installs
+it with no change to the lock. The names are the platform names above:
+`darwin-amd64`, `darwin-arm64`, `linux-amd64-glibc`, `linux-amd64-musl`,
+`linux-arm64-glibc`, `linux-arm64-musl`, `windows-amd64` and `windows-arm64`.
+
+oku takes the checksum of another platform from the manifest's `sha256`, else
+from its `sha256_url`. With neither it downloads the file, hashes it and tells
+you, see [Trust on first use](trust.md#trust-on-first-use). It never unpacks or
+runs a download for another platform. A platform that the manifest builds from
+source gets `strategy = 'build'`, and its `vendor_sha256` comes from the first
+build on that platform.
+
+- A named platform that a package has no artifact and no build for is an
+  error. Limit such a package with `when`, and oku pins it for the platforms
+  that `when` matches.
+- Without `[lock]`, a [project](projects.md) pins every platform it can, when
+  you `add` or `update`, and skips the ones that have no download. The global
+  list pins your own platform only.
+- Only the `[lock]` of your own `oku.toml` counts, not one in an included list.
+- oku does not pin a package whose `when` leaves out your own machine. The
+  first machine that `when` matches pins it.
+
+A machine whose platform is missing from the lock adds its own entry the first
+time it runs `oku sync`, and does not change the other entries. Commit the lock
+back after that.
 
 Platform entries for a package are cleared when `oku update` accepts a changed
 manifest, because they described the old one. Each machine adds its entry

@@ -132,6 +132,11 @@ project /home/you/api
 profile now holds 3 packages
 ```
 
+`add` and `update` pin each package for every platform that has a download, so
+a teammate on Linux installs from the lock that your Mac wrote. `[lock]` names
+the platforms when you want fewer, or want a missing one to be an error, see
+[One lock for several machines](list-and-lock.md#one-lock-for-several-machines).
+
 `sync` installs what `oku.lock` pins, as it does for the global list. A package
 that builds from source asks for approval on each machine.
 
