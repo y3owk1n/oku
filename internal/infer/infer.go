@@ -179,6 +179,11 @@ func (inf *Inferrer) Manifest(
 			l, err = inf.layoutOf(ctx, server.Auth(), urls[c.asset], c.asset, name, opts.Bin)
 
 			switch {
+			case err != nil && isHost && len(c.others) > 0:
+				return "", fmt.Errorf(
+					"%s: %w\nthese assets fit this machine too: %s\nchoose one with --asset",
+					c.asset, err, strings.Join(c.others, ", "),
+				)
 			case err != nil && isHost:
 				return "", fmt.Errorf("%s: %w", c.asset, err)
 			case err != nil:
@@ -395,12 +400,14 @@ func pick(names []string, t target) []string {
 		fits = append(fits, name)
 	}
 
-	// A build for the arch sorts before a universal one. A tar archive keeps file
-	// modes, so it sorts before a zip. A shorter name sorts before variants such
-	// as "-debug".
+	// A build for the arch sorts before a universal one. A command line build
+	// sorts before a desktop app, which holds no program to link. A tar archive
+	// keeps file modes, so it sorts before a zip. A shorter name sorts before
+	// variants such as "-debug".
 	slices.SortFunc(fits, func(a, b string) int {
 		return cmp.Or(
 			cmp.Compare(t.fat(a), t.fat(b)),
+			cmp.Compare(desktop(a), desktop(b)),
 			cmp.Compare(rank(a), rank(b)),
 			cmp.Compare(len(a), len(b)),
 			strings.Compare(a, b),
@@ -408,6 +415,17 @@ func pick(names []string, t target) []string {
 	})
 
 	return fits
+}
+
+// desktop is 1 for an asset that is a desktop app, such as
+// "tool-desktop-mac-arm64.app.tar.gz" beside "tool-darwin-arm64.zip".
+func desktop(name string) int {
+	lower := strings.ToLower(name)
+	if strings.Contains(lower, ".app.") || hasWord(lower, []string{"desktop", "gui", "installer", "setup"}) {
+		return 1
+	}
+
+	return 0
 }
 
 func rank(name string) int {
@@ -496,18 +514,44 @@ func checksumAsset(names []string, asset string) string {
 		}
 	}
 
+	// A release may hold one checksum file for each OS, such as
+	// "tool-mac-checksums.txt". The one for another OS does not list the asset.
+	shared := ""
+
 	for _, name := range names {
 		lower := strings.ToLower(name)
-		if hasAnySuffix(lower, signatures) {
+		if hasAnySuffix(lower, signatures) ||
+			!strings.Contains(lower, "checksum") && !strings.Contains(lower, "sha256sum") {
 			continue
 		}
 
-		if strings.Contains(lower, "checksum") || strings.Contains(lower, "sha256sum") {
+		switch ours, other := sameOS(lower, strings.ToLower(asset)); {
+		case ours:
 			return name
+		case !other && shared == "":
+			shared = name
 		}
 	}
 
-	return ""
+	return shared
+}
+
+// sameOS reports whether name has an OS word that asset has too, and whether it
+// has the word of another OS only.
+func sameOS(name, asset string) (ours, other bool) {
+	for _, words := range osWords {
+		if !hasWord(name, words) {
+			continue
+		}
+
+		if hasWord(asset, words) {
+			return true, false
+		}
+
+		other = true
+	}
+
+	return false, other
 }
 
 // template swaps the tag and the version in a release URL for their variables.

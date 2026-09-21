@@ -539,10 +539,15 @@ How inference reads a release:
   single binaries, compressed or not. It skips editor extensions (`.vsix`) and
   installers such as `.deb`, `.rpm`, `.msi`, `.dmg` and
   `.pkg`, because the paths inside them cannot be guessed. With several
-  candidates it prefers a tar archive over a zip, then the shortest name. When
-  other assets fit your machine as well, a comment in the manifest lists them.
+  candidates it prefers a command line build over a desktop app, which is an
+  asset with `desktop`, `gui`, `installer`, `setup` or `.app.` in its name. Then
+  it prefers a tar archive over a zip, then the shortest name. When other assets
+  fit your machine as well, a comment in the manifest lists them, and so does
+  the error when oku cannot find the program in the asset it chose.
 - It uses `<asset>.sha256` as `sha256_url` when that exists, else a release file
-  with `checksum` or `sha256sum` in its name that is not a signature. With neither, the package is
+  with `checksum` or `sha256sum` in its name that is not a signature. When a
+  release has one such file for each OS, such as `tool-mac-checksums.txt`, oku
+  takes the one that names the OS of the asset. With neither, the package is
   [trusted on first use](trust.md#trust-on-first-use).
 - The version starts at the first digit of the tag, and everything before it
   becomes `strip_prefix`. `v1.2.0` gives `"v"` and `jq-1.8.1` gives `"jq-"`.

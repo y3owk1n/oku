@@ -118,6 +118,9 @@ order step in `prd/product.md`.
   from release assets, prints it, and marks the lock entry `inferred`. The
   lock stores the manifest text, and `sync` installs from it without inferring
   again.
+- B174 [4] With several assets for a platform, inference prefers a command
+  line build over a desktop app. With one checksum file for each OS, it reads
+  the one of the asset's OS.
 - B26 [4] Inference that finds no asset for the host fails and lists the asset
   names it saw.
 - B27 [4] `oku manifest init --from <repo>` writes the inferred manifest to a
