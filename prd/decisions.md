@@ -198,7 +198,9 @@ targets without the user asking.
 
 Discovered tags become versions by cutting `strip_prefix`. A tag that then
 does not start with a digit is ignored. Versions compare by dot-separated
-numbers, and a `-` suffix sorts before the same version without one. GitHub
+numbers, and a `-` suffix sorts before the same version without one. Two
+suffixes compare piece by piece, with a number as a number, because some
+projects count their releases there, such as ImageMagick 7.1.2-31. GitHub
 drafts and prereleases are skipped. The lock stores the tag beside the version,
 and `{{tag}}` expands to it. Why: many upstream tags are not valid semver, so a
 strict parser would reject real projects. Release URLs often contain the tag
