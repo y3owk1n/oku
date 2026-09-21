@@ -9,6 +9,7 @@ one per package.
 | `https://host/ripgrep.toml` | A URL. `http://` works too. |
 | `github:owner/repo` | `oku.pkg.toml` at the root of the repo's default branch. Without one, oku [infers a manifest](manifest.md#inferred-manifests) from the newest release. |
 | `github:owner/repo#name` | `name.toml` at the root, else `packages/name.toml`. |
+| `github:host/owner/repo` | The same on a GitHub Enterprise Server at `host`. `#name` and `@version` work as above. |
 | `git+https://host/repo` | `oku.pkg.toml` at the root of any git repo. |
 | `git+https://host/repo#name` | `name.toml` at the root, else `packages/name.toml`. A fragment with no `/` and no `.` is a name. |
 | `git+https://host/repo#dir/name.toml` | That file in the repo. |
@@ -45,6 +46,12 @@ reads that same commit again.
 
 GitHub allows 60 unauthenticated API requests per hour. Set `GITHUB_TOKEN` to
 raise the limit. oku sends the token to the GitHub API only.
+
+A `github:host/owner/repo` ref reads a GitHub Enterprise Server. A first part
+with a dot is the host, because no owner name has one. oku reads everything
+from `https://host/api/v3`, the manifest included. Set `GH_ENTERPRISE_TOKEN`
+for a server that needs a login. oku never sends `GITHUB_TOKEN` to such a
+server, and never sends `GH_ENTERPRISE_TOKEN` to github.com.
 
 **`git+`** needs `git` on `PATH`. oku fetches one commit at depth 1 into its
 cache directory and reads the file from there. git runs with

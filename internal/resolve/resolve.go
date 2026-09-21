@@ -4,30 +4,22 @@ package resolve
 import (
 	"cmp"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
-	"net/http"
 	"os"
 	"os/exec"
 	"slices"
 	"strconv"
 	"strings"
-	"time"
 	"unicode"
 
+	"github.com/y3owk1n/oku/internal/forge"
 	"github.com/y3owk1n/oku/internal/manifest"
 )
 
-// Resolver lists versions. The GitHub URL is a field so tests can point it at a
-// local server.
+// Resolver lists versions.
 type Resolver struct {
-	HTTP      *http.Client
-	GitHubAPI string
-	// The resolver sends Token to the GitHub API when set, which raises the rate
-	// limit.
-	Token string
+	Hosts forge.Hosts
 }
 
 // Release is one installable version and the upstream tag it came from.
@@ -213,46 +205,23 @@ func (r *Resolver) List(ctx context.Context, v manifest.Version) ([]Release, err
 // "nightly". Its version is the day of the commit the tag points at and that
 // commit, such as 2026.09.20-a73243f, so one commit always has one version. A
 // prerelease counts, a draft does not.
-func (r *Resolver) movingTag(ctx context.Context, repo, tag string) (Release, error) {
-	what := "read the release " + tag + " of " + repo
+func (r *Resolver) movingTag(ctx context.Context, location, tag string) (Release, error) {
+	what := "read the release " + tag + " of " + location
+	server, repo := forge.Split(location)
+	host := r.Hosts.GitHub(server)
 
-	var found struct {
-		Draft  bool `json:"draft"`
-		Assets []struct {
-			URL    string `json:"browser_download_url"`
-			Digest string `json:"digest"`
-		} `json:"assets"`
-	}
-
-	err := r.github(
-		ctx,
-		"/repos/"+repo+"/releases/tags/"+tag,
-		what,
-		"the repository has no such release",
-		&found,
-	)
+	found, err := host.Release(ctx, repo, tag)
 	if err != nil {
-		return Release{}, err
+		return Release{}, explain(err, what, "the repository has no such release")
 	}
 
 	if found.Draft {
 		return Release{}, fmt.Errorf("%s: the release is a draft", what)
 	}
 
-	var commit struct {
-		SHA    string `json:"sha"`
-		Commit struct {
-			Committer struct {
-				Date time.Time `json:"date"`
-			} `json:"committer"`
-		} `json:"commit"`
-	}
-
-	err = r.github(
-		ctx, "/repos/"+repo+"/commits/"+tag, what, "the repository has no such tag", &commit,
-	)
+	commit, err := host.TagCommit(ctx, repo, tag)
 	if err != nil {
-		return Release{}, err
+		return Release{}, explain(err, what, "the repository has no such tag")
 	}
 
 	if len(commit.SHA) < 7 {
@@ -262,13 +231,13 @@ func (r *Resolver) movingTag(ctx context.Context, repo, tag string) (Release, er
 	digests := map[string]string{}
 
 	for _, asset := range found.Assets {
-		if sum, ok := strings.CutPrefix(asset.Digest, "sha256:"); ok {
-			digests[asset.URL] = sum
+		if asset.Digest != "" {
+			digests[asset.URL] = asset.Digest
 		}
 	}
 
 	return Release{
-		Version: commit.Commit.Committer.Date.UTC().Format("2006.01.02") + "-" + commit.SHA[:7],
+		Version: commit.Date.UTC().Format("2006.01.02") + "-" + commit.SHA[:7],
 		Tag:     tag,
 		Commit:  commit.SHA,
 		Digests: digests,
@@ -277,19 +246,12 @@ func (r *Resolver) movingTag(ctx context.Context, repo, tag string) (Release, er
 
 // githubReleases returns the tags of published releases. It reads the newest
 // 100 and skips drafts and prereleases.
-func (r *Resolver) githubReleases(ctx context.Context, repo string) ([]string, error) {
-	var found []struct {
-		Tag        string `json:"tag_name"`
-		Draft      bool   `json:"draft"`
-		Prerelease bool   `json:"prerelease"`
-	}
+func (r *Resolver) githubReleases(ctx context.Context, location string) ([]string, error) {
+	server, repo := forge.Split(location)
 
-	err := r.github(
-		ctx, "/repos/"+repo+"/releases?per_page=100", "list releases of "+repo,
-		"the repository was not found", &found,
-	)
+	found, err := r.Hosts.GitHub(server).Releases(ctx, repo)
 	if err != nil {
-		return nil, err
+		return nil, explain(err, "list releases of "+location, "the repository was not found")
 	}
 
 	var tags []string
@@ -303,41 +265,14 @@ func (r *Resolver) githubReleases(ctx context.Context, repo string) ([]string, e
 	return tags, nil
 }
 
-// github decodes the GitHub API's answer for path into into. what names the
-// request in errors, and missing says what a 404 means for it.
-func (r *Resolver) github(ctx context.Context, path, what, missing string, into any) error {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, r.GitHubAPI+path, nil)
-	if err != nil {
-		return err
-	}
-
-	req.Header.Set("User-Agent", "oku")
-	req.Header.Set("Accept", "application/vnd.github+json")
-
-	if r.Token != "" {
-		req.Header.Set("Authorization", "Bearer "+r.Token)
-	}
-
-	resp, err := r.HTTP.Do(req)
-	if err != nil {
-		return fmt.Errorf("%s: %w", what, err)
-	}
-	defer resp.Body.Close()
-
-	switch {
-	case resp.StatusCode == http.StatusNotFound:
+// explain names the request in a forge's error. missing says what a missing
+// page means for it.
+func explain(err error, what, missing string) error {
+	if errors.Is(err, forge.ErrNotFound) {
 		return fmt.Errorf("%s: %s", what, missing)
-	case resp.StatusCode == http.StatusForbidden && resp.Header.Get("X-RateLimit-Remaining") == "0":
-		return errors.New("GitHub rate limit reached, set GITHUB_TOKEN to raise it")
-	case resp.StatusCode != http.StatusOK:
-		return fmt.Errorf("%s: server returned %s", what, resp.Status)
 	}
 
-	if err := json.NewDecoder(io.LimitReader(resp.Body, 8<<20)).Decode(into); err != nil {
-		return fmt.Errorf("%s: %w", what, err)
-	}
-
-	return nil
+	return fmt.Errorf("%s: %w", what, err)
 }
 
 func gitTags(ctx context.Context, url string) ([]string, error) {

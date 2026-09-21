@@ -5,15 +5,13 @@ package infer
 import (
 	"cmp"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
-	"net/http"
 	"path"
 	"slices"
 	"strings"
 
+	"github.com/y3owk1n/oku/internal/forge"
 	"github.com/y3owk1n/oku/internal/platform"
 )
 
@@ -29,24 +27,10 @@ type File struct {
 
 var errNoRelease = errors.New("has no release")
 
-// Inferrer reads releases from GitHub.
+// Inferrer reads releases from a forge.
 type Inferrer struct {
-	HTTP      *http.Client
-	GitHubAPI string
-	Token     string
-	Inspect   Inspector
-}
-
-// Release is a GitHub release with its downloads.
-type Release struct {
-	Tag string `json:"tag_name"`
-	// Commit is the commit the release was made from, when upstream made it from
-	// a commit and not from a branch.
-	Commit string `json:"target_commitish"`
-	Assets []struct {
-		Name string `json:"name"`
-		URL  string `json:"browser_download_url"`
-	} `json:"assets"`
+	Hosts   forge.Hosts
+	Inspect Inspector
 }
 
 // Options set the release, the asset and the program Manifest uses. With the
@@ -115,7 +99,8 @@ type choice struct {
 	others []string
 }
 
-// Manifest returns manifest TOML for the GitHub repo "owner/repo". It needs an
+// Manifest returns manifest TOML for the GitHub repo "owner/repo", which may
+// have a host in front. It needs an
 // asset for host, because it opens that asset to find the executable.
 func (inf *Inferrer) Manifest(
 	ctx context.Context,
@@ -160,7 +145,12 @@ func (inf *Inferrer) Manifest(
 
 	var b strings.Builder
 
-	fmt.Fprintf(&b, "[package]\nname = %q\nhomepage = %q\n\n", name, "https://github.com/"+repo)
+	server, onServer := forge.Split(repo)
+
+	fmt.Fprintf(
+		&b, "[package]\nname = %q\nhomepage = %q\n\n",
+		name, inf.Hosts.GitHub(server).Home(onServer),
+	)
 	fmt.Fprintf(&b, "[version]\nfrom = \"github-releases\"\nrepo = %q\n", repo)
 
 	if prefix != "" {
@@ -297,7 +287,7 @@ func choose(names []string, host platform.Platform, glob string) ([]choice, erro
 // wanted returns the release for version, or the newest one for "". It tries
 // version as a tag and as a "v" tag. With any other prefix it returns the newest
 // release, whose asset names are the best guess there is.
-func (inf *Inferrer) wanted(ctx context.Context, repo, version string) (Release, error) {
+func (inf *Inferrer) wanted(ctx context.Context, repo, version string) (forge.Release, error) {
 	if version != "" {
 		for _, tag := range []string{version, "v" + version} {
 			rel, err := inf.Tagged(ctx, repo, tag)
@@ -310,60 +300,32 @@ func (inf *Inferrer) wanted(ctx context.Context, repo, version string) (Release,
 	return inf.Latest(ctx, repo)
 }
 
-// Latest returns the newest release of the GitHub repo "owner/name".
-func (inf *Inferrer) Latest(ctx context.Context, repo string) (Release, error) {
-	return inf.release(ctx, repo, "latest")
+// Latest returns the newest release of the GitHub repo at location, which is
+// "owner/name" with an optional host in front.
+func (inf *Inferrer) Latest(ctx context.Context, location string) (forge.Release, error) {
+	return inf.release(ctx, location, "")
 }
 
-// Tagged returns the release of repo with that tag. Unlike Latest, it also
+// Tagged returns the release of location with that tag. Unlike Latest, it also
 // returns a prerelease.
-func (inf *Inferrer) Tagged(ctx context.Context, repo, tag string) (Release, error) {
-	return inf.release(ctx, repo, "tags/"+tag)
+func (inf *Inferrer) Tagged(ctx context.Context, location, tag string) (forge.Release, error) {
+	return inf.release(ctx, location, tag)
 }
 
-func (inf *Inferrer) release(ctx context.Context, repo, which string) (Release, error) {
-	var rel Release
+func (inf *Inferrer) release(ctx context.Context, location, tag string) (forge.Release, error) {
+	host, repo := forge.Split(location)
 
-	what := "read the newest release of " + repo
-	if tag, ok := strings.CutPrefix(which, "tags/"); ok {
-		what = "read the release " + tag + " of " + repo
-	}
-
-	req, err := http.NewRequestWithContext(
-		ctx, http.MethodGet, inf.GitHubAPI+"/repos/"+repo+"/releases/"+which, nil,
-	)
-	if err != nil {
-		return rel, err
-	}
-
-	req.Header.Set("User-Agent", "oku")
-	req.Header.Set("Accept", "application/vnd.github+json")
-
-	if inf.Token != "" {
-		req.Header.Set("Authorization", "Bearer "+inf.Token)
-	}
-
-	resp, err := inf.HTTP.Do(req)
-	if err != nil {
-		return rel, fmt.Errorf("%s: %w", what, err)
-	}
-	defer resp.Body.Close()
+	rel, err := inf.Hosts.GitHub(host).Release(ctx, repo, tag)
 
 	switch {
-	case resp.StatusCode == http.StatusNotFound && which != "latest":
-		return rel, fmt.Errorf(
-			"%s %w %s", repo, errNoRelease, strings.TrimPrefix(which, "tags/"),
-		)
-	case resp.StatusCode == http.StatusNotFound:
-		return rel, fmt.Errorf("%s has no manifest and no release to infer one from", repo)
-	case resp.StatusCode == http.StatusForbidden && resp.Header.Get("X-RateLimit-Remaining") == "0":
-		return rel, errors.New("GitHub rate limit reached, set GITHUB_TOKEN to raise it")
-	case resp.StatusCode != http.StatusOK:
-		return rel, fmt.Errorf("%s: server returned %s", what, resp.Status)
-	}
-
-	if err := json.NewDecoder(io.LimitReader(resp.Body, 8<<20)).Decode(&rel); err != nil {
-		return rel, fmt.Errorf("%s: %w", what, err)
+	case errors.Is(err, forge.ErrNotFound) && tag != "":
+		return rel, fmt.Errorf("%s %w %s", location, errNoRelease, tag)
+	case errors.Is(err, forge.ErrNotFound):
+		return rel, fmt.Errorf("%s has no manifest and no release to infer one from", location)
+	case err != nil && tag != "":
+		return rel, fmt.Errorf("read the release %s of %s: %w", tag, location, err)
+	case err != nil:
+		return rel, fmt.Errorf("read the newest release of %s: %w", location, err)
 	}
 
 	return rel, nil

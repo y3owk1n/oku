@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -15,19 +14,18 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+
+	"github.com/y3owk1n/oku/internal/forge"
 )
 
 // maxManifest is the most bytes Fetch reads from a server.
 const maxManifest = 1 << 20
 
-// Fetcher reads manifests. The GitHub URLs are fields so tests can point them at
-// a local server.
+// Fetcher reads manifests.
 type Fetcher struct {
-	HTTP      *http.Client
-	GitHubAPI string
-	GitHubRaw string
-	// Fetch sends Token to the GitHub API when set, which raises the rate limit.
-	Token string
+	HTTP *http.Client
+	// Hosts opens the forge of a GitHub ref.
+	Hosts forge.Hosts
 	// GitCache holds the clones that Git refs read from.
 	GitCache string
 }
@@ -45,15 +43,34 @@ type Fetched struct {
 // ErrNotFound reports that the file a ref or path names does not exist.
 var ErrNotFound = errors.New("not found")
 
-// NewFetcher returns a Fetcher for github.com that clones under cacheDir.
+// NewFetcher returns a Fetcher that clones under cacheDir.
 func NewFetcher(cacheDir string) *Fetcher {
 	return &Fetcher{
-		HTTP:      http.DefaultClient,
-		GitHubAPI: "https://api.github.com",
-		GitHubRaw: "https://raw.githubusercontent.com",
-		Token:     os.Getenv("GITHUB_TOKEN"),
-		GitCache:  filepath.Join(cacheDir, "git"),
+		HTTP:     http.DefaultClient,
+		Hosts:    forge.Hosts{HTTP: http.DefaultClient},
+		GitCache: filepath.Join(cacheDir, "git"),
 	}
+}
+
+// forgeOf returns the forge of a GitHub ref and the repo on it.
+func (f *Fetcher) forgeOf(r Ref) (forge.Forge, string) {
+	host, repo := forge.Split(r.Location)
+
+	return f.Hosts.GitHub(host), repo
+}
+
+// file reads one manifest file from a forge.
+func file(ctx context.Context, host forge.Forge, repo, commit, path string) ([]byte, error) {
+	data, err := host.File(ctx, repo, commit, path)
+	if errors.Is(err, forge.ErrNotFound) {
+		return nil, ErrNotFound
+	}
+
+	if err == nil && len(data) > maxManifest {
+		return nil, fmt.Errorf("response is larger than %d bytes", maxManifest)
+	}
+
+	return data, err
 }
 
 // Fetch reads the file r points at as a t. A non-empty commit pins GitHub and
@@ -72,7 +89,7 @@ func (f *Fetcher) Fetch(ctx context.Context, r Ref, commit string, t Target) (Fe
 
 		return Fetched{Data: data, Path: r.Location}, nil
 	case HTTP:
-		data, err := f.get(ctx, r.Location, nil)
+		data, err := f.get(ctx, r.Location)
 		if err != nil {
 			return Fetched{}, fmt.Errorf("fetch %s: %w", r.Location, err)
 		}
@@ -91,21 +108,17 @@ func (f *Fetcher) fetchGitHub(
 	commit string,
 	t Target,
 ) (Fetched, error) {
-	if commit == "" {
-		sha, err := f.get(
-			ctx,
-			f.GitHubAPI+"/repos/"+r.Location+"/commits/HEAD",
-			map[string]string{"Accept": "application/vnd.github.sha"},
-		)
-		if err != nil {
-			return Fetched{}, fmt.Errorf("resolve github:%s: %w", r.Location, err)
-		}
+	host, repo := f.forgeOf(r)
 
-		commit = strings.TrimSpace(string(sha))
+	if commit == "" {
+		var err error
+		if commit, err = host.Head(ctx, repo); err != nil {
+			return Fetched{}, fmt.Errorf("resolve %s: %w", r, notFound(err))
+		}
 	}
 
 	for _, path := range t.paths(r.Fragment) {
-		data, err := f.get(ctx, f.GitHubRaw+"/"+r.Location+"/"+commit+"/"+path, nil)
+		data, err := file(ctx, host, repo, commit, path)
 		if errors.Is(err, ErrNotFound) {
 			continue
 		}
@@ -132,21 +145,22 @@ func (t Target) paths(name string) []string {
 	return []string{name + ".toml", t.Dir + "/" + name + ".toml"}
 }
 
-func (f *Fetcher) get(ctx context.Context, url string, headers map[string]string) ([]byte, error) {
+// notFound turns a forge's missing file or repo into ErrNotFound.
+func notFound(err error) error {
+	if errors.Is(err, forge.ErrNotFound) {
+		return ErrNotFound
+	}
+
+	return err
+}
+
+func (f *Fetcher) get(ctx context.Context, url string) ([]byte, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, err
 	}
 
 	req.Header.Set("User-Agent", "oku")
-
-	for k, v := range headers {
-		req.Header.Set(k, v)
-	}
-
-	if f.Token != "" && strings.HasPrefix(url, f.GitHubAPI) {
-		req.Header.Set("Authorization", "Bearer "+f.Token)
-	}
 
 	resp, err := f.HTTP.Do(req)
 	if err != nil {
@@ -157,8 +171,6 @@ func (f *Fetcher) get(ctx context.Context, url string, headers map[string]string
 	switch {
 	case resp.StatusCode == http.StatusNotFound:
 		return nil, ErrNotFound
-	case resp.StatusCode == http.StatusForbidden && resp.Header.Get("X-RateLimit-Remaining") == "0":
-		return nil, errors.New("GitHub rate limit reached, set GITHUB_TOKEN to raise it")
 	case resp.StatusCode != http.StatusOK:
 		return nil, fmt.Errorf("server returned %s", resp.Status)
 	}
@@ -250,7 +262,9 @@ func (f *Fetcher) FetchBeside(
 	case File, HTTP:
 		r.Location = at
 	case GitHub:
-		data, err := f.get(ctx, f.GitHubRaw+"/"+r.Location+"/"+got.Commit+"/"+at, nil)
+		host, repo := f.forgeOf(r)
+
+		data, err := file(ctx, host, repo, got.Commit, at)
 		if err != nil {
 			return Fetched{}, fmt.Errorf("fetch %s: %w", at, err)
 		}
@@ -358,51 +372,32 @@ func readCollection(dir string) (map[string][]byte, error) {
 }
 
 func (f *Fetcher) listGitHub(ctx context.Context, r Ref) (map[string][]byte, error) {
-	sha, err := f.get(
-		ctx, f.GitHubAPI+"/repos/"+r.Location+"/commits/HEAD",
-		map[string]string{"Accept": "application/vnd.github.sha"},
-	)
+	host, repo := f.forgeOf(r)
+
+	commit, err := host.Head(ctx, repo)
 	if err != nil {
-		return nil, fmt.Errorf("resolve %s: %w", r, err)
+		return nil, fmt.Errorf("resolve %s: %w", r, notFound(err))
 	}
 
-	commit := strings.TrimSpace(string(sha))
-
-	body, err := f.get(
-		ctx,
-		f.GitHubAPI+"/repos/"+r.Location+"/git/trees/"+commit+"?recursive=1",
-		nil,
-	)
+	paths, err := host.Files(ctx, repo, commit)
 	if err != nil {
-		return nil, fmt.Errorf("list %s: %w", r, err)
-	}
-
-	var tree struct {
-		Tree []struct {
-			Path string `json:"path"`
-			Type string `json:"type"`
-		} `json:"tree"`
-	}
-
-	if err := json.Unmarshal(body, &tree); err != nil {
-		return nil, fmt.Errorf("list %s: %w", r, err)
+		return nil, fmt.Errorf("list %s: %w", r, notFound(err))
 	}
 
 	found := map[string][]byte{}
 
-	for _, item := range tree.Tree {
-		dir, file := path.Split(item.Path)
-		if item.Type != "blob" || !strings.HasSuffix(file, ".toml") ||
-			dir != "" && dir != Manifest.Dir+"/" {
+	for _, at := range paths {
+		dir, name := path.Split(at)
+		if !strings.HasSuffix(name, ".toml") || dir != "" && dir != Manifest.Dir+"/" {
 			continue
 		}
 
-		data, err := f.get(ctx, f.GitHubRaw+"/"+r.Location+"/"+commit+"/"+item.Path, nil)
+		data, err := file(ctx, host, repo, commit, at)
 		if err != nil {
-			return nil, fmt.Errorf("fetch %s: %w", item.Path, err)
+			return nil, fmt.Errorf("fetch %s: %w", at, err)
 		}
 
-		name := strings.TrimSuffix(file, ".toml")
+		name = strings.TrimSuffix(name, ".toml")
 		if _, taken := found[name]; !taken || dir == "" {
 			found[name] = data
 		}

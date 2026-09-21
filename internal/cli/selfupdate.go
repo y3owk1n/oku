@@ -12,7 +12,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/y3owk1n/oku/internal/infer"
+	"github.com/y3owk1n/oku/internal/forge"
 	"github.com/y3owk1n/oku/internal/store"
 )
 
@@ -86,7 +86,7 @@ func runSelfUpdate(cmd *cobra.Command, opts Options, check, nightly bool) error 
 	out := cmd.OutOrStdout()
 
 	var (
-		release infer.Release
+		release forge.Release
 		newest  string
 		current bool
 	)
