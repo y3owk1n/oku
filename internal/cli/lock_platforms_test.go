@@ -167,3 +167,59 @@ func TestB181LockedSyncFailsWhenTheLockWouldChange(t *testing.T) {
 		t.Fatalf("want an out of date error, got %v", err)
 	}
 }
+
+func TestB182SyncPinsAPackageWhoseWhenLeavesOutTheHost(t *testing.T) {
+	m := newMachine(t)
+	other := otherPlatform()
+
+	// Both downloads are for the other platform alone, and neither is an archive.
+	download := filepath.Join(m.fixtures, "foreign.bin")
+	must(t, os.WriteFile(download, []byte("not an archive"), 0o644))
+
+	artifact := fmt.Sprintf(
+		"[[artifact]]\nmatch = { os = %q }\nurl = \"file://%s\"\nbin = [\"x\"]\n", other.OS, download,
+	)
+	m.rawManifest(t, "interp", artifact)
+	tool := m.rawManifest(t, "tool", "[runtime]\ndeps = [\"./interp.toml\"]\n"+artifact)
+
+	list := fmt.Sprintf(
+		"[lock]\nplatforms = [%q]\n\n[packages]\ntool = { ref = %q, when = { os = %q } }\n",
+		other.String(), tool, other.OS,
+	)
+	must(t, os.MkdirAll(m.config, 0o755))
+	must(t, os.WriteFile(filepath.Join(m.config, "oku.toml"), []byte(list), 0o644))
+
+	out, err := m.run(t, "", "sync")
+	if err != nil {
+		t.Fatalf("sync: %v\n%s", err, out)
+	}
+
+	if !strings.Contains(out, "tool 1.2.3, pinned and not installed on "+platform.Host().String()) {
+		t.Fatalf("sync did not say that it pinned tool:\n%s", out)
+	}
+
+	lockPath := filepath.Join(m.config, "oku.lock")
+	locked, err := os.ReadFile(lockPath)
+	must(t, err)
+
+	for _, want := range []string{
+		"name = 'tool'", "name = 'interp'",
+		"[package.platform." + other.String() + "]", "[package.dep.platform." + other.String() + "]",
+	} {
+		if !strings.Contains(string(locked), want) {
+			t.Fatalf("oku.lock lacks %s:\n%s", want, locked)
+		}
+	}
+
+	if strings.Contains(string(locked), platform.Host().String()) || len(m.storeEntries(t)) != 0 ||
+		exists(m.profile("bin", "x")) {
+		t.Fatalf("sync installed tool on a host that its when leaves out:\n%s", locked)
+	}
+
+	// A lock that pins the package needs no second look at its manifest.
+	must(t, os.Remove(tool))
+
+	if out, err := m.run(t, "", "sync", "--locked"); err != nil {
+		t.Fatalf("sync of a complete lock read the manifest again: %v\n%s", err, out)
+	}
+}

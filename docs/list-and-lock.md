@@ -58,8 +58,10 @@ The keys are `os`, `arch` and `libc`, with the values described in the
 [manifest reference](manifest.md#match-values). A missing key matches anything.
 Any other key is an error.
 
-`oku sync` skips a package whose `when` does not match the machine. If the lock
-already has an entry for it from another machine, that entry stays.
+`oku sync` does not install a package whose `when` does not match the machine.
+If the lock already has an entry for it from another machine, that entry stays.
+oku can also pin such a package from your machine, see
+[One lock for several machines](#one-lock-for-several-machines).
 
 ### Including other lists
 
@@ -428,8 +430,11 @@ build on that platform.
   you `add` or `update`, and skips the ones that have no download. The global
   list pins your own platform only.
 - Only the `[lock]` of your own `oku.toml` counts, not one in an included list.
-- oku does not pin a package whose `when` leaves out your own machine. The
-  first machine that `when` matches pins it.
+- oku also pins a package whose `when` leaves out your own machine, with its
+  deps, for the platforms that `when` matches. It installs none of it and
+  prints `patchelf 0.18.0, pinned and not installed on darwin-arm64`. The
+  global list without `[lock]` pins the host alone, so there the first machine
+  that `when` matches pins the package.
 
 A machine whose platform is missing from the lock adds its own entry the first
 time it runs `oku sync`, and does not change the other entries. Commit the lock

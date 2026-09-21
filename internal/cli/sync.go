@@ -187,9 +187,13 @@ func reconcile(
 	for _, name := range slices.Sorted(maps.Keys(wanted)) {
 		r := wanted[name].ref
 		previous, _ := locked.Find(name)
+		platforms, strict := e.lockPlatforms(all.own, wanted[name].entry.When)
+		fresh := update && (len(names) == 0 || slices.Contains(names, name))
 
-		// A package for another platform keeps its lock entry and is not installed.
-		if !wanted[name].entry.When.Matches(host) {
+		// oku does not install a package for another platform. It keeps the lock
+		// entry, or pins the package again when the entry has to change.
+		lockOnly := !wanted[name].entry.When.Matches(host)
+		if lockOnly && !needsLock(previous, r.String(), platforms, strict, fresh) {
 			if previous.Name != "" {
 				next.Set(previous)
 			}
@@ -197,11 +201,10 @@ func reconcile(
 			continue
 		}
 
-		if previous.Ref != r.String() || previous.Platforms[host.String()] == (lock.Platform{}) {
+		pinned := previous.Ref == r.String() && previous.Platforms[host.String()] != (lock.Platform{})
+		if !lockOnly && !pinned {
 			unpinned = append(unpinned, name)
 		}
-
-		fresh := update && (len(names) == 0 || slices.Contains(names, name))
 
 		commit := previous.Commit
 		if fresh || previous.Ref != r.String() {
@@ -215,14 +218,13 @@ func reconcile(
 			wantManifest = previous.ManifestSHA256
 		}
 
-		platforms, strict := e.lockPlatforms(all.own, wanted[name].entry.When)
-
 		jobs = append(jobs, &job{
 			name: name, fresh: fresh, locksManifest: locksManifest,
 			req: request{
 				ref:             r,
 				platforms:       platforms,
 				strictPlatforms: strict,
+				lockOnly:        lockOnly,
 				commit:          commit,
 				previous:        previous,
 				wantManifest:    wantManifest,
@@ -313,6 +315,8 @@ func reconcile(
 		}
 
 		switch {
+		case j.req.lockOnly:
+			fmt.Fprintf(out, "%s %s, pinned and not installed on %s\n", name, got.lock.Version, host)
 		case !locksManifest:
 			fmt.Fprintf(out, "%s %s\n", name, got.lock.Version)
 		case previous.Version != got.lock.Version:
@@ -330,7 +334,10 @@ func reconcile(
 		reportCache(cmd.ErrOrStderr(), got)
 
 		next.Set(got.lock)
-		pkgs = append(pkgs, got.profile)
+
+		if !j.req.lockOnly {
+			pkgs = append(pkgs, got.profile)
+		}
 	}
 
 	lockData, err := next.Bytes(e.lockPath())
@@ -390,6 +397,27 @@ func reconcile(
 	}
 
 	return nil
+}
+
+// needsLock reports whether sync must pin a package that it does not install.
+// previous is its lock entry, and platforms are the ones to pin it for.
+func needsLock(
+	previous lock.Package,
+	ref string,
+	platforms []platform.Platform,
+	strict, fresh bool,
+) bool {
+	if len(platforms) == 0 {
+		return false
+	}
+
+	if fresh || previous.Ref != ref {
+		return true
+	}
+
+	return strict && slices.ContainsFunc(platforms, func(p platform.Platform) bool {
+		return previous.Platforms[p.String()] == (lock.Platform{})
+	})
 }
 
 // parallelEnv names the variable that sets how many packages install at once.

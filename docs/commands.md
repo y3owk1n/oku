@@ -224,7 +224,10 @@ Makes the profile match `oku.toml` and the lists it includes, at the versions
 pinned in `oku.lock`.
 
 - A package in the list but not installed is installed.
-- A package whose `when` does not match this machine is skipped.
+- oku does not install a package whose `when` does not match this machine. It
+  pins it for the platforms of
+  [`[lock]`](list-and-lock.md#one-lock-for-several-machines) when the lock
+  lacks them.
 - An included list is read at the commit in the lock.
 - A package installed but not in the list is dropped from the profile and from
   the lock.
