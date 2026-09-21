@@ -10,6 +10,7 @@ has the overview.
 | [Refs](refs.md) | The ways to point oku at a manifest, a repo on GitHub, GitLab, Codeberg or Gitea, or a download, and sources |
 | [List and lock](list-and-lock.md) | `oku.toml`, `oku.lock`, one list for several machines |
 | [Projects](projects.md) | A list, a lock and a profile that belong to one repo, and the shell hook |
+| [Secrets](secrets.md) | SSH keys and tokens from sops and age files, decrypted on sync |
 | [Services](services.md) | Running a package's daemon with launchd, systemd or Task Scheduler |
 | [System scope](system-scope.md) | Apps, fonts and services for every user of the machine |
 | [Windows](windows.md) | Shims, junctions, and what is not verified there |

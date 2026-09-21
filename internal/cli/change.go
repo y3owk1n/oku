@@ -152,7 +152,13 @@ func (e env) plan(cmd *cobra.Command, opts Options, c change) (pending, exposePl
 		return pending{}, exposePlan{}, err
 	}
 
-	files, err := prof.FilesOf(c.to)
+	files, err := prof.FilesWithContent(c.to)
+	if err != nil {
+		return pending{}, exposePlan{}, err
+	}
+
+	// A secret that cannot be decrypted has to stop the change here.
+	secrets, err := e.unseal(cmd.Context(), c.to, files)
 	if err != nil {
 		return pending{}, exposePlan{}, err
 	}
@@ -166,6 +172,8 @@ func (e env) plan(cmd *cobra.Command, opts Options, c change) (pending, exposePl
 	if err != nil {
 		return pending{}, exposePlan{}, err
 	}
+
+	plan.secrets = secrets
 
 	p := pending{
 		Project: e.project, From: prof.Current(), To: c.to,
@@ -205,7 +213,12 @@ func (e env) revert(ctx context.Context, opts Options, p pending) error {
 			return err
 		}
 
-		files, err := prof.FilesOf(p.From)
+		files, err := prof.FilesWithContent(p.From)
+		if err != nil {
+			return err
+		}
+
+		secrets, err := e.unseal(ctx, p.From, files)
 		if err != nil {
 			return err
 		}
@@ -229,7 +242,7 @@ func (e env) revert(ctx context.Context, opts Options, p pending) error {
 			wanted = keepSystem(ledger.Items, wanted)
 		}
 
-		handlers, err := e.handlers(ctx, opts, defs)
+		handlers, err := e.handlers(ctx, opts, defs, secrets)
 		if err != nil {
 			return err
 		}

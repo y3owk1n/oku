@@ -40,6 +40,8 @@ type merger struct {
 	// files is keyed by the target as the list has it.
 	files map[string]listedFile
 	vars  map[string]string
+	// secrets is keyed by the name in [secrets].
+	secrets map[string]listedSecret
 	// settings is keyed by backend, domain and key.
 	settings map[[3]string]list.Setting
 	includes []lock.Include
@@ -50,8 +52,9 @@ type merger struct {
 type merged struct {
 	packages map[string]listed
 	// files is sorted by target.
-	files []listedFile
-	vars  map[string]string
+	files   []listedFile
+	vars    map[string]string
+	secrets map[string]listedSecret
 	// settings is sorted by backend, domain and key.
 	settings []list.Setting
 	includes []lock.Include
@@ -80,6 +83,7 @@ func (e env) loadList(
 		packages: map[string]listed{},
 		files:    map[string]listedFile{},
 		vars:     map[string]string{},
+		secrets:  map[string]listedSecret{},
 		settings: map[[3]string]list.Setting{},
 		seen:     map[string]bool{},
 	}
@@ -103,7 +107,8 @@ func (e env) loadList(
 	}
 
 	return merged{
-		packages: m.packages, files: files, vars: m.vars, settings: settings, includes: m.includes,
+		packages: m.packages, files: files, vars: m.vars, secrets: m.secrets,
+		settings: settings, includes: m.includes,
 	}, nil
 }
 
@@ -202,6 +207,18 @@ func (m *merger) merge(l *list.List, origin, dir, from string, depth int) error 
 
 	if m.project != "" && len(l.Vars) > 0 {
 		return fmt.Errorf("%s has [vars], which only the global list uses", origin)
+	}
+
+	switch {
+	case len(l.Secrets) == 0:
+	case m.project != "":
+		return fmt.Errorf("%s has [secrets], and only the global list may hold secrets", origin)
+	case dir == "":
+		return fmt.Errorf("%s: [secrets] only works in a list on this machine for now", origin)
+	}
+
+	for name, s := range l.Secrets {
+		m.secrets[name] = listedSecret{secret: s, dir: dir}
 	}
 
 	if m.project != "" && len(l.Settings) > 0 {

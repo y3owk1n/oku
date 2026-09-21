@@ -54,6 +54,7 @@ export XDG_CACHE_HOME=/tmp/oku-try/cache
     project-2d27013d8c67/      one per project, same layout
   exposed.toml                 every file oku wrote outside these directories
   pending.toml                 exists only while oku applies a change
+  secrets/                     decrypted secrets, which only you can read
   services/                    definitions of services that are not enabled (macOS)
   logs/                        output of services (macOS)
   trust/

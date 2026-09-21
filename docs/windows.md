@@ -111,7 +111,10 @@ Windows allows:
 | `link` to a file | A copy. Run `oku sync` after you edit the source. |
 | `text` | A copy of the content in the generation. `oku rollback` writes the bytes of that generation. |
 
-oku records the sha256 of every copy. A copy that no longer holds those bytes
+A [secret](secrets.md) is a copy too. It and the directory of decrypted files
+get an access control list that names you alone and inherits nothing.
+
+oku records the sha256 of every other copy. A copy that no longer holds those bytes
 was edited by hand. The next `sync`, `add`, `remove`, `update` or `rollback`
 then stops before it changes anything and names the file. Move the change into
 the source or into `oku.toml`, delete the copy, and run the command again. oku

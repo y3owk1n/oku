@@ -716,6 +716,7 @@ oku: doctor found 1 problem
 | Shell hook | Never. Without a hook line in a startup file you get a `note` with the line to add, because only [projects](projects.md) need the hook. |
 | `PATH` | The global profile's `bin` is not on `PATH`, or a program earlier on `PATH` has the name of an oku program and runs in its place. |
 | Profiles | A package's store path is missing, or an entry in a profile's `bin` points at a file that does not exist. `oku sync` installs a missing package again. |
+| Secrets | The list has [secrets](secrets.md) and the age key file is missing, or a secret is a sops file and `sops` is neither in the list nor on `PATH`. |
 | Unfinished change | A change stopped halfway and oku has not put the machine back yet. `oku sync` does that first, and says why when it cannot. |
 
 ## oku setup

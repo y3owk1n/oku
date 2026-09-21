@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 
 	"github.com/y3owk1n/oku/internal/expose"
@@ -115,24 +116,75 @@ func linkSource(f listedFile, pkgs []profile.Package) (string, error) {
 	return source, nil
 }
 
-// content returns the bytes of a text or a render entry, with the variables
-// filled in.
-func content(f listedFile, vars map[string]string) (string, error) {
-	if f.file.HasText {
-		return render.Text(f.file.Text, vars, fmt.Sprintf("files.%q", f.file.Target))
+// content returns what a generation holds for a text, a render or a secret
+// entry: the bytes with the variables filled in, and the secrets they use. A
+// secret stays a placeholder, because a generation never holds its value.
+func content(
+	f listedFile,
+	vars map[string]string,
+	secrets map[string]listedSecret,
+) (string, []profile.SecretRef, error) {
+	if f.file.Secret != "" {
+		ref, err := secretRef(inline, listedSecret{
+			secret: list.Secret{File: f.file.Secret, Key: f.file.Key}, dir: f.dir,
+		})
+		if err != nil {
+			return "", nil, fmt.Errorf("files.%q: %w", f.file.Target, err)
+		}
+
+		return placeholder(inline), []profile.SecretRef{ref}, nil
 	}
 
-	path := f.file.Render
-	if !filepath.IsAbs(path) {
-		path = filepath.Join(f.dir, filepath.FromSlash(path))
+	text, origin := f.file.Text, fmt.Sprintf("files.%q", f.file.Target)
+
+	if !f.file.HasText {
+		origin = f.file.Render
+		if !filepath.IsAbs(origin) {
+			origin = filepath.Join(f.dir, filepath.FromSlash(origin))
+		}
+
+		template, err := os.ReadFile(origin)
+		if err != nil {
+			return "", nil, fmt.Errorf("files.%q: %w", f.file.Target, err)
+		}
+
+		text = string(template)
 	}
 
-	template, err := os.ReadFile(path)
-	if err != nil {
-		return "", fmt.Errorf("files.%q: %w", f.file.Target, err)
-	}
+	var refs []profile.SecretRef
 
-	return render.Text(string(template), vars, path)
+	text, err := render.Fill(text, origin, func(name string) (string, error) {
+		secretName, isSecret := strings.CutPrefix(name, secretPrefix)
+		if !isSecret {
+			value, set := vars[name]
+			if !set {
+				return "", fmt.Errorf("%s is not set in [vars]", name)
+			}
+
+			return value, nil
+		}
+
+		listed, set := secrets[secretName]
+		if !set {
+			return "", fmt.Errorf("%s is not in [secrets]", secretName)
+		}
+
+		if !slices.ContainsFunc(
+			refs,
+			func(r profile.SecretRef) bool { return r.Name == secretName },
+		) {
+			ref, err := secretRef(secretName, listed)
+			if err != nil {
+				return "", err
+			}
+
+			refs = append(refs, ref)
+		}
+
+		return placeholder(secretName), nil
+	})
+
+	return text, refs, err
 }
 
 // resolveFiles turns the [files] of the merged list into the files of a
@@ -140,6 +192,7 @@ func content(f listedFile, vars map[string]string) (string, error) {
 func (e env) resolveFiles(
 	listed []listedFile,
 	listVars map[string]string,
+	secrets map[string]listedSecret,
 	pkgs []profile.Package,
 ) ([]profile.File, error) {
 	locations, err := e.locations()
@@ -181,21 +234,29 @@ func (e env) resolveFiles(
 		owners[path] = f.file.Target
 
 		if f.file.Link == "" {
-			text, err := content(f, vars)
+			text, refs, err := content(f, vars, secrets)
 			if err != nil {
 				return nil, err
 			}
 
 			sum := sha256.Sum256([]byte(path))
-			hash := sha256.Sum256([]byte(text))
 
-			files = append(files, profile.File{
+			file := profile.File{
 				Target:  path,
 				Content: hex.EncodeToString(sum[:])[:12] + "-" + filepath.Base(path),
 				Mode:    f.file.Mode,
-				Hash:    hex.EncodeToString(hash[:]),
+				Hash:    sealedHash(text, refs),
 				Text:    []byte(text),
-			})
+				Secrets: refs,
+			}
+
+			// A file that holds a secret is for the user alone unless the list says
+			// otherwise.
+			if len(refs) > 0 && file.Mode == 0 {
+				file.Mode = 0o600
+			}
+
+			files = append(files, file)
 
 			continue
 		}

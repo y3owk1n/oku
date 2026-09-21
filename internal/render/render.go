@@ -18,6 +18,18 @@ var name = regexp.MustCompile(`^\s*([A-Za-z0-9][A-Za-z0-9_.-]*)\s*$`)
 // Text replaces each {{name}} in text with vars[name]. origin names the text in
 // an error, which also gives the line.
 func Text(text string, vars map[string]string, origin string) (string, error) {
+	return Fill(text, origin, func(name string) (string, error) {
+		value, set := vars[name]
+		if !set {
+			return "", fmt.Errorf("%s is not set in [vars]", name)
+		}
+
+		return value, nil
+	})
+}
+
+// Fill replaces each {{name}} in text with what lookup returns for the name.
+func Fill(text, origin string, lookup func(name string) (string, error)) (string, error) {
 	var out strings.Builder
 
 	rest := text
@@ -50,9 +62,9 @@ func Text(text string, vars map[string]string, origin string) (string, error) {
 			)
 		}
 
-		value, set := vars[match[1]]
-		if !set {
-			return "", fmt.Errorf("%s:%d: %s is not set in [vars]", origin, line, match[1])
+		value, err := lookup(match[1])
+		if err != nil {
+			return "", fmt.Errorf("%s:%d: %w", origin, line, err)
 		}
 
 		out.WriteString(rest[:at] + value)

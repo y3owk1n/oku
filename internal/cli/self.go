@@ -118,7 +118,7 @@ func runUninstall(
 	}
 
 	// Files outside oku's directories go first, while the ledger still exists.
-	handlers, err := e.handlers(cmd.Context(), opts, nil)
+	handlers, err := e.handlers(cmd.Context(), opts, nil, nil)
 	if err != nil {
 		return err
 	}

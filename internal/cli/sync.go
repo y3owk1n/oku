@@ -224,7 +224,7 @@ func reconcile(
 		return err
 	}
 
-	files, err := e.resolveFiles(all.files, all.vars, pkgs)
+	files, err := e.resolveFiles(all.files, all.vars, all.secrets, pkgs)
 	if err != nil {
 		return err
 	}

@@ -46,10 +46,22 @@ type File struct {
 	Text    string
 	HasText bool
 	Render  string
+	// Secret is the path of an encrypted file whose value is the content, and Key
+	// the path of one value in it.
+	Secret string
+	Key    string
 	// Mode is the permission of a file with content. Zero means read-only.
 	Mode fs.FileMode
 	// When limits the entry to matching platforms. The zero value matches all.
 	When platform.Selector
+}
+
+// Secret is one entry of [secrets]: a name for one encrypted value.
+type Secret struct {
+	// File is the path of a sops or an age file.
+	File string
+	// Key is the path of one value in a sops file, with "/" between its parts.
+	Key string
 }
 
 // Setting is one key of a settings table, such as [defaults."com.apple.dock"].
@@ -74,6 +86,8 @@ type List struct {
 	Files []File
 	// Settings is sorted by backend, domain and key.
 	Settings []Setting
+	// Secrets holds [secrets] by name.
+	Secrets map[string]Secret
 	// Vars holds [vars]. A nested table becomes names joined by a dot, so
 	// [vars.theme] with base00 is "theme.base00".
 	Vars map[string]string
@@ -96,6 +110,7 @@ func Parse(data []byte, origin string) (*List, error) {
 		Packages map[string]any `toml:"packages"`
 		Files    map[string]any `toml:"files"`
 		Vars     map[string]any `toml:"vars"`
+		Secrets  map[string]any `toml:"secrets"`
 		Defaults map[string]any `toml:"defaults"`
 		Registry map[string]any `toml:"registry"`
 		Dconf    map[string]any `toml:"dconf"`
@@ -109,6 +124,29 @@ func Parse(data []byte, origin string) (*List, error) {
 
 	if err := flattenVars(l.Vars, "", raw.Vars); err != nil {
 		return nil, fmt.Errorf("%s: %w", origin, err)
+	}
+
+	for name, value := range raw.Secrets {
+		table, _ := value.(map[string]any)
+
+		var secret Secret
+
+		secret.File, _ = table["file"].(string)
+		secret.Key, _ = table["key"].(string)
+
+		if secret.File == "" || len(table) > 2 || (len(table) == 2 && secret.Key == "") {
+			return nil, fmt.Errorf(
+				"%s: secrets.%s wants a table with file, and key when needed",
+				origin,
+				name,
+			)
+		}
+
+		if l.Secrets == nil {
+			l.Secrets = map[string]Secret{}
+		}
+
+		l.Secrets[name] = secret
 	}
 
 	for name, value := range raw.Packages {
@@ -203,7 +241,7 @@ func flattenVars(vars map[string]string, prefix string, table map[string]any) er
 func toFile(value any) (File, error) {
 	table, ok := value.(map[string]any)
 	if !ok {
-		return File{}, errors.New("want a table with link, text or render")
+		return File{}, errors.New("want a table with link, text, render or secret")
 	}
 
 	var f File
@@ -218,6 +256,10 @@ func toFile(value any) (File, error) {
 			f.Text, f.HasText = text, isText
 		case "render":
 			f.Render = text
+		case "secret":
+			f.Secret = text
+		case "key":
+			f.Key = text
 		case "mode":
 			mode, err := strconv.ParseUint(text, 8, 32)
 			if err != nil || !isText || mode > 0o777 {
@@ -229,7 +271,7 @@ func toFile(value any) (File, error) {
 			continue
 		default:
 			return f, fmt.Errorf(
-				"%s is not a key of a file, use link, text, render, mode or when", key,
+				"%s is not a key of a file, use link, text, render, secret, key, mode or when", key,
 			)
 		}
 
@@ -240,7 +282,7 @@ func toFile(value any) (File, error) {
 
 	kinds := 0
 
-	for _, set := range []bool{f.Link != "", f.HasText, f.Render != ""} {
+	for _, set := range []bool{f.Link != "", f.HasText, f.Render != "", f.Secret != ""} {
 		if set {
 			kinds++
 		}
@@ -248,7 +290,9 @@ func toFile(value any) (File, error) {
 
 	switch {
 	case kinds != 1:
-		return f, errors.New("a file needs exactly one of link, text and render")
+		return f, errors.New("a file needs exactly one of link, text, render and secret")
+	case f.Key != "" && f.Secret == "":
+		return f, errors.New("key names a value of a secret, so it needs secret")
 	case f.Link != "" && f.Mode != 0:
 		return f, errors.New(
 			"mode does not apply to a link, which has the permissions of its source",
