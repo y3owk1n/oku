@@ -149,7 +149,12 @@ func (e env) plan(cmd *cobra.Command, opts Options, c change) (pending, exposePl
 		return pending{}, exposePlan{}, err
 	}
 
-	plan, err := e.planExposed(cmd, opts, pkgs, c.system)
+	files, err := prof.FilesOf(c.to)
+	if err != nil {
+		return pending{}, exposePlan{}, err
+	}
+
+	plan, err := e.planExposed(cmd, opts, pkgs, files, c.system)
 	if err != nil {
 		return pending{}, exposePlan{}, err
 	}
@@ -192,7 +197,12 @@ func (e env) revert(ctx context.Context, opts Options, p pending) error {
 			return err
 		}
 
-		wanted, defs, err := e.wantedItems(opts, pkgs)
+		files, err := prof.FilesOf(p.From)
+		if err != nil {
+			return err
+		}
+
+		wanted, defs, err := e.wantedItems(opts, pkgs, files)
 		if err != nil {
 			return err
 		}

@@ -20,7 +20,7 @@ import (
 
 // Item is one thing oku placed outside its own directories.
 type Item struct {
-	// Kind is "app" or "font".
+	// Kind is "app", "font", "service" or "file".
 	Kind string `toml:"kind"`
 	// Package is the package that ships it.
 	Package string `toml:"package"`
@@ -192,12 +192,21 @@ func (l *Ledger) Check(wanted []Item) error {
 			continue
 		}
 
-		if _, err := os.Lstat(want.Target); err == nil {
+		if _, err := os.Lstat(want.Target); err != nil {
+			continue
+		}
+
+		if want.Kind == "file" {
 			return fmt.Errorf(
-				"%s already exists and oku did not put it there, so %s cannot expose its %s",
-				want.Target, want.Package, want.Kind,
+				"%s already exists and oku did not put it there\n"+
+					"move it away, or take it out of [files]", want.Target,
 			)
 		}
+
+		return fmt.Errorf(
+			"%s already exists and oku did not put it there, so %s cannot expose its %s",
+			want.Target, want.Package, want.Kind,
+		)
 	}
 
 	return nil
@@ -263,6 +272,26 @@ func (l *Ledger) remove(item Item, handler Handler) error {
 	l.Items = slices.DeleteFunc(l.Items, func(have Item) bool { return have == item })
 
 	return l.write()
+}
+
+// PlaceLink makes the target of a file a symlink to its source.
+func PlaceLink(item Item) error {
+	if err := os.MkdirAll(filepath.Dir(item.Target), 0o755); err != nil {
+		return err
+	}
+
+	return os.Symlink(item.Source, item.Target)
+}
+
+// RemoveLink deletes the link oku made for a file. A target that is no link any
+// more is the user's, and stays.
+func RemoveLink(item Item) error {
+	info, err := os.Lstat(item.Target)
+	if err != nil || info.Mode()&fs.ModeSymlink == 0 {
+		return nil
+	}
+
+	return os.Remove(item.Target)
 }
 
 // shortcutExt ends a Windows Start Menu shortcut.

@@ -5,7 +5,9 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"maps"
 	"path/filepath"
+	"slices"
 
 	"github.com/y3owk1n/oku/internal/list"
 	"github.com/y3owk1n/oku/internal/lock"
@@ -31,8 +33,12 @@ type merger struct {
 	locked  *lock.Lock
 	// With refresh, merge reads includes at their newest commit and accepts
 	// changed content.
-	refresh  bool
+	refresh bool
+	// project is set for a project list, which may not place files.
+	project  string
 	packages map[string]listed
+	// files is keyed by the target as the list has it.
+	files    map[string]listedFile
 	includes []lock.Include
 	seen     map[string]bool
 }
@@ -45,10 +51,10 @@ func (e env) loadList(
 	opts Options,
 	locked *lock.Lock,
 	refresh bool,
-) (map[string]listed, []lock.Include, error) {
+) (map[string]listed, []listedFile, []lock.Include, error) {
 	own, err := list.Read(e.listPath())
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	m := &merger{
@@ -56,15 +62,22 @@ func (e env) loadList(
 		fetcher:  e.fetcher(opts),
 		locked:   locked,
 		refresh:  refresh,
+		project:  e.project,
 		packages: map[string]listed{},
+		files:    map[string]listedFile{},
 		seen:     map[string]bool{},
 	}
 
 	if err := m.merge(own, e.listPath(), filepath.Dir(e.listPath()), "", 0); err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
-	return m.packages, m.includes, nil
+	files := make([]listedFile, 0, len(m.files))
+	for _, target := range slices.Sorted(maps.Keys(m.files)) {
+		files = append(files, m.files[target])
+	}
+
+	return m.packages, files, m.includes, nil
 }
 
 // merge adds l's includes and then l's own packages, so a package in l overrides
@@ -149,6 +162,19 @@ func (m *merger) merge(l *list.List, origin, dir, from string, depth int) error 
 
 		r.Version = entry.Version
 		m.packages[name] = listed{entry: entry, ref: r, from: from}
+	}
+
+	if dir == "" && len(l.Files) > 0 {
+		return fmt.Errorf("%s: [files] only works in a list on this machine for now", origin)
+	}
+
+	// A cloned repo must not write into the home directory.
+	if m.project != "" && len(l.Files) > 0 {
+		return fmt.Errorf("%s has [files], and only the global list may place files", origin)
+	}
+
+	for _, file := range l.Files {
+		m.files[file.Target] = listedFile{file: file, dir: dir}
 	}
 
 	return nil

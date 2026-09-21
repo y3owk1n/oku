@@ -5,9 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"maps"
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/pelletier/go-toml/v2"
@@ -31,11 +34,29 @@ type Entry struct {
 	System bool
 }
 
+// File is one entry of [files]: a path in the home directory that oku writes.
+type File struct {
+	// Target is the path as the list has it, starting with a location variable
+	// such as {{home}}.
+	Target string
+	// Link is the path the target links to. Text is the content of the target.
+	// An entry has one of the two, and HasText tells an empty text from none.
+	Link    string
+	Text    string
+	HasText bool
+	// Mode is the permission of a file with content. Zero means read-only.
+	Mode fs.FileMode
+	// When limits the entry to matching platforms. The zero value matches all.
+	When platform.Selector
+}
+
 // List is a parsed oku.toml.
 type List struct {
 	// Include holds refs of other lists to merge under this one.
 	Include  []string
 	Packages map[string]Entry
+	// Files is sorted by target.
+	Files []File
 }
 
 // Read parses the list at path. A missing file is an empty list.
@@ -53,6 +74,7 @@ func Parse(data []byte, origin string) (*List, error) {
 	var raw struct {
 		Include  []string       `toml:"include"`
 		Packages map[string]any `toml:"packages"`
+		Files    map[string]any `toml:"files"`
 	}
 
 	if err := toml.Unmarshal(data, &raw); err != nil {
@@ -70,7 +92,88 @@ func Parse(data []byte, origin string) (*List, error) {
 		l.Packages[name] = entry
 	}
 
+	for _, target := range slices.Sorted(maps.Keys(raw.Files)) {
+		file, err := toFile(raw.Files[target])
+		if err != nil {
+			return nil, fmt.Errorf("%s: files.%q: %w", origin, target, err)
+		}
+
+		file.Target = target
+		l.Files = append(l.Files, file)
+	}
+
 	return l, nil
+}
+
+// toFile reads the table of one [files] entry.
+func toFile(value any) (File, error) {
+	table, ok := value.(map[string]any)
+	if !ok {
+		return File{}, errors.New("want a table with link or text")
+	}
+
+	var f File
+
+	for key, v := range table {
+		text, isText := v.(string)
+
+		switch key {
+		case "link":
+			f.Link = text
+		case "text":
+			f.Text, f.HasText = text, isText
+		case "mode":
+			mode, err := strconv.ParseUint(text, 8, 32)
+			if err != nil || !isText || mode > 0o777 {
+				return f, fmt.Errorf("mode %v is not a permission such as \"0600\"", v)
+			}
+
+			f.Mode = fs.FileMode(mode)
+		case "when":
+			continue
+		default:
+			return f, fmt.Errorf("%s is not a key of a file, use link, text, mode or when", key)
+		}
+
+		if !isText {
+			return f, fmt.Errorf("%s must be a string", key)
+		}
+	}
+
+	switch {
+	case f.Link != "" && f.HasText:
+		return f, errors.New("link and text cannot both be set")
+	case f.Link == "" && !f.HasText:
+		return f, errors.New("link or text is required")
+	case f.Link != "" && f.Mode != 0:
+		return f, errors.New("mode only applies to text, a link has the permissions of its source")
+	}
+
+	var err error
+
+	f.When, err = toSelector(table["when"])
+
+	return f, err
+}
+
+// toSelector reads a when table. A missing one matches every platform.
+func toSelector(value any) (platform.Selector, error) {
+	var sel platform.Selector
+
+	when, _ := value.(map[string]any)
+	for key, field := range map[string]*string{
+		"os": &sel.OS, "arch": &sel.Arch, "libc": &sel.Libc,
+	} {
+		*field, _ = when[key].(string)
+	}
+
+	for key := range when {
+		if key != "os" && key != "arch" && key != "libc" {
+			return sel, fmt.Errorf("when.%s is not a selector key, use os, arch or libc", key)
+		}
+	}
+
+	return sel, nil
 }
 
 // toEntry accepts the short form "ref" and the table form { ref, version, when }.
@@ -90,20 +193,11 @@ func toEntry(value any) (Entry, error) {
 			return e, errors.New("ref is required")
 		}
 
-		when, _ := v["when"].(map[string]any)
-		for key, field := range map[string]*string{
-			"os": &e.When.OS, "arch": &e.When.Arch, "libc": &e.When.Libc,
-		} {
-			*field, _ = when[key].(string)
-		}
+		var err error
 
-		for key := range when {
-			if key != "os" && key != "arch" && key != "libc" {
-				return e, fmt.Errorf("when.%s is not a selector key, use os, arch or libc", key)
-			}
-		}
+		e.When, err = toSelector(v["when"])
 
-		return e, nil
+		return e, err
 	default:
 		return Entry{}, errors.New("want a ref string or a table with ref")
 	}

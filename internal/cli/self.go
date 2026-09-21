@@ -16,6 +16,7 @@ import (
 
 	"github.com/y3owk1n/oku/internal/expose"
 	"github.com/y3owk1n/oku/internal/service"
+	"github.com/y3owk1n/oku/internal/source"
 )
 
 // listFiles are what --keep-list leaves in the config directory.
@@ -77,7 +78,7 @@ func runUninstall(
 	fmt.Fprintln(out, "this removes:")
 	fmt.Fprintf(out, "  store and profiles  %s\n", e.data)
 	fmt.Fprintf(out, "  cache               %s\n", e.cache)
-	fmt.Fprintf(out, "  config              %s\n", e.config)
+	fmt.Fprintf(out, "  config              oku's own files in %s\n", e.config)
 	fmt.Fprintf(out, "  binary              %s\n", executable)
 
 	if e.root != e.data {
@@ -144,7 +145,8 @@ func runUninstall(
 		return err
 	}
 
-	if err := removeConfig(e.config, keepList); err != nil {
+	notOkus, err := removeConfig(e.config, keepList)
+	if err != nil {
 		return fmt.Errorf("remove %s: %w", e.config, err)
 	}
 
@@ -153,6 +155,13 @@ func runUninstall(
 	}
 
 	fmt.Fprintln(out, "oku is uninstalled")
+
+	if len(notOkus) > 0 {
+		fmt.Fprintf(
+			out, "left in place, because oku did not write them:\n  %s\n",
+			strings.Join(notOkus, "\n  "),
+		)
+	}
 
 	if emptyRoot != "" {
 		fmt.Fprintf(
@@ -251,35 +260,43 @@ func removeSharedRoot(ctx context.Context, opts Options, e env, elevated bool) (
 	return "", nil
 }
 
-// removeConfig deletes the config directory. With keepList it deletes
-// everything in it except the list files.
-func removeConfig(dir string, keepList bool) error {
+// removeConfig deletes the files oku writes in the config directory, without
+// the list files when keepList is set, and the directory when that empties it.
+// It returns what else is in there. The sources of [files], the user's own
+// manifests and a .git directory are the user's, and stay.
+func removeConfig(dir string, keepList bool) ([]string, error) {
+	own := []string{source.FileName, signingKeyFile}
 	if !keepList {
-		return os.RemoveAll(dir)
+		own = append(own, listFiles...)
+	}
+
+	for _, name := range own {
+		err := os.Remove(filepath.Join(dir, name))
+		if err != nil && !errors.Is(err, fs.ErrNotExist) {
+			return nil, err
+		}
 	}
 
 	entries, err := os.ReadDir(dir)
 	if errors.Is(err, fs.ErrNotExist) {
-		return nil
+		return nil, nil
 	}
 
 	if err != nil {
-		return err
-	}
-
-	for _, entry := range entries {
-		if slices.Contains(listFiles, entry.Name()) {
-			continue
-		}
-
-		if err := os.RemoveAll(filepath.Join(dir, entry.Name())); err != nil {
-			return err
-		}
+		return nil, err
 	}
 
 	if len(entries) == 0 {
-		return os.Remove(dir)
+		return nil, os.Remove(dir)
 	}
 
-	return nil
+	var left []string
+
+	for _, entry := range entries {
+		if !slices.Contains(listFiles, entry.Name()) {
+			left = append(left, filepath.Join(dir, entry.Name()))
+		}
+	}
+
+	return left, nil
 }
