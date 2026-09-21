@@ -271,6 +271,9 @@ order step in `prd/product.md`.
 - B73 [8] A package with `service = true` in `oku.toml` is running after
   `sync` and after the next login. Without it, the service is installed and
   stopped.
+- B184 [8] oku installs a `[[service]]` with `when` on the platforms that
+  `when` matches and on no other. Two services of a package may share a name
+  when their `when` tables match different platforms.
 - B170 [8] The `args` and `env` of a service expand `{{home}}`, `{{config}}` and
   `{{data}}`. On macOS and Linux a service of the user finds the programs of
   the global profile on its `PATH`, unless its `env` sets `PATH`.

@@ -234,7 +234,7 @@ func (s *Store) Build(
 
 	meta, err := toml.Marshal(Meta{
 		Name: m.Package.Name, Version: m.Version.Value, Platform: p.String(),
-		Impure: result.Impure, Launchers: m.Apps, Services: m.Services,
+		Impure: result.Impure, Launchers: m.Apps, Services: m.ServicesFor(p),
 	})
 	if err == nil {
 		err = os.WriteFile(filepath.Join(prefix, metaFile), meta, 0o644)
