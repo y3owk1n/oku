@@ -90,6 +90,10 @@ func runAdd(
 		return err
 	}
 
+	if err := e.recoverPending(cmd, opts); err != nil {
+		return err
+	}
+
 	r, err := e.parseRef(arg)
 	if err != nil {
 		return err
@@ -133,29 +137,33 @@ func runAdd(
 	}
 
 	prof := e.profile()
-	if err := prof.Add(got.profile, lockData); err != nil {
-		return err
-	}
 
-	if err := e.syncExposed(cmd, opts, system); err != nil {
-		return err
-	}
-
-	err = list.Set(
-		e.listPath(),
-		got.lock.Name,
-		list.Entry{
-			Ref:     ref.InDir(filepath.Dir(e.listPath()), r.String()),
-			Version: r.Version,
-			Service: enable,
-			System:  system,
-		},
-	)
+	staged, err := prof.Add(got.profile, lockData)
 	if err != nil {
 		return err
 	}
 
-	if err := locked.Write(e.lockPath()); err != nil {
+	err = e.apply(cmd, opts, change{
+		to: staged, staged: true, system: system,
+		commit: func() error {
+			err := list.Set(
+				e.listPath(),
+				got.lock.Name,
+				list.Entry{
+					Ref:     ref.InDir(filepath.Dir(e.listPath()), r.String()),
+					Version: r.Version,
+					Service: enable,
+					System:  system,
+				},
+			)
+			if err != nil {
+				return err
+			}
+
+			return locked.Write(e.lockPath())
+		},
+	})
+	if err != nil {
 		return err
 	}
 

@@ -85,23 +85,32 @@ func (e env) wantedItems(
 	return append(wanted, services...), defs, err
 }
 
-// syncExposed makes the apps, fonts and services on this machine match the active
-// generation of the global profile. Project profiles expose nothing, because an
-// app or a font is visible to the whole user account, not to one directory.
+// exposePlan is what a change exposes, decided before the first change.
+type exposePlan struct {
+	wanted []expose.Item
+	defs   map[string]service.Definition
+	// elevated reports that the user agreed to change system scope.
+	elevated bool
+}
+
+// planExposed decides which apps, fonts and services the global profile exposes
+// when it holds pkgs, and checks that no target belongs to someone else. It
+// changes nothing. Project profiles expose nothing, because an app or a font is
+// visible to the whole user account, not to one directory.
 //
 // Items in system scope change only with system set, after oku has listed them
 // and the user has agreed. Otherwise oku leaves them as they are and says so.
-func (e env) syncExposed(cmd *cobra.Command, opts Options, system bool) error {
+func (e env) planExposed(
+	cmd *cobra.Command,
+	opts Options,
+	pkgs []profile.Package,
+	system bool,
+) (exposePlan, error) {
 	notice := cmd.ErrOrStderr()
-
-	pkgs, err := e.profile().Packages()
-	if err != nil {
-		return err
-	}
 
 	wanted, defs, err := e.wantedItems(opts, pkgs)
 	if err != nil {
-		return err
+		return exposePlan{}, err
 	}
 
 	if e.project != "" {
@@ -112,17 +121,15 @@ func (e env) syncExposed(cmd *cobra.Command, opts Options, system bool) error {
 			)
 		}
 
-		return nil
+		return exposePlan{}, nil
 	}
 
 	ledger, err := expose.ReadLedger(e.data)
 	if err != nil {
-		return err
+		return exposePlan{}, err
 	}
 
-	before := slices.Clone(ledger.Items)
-
-	if pending := pendingSystem(before, wanted); len(pending) > 0 {
+	if pending := pendingSystem(ledger.Items, wanted); len(pending) > 0 {
 		if system {
 			fmt.Fprintln(notice, "this changes, with administrator rights:")
 		} else {
@@ -138,16 +145,36 @@ func (e env) syncExposed(cmd *cobra.Command, opts Options, system bool) error {
 		if !system {
 			fmt.Fprintln(notice, `run "oku sync --system" to apply them`)
 
-			wanted = keepSystem(before, wanted)
+			wanted = keepSystem(ledger.Items, wanted)
 		}
+	} else {
+		system = false
 	}
 
-	handlers, err := e.handlers(cmd.Context(), opts, defs)
+	return exposePlan{wanted: wanted, defs: defs, elevated: system}, ledger.Check(wanted)
+}
+
+// placeExposed makes the apps, fonts and services on this machine match plan.
+func (e env) placeExposed(cmd *cobra.Command, opts Options, plan exposePlan) error {
+	if e.project != "" {
+		return nil
+	}
+
+	notice := cmd.ErrOrStderr()
+
+	ledger, err := expose.ReadLedger(e.data)
 	if err != nil {
 		return err
 	}
 
-	if err := ledger.Sync(wanted, handlers); err != nil {
+	before := slices.Clone(ledger.Items)
+
+	handlers, err := e.handlers(cmd.Context(), opts, plan.defs)
+	if err != nil {
+		return err
+	}
+
+	if err := ledger.Sync(plan.wanted, handlers); err != nil {
 		return err
 	}
 

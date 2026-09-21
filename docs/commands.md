@@ -17,6 +17,9 @@
 Every command exits with status 0 on success. On failure it prints
 `oku: <reason>` to stderr and exits with status 1.
 
+`add`, `remove`, `sync`, `update` and `rollback` change the machine all the way
+or not at all, see [a change that fails](files.md#a-change-that-fails).
+
 Inside a directory tree that has an `oku.toml`, the commands that read or change
 a list act on that [project](projects.md) and print `project <dir>` on stderr.
 `--global`, or `-g`, makes them use the global list instead. It works on every
@@ -130,8 +133,8 @@ Common failures:
 | `the manifest provides version X, not Y` | The `@version` suffix does not match a manifest with a fixed version. |
 | `... has no version X, the newest are ...` | The `@version` suffix names a release that upstream does not have. |
 
-A failed `add` leaves the previous profile active and the list and lock
-unchanged.
+A failed `add` leaves the previous profile active and the list, the lock and
+every app, font and service unchanged.
 
 ## oku remove
 
@@ -237,7 +240,8 @@ oku: ripgrep: the manifest changed since oku.lock was written
 run `oku update ripgrep` to accept it
 ```
 
-If any package fails, `sync` leaves the profile unchanged.
+If any package fails, `sync` leaves the profile unchanged. When an app, a font
+or a service cannot be set up, oku takes back the ones it had already changed.
 
 Output is either `already in sync` or a line such as
 `profile now holds 12 packages`.
@@ -272,8 +276,8 @@ This only works on a machine whose global `oku.toml` is missing or empty. On
 any other machine oku refuses and tells you to add the ref to your `include`
 array instead. A list ref takes no `@version`.
 
-If the install fails after the two files were written, fix the cause and run
-`oku sync` with no argument.
+If the install fails, oku removes the two files again, so the same command
+works once the cause is fixed.
 
 ## oku update
 
@@ -413,7 +417,9 @@ again. The next `add`, `remove`, `sync` or `update` that changes something
 writes the next number.
 
 Rollback fails for a number that does not exist, for the generation that is
-already active, and with no number when the oldest generation is active.
+already active, and with no number when the oldest generation is active. It
+also fails, before it changes anything, when an app or a font of that
+generation would overwrite a file that oku did not write.
 
 ## oku gc
 
@@ -710,6 +716,7 @@ oku: doctor found 1 problem
 | Shell hook | Never. Without a hook line in a startup file you get a `note` with the line to add, because only [projects](projects.md) need the hook. |
 | `PATH` | The global profile's `bin` is not on `PATH`, or a program earlier on `PATH` has the name of an oku program and runs in its place. |
 | Profiles | A package's store path is missing, or an entry in a profile's `bin` points at a file that does not exist. `oku sync` installs a missing package again. |
+| Unfinished change | A change stopped halfway and oku has not put the machine back yet. `oku sync` does that first, and says why when it cannot. |
 
 ## oku setup
 

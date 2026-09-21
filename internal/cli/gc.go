@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"maps"
 	"path/filepath"
@@ -45,6 +46,13 @@ func runGC(cmd *cobra.Command, keep int, dryRun bool) error {
 	e, err := loadEnv()
 	if err != nil {
 		return err
+	}
+
+	// A revert needs the generation and the store paths it goes back to.
+	if p, err := e.readPending(); err != nil || p != nil {
+		return errors.Join(err, errors.New(
+			"the last change did not finish. Run `oku sync` first, which puts the machine back",
+		))
 	}
 
 	profiles, err := profile.All(e.data)

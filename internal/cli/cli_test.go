@@ -50,6 +50,10 @@ type machine struct {
 // fakeServices stands in for launchd or systemd and remembers what oku asked.
 type fakeServices struct {
 	state map[string]*fakeService
+	// failInstall names the services whose Install fails.
+	failInstall map[string]bool
+	// dieInInstall makes Install panic, which stands in for a killed process.
+	dieInInstall bool
 }
 
 type fakeService struct {
@@ -58,6 +62,14 @@ type fakeService struct {
 }
 
 func (f *fakeServices) Install(_ context.Context, d service.Definition, enabled bool) error {
+	if f.dieInInstall {
+		panic("killed")
+	}
+
+	if f.failInstall[d.Name] {
+		return fmt.Errorf("the service manager refused %s", d.Name)
+	}
+
 	f.state[d.Name] = &fakeService{def: d, enabled: enabled, running: enabled}
 
 	return nil

@@ -96,7 +96,21 @@ func (p *Profile) BinDir() string {
 // Packages lists the active generation, sorted by name. A profile with no
 // generation has no packages.
 func (p *Profile) Packages() ([]Package, error) {
-	data, err := os.ReadFile(filepath.Join(p.dir, current, stateFile))
+	return p.packagesIn(current)
+}
+
+// PackagesOf lists generation n. Generation 0 is the profile before its first
+// generation, and has no packages.
+func (p *Profile) PackagesOf(n int) ([]Package, error) {
+	if n == 0 {
+		return nil, nil
+	}
+
+	return p.packagesIn(genPrefix + strconv.Itoa(n))
+}
+
+func (p *Profile) packagesIn(gen string) ([]Package, error) {
+	data, err := os.ReadFile(filepath.Join(p.dir, gen, stateFile))
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil, nil
 	}
@@ -113,24 +127,25 @@ func (p *Profile) Packages() ([]Package, error) {
 	return s.Packages, nil
 }
 
-// Add activates a new generation that includes pkg. It replaces a package of
-// the same name. lockData is saved in the generation as LockSnapshot.
-func (p *Profile) Add(pkg Package, lockData []byte) error {
+// Add stages a new generation that includes pkg, and returns its number. It
+// replaces a package of the same name. lockData is saved in the generation as
+// LockSnapshot. Activate makes a staged generation the active one.
+func (p *Profile) Add(pkg Package, lockData []byte) (int, error) {
 	pkgs, err := p.Packages()
 	if err != nil {
-		return err
+		return 0, err
 	}
 
 	pkgs = slices.DeleteFunc(pkgs, func(have Package) bool { return have.Name == pkg.Name })
 
-	return p.activate(append(pkgs, pkg), lockData)
+	return p.stage(append(pkgs, pkg), lockData)
 }
 
-// Remove activates a new generation without the package called name.
-func (p *Profile) Remove(name string, lockData []byte) error {
+// Remove stages a new generation without the package called name.
+func (p *Profile) Remove(name string, lockData []byte) (int, error) {
 	pkgs, err := p.Packages()
 	if err != nil {
-		return err
+		return 0, err
 	}
 
 	kept := slices.DeleteFunc(
@@ -138,19 +153,18 @@ func (p *Profile) Remove(name string, lockData []byte) error {
 		func(have Package) bool { return have.Name == name },
 	)
 	if len(kept) == len(pkgs) {
-		return fmt.Errorf("%s: %w", name, ErrNotInstalled)
+		return 0, fmt.Errorf("%s: %w", name, ErrNotInstalled)
 	}
 
-	return p.activate(kept, lockData)
+	return p.stage(kept, lockData)
 }
 
-// Replace activates a new generation holding exactly pkgs. It does nothing when
-// the active generation already holds them with the same lock, and reports
-// whether it changed.
-func (p *Profile) Replace(pkgs []Package, lockData []byte) (bool, error) {
+// Replace stages a new generation holding exactly pkgs. It returns 0 when the
+// active generation already holds them with the same lock.
+func (p *Profile) Replace(pkgs []Package, lockData []byte) (int, error) {
 	have, err := p.Packages()
 	if err != nil {
-		return false, err
+		return 0, err
 	}
 
 	pkgs = slices.Clone(pkgs)
@@ -163,37 +177,69 @@ func (p *Profile) Replace(pkgs []Package, lockData []byte) (bool, error) {
 	}
 
 	if slices.EqualFunc(have, pkgs, same) && bytes.Equal(lockData, p.LockSnapshotOfCurrent()) {
-		return false, nil
+		return 0, nil
 	}
 
-	return true, p.activate(pkgs, lockData)
+	return p.stage(pkgs, lockData)
 }
 
-// activate builds the next generation from pkgs and points "current" at it. A
-// failure deletes the half-built generation and leaves "current" unchanged.
-func (p *Profile) activate(pkgs []Package, lockData []byte) error {
+// stage builds the next generation from pkgs and leaves "current" unchanged. A
+// failure deletes the half-built generation.
+func (p *Profile) stage(pkgs []Package, lockData []byte) (int, error) {
 	slices.SortFunc(pkgs, func(a, b Package) int { return strings.Compare(a.Name, b.Name) })
 
 	next, err := p.nextGeneration()
 	if err != nil {
-		return err
+		return 0, err
 	}
 
-	gen := filepath.Join(p.dir, next)
+	gen := filepath.Join(p.dir, genPrefix+strconv.Itoa(next))
 	if err := os.MkdirAll(gen, 0o755); err != nil {
-		return fmt.Errorf("create generation: %w", err)
+		return 0, fmt.Errorf("create generation: %w", err)
 	}
 
 	if err := build(gen, pkgs, lockData); err != nil {
 		os.RemoveAll(gen)
 
-		return err
+		return 0, err
 	}
 
-	if err := p.point(next); err != nil {
-		os.RemoveAll(gen)
+	return next, nil
+}
 
-		return err
+// Current returns the number of the active generation, or 0 when the profile
+// has none.
+func (p *Profile) Current() int {
+	active, err := os.Readlink(filepath.Join(p.dir, current))
+	if err != nil {
+		return 0
+	}
+
+	// A Windows junction reads back as an absolute path.
+	n, _ := strconv.Atoi(strings.TrimPrefix(filepath.Base(active), genPrefix))
+
+	return n
+}
+
+// Activate points "current" at generation n. With 0 it removes "current", which
+// is the profile before its first generation.
+func (p *Profile) Activate(n int) error {
+	if n == 0 {
+		err := os.Remove(filepath.Join(p.dir, current))
+		if err != nil && !errors.Is(err, fs.ErrNotExist) {
+			return fmt.Errorf("activate generation: %w", err)
+		}
+
+		return nil
+	}
+
+	return p.point(genPrefix + strconv.Itoa(n))
+}
+
+// Discard deletes generation n.
+func (p *Profile) Discard(n int) error {
+	if err := os.RemoveAll(filepath.Join(p.dir, genPrefix+strconv.Itoa(n))); err != nil {
+		return fmt.Errorf("delete generation %d: %w", n, err)
 	}
 
 	return nil
@@ -240,9 +286,9 @@ func (p *Profile) Generations() ([]Generation, error) {
 	return gens, nil
 }
 
-// Switch points "current" at generation n and returns the lock snapshot saved
-// in it. The snapshot is nil for a generation written before snapshots existed.
-func (p *Profile) Switch(n int) ([]byte, error) {
+// LockSnapshotOf returns the lock snapshot saved in generation n. The snapshot
+// is nil for a generation written before snapshots existed.
+func (p *Profile) LockSnapshotOf(n int) ([]byte, error) {
 	gen := genPrefix + strconv.Itoa(n)
 
 	if _, err := os.Stat(filepath.Join(p.dir, gen, stateFile)); err != nil {
@@ -254,13 +300,13 @@ func (p *Profile) Switch(n int) ([]byte, error) {
 		return nil, fmt.Errorf("read generation %d: %w", n, err)
 	}
 
-	return snapshot, p.point(gen)
+	return snapshot, nil
 }
 
-func (p *Profile) nextGeneration() (string, error) {
+func (p *Profile) nextGeneration() (int, error) {
 	entries, err := os.ReadDir(p.dir)
 	if err != nil && !errors.Is(err, fs.ErrNotExist) {
-		return "", fmt.Errorf("read profile: %w", err)
+		return 0, fmt.Errorf("read profile: %w", err)
 	}
 
 	highest := 0
@@ -272,7 +318,7 @@ func (p *Profile) nextGeneration() (string, error) {
 		}
 	}
 
-	return genPrefix + strconv.Itoa(highest+1), nil
+	return highest + 1, nil
 }
 
 // build links every file under each package's bin and share into gen, saves the

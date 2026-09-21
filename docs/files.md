@@ -52,6 +52,7 @@ export XDG_CACHE_HOME=/tmp/oku-try/cache
       current -> gen-2         the active generation
     project-2d27013d8c67/      one per project, same layout
   exposed.toml                 every file oku wrote outside these directories
+  pending.toml                 exists only while oku applies a change
   services/                    definitions of services that are not enabled (macOS)
   logs/                        output of services (macOS)
   trust/
@@ -106,6 +107,38 @@ On Windows a generation holds shims and hard links in place of symlinks, and
 Old generations stay on disk until `oku gc --keep N` deletes them.
 `oku generations` lists them and `oku rollback` switches back to one, see
 [Commands](commands.md#oku-rollback).
+
+## A change that fails
+
+`add`, `remove`, `sync`, `update` and `rollback` work in two parts.
+
+First oku checks everything it can without changing the machine. It downloads,
+verifies and builds into the store, builds the new generation beside the active
+one, and checks that no app or font would overwrite a file it did not write. A
+failure here leaves the machine as it was. The store and the cache may hold
+downloads that nothing uses, and `oku gc` deletes them.
+
+Then oku writes `pending.toml`, sets up the apps, fonts and services, moves
+`current`, writes `oku.toml` and `oku.lock`, and deletes `pending.toml`. When
+one of these steps fails, oku undoes the steps before it, deletes the new
+generation and prints the error of the step that failed.
+
+`pending.toml` holds the two generation numbers and the text of `oku.toml` and
+`oku.lock` from before the change. If an oku process is killed halfway, the
+next `add`, `remove`, `sync`, `update` or `rollback` finds the file, puts the
+machine back first, and prints
+
+```
+the last change did not finish, so oku put generation 4 back
+```
+
+`oku gc` refuses to run until that has happened. When oku cannot undo a step,
+for example because the service manager refuses, it says which one and keeps
+`pending.toml`, and `oku doctor` reports it until a later command succeeds.
+
+An OS gives no single step that covers files, services and the list at once.
+So oku does not promise one atomic step. It promises to check first and to undo
+on failure.
 
 ## Outside oku's directories
 

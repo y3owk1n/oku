@@ -28,6 +28,10 @@ from that list and the lock beside it. That needs a machine with no global
 oku.toml yet.`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := recoverFirst(cmd, opts); err != nil {
+				return err
+			}
+
 			if len(args) == 1 {
 				e, err := scopedEnv(cmd, opts)
 				if err != nil {
@@ -42,12 +46,25 @@ oku.toml yet.`,
 					)
 				}
 
+				// adopt writes the list and the lock, so a sync that then fails has
+				// to take them away again.
+				before, err := e.readSavedLists()
+				if err != nil {
+					return err
+				}
+
 				if err := adopt(cmd, opts, e, args[0]); err != nil {
 					return err
 				}
+
+				if err := reconcile(cmd, opts, &flags, nil, false, &before); err != nil {
+					return errors.Join(err, e.restoreSavedLists(before))
+				}
+
+				return nil
 			}
 
-			return reconcile(cmd, opts, &flags, nil, false)
+			return reconcile(cmd, opts, &flags, nil, false, nil)
 		},
 	}
 
@@ -64,7 +81,11 @@ func newUpdateCmd(opts Options) *cobra.Command {
 		Use:   "update [name...]",
 		Short: "Re-resolve packages from their refs and rewrite oku.lock",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return reconcile(cmd, opts, &flags, args, true)
+			if err := recoverFirst(cmd, opts); err != nil {
+				return err
+			}
+
+			return reconcile(cmd, opts, &flags, args, true, nil)
 		},
 	}
 
@@ -75,7 +96,8 @@ func newUpdateCmd(opts Options) *cobra.Command {
 }
 
 // reconcile installs every package of oku.toml, activates a generation holding
-// exactly those, and rewrites oku.lock to match.
+// exactly those, and rewrites oku.lock to match. before is the list and the lock
+// to restore when the change fails, or nil for the ones on disk.
 //
 // Without update, a locked package is read at its locked commit and must still
 // have its locked manifest hash. With update, the packages in names, or all of
@@ -86,6 +108,7 @@ func reconcile(
 	flags *buildFlags,
 	names []string,
 	update bool,
+	before *savedLists,
 ) error {
 	e, err := scopedEnv(cmd, opts)
 	if err != nil {
@@ -199,22 +222,26 @@ func reconcile(
 		return err
 	}
 
-	changed, err := e.profile().Replace(pkgs, lockData)
+	staged, err := e.profile().Replace(pkgs, lockData)
 	if err != nil {
 		return err
 	}
 
 	system, _ := cmd.Flags().GetBool(systemFlag)
 
-	if err := e.syncExposed(cmd, opts, system); err != nil {
+	c := change{
+		to: staged, staged: true, system: system, before: before,
+		commit: func() error { return next.Write(e.lockPath()) },
+	}
+	if staged == 0 {
+		c.to, c.staged = e.profile().Current(), false
+	}
+
+	if err := e.apply(cmd, opts, c); err != nil {
 		return err
 	}
 
-	if err := next.Write(e.lockPath()); err != nil {
-		return err
-	}
-
-	if changed {
+	if staged != 0 {
 		noun := "packages"
 		if len(pkgs) == 1 {
 			noun = "package"
