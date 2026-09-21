@@ -164,7 +164,7 @@ Keys of a `[[package]]` entry:
 | Key | Meaning |
 |---|---|
 | `ref` | The ref from `oku.toml`, without `@version`. |
-| `commit` | The commit the manifest was read at. Only for `github:` and `git+` refs. |
+| `commit` | The commit the manifest was read at. Only for `github:`, `codeberg:`, `gitea:`, `gitlab:` and `git+` refs. |
 | `manifest_sha256` | Digest of the manifest file. |
 | `signing_key` | The manifest's minisign key, when it has one. oku refuses a manifest with another key until you pass `--accept-key`. |
 | `version` | The version installed. |

@@ -12,7 +12,7 @@ digest from the first of these that exists:
 1. `sha256` in the manifest.
 2. The checksum file at the manifest's `sha256_url`.
 3. For a [moving tag](manifest.md#a-moving-tag), the sha256 that the GitHub API
-   reports for the file.
+   reports for the file. GitLab, Gitea and Forgejo report none.
 4. The digest `oku.lock` pinned for the same package version and URL.
 
 A download that does not match is deleted, and nothing is installed:
@@ -41,6 +41,14 @@ For a repo with no manifest, oku writes one from the release and prints it
 before it installs, so you can read what it is about to do. The lock stores that
 text. Other machines install from the stored text, and only `oku update` infers
 again.
+
+A manifest inferred from a [URL of the download](manifest.md#a-url-of-the-download)
+has no checksum to read, so oku always trusts that download on first use.
+
+oku sends a token to the host it is for and to no other: `GITHUB_TOKEN`,
+`GH_ENTERPRISE_TOKEN`, `GITLAB_TOKEN`, `GITLAB_SERVER_TOKEN`, `CODEBERG_TOKEN`
+and `GITEA_TOKEN`. [Refs](refs.md#how-each-kind-is-fetched) lists the host
+of each one.
 
 ## Build commands
 
@@ -124,7 +132,7 @@ key belongs to the developer.
 
 | Pinned | Effect |
 |---|---|
-| Commit of a `github:` or `git+` ref | `oku sync` reads the manifest at that commit, even after the branch moves. |
+| Commit of a `github:`, `codeberg:`, `gitea:`, `gitlab:` or `git+` ref | `oku sync` reads the manifest at that commit, even after the branch moves. |
 | Manifest sha256 | `oku sync` stops if the manifest content changed. |
 | Artifact sha256 per platform | A changed download fails. |
 | Signing key | oku refuses a manifest with another `signing_key`, or with none, until you pass `--accept-key`. |
