@@ -5763,6 +5763,16 @@ func TestB111SelfUpdateNightlyTakesTheNightlyBuildAfterTheSameCheck(t *testing.T
 		t.Fatalf("self update --nightly did not replace the binary:\n%s", out)
 	}
 
+	// The nightly tag moves, so the same url serves another build the next day.
+	m.releaseWith(t, "the next nightly oku", secret)
+
+	_, err = m.run(t, "", "self", "update", "--nightly")
+	must(t, err)
+
+	if data, _ := os.ReadFile(m.exe); string(data) != "the next nightly oku" {
+		t.Fatalf("self update --nightly installed %q from an earlier download", data)
+	}
+
 	m.opts.Version = "nightly-20260921010203-7777777"
 
 	must(t, os.WriteFile(m.exe, []byte("binary"), 0o755))
