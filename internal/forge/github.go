@@ -55,6 +55,10 @@ func (g *github) Kind() string { return KindGitHub }
 
 func (g *github) Host() string { return g.host }
 
+// Auth sends nothing. GitHub serves the file of a private release from its API
+// only, and oku downloads the URL a release lists.
+func (g *github) Auth() Auth { return Auth{} }
+
 func (g *github) Home(repo string) string {
 	return g.web + "/" + repo
 }

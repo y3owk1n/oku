@@ -60,6 +60,14 @@ func (g *gitlab) Kind() string { return KindGitLab }
 
 func (g *gitlab) Host() string { return g.host }
 
+func (g *gitlab) Auth() Auth {
+	if g.token == "" {
+		return Auth{}
+	}
+
+	return Auth{Host: strings.TrimPrefix(g.web(), "https://"), Header: "Bearer " + g.token}
+}
+
 func (g *gitlab) web() string {
 	if g.host == "" {
 		return "https://gitlab.com"

@@ -16,8 +16,9 @@ import (
 )
 
 // Inspector downloads an asset and reports the files in it. The store provides
-// it, so the download goes into oku's cache.
-type Inspector func(ctx context.Context, url string) ([]File, error)
+// it, so the download goes into oku's cache. auth is the login for the host of a
+// private repo.
+type Inspector func(ctx context.Context, url string, auth forge.Auth) ([]File, error)
 
 // File is one regular file of an unpacked asset.
 type File struct {
@@ -175,7 +176,7 @@ func (inf *Inferrer) Manifest(
 
 		l, known := layouts[kind]
 		if !known {
-			l, err = inf.layoutOf(ctx, urls[c.asset], c.asset, name, opts.Bin)
+			l, err = inf.layoutOf(ctx, server.Auth(), urls[c.asset], c.asset, name, opts.Bin)
 
 			switch {
 			case err != nil && isHost:
@@ -228,8 +229,12 @@ func (inf *Inferrer) Manifest(
 	return b.String(), nil
 }
 
-func (inf *Inferrer) layoutOf(ctx context.Context, url, asset, name, bin string) (layout, error) {
-	files, err := inf.Inspect(ctx, url)
+func (inf *Inferrer) layoutOf(
+	ctx context.Context,
+	auth forge.Auth,
+	url, asset, name, bin string,
+) (layout, error) {
+	files, err := inf.Inspect(ctx, url, auth)
 	if err != nil {
 		return layout{}, fmt.Errorf("inspect it: %w", err)
 	}

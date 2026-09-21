@@ -263,7 +263,9 @@ func (e env) install(ctx context.Context, opts Options, req request) (installed,
 			pinned = ""
 		}
 
-		if realized, err = e.store().Realize(ctx, m, artifact, host, pinned); err != nil {
+		auth := e.fetcher(opts).Hosts.AuthFor(m.Version.From, m.Version.Repo)
+
+		if realized, err = e.store().As(auth).Realize(ctx, m, artifact, host, pinned); err != nil {
 			return installed{}, err
 		}
 

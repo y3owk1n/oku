@@ -116,6 +116,18 @@ Aliases live in `config.toml` in the config directory:
 core = 'github:someone/recipes'
 ```
 
+## Private repos
+
+Set the token of the host, as listed above. On Codeberg, a Gitea or Forgejo
+server, and GitLab, oku sends it with the API requests and with the downloads
+of a release, so a private repo installs like a public one. oku sends it only
+to that host and only over https, and Go drops it when the server redirects to
+another host. `oku sync` on another machine needs the token too.
+
+On GitHub the token reads a private repo's manifest and releases, and the
+download of a private release then fails. GitHub serves those files from its API
+only, and oku downloads the URL a release lists.
+
 ## Limits
 
 - A manifest may be at most 1 MiB.

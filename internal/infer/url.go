@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/y3owk1n/oku/internal/forge"
 	"github.com/y3owk1n/oku/internal/platform"
 )
 
@@ -69,7 +70,7 @@ func (inf *Inferrer) FromURL(
 		return "", fmt.Errorf("%s: cannot take a package name from %q, write a manifest for it", at, asset)
 	}
 
-	files, err := inf.Inspect(ctx, at)
+	files, err := inf.Inspect(ctx, at, forge.Auth{})
 	if err != nil {
 		return "", fmt.Errorf("inspect %s: %w", asset, err)
 	}
