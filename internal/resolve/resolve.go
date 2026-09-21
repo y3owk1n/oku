@@ -323,7 +323,9 @@ func gitTags(ctx context.Context, url string) ([]string, error) {
 
 // Compare orders two versions by their dot-separated numbers, so 1.10.0 is newer
 // than 1.9.0. A version with a "-" suffix, such as 2.0.0-rc1, is older than the
-// same version without one. It returns -1, 0 or 1.
+// same version without one. Two suffixes compare piece by piece, and a piece
+// that is a number compares as one, so 7.1.2-31 is newer than 7.1.2-9 and rc10
+// is newer than rc9. It returns -1, 0 or 1.
 func Compare(a, b string) int {
 	coreA, preA, _ := strings.Cut(a, "-")
 	coreB, preB, _ := strings.Cut(b, "-")
@@ -357,6 +359,46 @@ func Compare(a, b string) int {
 	case preA != "" && preB == "":
 		return -1
 	default:
-		return strings.Compare(preA, preB)
+		return compareSuffix(preA, preB)
 	}
 }
+
+// compareSuffix orders two "-" suffixes. It splits each into runs of digits and
+// runs of anything else, and compares run by run.
+func compareSuffix(a, b string) int {
+	runsA, runsB := runs(a), runs(b)
+
+	for i := range min(len(runsA), len(runsB)) {
+		x, y := runsA[i], runsB[i]
+
+		nx, errX := strconv.Atoi(x)
+		ny, errY := strconv.Atoi(y)
+
+		switch {
+		case errX == nil && errY == nil && nx != ny:
+			return cmp.Compare(nx, ny)
+		case (errX != nil || errY != nil) && x != y:
+			return strings.Compare(x, y)
+		}
+	}
+
+	return cmp.Compare(len(runsA), len(runsB))
+}
+
+// runs splits s where a digit meets another character, so "rc10" is "rc", "10".
+func runs(s string) []string {
+	var out []string
+
+	start := 0
+
+	for i := 1; i <= len(s); i++ {
+		if i == len(s) || isDigit(s[i]) != isDigit(s[i-1]) {
+			out = append(out, s[start:i])
+			start = i
+		}
+	}
+
+	return out
+}
+
+func isDigit(c byte) bool { return c >= '0' && c <= '9' }

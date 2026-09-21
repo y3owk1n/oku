@@ -71,7 +71,8 @@ order step in `prd/product.md`.
 
 - B20 [3] With `[version] from`, `add` picks the newest discovered version and
   `add <ref>@x` picks x. Drafts, prereleases and tags that are not versions
-  are never picked, and an unknown x fails naming the newest versions.
+  are never picked, and an unknown x fails naming the newest versions. A number
+  in a `-` suffix compares as a number, so 7.1.2-31 is newer than 7.1.2-9.
 - B118 [3] `add <ref>@<version>` finds a version that is not on the first page
   of the host's release list, among the newest 100 releases.
 - B123 [3] With `version.from = "npm"`, `add` picks the newest version of the
