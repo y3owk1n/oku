@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -247,5 +248,110 @@ func TestB184AServiceWithWhenIsInstalledOnMatchingPlatformsOnly(t *testing.T) {
 
 	if len(m.services.state) != 1 {
 		t.Fatalf("oku installed the service of another platform: %v", m.services.state)
+	}
+}
+
+// platformEntry returns the text of name's entry in a lock.
+func platformEntry(locked, name string) string {
+	_, after, _ := strings.Cut(locked, "platform."+name+"]\n")
+	entry, _, _ := strings.Cut(after, "\n[")
+
+	return entry
+}
+
+func TestB187ABuildIsPinnedForAnotherPlatformWithItsSourceArchive(t *testing.T) {
+	m := newMachine(t)
+	other := otherPlatform()
+	archive, sum := m.archive(t, "src", map[string]string{"tool": script})
+
+	ref := m.rawManifest(t, "tool", fmt.Sprintf(
+		"[build]\nsource = { url = \"file://%s\" }\n"+
+			"[[build.step]]\nrun = \"true\"\nshell = \"sh\"\nnetwork = true\n"+
+			"[[build.step]]\ninstall = { bin = [\"tool\"] }\n", archive,
+	))
+
+	must(t, os.MkdirAll(m.config, 0o755))
+	must(t, os.WriteFile(filepath.Join(m.config, "oku.toml"), []byte(fmt.Sprintf(
+		"[lock]\nplatforms = [%q]\n\n[packages]\ntool = %q\n", other.String(), ref,
+	)), 0o644))
+
+	if out, err := m.run(t, "", "sync", "--yes"); err != nil {
+		t.Fatalf("sync: %v\n%s", err, out)
+	}
+
+	locked, err := os.ReadFile(filepath.Join(m.config, "oku.lock"))
+	must(t, err)
+
+	entry := platformEntry(string(locked), other.String())
+	for _, want := range []string{"strategy = 'build'", sum, "impure = true"} {
+		if !strings.Contains(entry, want) {
+			t.Fatalf("the entry of %s lacks %s:\n%s", other, want, locked)
+		}
+	}
+
+	if entry != platformEntry(string(locked), platform.Host().String()) {
+		t.Fatalf("the entry of %s differs from the one this machine built:\n%s", other, locked)
+	}
+}
+
+func TestB187AGoVendorDigestIsPinnedForEveryPlatform(t *testing.T) {
+	if _, err := exec.LookPath("go"); err != nil {
+		t.Skip("needs go")
+	}
+
+	m := newMachine(t)
+	other := otherPlatform()
+
+	tmp := filepath.Join(m.fixtures, "tmp")
+	must(t, os.Mkdir(tmp, 0o755))
+	t.Setenv("TMPDIR", tmp)
+
+	// The vendored module is a local directory, so the test needs no network.
+	lib := filepath.Join(m.fixtures, "greet")
+	must(t, os.MkdirAll(lib, 0o755))
+	must(t, os.WriteFile(filepath.Join(lib, "go.mod"),
+		[]byte("module example.com/greet\n\ngo 1.21\n"), 0o644))
+	must(t, os.WriteFile(filepath.Join(lib, "greet.go"),
+		[]byte("package greet\n\nfunc Text() string { return \"hi\" }\n"), 0o644))
+
+	ref := filepath.Join(m.fixtures, "gotool.toml")
+	must(t, os.WriteFile(ref, []byte(fmt.Sprintf(`[package]
+name = "gotool"
+[version]
+value = "1.0.0"
+[build]
+needs = ["go"]
+[[build.step]]
+run = """
+printf 'module example.com/gotool\\n\\ngo 1.21\\n\\nrequire example.com/greet v0.0.0\\n\\nreplace example.com/greet => %s\\n' > go.mod
+printf 'package main\\n\\nimport "example.com/greet"\\n\\nfunc main() { println(greet.Text()) }\\n' > main.go
+"""
+shell = "sh"
+[[build.step]]
+vendor = "go"
+[[build.step]]
+run = "go build -mod=vendor -o gotool ."
+shell = "sh"
+env = { GOTOOLCHAIN = "local", GOFLAGS = "-buildvcs=false" }
+[[build.step]]
+install = { bin = ["gotool"] }
+`, lib)), 0o644))
+
+	must(t, os.MkdirAll(m.config, 0o755))
+	must(t, os.WriteFile(filepath.Join(m.config, "oku.toml"), []byte(fmt.Sprintf(
+		"[lock]\nplatforms = [%q]\n\n[packages]\ngotool = %q\n", other.String(), ref,
+	)), 0o644))
+
+	if out, err := m.run(t, "", "sync", "--yes"); err != nil {
+		t.Fatalf("sync: %v\n%s", err, out)
+	}
+
+	locked, err := os.ReadFile(filepath.Join(m.config, "oku.lock"))
+	must(t, err)
+
+	entry := platformEntry(string(locked), other.String())
+	if !strings.Contains(entry, "vendor_sha256 = '") ||
+		entry != platformEntry(string(locked), platform.Host().String()) {
+		t.Fatalf("the entry of %s lacks the vendor digest of this machine:\n%s", other, locked)
 	}
 }

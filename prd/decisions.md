@@ -893,9 +893,8 @@ Go has no such file. A global list mostly serves one person's machines, and
 there oku would hash up to eight downloads per package that no other machine
 uses.
 
-Known limits: a `vendor_sha256` still comes from the first build on each
-platform (D34). oku pins the build deps of a platform that builds only when
-the host builds too.
+Known limits: oku pins the build deps of a platform that builds only when the
+host builds too. For the `vendor_sha256` of another platform see D68.
 
 ## D66. `sync --locked` refuses to change the lock
 
@@ -933,3 +932,25 @@ to be made twice.
 
 Known limit: oku pins the build deps when one of the pinned platforms builds,
 and a constraint of a dep picks one version for all platforms.
+
+## D68. A go or cargo vendor digest holds for every platform
+
+When oku pins a build for another platform (D65), the entry holds everything
+that a build there would write: `impure`, the source archive and its digest,
+and the `vendor_sha256` of the build on the host when every vendor step of the
+manifest is `go` or `cargo` and has no `when`. For `npm` and `pip` the digest
+still comes from the first build on each platform (D34). oku pins again an
+entry that only says `strategy = 'build'`, which older versions wrote.
+
+Why: without those fields the first build on another platform changed the
+lock, so `sync --locked` (D66) failed for every package that builds. `go mod
+vendor` copies the packages of every platform, and `cargo vendor` takes every
+target of `Cargo.lock`. On 2026-09-22 goimports 0.44.0 gave the same digest on
+darwin-arm64 and linux-arm64, and `cargo vendor --locked` of eza 0.23.5 gave
+the same 18193 files on both with cargo 1.98.1. cargo 1.90.0 gave 18200 files,
+so the digest depends on the version of cargo. The lock pins one version of
+the toolchain dep for all platforms, so every platform runs the same cargo. npm
+installs optional packages by `os` and `cpu`, and pip downloads wheels for the
+platform, so their trees differ. A wrong pin stops the build on the other
+platform with "the vendored packages changed", and the message names `oku
+update`.

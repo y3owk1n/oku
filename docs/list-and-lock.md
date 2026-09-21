@@ -419,9 +419,20 @@ it with no change to the lock. The names are the platform names above:
 oku takes the checksum of another platform from the manifest's `sha256`, else
 from its `sha256_url`. With neither it downloads the file, hashes it and tells
 you, see [Trust on first use](trust.md#trust-on-first-use). It never unpacks or
-runs a download for another platform. A platform that the manifest builds from
-source gets `strategy = 'build'`, and its `vendor_sha256` comes from the first
-build on that platform.
+runs a download for another platform.
+
+A platform that the manifest builds from source gets `strategy = 'build'`, the
+source archive with its `sha256`, and `impure` when a `run` step for that
+platform uses the network. oku builds nothing for it. The `vendor_sha256`
+depends on the language:
+
+| `vendor` | Pinned from another machine |
+|---|---|
+| `go`, `cargo` | Yes. They download the same files on every platform, so the digest of the build on your machine holds for the others. |
+| `npm`, `pip` | No. They pick packages by platform, so the digest comes from the first build on that platform. `oku sync --locked` fails there until a machine of that platform has built the package and you have committed the lock. |
+
+The digest of a `go` or `cargo` step only holds when no vendor step of the
+manifest has a `when`.
 
 - A named platform that a package has no artifact and no build for is an
   error. Limit such a package with `when`, and oku pins it for the platforms
