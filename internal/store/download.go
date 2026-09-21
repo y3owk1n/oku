@@ -13,9 +13,14 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/y3owk1n/oku/internal/status"
 )
+
+// recentDownload is how long fetch trusts that a url still serves the bytes it
+// served last time, when the caller has no digest to ask for.
+const recentDownload = 24 * time.Hour
 
 // fetch downloads url into the cache and returns the file's path and digest. It
 // names the file after its digest and reuses an earlier download that still
@@ -27,10 +32,21 @@ func (s *Store) fetch(ctx context.Context, url, wantSHA string) (string, string,
 		return "", "", fmt.Errorf("create download cache: %w", err)
 	}
 
-	if wantSHA != "" {
-		dest := filepath.Join(dir, wantSHA)
-		if got, err := fileSHA256(dest); err == nil && got == wantSHA {
-			return dest, wantSHA, nil
+	// A run that stops before it writes the lock records no digest, so fetch
+	// uses the digest that a recent download of the same url gave.
+	recent := filepath.Join(dir, "by-url", fmt.Sprintf("%x", sha256.Sum256([]byte(url))))
+
+	cached := wantSHA
+	if info, err := os.Stat(recent); cached == "" && err == nil &&
+		time.Since(info.ModTime()) < recentDownload {
+		data, _ := os.ReadFile(recent)
+		cached = strings.TrimSpace(string(data))
+	}
+
+	if cached != "" {
+		dest := filepath.Join(dir, cached)
+		if got, err := fileSHA256(dest); err == nil && got == cached {
+			return dest, cached, nil
 		}
 	}
 
@@ -70,6 +86,11 @@ func (s *Store) fetch(ctx context.Context, url, wantSHA string) (string, string,
 	dest := filepath.Join(dir, got)
 	if err := os.Rename(tmp.Name(), dest); err != nil {
 		return "", "", fmt.Errorf("download %s: %w", url, err)
+	}
+
+	// The index only avoids a later download, so fetch ignores a failed write.
+	if os.MkdirAll(filepath.Dir(recent), 0o755) == nil {
+		_ = os.WriteFile(recent, []byte(got+"\n"), 0o644)
 	}
 
 	return dest, got, nil

@@ -510,8 +510,8 @@ two packages set the same variable, the one whose name sorts last is used.
 ## Inferred manifests
 
 `oku add github:owner/repo` on a repo with no `oku.pkg.toml` writes a manifest
-from the repo's newest release, prints it, and installs from it. A `codeberg:`
-or `gitea:` ref works the same way, and its manifest gets
+from the repo's newest release and installs from it. `--verbose` prints it. A
+`codeberg:` or `gitea:` ref works the same way, and its manifest gets
 `from = "gitea-releases"`. A `gitlab:` ref gets `from = "gitlab-releases"`, and
 its assets are the links of the release, not the source archives GitLab adds.
 

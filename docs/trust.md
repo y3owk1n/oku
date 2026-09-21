@@ -42,10 +42,10 @@ manifests that publish `sha256` or `sha256_url`.
 
 ## Inferred manifests
 
-For a repo with no manifest, oku writes one from the release and prints it
-before it installs, so you can read what it is about to do. The lock stores that
-text. Other machines install from the stored text, and only `oku update` infers
-again.
+For a repo with no manifest, oku writes one from the release and says so. With
+`--verbose` it prints the manifest, so you can read what it installed from. The
+lock stores that text. Other machines install from the stored text, and only
+`oku update` infers again.
 
 A manifest inferred from a [URL of the download](manifest.md#a-url-of-the-download)
 has no checksum to read, so oku always trusts that download on first use.

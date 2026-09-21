@@ -53,19 +53,15 @@ Point oku at a GitHub repo:
 
 ```
 $ oku add github:BurntSushi/ripgrep
-github:BurntSushi/ripgrep has no manifest, so oku inferred this one from its newest release:
-
-[package]
-name = "ripgrep"
-...
+github:BurntSushi/ripgrep has no manifest, so oku inferred one from its newest release, --verbose prints it
 added ripgrep 15.2.0
 add /home/you/.local/share/oku/profiles/global/current/bin to PATH to run it
 ```
 
 The ripgrep repo has no oku manifest. oku read its newest release, matched the
 release files to operating systems and CPU types, found the published
-checksums, and opened the download to find the program inside. It printed the
-manifest it wrote before it installed anything. See
+checksums, and opened the download to find the program inside. Add `--verbose`
+to read the manifest it wrote. See
 [Inferred manifests](manifest.md#inferred-manifests) for when this works.
 
 To pick a version, add `@version`:

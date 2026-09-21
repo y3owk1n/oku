@@ -208,15 +208,17 @@ strict parser would reject real projects. Release URLs often contain the tag
 and the version in different places, and keeping the tag in the lock lets
 `sync` build the URL without asking upstream again.
 
-## D25. An inferred manifest is printed, installed without a prompt, and stored
+## D25. An inferred manifest is announced, installed without a prompt, and stored
 
-`oku add github:owner/repo` on a repo with no manifest prints the manifest it
-inferred and installs from it without asking. The lock stores the full manifest
-text. `sync` installs from that text and never infers. Only `update` infers
-again. Why: a prompt would break scripted installs, and printing gives the user
-the same information. Inference is a heuristic that will change between oku
-versions, so re-running it on another machine could give a different manifest
-for the same lock. Storing the text keeps "same input, same machine" true.
+`oku add github:owner/repo` on a repo with no manifest says that it inferred
+one and installs from it without asking. `--verbose` prints the manifest. The
+lock stores the full manifest text. `sync` installs from that text and never
+infers. Only `update` infers again. Why: a prompt would break scripted
+installs. The manifest is long and most users never read it, so one line says
+it exists, and `--verbose` or `oku.lock` shows it. Inference is a heuristic
+that will change between oku versions, so re-running it on another machine
+could give a different manifest for the same lock. Storing the text keeps
+"same input, same machine" true.
 
 ## D26. An alias expands before it reaches a list
 

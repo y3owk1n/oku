@@ -20,15 +20,11 @@ is already installable (B25, B26).
 
 ```
 $ oku add github:you/tool
-github:you/tool has no manifest, so oku inferred this one from its newest release:
-
-[package]
-name = "tool"
-...
+github:you/tool has no manifest, so oku inferred one from its newest release, --verbose prints it
 added tool 1.2.0
 ```
 
-oku prints the inferred manifest and installs without asking, so the command
+oku says it inferred a manifest and installs without asking, so the command
 works in scripts. The lock stores the manifest text (B25).
 
 ### Level 1: own the manifest

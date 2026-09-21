@@ -115,9 +115,9 @@ order step in `prd/product.md`.
 ## Publishing
 
 - B25 [4] `oku add github:owner/repo` on a repo with no manifest infers one
-  from release assets, prints it, and marks the lock entry `inferred`. The
-  lock stores the manifest text, and `sync` installs from it without inferring
-  again.
+  from release assets, says so, prints it with `--verbose`, and marks the lock
+  entry `inferred`. The lock stores the manifest text, and `sync` installs from
+  it without inferring again.
 - B174 [4] With several assets for a platform, inference prefers a command
   line build over a desktop app. With one checksum file for each OS, it reads
   the one of the asset's OS.
@@ -142,9 +142,9 @@ order step in `prd/product.md`.
 - B127 [4] Without `runtimes.node`, the programs of an npm package run the
   `node` on `PATH`, and `add` says how to pin one.
 - B117 [4] `oku add <url>` on a URL that is no manifest infers a one-artifact
-  manifest for the host from the download, prints it, and warns that it
-  trusted the download. A URL that holds a manifest stays a manifest whatever
-  its name, and a URL that does not exist fails as not found.
+  manifest for the host from the download, says so, prints it with `--verbose`,
+  and warns that it trusted the download. A URL that holds a manifest stays a
+  manifest whatever its name, and a URL that does not exist fails as not found.
 - B120 [4] Inference takes a macOS universal build for both darwin arches and a
   `windows-gnu` asset for Windows, and never reads a signature file as the
   checksum file.
