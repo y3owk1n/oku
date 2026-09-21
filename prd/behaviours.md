@@ -24,7 +24,18 @@ order step in `prd/product.md`.
 
 ## Refs, list and lock
 
-- B10 [2] `add` accepts file, https, `github:` and `git+` refs.
+- B10 [2] `add` accepts file, https, `github:`, `codeberg:`, `gitea:`,
+  `gitlab:` and `git+` refs.
+- B114 [2] `github:host/owner/repo` reads a GitHub Enterprise Server at `host`.
+  oku sends it `GH_ENTERPRISE_TOKEN` and never `GITHUB_TOKEN`.
+- B115 [2] `codeberg:owner/repo` and `gitea:host/owner/repo` fetch, infer and
+  list releases the way `github:owner/repo` does, with
+  `version.from = "gitea-releases"`. oku sends `CODEBERG_TOKEN` to codeberg.org
+  only.
+- B116 [2] `gitlab:group/project`, with any depth of subgroups, fetches, infers
+  and lists releases the way `github:owner/repo` does, with
+  `version.from = "gitlab-releases"`. oku sends `GITLAB_TOKEN` to gitlab.com
+  only.
 - B11 [2] `add` writes the package to `oku.toml` and its resolution to
   `oku.lock`.
 - B12 [2] `oku sync` makes the profile match `oku.toml`: missing packages are
@@ -54,6 +65,8 @@ order step in `prd/product.md`.
 - B20 [3] With `[version] from`, `add` picks the newest discovered version and
   `add <ref>@x` picks x. Drafts, prereleases and tags that are not versions
   are never picked, and an unknown x fails naming the newest versions.
+- B118 [3] `add <ref>@<version>` finds a version that is not on the first page
+  of the host's release list, among the newest 100 releases.
 - B21 [3] `oku update [name]` re-resolves and rewrites the lock. Without it,
   versions never move, and `sync` installs the locked version without asking
   upstream for versions. A package pinned in `oku.toml` stays on its version
@@ -95,6 +108,19 @@ order step in `prd/product.md`.
   names it saw.
 - B27 [4] `oku manifest init --from <repo>` writes the inferred manifest to a
   file.
+- B112 [4] `oku add --asset <glob>` and `--bin <name>` choose the asset and the
+  program of an inferred manifest. When inference fails, the error names the
+  flag to pass.
+- B113 [4] `oku add github:owner/repo@version` on a repo with no manifest infers
+  from that version's release, not from the newest one.
+- B117 [4] `oku add <url>` on a URL that is no manifest infers a one-artifact
+  manifest for the host from the download, prints it, and warns that it
+  trusted the download. A URL that holds a manifest stays a manifest whatever
+  its name, and a URL that does not exist fails as not found.
+- B120 [4] Inference takes a macOS universal build for both darwin arches and a
+  `windows-gnu` asset for Windows, and never reads a signature file as the
+  checksum file.
+- B121 [4] Inference installs a release asset that is one compressed binary.
 - B28 [4] `oku manifest lint` rejects: unknown keys, a step with zero or
   several type keys, a windows-reachable `run` without `shell`, unknown
   template variables, an artifact with no output keys, a `fetch` step without
@@ -103,6 +129,7 @@ order step in `prd/product.md`.
 - B29 [4] `oku manifest bump` rewrites a static version and its checksums to
   the newest upstream release, or to `--to <version>`. It keeps the file's
   comments, and it refuses a manifest that discovers its versions.
+- B119 [4] `oku manifest bump --repo <ref>` reads releases from any forge ref.
 - B30 [4] `oku source add <alias> <ref>` makes `alias/name` resolve to the
   manifest `name` in that collection, and `add` accepts `alias/name` refs.
   `oku.toml` gets the full ref, so the list works without the alias.
