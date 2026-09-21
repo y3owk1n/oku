@@ -37,6 +37,7 @@ func newAddCmd(opts Options) *cobra.Command {
   codeberg:owner/repo                 the same on codeberg.org
   gitea:host/owner/repo               the same on a Gitea or Forgejo server
   gitlab:group/project                the same on gitlab.com
+  npm:@scope/name                     a command-line tool in the npm registry
   git+https://host/repo#path/pkg.toml a file in any git repo
   alias/name                          a package in a source, see "oku source"`,
 		Args: cobra.ExactArgs(1),

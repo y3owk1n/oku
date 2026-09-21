@@ -27,6 +27,7 @@ Installing software with oku is one line that the author controls and the user c
 oku add github:BurntSushi/ripgrep        # a repo with no oku manifest at all
 oku add github:you/tool@1.4.0            # a manifest next to the code, at a version
 oku add gitlab:gitlab-org/cli            # or codeberg:, gitea:host/..., github:host/...
+oku add npm:prettier                     # a command-line tool from the npm registry
 oku add https://example.com/tool.toml    # a manifest at a URL, or ./tool.toml
 oku add https://example.com/tool-1.2.0-linux-amd64.tar.gz   # or the download itself
 oku sync github:you/machines             # rebuild your whole setup on a new machine
@@ -35,7 +36,7 @@ oku sync github:you/machines             # rebuild your whole setup on a new mac
 ## Why oku
 
 - **No registry.** A package is a TOML manifest in the author's own repo, a URL or a local file. Nobody submits anything anywhere, and oku ships no package list of its own.
-- **Often no manifest either.** For a repo without one on GitHub, GitLab, Codeberg, or any Gitea or Forgejo server, oku reads the newest release, matches the files to your OS and CPU, finds the published checksums, and shows you the manifest it wrote before it installs. A URL of the download itself works the same way. When oku picks the wrong file, `--asset` and `--bin` name the right one.
+- **Often no manifest either.** For a repo without one on GitHub, GitLab, Codeberg, or any Gitea or Forgejo server, oku reads the newest release, matches the files to your OS and CPU, finds the published checksums, and shows you the manifest it wrote before it installs. A URL of the download itself works the same way, and so does a command-line tool in the npm registry, which runs through a node that you pin once. When oku picks the wrong file, `--asset` and `--bin` name the right one.
 - **Same input, same machine.** `oku.toml` lists what you want. `oku.lock` pins the commit, the manifest hash and every download's sha256. `oku sync` on a new machine gives the same store paths.
 - **TOML, not a language.** A manifest has a fixed set of keys and seven build step types. `oku manifest lint` checks all of it.
 - **No root.** Everything lives in a private store under your home. Each change is a new generation, `oku rollback` activates the previous one, and `oku self uninstall` removes every file oku wrote.
@@ -171,7 +172,7 @@ oku manifest bump    # move it to the newest release, checksums included
 
 | Tool                                  | Where packages come from               | Written in          | Pins hashes in a lock | Runs on               |
 | :------------------------------------ | :------------------------------------- | :------------------ | :-------------------: | :-------------------- |
-| **oku**                               | Any repo, URL or file. No registry     | TOML, or nothing    | Yes                   | Linux, macOS, Windows |
+| **oku**                               | Any repo, URL, file or npm package. No registry of its own | TOML, or nothing    | Yes                   | Linux, macOS, Windows |
 | [Homebrew](https://brew.sh)           | A central tap, plus third-party taps   | Ruby                | No                    | macOS, Linux          |
 | [Nix](https://nixos.org)              | nixpkgs, plus flakes                   | The Nix language    | Yes                   | Linux, macOS          |
 | [mise](https://mise.jdx.dev)          | A registry of tools and backends       | TOML config         | Optional              | Linux, macOS, Windows |
@@ -186,7 +187,7 @@ oku fits if you want the reproducibility of a lock file without learning a langu
 ```
 oku add <ref>
   -> fetch the manifest        a file, a URL, a repo on GitHub, GitLab, Codeberg or Gitea, any git repo
-                               or infer one from a release, or from a URL of the download
+                               or infer one from a release, a URL of the download, or the npm registry
   -> pick a version            pinned, locked, or the newest release
   -> pick a strategy           the first artifact that fits this machine, else [build]
   -> realize in the store      <data>/oku/store/<name>-<version>-<hash>/

@@ -501,7 +501,7 @@ check the result, and commit it to the repo as `oku.pkg.toml`.
 
 | Flag | Effect |
 |---|---|
-| `--from` | The repo, as `owner/repo` on GitHub or as a ref such as `codeberg:owner/repo`. Required. |
+| `--from` | The repo, as `owner/repo` on GitHub or as a ref such as `codeberg:owner/repo`, or an npm package as `npm:@scope/name`. Required. |
 | `-o`, `--output` | The file to write. Default `oku.pkg.toml`. `-` prints to stdout. |
 | `--force` | Replaces the output file when it exists. |
 

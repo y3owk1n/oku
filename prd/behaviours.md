@@ -28,7 +28,7 @@ order step in `prd/product.md`.
 ## Refs, list and lock
 
 - B10 [2] `add` accepts file, https, `github:`, `codeberg:`, `gitea:`,
-  `gitlab:` and `git+` refs.
+  `gitlab:`, `npm:` and `git+` refs.
 - B114 [2] `github:host/owner/repo` reads a GitHub Enterprise Server at `host`.
   oku sends it `GH_ENTERPRISE_TOKEN` and never `GITHUB_TOKEN`.
 - B115 [2] `codeberg:owner/repo` and `gitea:host/owner/repo` fetch, infer and
@@ -122,6 +122,12 @@ order step in `prd/product.md`.
   flag to pass.
 - B113 [4] `oku add github:owner/repo@version` on a repo with no manifest infers
   from that version's release, not from the newest one.
+- B126 [4] `oku add npm:@scope/name` infers a manifest from the npm registry
+  with one program for each `bin` entry. With `runtimes.node` in `config.toml`
+  the programs run through that package, which stays out of the user's
+  profile.
+- B127 [4] Without `runtimes.node`, the programs of an npm package run the
+  `node` on `PATH`, and `add` says how to pin one.
 - B117 [4] `oku add <url>` on a URL that is no manifest infers a one-artifact
   manifest for the host from the download, prints it, and warns that it
   trusted the download. A URL that holds a manifest stays a manifest whatever

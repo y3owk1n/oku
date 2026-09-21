@@ -30,7 +30,7 @@ export XDG_CACHE_HOME=/tmp/oku-try/cache
 <config>/oku/
   oku.toml                     your package list
   oku.lock                     what oku resolved
-  config.toml                  your source aliases, caches, trusted keys and the store root
+  config.toml                  your source aliases, caches, trusted keys, runtimes and the store root
   signing.key                  the secret key of "oku cache push", after "oku key generate"
 
 <data>/oku/

@@ -2254,12 +2254,23 @@ func npmServer(t *testing.T, m *machine, tampered string, versions ...string) st
 
 			sum := sha512.Sum512(data)
 			items = append(items, fmt.Sprintf(
-				`%q: {"dist": {"tarball": %q, "integrity": "sha512-%s"}}`,
+				`%q: {"bin": {"tool": "./tool"}, "dist": {"tarball": %q, "integrity": "sha512-%s"}}`,
 				version, server.URL+at, base64.StdEncoding.EncodeToString(sum[:]),
 			))
 		}
 
-		_, _ = w.Write([]byte(`{"versions": {` + strings.Join(items, ",") + `}}`))
+		// The newest version that is no prerelease has the "latest" tag.
+		latest := ""
+
+		for _, version := range versions {
+			if !strings.Contains(version, "-") {
+				latest = version
+			}
+		}
+
+		_, _ = fmt.Fprintf(
+			w, `{"dist-tags": {"latest": %q}, "versions": {%s}}`, latest, strings.Join(items, ","),
+		)
 	}))
 	t.Cleanup(server.Close)
 
@@ -2357,6 +2368,96 @@ func TestB125ManifestHashPrintsTheChecksumsOfADownload(t *testing.T) {
 	out, err := m.run(t, "", "add", ref)
 	if err != nil || strings.Contains(out, "trusted this download") {
 		t.Fatalf("add with the printed integrity: %v\n%s", err, out)
+	}
+}
+
+// fakeNode writes a package called "interp" whose program "node" runs a script
+// with sh, and returns its manifest.
+func (m machine) fakeNode(t *testing.T) string {
+	t.Helper()
+
+	return m.manifest(t, "interp", map[string]string{
+		"node": "#!/bin/sh\nexec sh \"$@\"\n",
+	}, `bin = ["node"]`)
+}
+
+func TestB126AddInfersAnNPMPackageThatRunsThroughTheConfiguredNode(t *testing.T) {
+	m := newMachine(t)
+	npmServer(t, &m, "", "1.0.0", "1.1.0")
+
+	must(t, os.MkdirAll(m.config, 0o755))
+	must(t, os.WriteFile(
+		filepath.Join(m.config, "config.toml"),
+		[]byte(fmt.Sprintf("[runtimes]\nnode = %q\n", m.fakeNode(t))), 0o644,
+	))
+
+	out, err := m.run(t, "", "add", "npm:@scope/tool")
+	if err != nil {
+		t.Fatalf("add: %v\n%s", err, out)
+	}
+
+	for _, want := range []string{
+		"is an npm package", `from = "npm"`, `repo = "@scope/tool"`, "[runtime]",
+		`run = "{{dep.interp.prefix}}/bin/node"`, `args = ["{{pkg}}/tool"]`, "added tool 1.1.0",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("add output lacks %q:\n%s", want, out)
+		}
+	}
+
+	// PATH has no node, so only the configured one can run the script.
+	cmd := exec.Command(m.profile("bin", "tool"))
+	cmd.Env = []string{"PATH=/usr/bin:/bin"}
+
+	got, err := cmd.Output()
+	must(t, err)
+
+	if strings.TrimSpace(string(got)) != "1.1.0" {
+		t.Fatalf("tool printed %q", got)
+	}
+
+	if _, err := os.Stat(m.profile("bin", "node")); err == nil {
+		t.Fatal("node is in the user's profile")
+	}
+
+	_, err = m.run(t, "", "add", "npm:@scope/tool@1.0.0")
+	must(t, err)
+
+	if got := m.toolOutput(t); got != "1.0.0" {
+		t.Fatalf("add @1.0.0 installed %s", got)
+	}
+}
+
+func TestB127AnNPMPackageRunsTheNodeOnPathWhenNoneIsConfigured(t *testing.T) {
+	m := newMachine(t)
+	npmServer(t, &m, "", "1.1.0")
+
+	out, err := m.run(t, "", "add", "npm:@scope/tool")
+	if err != nil {
+		t.Fatalf("add: %v\n%s", err, out)
+	}
+
+	if strings.Contains(out, "[runtime]") || !strings.Contains(out, "runtimes.node") {
+		t.Fatalf("add did not say how to pin a node:\n%s", out)
+	}
+
+	dir := filepath.Join(m.fixtures, "path")
+	must(t, os.MkdirAll(dir, 0o755))
+	must(t, os.WriteFile(filepath.Join(dir, "node"), []byte("#!/bin/sh\nexec sh \"$@\"\n"), 0o755))
+
+	cmd := exec.Command(m.profile("bin", "tool"))
+	cmd.Env = []string{"PATH=" + dir + ":/usr/bin:/bin"}
+
+	got, err := cmd.Output()
+	must(t, err)
+
+	if strings.TrimSpace(string(got)) != "1.1.0" {
+		t.Fatalf("tool printed %q", got)
+	}
+
+	_, err = m.run(t, "", "add", "npm:@scope/missing")
+	if err == nil || !strings.Contains(err.Error(), "no such package") {
+		t.Fatalf("want a missing package to fail, got %v", err)
 	}
 }
 
