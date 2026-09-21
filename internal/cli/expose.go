@@ -51,6 +51,7 @@ func (e env) wantedItems(
 	opts Options,
 	pkgs []profile.Package,
 	files []profile.File,
+	wantedSettings []profile.Setting,
 ) ([]expose.Item, map[string]service.Definition, error) {
 	dirs, err := e.userDirs()
 	if err != nil {
@@ -98,6 +99,13 @@ func (e env) wantedItems(
 		wanted = append(wanted, item)
 	}
 
+	for _, s := range wantedSettings {
+		wanted = append(wanted, expose.Item{
+			Kind: "setting", Domain: s.Domain, Key: s.Key, Source: s.Value,
+			Target: s.Domain + " " + s.Key,
+		})
+	}
+
 	services, defs, err := e.serviceItems(opts, pkgs)
 
 	return append(wanted, services...), defs, err
@@ -123,11 +131,12 @@ func (e env) planExposed(
 	opts Options,
 	pkgs []profile.Package,
 	files []profile.File,
+	wantedSettings []profile.Setting,
 	system bool,
 ) (exposePlan, error) {
 	notice := cmd.ErrOrStderr()
 
-	wanted, defs, err := e.wantedItems(opts, pkgs, files)
+	wanted, defs, err := e.wantedItems(opts, pkgs, files, wantedSettings)
 	if err != nil {
 		return exposePlan{}, err
 	}
@@ -205,6 +214,8 @@ func (e env) placeExposed(cmd *cobra.Command, opts Options, plan exposePlan) err
 		return err
 	}
 
+	tellSettings(opts, before, ledger.Items)
+
 	for _, item := range ledger.Items {
 		// An item that changed, such as a service that was just enabled, is new too.
 		if slices.Contains(before, item) {
@@ -212,6 +223,8 @@ func (e env) placeExposed(cmd *cobra.Command, opts Options, plan exposePlan) err
 		}
 
 		switch {
+		case item.Kind == "setting":
+			fmt.Fprintf(notice, "set %s\n", item.Target)
 		case item.Kind == "file":
 			fmt.Fprintf(notice, "wrote %s\n", item.Target)
 		case item.Kind != "service":
@@ -287,7 +300,8 @@ func (e env) handlers(
 		return e.applyAsRoot(ctx, opts, action, systemChange{item, defs[item.Name]})
 	}
 
-	handlers := map[string]expose.Handler{}
+	store, _ := settingsStore(opts)
+	handlers := map[string]expose.Handler{"setting": settingHandler(store)}
 
 	for _, kind := range []string{"app", "font", "service", "file"} {
 		local := expose.Handler{

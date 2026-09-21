@@ -64,10 +64,19 @@ type File struct {
 	Text []byte `toml:"-"`
 }
 
+// Setting is one setting of the OS that a generation wants, with its value as
+// the fragment that internal/settings writes.
+type Setting struct {
+	Domain string `toml:"domain"`
+	Key    string `toml:"key"`
+	Value  string `toml:"value"`
+}
+
 type state struct {
 	Created  time.Time `toml:"created"`
 	Packages []Package `toml:"package"`
 	Files    []File    `toml:"file,omitempty"`
+	Settings []Setting `toml:"setting,omitempty"`
 }
 
 // Generation is one numbered snapshot of the profile.
@@ -155,6 +164,17 @@ func (p *Profile) stateIn(gen string) (state, error) {
 	return s, nil
 }
 
+// SettingsOf lists the settings of generation n.
+func (p *Profile) SettingsOf(n int) ([]Setting, error) {
+	if n == 0 {
+		return nil, nil
+	}
+
+	s, err := p.stateIn(genPrefix + strconv.Itoa(n))
+
+	return s.Settings, err
+}
+
 // FilesOf lists the files of generation n, without their text.
 func (p *Profile) FilesOf(n int) ([]File, error) {
 	if n == 0 {
@@ -207,9 +227,14 @@ func (p *Profile) Add(pkg Package, lockData []byte) (int, error) {
 		return 0, err
 	}
 
+	settings, err := p.SettingsOf(p.Current())
+	if err != nil {
+		return 0, err
+	}
+
 	pkgs = slices.DeleteFunc(pkgs, func(have Package) bool { return have.Name == pkg.Name })
 
-	return p.stage(append(pkgs, pkg), files, lockData)
+	return p.stage(append(pkgs, pkg), files, settings, lockData)
 }
 
 // Remove stages a new generation without the package called name.
@@ -232,18 +257,33 @@ func (p *Profile) Remove(name string, lockData []byte) (int, error) {
 		return 0, err
 	}
 
-	return p.stage(kept, files, lockData)
+	settings, err := p.SettingsOf(p.Current())
+	if err != nil {
+		return 0, err
+	}
+
+	return p.stage(kept, files, settings, lockData)
 }
 
-// Replace stages a new generation holding exactly pkgs and files. It returns 0
-// when the active generation already holds them with the same lock.
-func (p *Profile) Replace(pkgs []Package, files []File, lockData []byte) (int, error) {
+// Replace stages a new generation holding exactly pkgs, files and settings. It
+// returns 0 when the active generation already holds them with the same lock.
+func (p *Profile) Replace(
+	pkgs []Package,
+	files []File,
+	settings []Setting,
+	lockData []byte,
+) (int, error) {
 	have, err := p.Packages()
 	if err != nil {
 		return 0, err
 	}
 
 	haveFiles, err := p.files()
+	if err != nil {
+		return 0, err
+	}
+
+	haveSettings, err := p.SettingsOf(p.Current())
 	if err != nil {
 		return 0, err
 	}
@@ -263,16 +303,22 @@ func (p *Profile) Replace(pkgs []Package, files []File, lockData []byte) (int, e
 	}
 
 	if slices.EqualFunc(have, pkgs, same) && slices.EqualFunc(haveFiles, files, sameFile) &&
+		slices.Equal(haveSettings, settings) &&
 		bytes.Equal(lockData, p.LockSnapshotOfCurrent()) {
 		return 0, nil
 	}
 
-	return p.stage(pkgs, files, lockData)
+	return p.stage(pkgs, files, settings, lockData)
 }
 
 // stage builds the next generation from pkgs and leaves "current" unchanged. A
 // failure deletes the half-built generation.
-func (p *Profile) stage(pkgs []Package, files []File, lockData []byte) (int, error) {
+func (p *Profile) stage(
+	pkgs []Package,
+	files []File,
+	settings []Setting,
+	lockData []byte,
+) (int, error) {
 	slices.SortFunc(pkgs, func(a, b Package) int { return strings.Compare(a.Name, b.Name) })
 
 	next, err := p.nextGeneration()
@@ -285,7 +331,7 @@ func (p *Profile) stage(pkgs []Package, files []File, lockData []byte) (int, err
 		return 0, fmt.Errorf("create generation: %w", err)
 	}
 
-	if err := build(gen, pkgs, files, lockData); err != nil {
+	if err := build(gen, pkgs, files, settings, lockData); err != nil {
 		os.RemoveAll(gen)
 
 		return 0, err
@@ -410,7 +456,7 @@ func (p *Profile) nextGeneration() (int, error) {
 
 // build links every file under each package's bin and share into gen, writes the
 // content of files, saves the lock snapshot and writes the state file.
-func build(gen string, pkgs []Package, files []File, lockData []byte) error {
+func build(gen string, pkgs []Package, files []File, settings []Setting, lockData []byte) error {
 	owners := map[string]string{}
 
 	for _, pkg := range pkgs {
@@ -455,7 +501,10 @@ func build(gen string, pkgs []Package, files []File, lockData []byte) error {
 	}
 
 	data, err := toml.Marshal(
-		state{Created: time.Now().UTC().Truncate(time.Second), Packages: pkgs, Files: files},
+		state{
+			Created:  time.Now().UTC().Truncate(time.Second),
+			Packages: pkgs, Files: files, Settings: settings,
+		},
 	)
 	if err != nil {
 		return fmt.Errorf("write generation: %w", err)

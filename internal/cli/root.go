@@ -22,6 +22,7 @@ import (
 	"github.com/y3owk1n/oku/internal/resolve"
 	"github.com/y3owk1n/oku/internal/sandbox"
 	"github.com/y3owk1n/oku/internal/service"
+	"github.com/y3owk1n/oku/internal/settings"
 	"github.com/y3owk1n/oku/internal/source"
 	"github.com/y3owk1n/oku/internal/store"
 )
@@ -42,6 +43,9 @@ type Options struct {
 	// reads and the minisign key it trusts. Tests set them.
 	ReleaseRepo string
 	ReleaseKey  string
+	// Settings replaces the OS's store of per-user settings. Tests set it, because
+	// the real one changes the preferences of whoever runs the tests.
+	Settings settings.Store
 	// SystemRoot replaces the shared store root that "oku setup --system" creates.
 	SystemRoot string
 	// SystemDirs replaces the directories for apps and fonts in system scope.

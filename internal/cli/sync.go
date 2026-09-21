@@ -229,7 +229,12 @@ func reconcile(
 		return err
 	}
 
-	staged, err := e.profile().Replace(pkgs, files, lockData)
+	wantedSettings, err := resolveSettings(opts, all.settings)
+	if err != nil {
+		return err
+	}
+
+	staged, err := e.profile().Replace(pkgs, files, wantedSettings, lockData)
 	if err != nil {
 		return err
 	}

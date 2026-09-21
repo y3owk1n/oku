@@ -815,6 +815,8 @@ Lists what it will delete, asks once, then removes:
 - every app, font, service and [file](list-and-lock.md#files-in-your-home-directory)
   oku set up outside its directories, each listed by path. Services are stopped
   first.
+- every [setting](list-and-lock.md#settings-of-the-os) oku wrote. Each one gets
+  back the value it had before.
 - the data directory (store and profiles)
 - the cache directory
 - `oku.toml`, `oku.lock`, `config.toml` and `signing.key` in the config
