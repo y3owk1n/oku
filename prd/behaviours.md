@@ -53,8 +53,9 @@ order step in `prd/product.md`.
 - B15 [2] `sync` on a platform missing from the lock resolves it and appends a
   platform entry without touching existing ones.
 - B16 [2] `include` merges the named lists. A local entry overrides an
-  included entry of the same name. `sync` stops when an included list changed
-  since the lock, and `remove` refuses a package only an include declares.
+  included entry of the same name. `sync` stops when a list from a URL or a
+  repo changed since the lock, and reads a list on this machine as it is.
+  `remove` refuses a package only an include declares.
 - B17 [2] An entry whose `when` does not match the host is skipped by `sync`
   and stays in the lock for other platforms.
 - B18 [2] `oku sync <ref>` on a machine with no global list adopts that list

@@ -948,19 +948,55 @@ func TestB16IncludeMergesListsAndLocalEntryWins(t *testing.T) {
 		t.Fatalf("want remove to refuse an included package, got %v", err)
 	}
 
+	// A list on this machine is the user's own file, so sync reads it as it is.
 	must(t, os.WriteFile(base, []byte("[packages]\nshared = \"./shared-base.toml\"\n"), 0o644))
 
-	_, err = m.run(t, "", "sync")
+	if out, err := m.run(t, "", "sync"); err != nil {
+		t.Fatalf("sync after an edit of a local include: %v\n%s", err, out)
+	}
+
+	if exists(m.profile("bin", "extra")) {
+		t.Fatal("extra left the include but stayed in the profile")
+	}
+}
+
+func TestB16SyncStopsWhenAListFromAURLChanged(t *testing.T) {
+	m := newMachine(t)
+
+	server := httptest.NewServer(http.FileServer(http.Dir(m.fixtures)))
+	t.Cleanup(server.Close)
+
+	m.namedManifest(t, "extra", "extra", "extra")
+	m.namedManifest(t, "other", "other", "other")
+
+	base := filepath.Join(m.fixtures, "base.toml")
+	must(t, os.WriteFile(base, []byte("[packages]\nextra = \""+server.URL+"/extra.toml\"\n"), 0o644))
+
+	must(t, os.MkdirAll(m.config, 0o755))
+	must(t, os.WriteFile(filepath.Join(m.config, "oku.toml"),
+		[]byte("include = [\""+server.URL+"/base.toml\"]\n"), 0o644))
+
+	if out, err := m.run(t, "", "sync"); err != nil {
+		t.Fatalf("sync: %v\n%s", err, out)
+	}
+
+	must(t, os.WriteFile(base, []byte("[packages]\nother = \""+server.URL+"/other.toml\"\n"), 0o644))
+
+	_, err := m.run(t, "", "sync")
 	if err == nil || !strings.Contains(err.Error(), "oku update") {
-		t.Fatalf("want sync to stop on a changed include, got %v", err)
+		t.Fatalf("want sync to stop on a changed list from a URL, got %v", err)
+	}
+
+	if !exists(m.profile("bin", "extra")) || exists(m.profile("bin", "other")) {
+		t.Fatal("the refused sync changed the profile")
 	}
 
 	if out, err := m.run(t, "", "update"); err != nil {
 		t.Fatalf("update: %v\n%s", err, out)
 	}
 
-	if exists(m.profile("bin", "extra")) {
-		t.Fatal("extra left the include but stayed in the profile")
+	if exists(m.profile("bin", "extra")) || !exists(m.profile("bin", "other")) {
+		t.Fatal("update did not accept the changed list")
 	}
 }
 

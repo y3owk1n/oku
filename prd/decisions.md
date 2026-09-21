@@ -152,8 +152,10 @@ through git instead.
 ## D19. oku uses only the lock beside the user's own list
 
 oku uses the `oku.lock` beside the user's own `oku.toml`. It pins every
-included list by commit and sha256, and ignores a lock beside an included
-list. `oku update` with no names reads includes fresh. `oku update <name>`
+included list from a URL or a repo by commit and sha256, and ignores a lock
+beside an included list. oku does not pin a list that is a file on this
+machine. It is the user's own file, like `oku.toml`, and a user who splits
+their list into files must be able to edit one and sync. `oku update` with no names reads includes fresh. `oku update <name>`
 keeps includes pinned. Why: one lock per machine records everything that
 machine installed in one file. Updating a single package must not add or drop
 other packages as a side effect.
