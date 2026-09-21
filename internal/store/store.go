@@ -180,6 +180,18 @@ func (s *Store) Realize(
 		return realized, nil
 	}
 
+	if a.Integrity != "" {
+		if err := verifyIntegrity(download, a.Integrity); err != nil {
+			os.Remove(download)
+
+			return Realized{}, fmt.Errorf("%s: %s: %w", m.Package.Name, a.URL, err)
+		}
+
+		// A matching sha512 is a checksum the publisher gave, so this is not a
+		// first use.
+		realized.FirstUse = false
+	}
+
 	if m.Package.SigningKey != "" {
 		if err := s.verifySignature(ctx, m.Package.SigningKey, a.URL, download); err != nil {
 			return Realized{}, fmt.Errorf("%s: %w", m.Package.Name, err)

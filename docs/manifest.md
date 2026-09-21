@@ -60,8 +60,8 @@ needs no manifest change.
 | Key | Meaning |
 |---|---|
 | `value` | The one version this manifest installs. |
-| `from` | `github-releases`, `gitea-releases`, `gitlab-releases` or `git-tags`. Not together with `value`. |
-| `repo` | `owner/repo` for `github-releases`, or `host/owner/repo` on a GitHub Enterprise Server. `host/owner/repo` for `gitea-releases`, such as `codeberg.org/owner/repo`. `group/project` for `gitlab-releases`, or `host/group/project` on a GitLab server of your own. A git URL for `git-tags`. Required with `from`. |
+| `from` | `github-releases`, `gitea-releases`, `gitlab-releases`, `git-tags` or `npm`. Not together with `value`. |
+| `repo` | `owner/repo` for `github-releases`, or `host/owner/repo` on a GitHub Enterprise Server. `host/owner/repo` for `gitea-releases`, such as `codeberg.org/owner/repo`. `group/project` for `gitlab-releases`, or `host/group/project` on a GitLab server of your own. A git URL for `git-tags`. A package name for `npm`, such as `@scope/name`. Required with `from`. |
 | `strip_prefix` | Text cut off the front of a tag to get the version, such as `"v"`. A tag without the prefix is ignored. |
 | `tag` | One tag that upstream moves, such as `"nightly"`. Only with `github-releases`, `gitea-releases` or `gitlab-releases`, and not together with `strip_prefix`. See [A moving tag](#a-moving-tag). |
 
@@ -74,6 +74,12 @@ strip_prefix = "v"
 
 How oku turns tags into versions:
 
+- `npm` reads every version of the package from `registry.npmjs.org` and skips
+  a prerelease, which has a `-` in its version. An npm version has no tag, so
+  `{{tag}}` equals `{{version}}` and `strip_prefix` does not apply. The
+  registry publishes a sha512 for each version's download. When the artifact's
+  `url` is that download and the manifest has no checksum of its own, oku
+  checks the download against it.
 - `github-releases` reads the newest 100 releases and skips drafts and
   prereleases. `gitea-releases` does the same for the newest 50 on a Gitea or
   Forgejo server. `gitlab-releases` reads the newest 100 and skips a release
@@ -149,6 +155,7 @@ machine, so put specific entries before general ones.
 | `url` | yes | Where the download is. `https://`, `http://` or `file://`. |
 | `sha256` | no | The download's digest, 64 lowercase hex characters. |
 | `sha256_url` | no | A URL of a checksum file. Not together with `sha256`. |
+| `integrity` | no | A sha512 digest the way npm publishes it, `sha512-` and the digest in base64. oku checks the download against it. |
 | `strip` | no | How many leading path components to drop when unpacking. Default 0. |
 | `bin` | see below | Paths of executables inside the package. An entry may also be a table that makes oku write the program, see [A program that needs an interpreter](#a-program-that-needs-an-interpreter). |
 | `man` | see below | Paths of man pages. The file name needs a section, such as `rg.1` or `rg.1.gz`. |
@@ -263,7 +270,8 @@ the package fails the install. Two outputs with the same file name fail too.
 ### Checksums
 
 In order, oku uses `sha256`, then the file at `sha256_url`, then the digest the
-user's `oku.lock` pinned earlier. With none of them it trusts the first
+user's `oku.lock` pinned earlier. It also checks `integrity` when the artifact
+has one, or when the npm registry publishes one for the download. With none of them it trusts the first
 download and pins it. Publish one of the first two. See
 [Trust and checksums](trust.md).
 

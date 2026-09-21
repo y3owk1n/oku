@@ -54,6 +54,8 @@ type Options struct {
 	// GitHubAPI and GitHubRaw replace the github.com URLs when set.
 	GitHubAPI string
 	GitHubRaw string
+	// NPMRegistry replaces the URL of the npm registry when set.
+	NPMRegistry string
 }
 
 // NewRootCmd builds the oku command tree.
@@ -254,7 +256,7 @@ func (e env) fetcher(opts Options) *ref.Fetcher {
 }
 
 func (e env) resolver(opts Options) *resolve.Resolver {
-	return &resolve.Resolver{Hosts: e.fetcher(opts).Hosts}
+	return &resolve.Resolver{Hosts: e.fetcher(opts).Hosts, NPM: opts.NPMRegistry}
 }
 
 func (e env) inferrer(opts Options) *infer.Inferrer {

@@ -259,6 +259,11 @@ func (e env) install(ctx context.Context, opts Options, req request) (installed,
 			artifact.SHA256 = release.Digests[artifact.URL]
 		}
 
+		// The npm registry publishes a sha512 for every version's download.
+		if artifact.SHA256 == "" && artifact.SHA256URL == "" && artifact.Integrity == "" {
+			artifact.Integrity = release.Integrity[artifact.URL]
+		}
+
 		if req.acceptDigest && (artifact.SHA256 != "" || artifact.SHA256URL != "") {
 			pinned = ""
 		}

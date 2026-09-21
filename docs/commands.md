@@ -607,7 +607,7 @@ It edits the file as text, so comments and layout stay:
 | Flag | Effect |
 |---|---|
 | `--to` | The version to move to. Default is the newest release. |
-| `--repo` | The repo to read releases from, as `owner/repo` on GitHub or as a ref such as `gitlab:group/project`, `codeberg:owner/repo`, `gitea:host/owner/repo` or `github:host/owner/repo`. Default is the repo in the manifest's first release URL on github.com, codeberg.org or gitlab.com. A release URL on any other host could belong to a GitHub Enterprise, Gitea or GitLab server, so such a manifest needs `--repo`. |
+| `--repo` | The repo to read releases from, as `owner/repo` on GitHub or as a ref such as `gitlab:group/project`, `codeberg:owner/repo`, `gitea:host/owner/repo` or `github:host/owner/repo`. `npm:@scope/name` reads the npm registry. Default is the repo in the manifest's first release URL on github.com, codeberg.org, gitlab.com or registry.npmjs.org. A release URL on any other host could belong to a GitHub Enterprise, Gitea or GitLab server, so such a manifest needs `--repo`. |
 | `--strip-prefix` | Text before the version in a tag. Default is `v` when a URL contains `/releases/download/v`, else nothing. |
 
 At the newest version it prints `<name> is already at <version>` and changes

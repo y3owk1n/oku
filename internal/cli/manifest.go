@@ -152,12 +152,19 @@ var (
 		`https://(codeberg\.org/[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9._-]+)/releases/download/`,
 	)
 	gitlabURLRe = regexp.MustCompile(`https://gitlab\.com/([A-Za-z0-9._/-]+?)/-/releases/`)
+	npmURLRe    = regexp.MustCompile(
+		`https://registry\.npmjs\.org/((?:@[a-z0-9][a-z0-9._~-]*/)?[a-z0-9][a-z0-9._~-]*)/-/`,
+	)
 )
 
 // bumpSource returns the version.from and version.repo that bump lists releases
 // with. flag is --repo, a forge ref or a bare "owner/repo" on GitHub. Without it
 // the artifact URLs in text name the repo.
 func bumpSource(file, text, flag string) (string, string, error) {
+	if name, ok := strings.CutPrefix(flag, "npm:"); ok {
+		return manifest.FromNPM, name, nil
+	}
+
 	if flag != "" {
 		if !strings.Contains(flag, ":") {
 			flag = "github:" + flag
@@ -185,6 +192,7 @@ func bumpSource(file, text, flag string) (string, string, error) {
 		{manifest.FromGitHubReleases, githubURLRe},
 		{manifest.FromGiteaReleases, codebergURLRe},
 		{manifest.FromGitLabReleases, gitlabURLRe},
+		{manifest.FromNPM, npmURLRe},
 	} {
 		if found := host.re.FindStringSubmatch(text); found != nil {
 			return host.from, found[1], nil
@@ -192,8 +200,8 @@ func bumpSource(file, text, flag string) (string, string, error) {
 	}
 
 	return "", "", fmt.Errorf(
-		"%s has no release URL on github.com, codeberg.org or gitlab.com to read the repo from, "+
-			"pass --repo with a ref such as gitea:host/owner/repo",
+		"%s has no release URL on github.com, codeberg.org, gitlab.com or registry.npmjs.org "+
+			"to read the repo from, pass --repo with a ref such as gitea:host/owner/repo",
 		file,
 	)
 }
@@ -306,7 +314,7 @@ func runBump(cmd *cobra.Command, opts Options, file, repo, prefix, to string) er
 	updated := 0
 
 	for i, artifact := range bumped.Artifacts {
-		if artifact.SHA256 == "" {
+		if artifact.SHA256 == "" && artifact.Integrity == "" {
 			continue
 		}
 
@@ -322,6 +330,23 @@ func runBump(cmd *cobra.Command, opts Options, file, repo, prefix, to string) er
 		expanded, _, err := single.Select(target)
 		if err != nil {
 			return err
+		}
+
+		// An inline integrity moves to the one the npm registry publishes.
+		if artifact.Integrity != "" {
+			published := release.Integrity[expanded.URL]
+			if published == "" {
+				return fmt.Errorf(
+					"artifact[%d]: the npm registry publishes no integrity for %s", i, expanded.URL,
+				)
+			}
+
+			text = strings.ReplaceAll(text, artifact.Integrity, published)
+			updated++
+		}
+
+		if artifact.SHA256 == "" {
+			continue
 		}
 
 		digest, err := e.store().Digest(cmd.Context(), expanded.URL)

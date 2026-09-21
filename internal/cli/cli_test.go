@@ -7,6 +7,8 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
+	"crypto/sha512"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -2210,6 +2212,118 @@ bin = [{ name = "tool", run = "{{dep.interp.prefix}}/bin/interp", args = ["{{pkg
 
 	if out, err = m.run(t, "", "manifest", "lint", bad); err == nil || !strings.Contains(out, "nope") {
 		t.Fatalf("lint accepted an unknown variable in a bin table: %v\n%s", err, out)
+	}
+}
+
+// npmServer fakes the npm registry for the package @scope/tool. Each version's
+// download is a tar archive whose program prints the version. A version in
+// tampered gets an integrity that does not fit its download.
+func npmServer(t *testing.T, m *machine, tampered string, versions ...string) string {
+	t.Helper()
+
+	files := map[string]string{}
+
+	var server *httptest.Server
+
+	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if file, ok := files[r.URL.Path]; ok {
+			http.ServeFile(w, r, file)
+
+			return
+		}
+
+		if r.URL.Path != "/@scope/tool" {
+			http.NotFound(w, r)
+
+			return
+		}
+
+		var items []string
+
+		for _, version := range versions {
+			at := "/@scope/tool/-/tool-" + version + ".tgz"
+
+			data, err := os.ReadFile(files[at])
+			if err != nil {
+				t.Error(err)
+			}
+
+			if version == tampered {
+				data = append(data, 'x')
+			}
+
+			sum := sha512.Sum512(data)
+			items = append(items, fmt.Sprintf(
+				`%q: {"dist": {"tarball": %q, "integrity": "sha512-%s"}}`,
+				version, server.URL+at, base64.StdEncoding.EncodeToString(sum[:]),
+			))
+		}
+
+		_, _ = w.Write([]byte(`{"versions": {` + strings.Join(items, ",") + `}}`))
+	}))
+	t.Cleanup(server.Close)
+
+	for _, version := range versions {
+		archive, _ := m.archive(t, "tool-"+version, map[string]string{
+			"package/tool": "#!/bin/sh\necho " + version + "\n",
+		})
+		files["/@scope/tool/-/tool-"+version+".tgz"] = archive
+	}
+
+	m.opts.NPMRegistry = server.URL
+
+	path := filepath.Join(m.fixtures, "tool.toml")
+	must(t, os.WriteFile(path, []byte(fmt.Sprintf(`[package]
+name = "tool"
+[version]
+from = "npm"
+repo = "@scope/tool"
+[[artifact]]
+url = "%s/@scope/tool/-/tool-{{version}}.tgz"
+strip = 1
+bin = ["tool"]
+`, server.URL)), 0o644))
+
+	return path
+}
+
+func TestB123VersionsComeFromTheNPMRegistry(t *testing.T) {
+	m := newMachine(t)
+	ref := npmServer(t, &m, "", "1.0.0", "1.1.0", "2.0.0-beta.1")
+
+	out, err := m.run(t, "", "add", ref)
+	if err != nil {
+		t.Fatalf("add: %v\n%s", err, out)
+	}
+
+	if got := m.toolOutput(t); got != "1.1.0" {
+		t.Fatalf("add installed %s, want the newest version that is no prerelease", got)
+	}
+
+	// The registry's sha512 checked the download, so oku did not trust it blindly.
+	if strings.Contains(out, "trusted this download") {
+		t.Fatalf("add trusted a download that the registry has a digest for:\n%s", out)
+	}
+
+	_, err = m.run(t, "", "add", ref+"@1.0.0")
+	must(t, err)
+
+	if got := m.toolOutput(t); got != "1.0.0" {
+		t.Fatalf("add @1.0.0 installed %s", got)
+	}
+}
+
+func TestB124ADownloadThatDoesNotFitItsIntegrityIsRejected(t *testing.T) {
+	m := newMachine(t)
+	ref := npmServer(t, &m, "1.1.0", "1.0.0", "1.1.0")
+
+	_, err := m.run(t, "", "add", ref)
+	if err == nil || !strings.Contains(err.Error(), "integrity mismatch") {
+		t.Fatalf("want an integrity mismatch, got %v", err)
+	}
+
+	if entries := m.storeEntries(t); len(entries) != 0 {
+		t.Fatalf("the store holds %v after a rejected download", entries)
 	}
 }
 

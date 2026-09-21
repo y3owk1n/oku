@@ -15,6 +15,11 @@ digest from the first of these that exists:
    reports for the file. GitLab, Gitea and Forgejo report none.
 4. The digest `oku.lock` pinned for the same package version and URL.
 
+An artifact may also have an `integrity`, a sha512 the way npm publishes it. A
+manifest with `version.from = "npm"` gets it from the registry for each version.
+oku checks the download against it as well. A download that fits has a
+published checksum, so oku does not count it as a first use.
+
 A download that does not match is deleted, and nothing is installed:
 
 ```
