@@ -420,11 +420,15 @@ inside the project for a project package.
 
 ```toml
 [env]
-JAVA_HOME = "{{prefix}}/lib/jvm"
+JAVA_HOME = "{{pkg}}/lib/jvm"
 ```
 
-Values expand `{{prefix}}`, which is the package's directory in the store,
-`{{version}}` and `{{tag}}`.
+Values expand `{{version}}`, `{{tag}}` and:
+
+| Variable | Value |
+|---|---|
+| `{{pkg}}` | The directory that holds the package's files. For a prebuilt artifact that is the unpacked download, and for a build it is what the build installed. |
+| `{{prefix}}` | The package's directory in the store. A build's files are in it. An artifact's files are in `{{prefix}}/pkg`, so use `{{pkg}}` for a path that works either way. |
 
 A package may not set a variable that changes how other programs load or run.
 oku rejects `PATH`, `HOME`, `SHELL`, `USER`, `IFS`, `ENV`, `BASH_ENV`, `PS1`,

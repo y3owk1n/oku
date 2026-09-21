@@ -10,6 +10,8 @@ order step in `prd/product.md`.
 - B122 [1] A `bin` entry that is a table makes oku write a program that runs
   `run` with `args` before the user's arguments. `run` may name a runtime dep,
   and that dep stays out of the user's profile.
+- B128 [1] In `[env]`, `{{pkg}}` is the directory that holds the package's
+  files, which for an artifact is the unpacked download.
 - B2 [1] An artifact whose download does not match its sha256 is rejected and
   nothing enters the store or profile.
 - B3 [1] A manifest with no matching artifact and no `[build]` fails with an

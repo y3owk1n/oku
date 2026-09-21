@@ -547,5 +547,20 @@ $evaluated = & "$bin\evaluate.exe" '6*7'
 Check 'a bin table runs the dep with its arguments before the user ones' { $evaluated -eq '42' }
 Check 'the dep of a bin table stays out of the profile' { -not (Test-Path "$bin\node.exe") }
 
+# An npm package. Windows cannot run a script through PATH, so oku asks for a
+# node first, and then runs the package's programs through it.
+$refused = (& $oku add npm:prettier 2>&1) -join "`n"
+Check 'an npm package without runtimes.node is refused and the error names the key' {
+    ($LASTEXITCODE -ne 0) -and ($refused -match 'runtimes\.node')
+}
+
+$configDir = Join-Path $env:XDG_CONFIG_HOME 'oku'
+New-Item -ItemType Directory -Force $configDir | Out-Null
+Set-Content (Join-Path $configDir 'config.toml') "[runtimes]`nnode = '$(Join-Path $fixtures 'node.toml')'"
+
+Oku add npm:prettier
+$prettier = & "$bin\prettier.exe" --version
+Check 'an npm package runs through the configured node' { $prettier -match '^\d+\.\d+' }
+
 Remove-Item -Recurse -Force $root
 Write-Host 'live test passed'
