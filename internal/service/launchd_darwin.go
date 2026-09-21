@@ -11,6 +11,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // launchd manages per-user agents. An enabled service's plist is in
@@ -184,8 +185,13 @@ func (l *launchd) bootstrap(ctx context.Context, path string) error {
 
 // bootout unloads the service. launchd reports an error for a service that is
 // not loaded, which is not a failure here.
+//
+// launchctl returns while the program still runs. Until the program has exited,
+// a bootstrap of the same label fails with "Input/output error". bootout
+// therefore waits until launchd has unloaded the label.
 func (l *launchd) bootout(ctx context.Context, d Definition) error {
-	args := []string{"bootout", l.domain + "/" + d.Label()}
+	target := l.domain + "/" + d.Label()
+	args := []string{"bootout", target}
 
 	out, err := exec.CommandContext(ctx, "/bin/launchctl", args...).CombinedOutput()
 	if err != nil && !bytes.Contains(out, []byte("No such process")) &&
@@ -193,8 +199,22 @@ func (l *launchd) bootout(ctx context.Context, d Definition) error {
 		return commandError("launchctl", args, out, err)
 	}
 
+	deadline := time.Now().Add(bootoutWait)
+
+	for exec.CommandContext(ctx, "/bin/launchctl", "print", target).Run() == nil {
+		if time.Now().After(deadline) {
+			return fmt.Errorf("%s is still loaded %s after launchctl bootout", target, bootoutWait)
+		}
+
+		time.Sleep(100 * time.Millisecond)
+	}
+
 	return nil
 }
+
+// bootoutWait is how long a service gets to exit. launchd kills a program that
+// ignores SIGTERM after 20 seconds by default.
+const bootoutWait = 30 * time.Second
 
 // plist renders the launchd property list for d.
 func plist(d Definition) []byte {

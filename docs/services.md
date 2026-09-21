@@ -52,6 +52,10 @@ $ oku service logs postgres
 The commands work the same on macOS, Linux and Windows. An unknown name fails and lists
 the services you have.
 
+`oku update` of a package with a running service stops the old program and
+starts the new one. On macOS oku waits up to 30 seconds for the old program to
+exit, because launchd does not load a service while its old program still runs.
+
 ## What oku writes
 
 | | macOS | Linux |
