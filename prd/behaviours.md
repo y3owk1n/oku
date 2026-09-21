@@ -76,6 +76,10 @@ order step in `prd/product.md`.
 - B188 [2] oku keeps the `vendor_sha256`, the source pin and `impure` of a build
   in the lock when the store or a cache already holds that build. `update` of a
   build that did not change writes the same lock.
+- B190 [2] `sync` completes a build entry that lacks a pin, for the host and for
+  the other lock platforms. It adds the source archive, `impure` and the vendor
+  digest it can pin without a build, keeps every pin the entry has, and builds
+  nothing for it.
 - B181 [2] `sync --locked` fails before any download when the lock does not pin
   a package of the list for the host, and names the packages and the platform.
   It also fails when the lock would change in any other way. It never writes

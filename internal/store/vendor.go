@@ -154,11 +154,13 @@ type BuildPin struct {
 
 // PinBuild returns the pin of m's build for platform p. It builds nothing. It
 // takes the digest of a source archive from the manifest, else from its
-// checksum file, else from a download.
+// checksum file, else from pinned, which is the entry oku.lock holds, else from
+// a download.
 func (s *Store) PinBuild(
 	ctx context.Context,
 	m *manifest.Manifest,
 	p platform.Platform,
+	pinned BuildPin,
 ) (BuildPin, error) {
 	var pin BuildPin
 
@@ -190,6 +192,8 @@ func (s *Store) PinBuild(
 		}
 
 		pin.SHA256, err = s.publishedSHA256(ctx, checksums, path.Base(pin.SourceURL))
+	case pinned.SHA256 != "" && pinned.SourceURL == pin.SourceURL:
+		pin.SHA256 = pinned.SHA256
 	default:
 		pin.FirstUse = true
 		_, pin.SHA256, err = s.fetch(ctx, pin.SourceURL, "")

@@ -362,6 +362,17 @@ func (e env) install(ctx context.Context, opts Options, req request) (installed,
 			Strategy: strategyBuild, Impure: realized.Impure, VendorSHA256: realized.VendorSHA256,
 			URL: realized.SourceURL, SHA256: realized.SHA256,
 		}, previous, m, host)
+
+		// A build from before oku recorded the source archive has no pin for it.
+		if entry.SHA256 == "" {
+			pin, err := e.store().PinBuild(ctx, m, host, store.BuildPin{})
+			if err != nil {
+				return installed{}, fmt.Errorf("%s: %w", m.Package.Name, err)
+			}
+
+			entry.URL, entry.SHA256 = pin.SourceURL, pin.SHA256
+			realized.FirstUse = realized.FirstUse || pin.FirstUse
+		}
 	default:
 		// A digest that oku.lock pinned for this version and URL still applies,
 		// even when the manifest gives none.
@@ -573,7 +584,7 @@ func (e env) resolveOnly(
 }
 
 // lockOthers pins m in platforms for each platform of req that has no entry
-// yet, or whose entry only says that the platform builds. It installs nothing.
+// yet, or whose build entry lacks a pin. It installs nothing.
 // host is the install on this machine, or the zero value. It returns the
 // platforms whose download it trusted on first use.
 func (e env) lockOthers(
@@ -594,11 +605,14 @@ func (e env) lockOthers(
 	auth := e.fetcher(opts).Hosts.AuthFor(m.Version.From, m.Version.Repo)
 
 	for _, p := range req.platforms {
-		if at, ok := platforms[p.String()]; ok && at != (lock.Platform{Strategy: strategyBuild}) {
+		// An artifact that is pinned is complete. A build may still lack a pin that
+		// an older oku did not write, and pinFor adds only what is missing.
+		at, ok := platforms[p.String()]
+		if ok && at.Strategy != strategyBuild {
 			continue
 		}
 
-		entry, trusted, err := pinFor(ctx, e.store().As(auth), m, release, p, host)
+		entry, trusted, err := pinFor(ctx, e.store().As(auth), m, release, p, host, at)
 		if err != nil && req.strictPlatforms {
 			return nil, err
 		}
@@ -627,7 +641,8 @@ type hostBuild struct {
 }
 
 // pinFor returns the lock entry of m for platform p, and whether oku trusted a
-// download for it. host is the install on this machine.
+// download for it. host is the install on this machine, and at is the entry
+// that oku.lock holds for p, whose pins stay.
 func pinFor(
 	ctx context.Context,
 	s *store.Store,
@@ -635,6 +650,7 @@ func pinFor(
 	release resolve.Release,
 	p platform.Platform,
 	host hostBuild,
+	at lock.Platform,
 ) (lock.Platform, bool, error) {
 	artifact, ok, err := m.Select(p)
 
@@ -642,20 +658,21 @@ func pinFor(
 	case err != nil:
 		return lock.Platform{}, false, err
 	case !ok && m.HasBuild():
-		pin, err := s.PinBuild(ctx, m, p)
+		pin, err := s.PinBuild(ctx, m, p, store.BuildPin{SourceURL: at.URL, SHA256: at.SHA256})
 		if err != nil {
 			return lock.Platform{}, false, fmt.Errorf("%s for %s: %w", m.Package.Name, p, err)
 		}
 
 		entry := lock.Platform{
 			Strategy: strategyBuild, Impure: pin.Impure, URL: pin.SourceURL, SHA256: pin.SHA256,
+			VendorSHA256: at.VendorSHA256,
 		}
 
 		// Go and cargo vendor the same files on every platform, so the digest of
 		// the build on this machine holds for p too. npm installs the packages of
 		// the platform it is told, so oku downloads those of p and builds nothing.
 		switch {
-		case host.entry.Strategy != strategyBuild:
+		case host.entry.Strategy != strategyBuild || entry.VendorSHA256 != "":
 		case store.VendorPortable(m.Build):
 			entry.VendorSHA256 = host.entry.VendorSHA256
 		case store.CanCrossVendor(m.Build, p):

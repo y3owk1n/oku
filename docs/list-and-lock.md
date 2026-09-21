@@ -437,6 +437,12 @@ depends on the language:
 The digest of a `go` or `cargo` step only holds when no vendor step of the
 manifest has a `when`.
 
+A lock from an older oku may hold build entries with fewer pins. `oku sync`
+adds what is missing and keeps the pins that are there. It builds nothing for
+that. The one exception is the vendor digest of your own machine. oku records
+it beside the build in the store, a build from an older oku has none, and only
+a new build gives it.
+
 - A named platform that a package has no artifact and no build for is an
   error. Limit such a package with `when`, and oku pins it for the platforms
   that `when` matches.
