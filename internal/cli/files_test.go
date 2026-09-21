@@ -368,3 +368,41 @@ func TestB175AFontEntryMayBeAPattern(t *testing.T) {
 		t.Fatalf("a pattern that matches nothing should fail, got %v", err)
 	}
 }
+
+func TestB183TheLockOfAnNPMPackageWorksUnderAnotherConfigDirectory(t *testing.T) {
+	m := newMachine(t)
+	npmServer(t, &m, "", "1.1.0")
+
+	node, err := os.ReadFile(m.fakeNode(t))
+	must(t, err)
+
+	must(t, os.MkdirAll(filepath.Join(m.config, "packages"), 0o755))
+	must(t, os.WriteFile(filepath.Join(m.config, "packages", "node.toml"), node, 0o644))
+	must(t, os.WriteFile(filepath.Join(m.config, "config.toml"),
+		[]byte("[runtimes]\nnode = \"./packages/node.toml\"\n"), 0o644))
+
+	_, err = m.run(t, "", "add", "npm:@scope/tool")
+	must(t, err)
+
+	locked, err := os.ReadFile(filepath.Join(m.config, "oku.lock"))
+	must(t, err)
+
+	if strings.Contains(string(locked), m.config) {
+		t.Fatalf("oku.lock names the config directory of this machine:\n%s", locked)
+	}
+
+	// Another machine has the same files under another home directory.
+	elsewhere := filepath.Join(t.TempDir(), "config")
+	must(t, os.MkdirAll(elsewhere, 0o755))
+	must(t, os.Rename(m.config, filepath.Join(elsewhere, "oku")))
+	must(t, os.RemoveAll(m.data))
+	t.Setenv("XDG_CONFIG_HOME", elsewhere)
+
+	if out, err := m.run(t, "", "sync"); err != nil {
+		t.Fatalf("sync under another config directory: %v\n%s", err, out)
+	}
+
+	if !exists(m.profile("bin", "tool")) {
+		t.Fatal("sync did not install the npm package")
+	}
+}

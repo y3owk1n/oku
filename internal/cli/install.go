@@ -750,7 +750,10 @@ func (e env) inferNPM(ctx context.Context, opts Options, req request) (string, e
 			return "", fmt.Errorf("runtimes.node in %s: %w", e.configPath(), err)
 		}
 
-		npmOpts.Node, npmOpts.NodeName = r.String(), m.Package.Name
+		// The lock stores the manifest, so oku names a node inside the config
+		// directory relative to it, and the lock works under another home directory.
+		npmOpts.Node = ref.InDir(filepath.Dir(e.configPath()), r.String())
+		npmOpts.NodeName = m.Package.Name
 	} else if platform.Host().OS == "windows" {
 		return "", fmt.Errorf(
 			"%s needs node, and Windows cannot run a script through PATH\n"+
@@ -885,8 +888,13 @@ func (e env) installDeps(
 	var set depSet
 
 	base := ""
-	if parent.ref.Kind == ref.File {
+
+	switch parent.ref.Kind {
+	case ref.File:
 		base = filepath.Dir(parent.ref.Location)
+	case ref.NPM:
+		// inferNPM names the node of an npm ref relative to config.toml.
+		base = filepath.Dir(e.configPath())
 	}
 
 	for _, dep := range wanted {
@@ -895,8 +903,7 @@ func (e env) installDeps(
 			return set, fmt.Errorf("dep %s: %w", dep.Ref, err)
 		}
 
-		// The node of an npm ref comes from the user's own config.toml.
-		if base == "" && r.Kind == ref.File && parent.ref.Kind != ref.NPM {
+		if base == "" && r.Kind == ref.File {
 			return set, fmt.Errorf(
 				"dep %s: a remote manifest cannot depend on a local path",
 				dep.Ref,
