@@ -18,6 +18,9 @@ func TestB174InferencePrefersTheCommandLineBuildAndTheChecksumsOfItsOwnOS(t *tes
 		"tool-desktop-mac-arm64.app.tar.gz": file("desktop"),
 		"tool-darwin-arm64.zip":             file("cli"),
 		"tool-linux-arm64.tar.gz":           file("linux"),
+		// manifest init wants an asset for the machine it runs on.
+		"tool-linux-x86_64.tar.gz": file("linux-amd64"),
+		"tool-darwin-x86_64.zip":   file("cli-amd64"),
 		// One checksum file for each OS, as stripe/stripe-cli ships them.
 		"tool-linux-checksums.txt": file("sums-linux"),
 		"tool-mac-checksums.txt":   file("sums-mac"),
