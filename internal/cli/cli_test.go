@@ -2159,6 +2159,60 @@ func TestB113AddAtAVersionInfersFromThatVersionsRelease(t *testing.T) {
 	}
 }
 
+func TestB122ABinTableWritesAProgramThatRunsADepWithArguments(t *testing.T) {
+	m := newMachine(t)
+
+	// The dep stands in for an interpreter such as node.
+	m.manifest(t, "interp", map[string]string{
+		"interp": "#!/bin/sh\necho \"interp ran $(basename \"$1\") $2\"\n",
+	}, `bin = ["interp"]`)
+
+	archive, sum := m.archive(t, "script", map[string]string{"lib/main.js": "// the script"})
+	path := filepath.Join(m.fixtures, "tool.toml")
+	must(t, os.WriteFile(path, []byte(fmt.Sprintf(`[package]
+name = "tool"
+[version]
+value = "1.0.0"
+[runtime]
+deps = ["./interp.toml"]
+[[artifact]]
+url = "file://%s"
+sha256 = %q
+bin = [{ name = "tool", run = "{{dep.interp.prefix}}/bin/interp", args = ["{{pkg}}/lib/main.js"] }]
+`, archive, sum)), 0o644))
+
+	out, err := m.run(t, "", "manifest", "lint", path)
+	if err != nil {
+		t.Fatalf("lint: %v\n%s", err, out)
+	}
+
+	out, err = m.run(t, "", "add", path)
+	if err != nil {
+		t.Fatalf("add: %v\n%s", err, out)
+	}
+
+	got, err := exec.Command(m.profile("bin", "tool"), "--stdio").Output()
+	must(t, err)
+
+	if strings.TrimSpace(string(got)) != "interp ran main.js --stdio" {
+		t.Fatalf("tool printed %q", got)
+	}
+
+	if _, err := os.Stat(m.profile("bin", "interp")); err == nil {
+		t.Fatal("the dep's program is in the user's profile")
+	}
+
+	bad := strings.Replace(path, "tool.toml", "bad.toml", 1)
+	must(t, os.WriteFile(bad, []byte(fmt.Sprintf(
+		"[package]\nname = \"bad\"\n[version]\nvalue = \"1.0.0\"\n[[artifact]]\nurl = \"file://%s\"\n"+
+			"bin = [{ name = \"bad\", run = \"{{nope}}/x\" }]\n", archive,
+	)), 0o644))
+
+	if out, err = m.run(t, "", "manifest", "lint", bad); err == nil || !strings.Contains(out, "nope") {
+		t.Fatalf("lint accepted an unknown variable in a bin table: %v\n%s", err, out)
+	}
+}
+
 func TestB120ManifestInitReadsUniversalAndWindowsGnuAssets(t *testing.T) {
 	m := newMachine(t)
 	archive, _ := m.archive(t, "release", map[string]string{"tool": script})

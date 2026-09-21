@@ -83,12 +83,16 @@ const (
 
 // Artifact is a prebuilt download for the platforms its selector matches.
 type Artifact struct {
-	Match       platform.Selector `toml:"match"`
-	URL         string            `toml:"url"`
-	SHA256      string            `toml:"sha256"`
-	SHA256URL   string            `toml:"sha256_url"`
-	Strip       int               `toml:"strip"`
-	Bin         []string          `toml:"bin"`
+	Match     platform.Selector `toml:"match"`
+	URL       string            `toml:"url"`
+	SHA256    string            `toml:"sha256"`
+	SHA256URL string            `toml:"sha256_url"`
+	Strip     int               `toml:"strip"`
+	// RawBin is "bin" as TOML gives it. Parse splits it into Bin, the files that
+	// are programs, and Wrap, the programs that oku writes.
+	RawBin      []any             `toml:"bin"`
+	Bin         []string          `toml:"-"`
+	Wrap        []Wrapper         `toml:"-"`
 	Man         []string          `toml:"man"`
 	Completions map[string]string `toml:"completions"`
 	// App holds macOS app bundles, such as "Foo.app". Font holds font files.
@@ -111,6 +115,17 @@ type App struct {
 	Name string `toml:"name"`
 	Exec string `toml:"exec"`
 	Icon string `toml:"icon"`
+}
+
+// Wrapper is a program that oku writes into the package. It runs Run with Args
+// before the user's own arguments, the way a shell script with "exec" does. An
+// interpreted program needs one, such as "node script.js".
+type Wrapper struct {
+	Name string
+	// Run and Args expand {{prefix}}, {{dep.<name>.prefix}} and the artifact
+	// variables.
+	Run  string
+	Args []string
 }
 
 var (
@@ -267,6 +282,12 @@ func (m *Manifest) validate() error {
 		errs = append(errs, errors.New("set version.tag or version.strip_prefix, not both"))
 	}
 
+	for i := range m.Artifacts {
+		if err := m.Artifacts[i].splitBin(); err != nil {
+			errs = append(errs, fmt.Errorf("artifact[%d]: %w", i, err))
+		}
+	}
+
 	for i, a := range m.Artifacts {
 		if a.URL == "" {
 			errs = append(errs, fmt.Errorf("artifact[%d]: url is required", i))
@@ -283,7 +304,7 @@ func (m *Manifest) validate() error {
 			errs = append(errs, fmt.Errorf("artifact[%d]: set sha256 or sha256_url, not both", i))
 		}
 
-		if len(a.Bin)+len(a.Man)+len(a.Completions)+len(a.App)+len(a.Font) == 0 {
+		if len(a.Bin)+len(a.Wrap)+len(a.Man)+len(a.Completions)+len(a.App)+len(a.Font) == 0 {
 			errs = append(errs, fmt.Errorf(
 				"artifact[%d]: set at least one of bin, man, completions, app or font",
 				i,
@@ -350,6 +371,57 @@ func reservedEnv(name string) bool {
 	return slices.Contains([]string{
 		"PATH", "HOME", "SHELL", "IFS", "ENV", "BASH_ENV", "PROMPT_COMMAND", "PS1", "USER",
 	}, upper)
+}
+
+// splitBin reads RawBin. An entry is a path, or a table with name, run and
+// args.
+func (a *Artifact) splitBin() error {
+	a.Bin, a.Wrap = nil, nil
+
+	for i, value := range a.RawBin {
+		switch v := value.(type) {
+		case string:
+			a.Bin = append(a.Bin, v)
+		case map[string]any:
+			var w Wrapper
+
+			w.Name, _ = v["name"].(string)
+			w.Run, _ = v["run"].(string)
+
+			rawArgs, _ := v["args"].([]any)
+			for _, arg := range rawArgs {
+				text, ok := arg.(string)
+				if !ok {
+					return fmt.Errorf("bin[%d]: args must be strings", i)
+				}
+
+				w.Args = append(w.Args, text)
+			}
+
+			for key := range v {
+				if key != "name" && key != "run" && key != "args" {
+					return fmt.Errorf("bin[%d]: unknown key %q, use name, run and args", i, key)
+				}
+			}
+
+			if strings.ContainsAny(w.Run+strings.Join(w.Args, ""), "\r\n") {
+				return fmt.Errorf("bin[%d]: run and args must not hold a line break", i)
+			}
+
+			if !nameRe.MatchString(w.Name) || w.Run == "" {
+				return fmt.Errorf(
+					"bin[%d]: a table needs a name of lowercase letters, digits, '.', '_' or '-', and run",
+					i,
+				)
+			}
+
+			a.Wrap = append(a.Wrap, w)
+		default:
+			return fmt.Errorf("bin[%d]: want a path, or a table with name, run and args", i)
+		}
+	}
+
+	return nil
 }
 
 // Expand replaces {{name}} with vars[name] and fails on an unknown name.

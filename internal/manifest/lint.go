@@ -33,7 +33,7 @@ type schema struct {
 		SHA256URL    string            `toml:"sha256_url"`
 		SignatureURL string            `toml:"signature_url"`
 		Strip        int               `toml:"strip"`
-		Bin          []string          `toml:"bin"`
+		Bin          []any             `toml:"bin"`
 		Lib          []string          `toml:"lib"`
 		Include      []string          `toml:"include"`
 		Man          []string          `toml:"man"`
@@ -55,6 +55,7 @@ var VendorKinds = []string{"cargo", "go", "npm", "pip"}
 
 var (
 	artifactVars = []string{"version", "tag", "os", "arch", "libc"}
+	wrapVars     = append([]string{"prefix", "pkg"}, artifactVars...)
 	buildVars    = append([]string{"prefix", "src", "jobs"}, artifactVars...)
 )
 
@@ -96,6 +97,19 @@ func Lint(data []byte) Report {
 	if err := toml.Unmarshal(data, &m); err == nil {
 		if err := m.validate(); err != nil {
 			report.Errors = append(report.Errors, strings.Split(err.Error(), "\n")...)
+		}
+	}
+
+	// A wrapper may also name the package's own directories and its deps.
+	for i, a := range m.Artifacts {
+		for _, w := range a.Wrap {
+			for _, text := range append([]string{w.Run}, w.Args...) {
+				for _, name := range unknownVars(text, wrapVars) {
+					report.Errors = append(report.Errors, fmt.Sprintf(
+						"artifact[%d]: bin %q: unknown template variable {{%s}}", i, w.Name, name,
+					))
+				}
+			}
 		}
 	}
 

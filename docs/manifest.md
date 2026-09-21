@@ -150,7 +150,7 @@ machine, so put specific entries before general ones.
 | `sha256` | no | The download's digest, 64 lowercase hex characters. |
 | `sha256_url` | no | A URL of a checksum file. Not together with `sha256`. |
 | `strip` | no | How many leading path components to drop when unpacking. Default 0. |
-| `bin` | see below | Paths of executables inside the package. |
+| `bin` | see below | Paths of executables inside the package. An entry may also be a table that makes oku write the program, see [A program that needs an interpreter](#a-program-that-needs-an-interpreter). |
 | `man` | see below | Paths of man pages. The file name needs a section, such as `rg.1` or `rg.1.gz`. |
 | `completions` | see below | Shell name to path, such as `{ fish = "complete/rg.fish" }`. |
 | `app` | see below | macOS app bundles, such as `["Foo.app"]`. See [Apps and fonts](#apps-and-fonts). |
@@ -158,6 +158,46 @@ machine, so put specific entries before general ones.
 
 Each artifact needs at least one of `bin`, `man`, `completions`, `app` and
 `font`.
+
+### A program that needs an interpreter
+
+Some packages ship a script and no executable, such as a Node or Python tool or
+a `.jar`. A `bin` entry that is a table makes oku write the program. It runs `run` with
+`args` in front of the user's own arguments.
+
+```toml
+[runtime]
+deps = ["github:someone/recipes#node"]
+
+[[artifact]]
+url = "https://registry.npmjs.org/@actions/languageserver/-/languageserver-{{version}}.tgz"
+sha256 = "d152725064c64f862da5158cd630d4c67973edfb58bdabaa44054ffef03b9d03"
+strip = 1
+bin = [{ name = "gh-actions-language-server", run = "{{dep.node.prefix}}/bin/node", args = ["{{pkg}}/bin/actions-languageserver"] }]
+```
+
+| Key | Meaning |
+|---|---|
+| `name` | The program's name in the user's profile. It need not match any file in the download. |
+| `run` | The program to run, as an absolute path. |
+| `args` | Arguments that go before the user's. Optional. |
+
+`run` and `args` expand the [template variables](#template-variables) and:
+
+| Variable | Value |
+|---|---|
+| `{{pkg}}` | The directory that holds the unpacked download. |
+| `{{prefix}}` | The package's directory in the store. `{{pkg}}` is `{{prefix}}/pkg`. |
+| `{{dep.<name>.prefix}}` | The store directory of a [runtime dep](#dependencies), by its package name. A dep's programs are in its `bin`. |
+
+The interpreter is a runtime dep, so the user does not need it on `PATH`, and it
+does not appear there either. The package stays a plain download. oku runs no
+build and asks for no approval.
+
+On macOS and Linux the program is a shell script that ends in `exec`. On Windows
+it is a [shim](windows.md#shims) that holds the arguments, so `run` names an
+`.exe` there. Use one `[[artifact]]` per OS when the paths differ. A `bin` list
+may mix paths and tables.
 
 ### match values
 
