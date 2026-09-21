@@ -5,6 +5,8 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/y3owk1n/oku/internal/settings"
 )
 
 // fakeSettings stands in for the preference domains of macOS.
@@ -15,6 +17,8 @@ type fakeSettings struct {
 	// applied holds the domains of each Applied call.
 	applied [][]string
 }
+
+func (f *fakeSettings) Encode(value any) (string, error) { return settings.EncodePlist(value) }
 
 func (f *fakeSettings) Read(domain, key string) (string, bool, error) {
 	value, set := f.values[domain+" "+key]

@@ -1,6 +1,6 @@
-//go:build !darwin
+//go:build !darwin && !windows
 
 package settings
 
-// OS returns the settings mechanism of this OS. Only macOS has one so far.
+// OS returns the settings mechanism of this OS. Linux has none so far.
 func OS() (Store, string) { return nil, "" }

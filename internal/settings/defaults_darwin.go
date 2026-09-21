@@ -21,6 +21,8 @@ func run(args ...string) ([]byte, error) {
 	return out, nil
 }
 
+func (Defaults) Encode(value any) (string, error) { return EncodePlist(value) }
+
 func (Defaults) Read(domain, key string) (string, bool, error) {
 	// A domain that does not exist exports as an empty dict.
 	exported, err := run("export", domain, "-")

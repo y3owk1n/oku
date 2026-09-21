@@ -26,7 +26,7 @@ func settingsStore(opts Options) (settings.Store, string) {
 // of a generation. A table for another OS is skipped, like a package whose when
 // does not match.
 func resolveSettings(opts Options, listed []list.Setting) ([]profile.Setting, error) {
-	_, backend := settingsStore(opts)
+	store, backend := settingsStore(opts)
 
 	var wanted []profile.Setting
 
@@ -39,7 +39,7 @@ func resolveSettings(opts Options, listed []list.Setting) ([]profile.Setting, er
 			continue
 		}
 
-		value, err := settings.Encode(s.Value)
+		value, err := store.Encode(s.Value)
 		if err != nil {
 			return nil, fmt.Errorf("%s.%q.%s: %w", s.Backend, s.Domain, s.Key, err)
 		}

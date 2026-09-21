@@ -106,7 +106,8 @@ These are permanent edges of the product, not deferrals.
 
 Everything below is in scope. The order is dependency order, not priority.
 Steps 1 to 14 are built, and `docs/` describes what works today. Of step 15,
-`[defaults]` on macOS is built, and `[registry]` and `[dconf]` are not.
+`[defaults]` on macOS and `[registry]` on Windows are built, and `[dconf]` is
+not.
 
 1. Core: local ref, artifact, store, global profile. `add`, `remove`, `list`.
 2. Refs, `oku.toml`, `oku.lock`, `sync`, list `include` and `when`, bootstrap
