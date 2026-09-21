@@ -2,7 +2,7 @@
 
 # oku
 
-A package manager with no central registry. Point it at any repo, and a lock file pins what it installs.
+A package manager with no central registry. Point it at any repo, and a lock file pins what it installs. The same list sets up your dotfiles, secrets and OS settings.
 
 [![Latest Release](https://img.shields.io/github/v/release/y3owk1n/oku?style=flat-square)](https://github.com/y3owk1n/oku/releases)
 [![CI](https://img.shields.io/github/actions/workflow/status/y3owk1n/oku/ci.yml?branch=main&style=flat-square&label=ci)](https://github.com/y3owk1n/oku/actions/workflows/ci.yml)
@@ -39,6 +39,8 @@ oku sync github:you/machines             # rebuild your whole setup on a new mac
 - **Often no manifest either.** For a repo without one on GitHub, GitLab, Codeberg, or any Gitea or Forgejo server, oku reads the newest release, matches the files to your OS and CPU, finds the published checksums, and shows you the manifest it wrote before it installs. A URL of the download itself works the same way, and so does a command-line tool in the npm registry, which runs through a node that you pin once. When oku picks the wrong file, `--asset` and `--bin` name the right one.
 - **Same input, same machine.** `oku.toml` lists what you want. `oku.lock` pins the commit, the manifest hash and every download's sha256. `oku sync` on a new machine gives the same store paths.
 - **TOML, not a language.** A manifest has a fixed set of keys and seven build step types. `oku manifest lint` checks all of it.
+- **More than packages.** The same `oku.toml` places files in your home directory, as links, as text or from templates with your own variables. It decrypts secrets from sops and age files. It sets macOS `defaults`, Windows registry values and dconf keys. A generation holds all of it, so `oku rollback` puts it back.
+- **All or nothing.** `add`, `remove`, `sync`, `update` and `rollback` check everything before the first step and undo a change that fails partway. `oku sync --dry-run` runs every check and changes nothing.
 - **No root.** Everything lives in a private store under your home. Each change is a new generation, `oku rollback` activates the previous one, and `oku self uninstall` removes every file oku wrote.
 - **Nothing runs unasked.** oku unpacks `.deb`, `.rpm`, `.pkg` and `.msi` files and never runs their scripts. A build from source shows you its commands first, and then runs them in a sandbox that has no network and cannot read your home directory.
 
@@ -90,7 +92,7 @@ oku doctor                     # checks PATH, the hook, the sandbox and the prof
 
 ## What oku does
 
-**Packages.** Prebuilt downloads in tar, zip, 7z, `.deb`, `.rpm`, AppImage, `.dmg`, `.pkg` and `.msi`, or a build from source with dependencies between packages. A package can also ship a desktop app, fonts and a service.
+**Packages.** Prebuilt downloads in tar, zip, 7z, `.deb`, `.rpm`, AppImage, `.dmg`, `.pkg` and `.msi`, or a build from source with dependencies between packages. A package can also ship a desktop app, fonts and a service. It can be a prebuilt library that other builds link against, a script that oku wraps with its interpreter, such as node, or only files, such as agent skills or a colour scheme. A version can follow releases, an npm package, or a moving tag such as `nightly`.
 
 ```bash
 oku add github:you/recipes#postgres --service   # runs now and at every login
@@ -107,6 +109,35 @@ rectangle = { ref = "mine/rectangle", when = { os = "darwin" } }
 postgres = { ref = "mine/postgres", service = true }
 ```
 
+**Your home directory and settings.** The global list places files, renders templates, decrypts secrets and sets per-user OS settings. oku refuses to overwrite a file it did not write. Before it first writes a setting it records the old value, and it puts that value back when the entry leaves the list. It skips the tables of another OS, so one list serves every machine.
+
+```toml
+[vars]
+font = "JetBrainsMono Nerd Font Propo"
+
+[secrets]
+github_token = { file = "./secrets/secrets.yaml", key = "github/token" }
+
+[files]
+"{{home}}/.config/nvim" = { link = "./files/nvim" }
+"{{home}}/.config/ghostty/config" = { render = "./files/ghostty.tmpl" }
+"{{home}}/.ssh/id_ed25519" = { secret = "./secrets/secrets.yaml", key = "ssh/id_ed25519" }
+"{{home}}/.claude/skills/deslop" = { link = "{{pkg.cursor-plugins}}/skills/deslop" }
+
+[defaults."com.apple.dock"]
+autohide = true
+
+[registry.'HKCU\Control Panel\Keyboard']
+KeyboardDelay = "0"
+
+[dconf."org/gnome/desktop/interface"]
+color-scheme = "prefer-dark"
+```
+
+```bash
+oku sync --dry-run    # resolve, build, render and decrypt, then print what would change
+```
+
 **Projects.** A repo can carry its own `oku.toml`, lock and profile. With the shell hook for bash, zsh, fish or PowerShell, entering the directory puts the project's tools on `PATH`, after you allowed it once.
 
 ```bash
@@ -114,7 +145,7 @@ cd ~/work/api && oku allow     # once per repo, then its tools are on PATH while
 oku shell github:cli/cli -- gh --version   # or try a package without installing it
 ```
 
-**History.** Every change is a generation. oku overwrites nothing, so going back needs no download.
+**History.** Every change is a generation, and it covers packages, files and settings. oku overwrites nothing, so going back needs no download.
 
 ```bash
 oku generations
@@ -124,7 +155,7 @@ oku gc --keep 3
 
 **Sharing builds.** A signed cache is any directory or static web host. oku takes a built package from it only when a key you trust signed it, and builds it itself otherwise.
 
-[Commands](docs/commands.md) · [List and lock](docs/list-and-lock.md) · [Projects](docs/projects.md) · [Build caches](docs/caches.md)
+[Commands](docs/commands.md) · [List and lock](docs/list-and-lock.md) · [Secrets](docs/secrets.md) · [Projects](docs/projects.md) · [Build caches](docs/caches.md)
 
 ---
 
@@ -162,6 +193,7 @@ install = { bin = ["tool"] }
 oku manifest lint    # check it
 oku manifest test    # install it into a throwaway store
 oku manifest bump    # move it to the newest release, checksums included
+oku manifest hash <url>   # print the checksums of a download
 ```
 
 [Manifest reference](docs/manifest.md) · [Trust and checksums](docs/trust.md)
@@ -178,7 +210,7 @@ oku manifest bump    # move it to the newest release, checksums included
 | [mise](https://mise.jdx.dev)          | A registry of tools and backends       | TOML config         | Optional              | Linux, macOS, Windows |
 | [Scoop](https://scoop.sh)             | Buckets                                | JSON                | No                    | Windows               |
 
-oku fits if you want the reproducibility of a lock file without learning a language for it, or you ship software and do not want to maintain a package in several registries. It does not fit if you need the large catalogues that Homebrew and nixpkgs already have. oku has none until someone points it at a repo.
+oku fits if you want the reproducibility of a lock file without learning a language for it, or you ship software and do not want to maintain a package in several registries. It does not fit if you need the large catalogues that Homebrew and nixpkgs already have. oku has none until someone points it at a repo. For dotfiles and OS settings it covers the per-user part of what home-manager and nix-darwin do, and nothing that needs root.
 
 ---
 
@@ -193,6 +225,7 @@ oku add <ref>
   -> realize in the store      <data>/oku/store/<name>-<version>-<hash>/
   -> new profile generation    a directory of links, swapped in with one rename
   -> expose                    apps, fonts and services, each recorded in a ledger
+  -> apply the list            files, templates, secrets and OS settings, on sync and update
 ```
 
 A store path's hash covers the manifest, the version, the platform and the download's sha256, so a changed input never overwrites an old package. On Windows a profile uses shims, hard links and a junction where unix uses symlinks, so it needs no administrator rights either. [Files and directories](docs/files.md)
@@ -206,8 +239,9 @@ A store path's hash covers the manifest, the version, the platform and the downl
 | [Getting started](docs/getting-started.md)     | Install, a first package, `PATH`, uninstall                |
 | [Commands](docs/commands.md)                   | Every command, its flags, what it prints, its JSON         |
 | [Refs](docs/refs.md)                           | The ways to point oku at a manifest, and sources           |
-| [List and lock](docs/list-and-lock.md)         | `oku.toml`, `oku.lock`, one list for several machines      |
+| [List and lock](docs/list-and-lock.md)         | `oku.toml`, `oku.lock`, home files, templates, OS settings |
 | [Projects](docs/projects.md)                   | A list and a profile that belong to one repo, the hook     |
+| [Secrets](docs/secrets.md)                     | SSH keys and tokens from sops and age files                |
 | [Services](docs/services.md)                   | Running a package's daemon                                 |
 | [System scope](docs/system-scope.md)           | Apps, fonts and services for the whole machine             |
 | [Windows](docs/windows.md)                     | Shims, junctions, and what is not verified there           |
