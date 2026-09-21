@@ -1,14 +1,19 @@
 package store
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"io"
 	"io/fs"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
+
+	"github.com/y3owk1n/oku/internal/manifest"
+	"github.com/y3owk1n/oku/internal/platform"
 )
 
 // vendorKind is how one language's packages are downloaded into the source
@@ -23,6 +28,10 @@ type vendorKind struct {
 	output string
 	// env is added to the step's environment.
 	env []string
+	// portable reports that the script fills output with the same files on every
+	// platform, so one digest serves them all. npm and pip pick packages by
+	// platform.
+	portable bool
 }
 
 const npmPackageKind = "npm package"
@@ -33,14 +42,16 @@ var vendorKinds = map[string]vendorKind{
 		script: `"$tool" mod vendor`,
 		output: "vendor",
 		// A toolchain download would be a second, unhashed download.
-		env: []string{"GOTOOLCHAIN=local", "GOFLAGS=-mod=mod"},
+		env:      []string{"GOTOOLCHAIN=local", "GOFLAGS=-mod=mod"},
+		portable: true,
 	},
 	"cargo": {
 		tools: []string{"cargo"},
 		script: `"$tool" vendor --locked vendor >/dev/null
 mkdir -p .cargo
 printf '\n[source.crates-io]\nreplace-with = "vendored-sources"\n\n[source.vendored-sources]\ndirectory = "vendor"\n' >> .cargo/config.toml`,
-		output: "vendor",
+		output:   "vendor",
+		portable: true,
 	},
 	"npm": {
 		tools:  []string{"npm"},
@@ -61,6 +72,84 @@ printf '\n[source.crates-io]\nreplace-with = "vendored-sources"\n\n[source.vendo
 		script: `"$tool" download --disable-pip-version-check -q -r requirements.txt -d vendor/pip`,
 		output: "vendor/pip",
 	},
+}
+
+// VendorPortable reports whether the digest of what b vendors is the same on
+// every platform. That needs a vendor step, and each one must run on every
+// platform and be of a portable kind.
+func VendorPortable(b *manifest.Build) bool {
+	found := false
+
+	for _, step := range b.Steps {
+		if step.Vendor == nil {
+			continue
+		}
+
+		if step.When != (platform.Selector{}) || !vendorKinds[*step.Vendor].portable {
+			return false
+		}
+
+		found = true
+	}
+
+	return found
+}
+
+// BuildPin is what oku.lock holds for a build before a machine of its platform
+// ran it.
+type BuildPin struct {
+	Impure bool
+	// SourceURL and SHA256 are the source archive and its digest, or empty for a
+	// git source. FirstUse reports that oku trusted the download.
+	SourceURL string
+	SHA256    string
+	FirstUse  bool
+}
+
+// PinBuild returns the pin of m's build for platform p. It builds nothing. It
+// takes the digest of a source archive from the manifest, else from its
+// checksum file, else from a download.
+func (s *Store) PinBuild(
+	ctx context.Context,
+	m *manifest.Manifest,
+	p platform.Platform,
+) (BuildPin, error) {
+	var pin BuildPin
+
+	for _, step := range m.Build.Steps {
+		pin.Impure = pin.Impure || step.Run != nil && step.Network && step.When.Matches(p)
+	}
+
+	source := m.Build.Source
+	if source.URL == "" {
+		return pin, nil
+	}
+
+	vars := map[string]string{
+		"version": m.Version.Value, "tag": m.Tag, "os": p.OS, "arch": p.Arch, "libc": p.Libc,
+	}
+
+	var err error
+	if pin.SourceURL, err = manifest.Expand(source.URL, vars); err != nil {
+		return pin, err
+	}
+
+	switch {
+	case source.SHA256 != "":
+		pin.SHA256 = source.SHA256
+	case source.SHA256URL != "":
+		var checksums string
+		if checksums, err = manifest.Expand(source.SHA256URL, vars); err != nil {
+			return pin, err
+		}
+
+		pin.SHA256, err = s.publishedSHA256(ctx, checksums, path.Base(pin.SourceURL))
+	default:
+		pin.FirstUse = true
+		_, pin.SHA256, err = s.fetch(ctx, pin.SourceURL, "")
+	}
+
+	return pin, err
 }
 
 // hashTree returns one digest for every file under dir: its path, whether it is

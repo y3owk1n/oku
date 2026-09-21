@@ -69,6 +69,10 @@ order step in `prd/product.md`.
   `sync` does that when the lock has no entry for its ref, or with `[lock]`
   when a named platform is missing, and `update` always. `sync` keeps an entry
   that already pins the package and does not read its manifest.
+- B187 [2] A build that oku pins for another platform holds `impure`, the
+  source archive and its sha256, and the `vendor_sha256` of the host's build
+  when every vendor step is `go` or `cargo` and has no `when`. oku pins again
+  an entry that only says `strategy = 'build'`.
 - B181 [2] `sync --locked` fails before any download when the lock does not pin
   a package of the list for the host, and names the packages and the platform.
   It also fails when the lock would change in any other way. It never writes
