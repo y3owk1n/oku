@@ -103,9 +103,12 @@ func (s *Store) Build(
 
 	// The temporary directory of macOS is behind a symlink. npm writes the keys of
 	// its lockfile relative to the real path, so a prefix behind a symlink would
-	// put the name of this directory into the vendored files.
-	if work, err = filepath.EvalSymlinks(work); err != nil {
-		return Realized{}, err
+	// put the name of this directory into the vendored files. On Windows this
+	// would only turn a short path such as RUNNER~1 into the long one.
+	if runtime.GOOS != "windows" {
+		if work, err = filepath.EvalSymlinks(work); err != nil {
+			return Realized{}, err
+		}
 	}
 
 	src := filepath.Join(work, "src")
