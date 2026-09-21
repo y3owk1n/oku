@@ -46,8 +46,12 @@ this machine to find the executable, so run it where a release asset exists.`,
 			}
 
 			r, err := ref.Parse(from)
-			if err != nil || r.Kind != ref.Forge || r.Fragment != "" || r.Version != "" {
-				return fmt.Errorf("--from %q: want owner/repo or a ref such as codeberg:owner/repo", from)
+			if err != nil || r.Kind != ref.Forge && r.Kind != ref.NPM ||
+				r.Fragment != "" || r.Version != "" {
+				return fmt.Errorf(
+					"--from %q: want owner/repo or a ref such as codeberg:owner/repo or npm:@scope/name",
+					from,
+				)
 			}
 
 			e, err := loadEnv()
@@ -55,9 +59,16 @@ this machine to find the executable, so run it where a release asset exists.`,
 				return err
 			}
 
-			text, err := e.inferrer(opts).Manifest(
-				cmd.Context(), r.Scheme, r.Location, platform.Host(), infer.Options{},
-			)
+			var text string
+
+			if r.Kind == ref.NPM {
+				text, err = e.inferNPM(cmd.Context(), opts, request{ref: r})
+			} else {
+				text, err = e.inferrer(opts).Manifest(
+					cmd.Context(), r.Scheme, r.Location, platform.Host(), infer.Options{},
+				)
+			}
+
 			if err != nil {
 				return err
 			}

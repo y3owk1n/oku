@@ -504,6 +504,14 @@ uses that asset for your machine. `--bin` is the file name of the program inside
 the assets. Both apply to an inferred manifest only. `oku add` fails when you
 pass them for a ref that has a manifest.
 
+### An npm package
+
+`oku add npm:@scope/name` infers a manifest from the npm registry. It has
+`version.from = "npm"`, the registry's download as its artifact, and one
+[`bin` table](#a-program-that-needs-an-interpreter) for each program in the
+package's `bin`. See [npm packages](refs.md#npm-packages) for where node comes
+from and which packages work.
+
 ### A URL of the download
 
 `oku add https://host/tool-1.2.3-linux-amd64.tar.gz` installs from a URL that is

@@ -15,6 +15,7 @@ one per package.
 | `gitea:host/owner/repo` | The same on any Gitea or Forgejo server. The host is required. |
 | `gitlab:group/project` | The same on gitlab.com. A project may be in subgroups, as in `gitlab:group/sub/project`. |
 | `gitlab:host/group/project` | The same on a GitLab server of your own. |
+| `npm:name`, `npm:@scope/name` | A package in the npm registry. It has no manifest, so oku always [infers one](#npm-packages). |
 | `git+https://host/repo` | `oku.pkg.toml` at the root of any git repo. |
 | `git+https://host/repo#name` | `name.toml` at the root, else `packages/name.toml`. A fragment with no `/` and no `.` is a name. |
 | `git+https://host/repo#dir/name.toml` | That file in the repo. |
@@ -116,6 +117,38 @@ Aliases live in `config.toml` in the config directory:
 core = 'github:someone/recipes'
 ```
 
+## npm packages
+
+`oku add npm:@scope/name` installs a command-line tool from the npm registry.
+oku asks the registry for the package's versions, its download and the programs
+in its `bin`, and writes a manifest that follows the package's versions. It
+checks each download against the sha512 the registry publishes. `@version`
+picks a version, and `oku manifest init --from npm:@scope/name` writes the
+manifest to a file.
+
+The programs need node. Name a package that provides it in `config.toml`, once:
+
+```toml
+[runtimes]
+node = 'github:you/recipes#node'
+```
+
+Every npm package then gets that package as a runtime dep, and its programs run
+through it. They do not need node on `PATH`, and node does not appear there.
+`oku update` updates that node package too. A local file works as the ref too, and
+then a list that holds npm packages only works on machines that have that file.
+
+Without `runtimes.node`, the programs run the `node` on `PATH`, and `oku add`
+says so. That does not work on Windows, where `oku add npm:` then fails and
+names the key.
+
+oku installs the package's own download and nothing else. A tool that bundles
+its code works, such as a language server or prettier. A tool that needs its
+`dependencies` installed beside it does not, and neither does one that ships
+its program in a platform package, as typescript 7 does. The inferred manifest
+has a comment when the package lists dependencies, because the registry does
+not say whether the download bundles them.
+
 ## Private repos
 
 Set the token of the host, as listed above. On Codeberg, a Gitea or Forgejo
@@ -133,5 +166,5 @@ only, and oku downloads the URL a release lists.
 - A manifest may be at most 1 MiB.
 - A `#path` in a `git+` ref must stay inside the repository.
 - Inference covers `github:`, `codeberg:`, `gitea:` and `gitlab:` refs with no
-  `#name`. A
+  `#name`, `npm:` refs, and a URL of the download. A
   ref with a `#name`, and a `git+` ref, needs the manifest file to exist.

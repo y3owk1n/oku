@@ -35,6 +35,10 @@ type Config struct {
 	// TrustedKeys are the minisign public keys whose cache entries oku accepts.
 	TrustedKeys []string          `toml:"trusted_keys,omitempty"`
 	Sources     map[string]string `toml:"sources"`
+	// Runtimes maps an interpreter, such as "node", to the ref of the package
+	// that provides it. An inferred manifest that needs the interpreter depends
+	// on that package.
+	Runtimes map[string]string `toml:"runtimes,omitempty"`
 }
 
 // Read parses the config at path. A missing file is an empty config.

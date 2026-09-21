@@ -19,6 +19,9 @@ const (
 	// Forge is a repo on a host whose API oku reads. Ref.Scheme says which.
 	Forge
 	Git
+	// NPM is a package in the npm registry. It has no manifest, so oku always
+	// infers one.
+	NPM
 )
 
 // Target is the kind of file Fetch reads a ref as. It sets the file names Fetch
@@ -67,6 +70,7 @@ var (
 	// front.
 	gitlabRe   = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*(/[A-Za-z0-9_][A-Za-z0-9._-]*)+$`)
 	codebergRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9._-]+$`)
+	npmRe      = regexp.MustCompile(`^(@[a-z0-9][a-z0-9._~-]*/)?[a-z0-9][a-z0-9._~-]*$`)
 	nameRe     = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]*$`)
 	gitSchema  = []string{"https://", "http://", "ssh://", "file://"}
 )
@@ -123,6 +127,13 @@ func ParseIn(dir, s string) (Ref, error) {
 		if r.Fragment != "" && !nameRe.MatchString(r.Fragment) {
 			return Ref{}, fmt.Errorf("%s: %q is not a manifest name", s, r.Fragment)
 		}
+	case strings.HasPrefix(body, "npm:"):
+		r.Kind = NPM
+		r.Location = strings.TrimPrefix(body, "npm:")
+
+		if !npmRe.MatchString(r.Location) {
+			return Ref{}, fmt.Errorf("%s: want npm:name or npm:@scope/name", s)
+		}
 	case strings.HasPrefix(body, "git+"):
 		r.Kind = Git
 		r.Location, r.Fragment, _ = strings.Cut(strings.TrimPrefix(body, "git+"), "#")
@@ -162,6 +173,8 @@ func (r Ref) String() string {
 		s = r.Scheme + ":" + s
 	case Git:
 		s = "git+" + s
+	case NPM:
+		s = "npm:" + s
 	}
 
 	if r.Fragment != "" {

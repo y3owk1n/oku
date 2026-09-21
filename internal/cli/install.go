@@ -17,6 +17,7 @@ import (
 	"github.com/y3owk1n/oku/internal/profile"
 	"github.com/y3owk1n/oku/internal/ref"
 	"github.com/y3owk1n/oku/internal/resolve"
+	"github.com/y3owk1n/oku/internal/source"
 	"github.com/y3owk1n/oku/internal/store"
 )
 
@@ -357,6 +358,12 @@ func (e env) manifestData(
 		}, "", nil
 	}
 
+	if req.ref.Kind == ref.NPM {
+		text, err := e.inferNPM(ctx, opts, req)
+
+		return ref.Fetched{Data: []byte(text)}, text, err
+	}
+
 	fetched, err := e.fetcher(opts).Fetch(ctx, req.ref, req.commit, ref.Manifest)
 
 	if req.ref.Kind == ref.HTTP && isDownload(req.ref, fetched.Data, err) {
@@ -417,6 +424,50 @@ func isDownload(r ref.Ref, data []byte, err error) bool {
 	return err != nil
 }
 
+// inferNPM writes the manifest of an npm ref. The programs run through the
+// package that config.toml names for node, or through the node on PATH.
+func (e env) inferNPM(ctx context.Context, opts Options, req request) (string, error) {
+	if req.asset != "" || req.bin != "" {
+		return "", fmt.Errorf(
+			"--asset and --bin do not apply, %s lists its download and its programs", req.ref,
+		)
+	}
+
+	config, err := source.Read(e.configPath())
+	if err != nil {
+		return "", err
+	}
+
+	npmOpts := infer.NPMOptions{Registry: opts.NPMRegistry, Version: req.ref.Version}
+
+	if node := config.Runtimes["node"]; node != "" {
+		r, err := e.parseRef(node)
+		if err != nil {
+			return "", fmt.Errorf("runtimes.node in %s: %w", e.configPath(), err)
+		}
+
+		fetched, err := e.fetcher(opts).Fetch(ctx, r, "", ref.Manifest)
+		if err != nil {
+			return "", fmt.Errorf("runtimes.node in %s: %w", e.configPath(), err)
+		}
+
+		m, err := manifest.Parse(fetched.Data, r.String())
+		if err != nil {
+			return "", fmt.Errorf("runtimes.node in %s: %w", e.configPath(), err)
+		}
+
+		npmOpts.Node, npmOpts.NodeName = r.String(), m.Package.Name
+	} else if platform.Host().OS == "windows" {
+		return "", fmt.Errorf(
+			"%s needs node, and Windows cannot run a script through PATH\n"+
+				"set runtimes.node in %s to the ref of a package that provides node",
+			req.ref, e.configPath(),
+		)
+	}
+
+	return e.inferrer(opts).FromNPM(ctx, req.ref.Location, npmOpts)
+}
+
 func inferredText(inferred string, req request) string {
 	if inferred == "" && req.previous.Inferred && req.keepVersion {
 		return req.previous.Manifest
@@ -450,6 +501,22 @@ func reportCache(w io.Writer, got installed) {
 // reportInferred prints a manifest that oku just inferred.
 func reportInferred(w io.Writer, got installed) {
 	if got.inferred == "" {
+		return
+	}
+
+	if strings.HasPrefix(got.lock.Ref, "npm:") {
+		fmt.Fprintf(
+			w, "%s is an npm package, so oku inferred this manifest from the registry:\n\n%s\n",
+			got.lock.Ref, got.inferred,
+		)
+
+		if !strings.Contains(got.inferred, "[runtime]") {
+			fmt.Fprintln(
+				w, "its programs run the node on PATH. To pin one, set runtimes.node in config.toml "+
+					"to the ref of a package that provides node",
+			)
+		}
+
 		return
 	}
 
@@ -521,7 +588,8 @@ func (e env) installDeps(
 			return set, fmt.Errorf("dep %s: %w", dep.Ref, err)
 		}
 
-		if base == "" && r.Kind == ref.File {
+		// The node of an npm ref comes from the user's own config.toml.
+		if base == "" && r.Kind == ref.File && parent.ref.Kind != ref.NPM {
 			return set, fmt.Errorf(
 				"dep %s: a remote manifest cannot depend on a local path",
 				dep.Ref,
