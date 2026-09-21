@@ -35,8 +35,8 @@ type listedSecret struct {
 	dir string
 }
 
-// placeholder stands in a generation's content where the value of a secret
-// goes. The zero bytes keep it apart from anything a config file holds.
+// placeholder marks the place in a generation's content where the value of a
+// secret goes. The zero bytes keep it apart from anything a config file holds.
 func placeholder(name string) string {
 	return "\x00oku-secret:" + name + "\x00"
 }

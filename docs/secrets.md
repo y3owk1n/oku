@@ -77,13 +77,13 @@ yourself, once, before the first sync.
 Only you can read `<data>/oku/secrets/` and the files in it. On macOS and Linux
 the directory has mode `0700` and a file `0600`, or the `mode` of the entry. On
 Windows both get an access control list that names you alone and inherits
-nothing, and so does the copy that stands in for a symlink there, see
+nothing. So does the copy that Windows gets in place of a symlink, see
 [Windows](windows.md#files-in-your-home-directory).
 
-Because a generation holds the encrypted file, `oku rollback` decrypts the file
-of the generation it returns to, and no old key stays in an old generation
-until `oku gc`. After you edit a file with `sops`, the next `oku sync` writes
-the new value. A secret whose entry leaves the list is deleted, and
+A generation holds the encrypted file. So `oku rollback` decrypts the file of
+the generation it returns to, and an old generation never holds an old key in
+readable form. After you edit a file with `sops`, the next `oku sync` writes
+the new value. oku deletes a secret whose entry leaves the list, and
 `oku self uninstall` deletes all of them.
 
 ## When a secret cannot be decrypted
