@@ -1252,7 +1252,7 @@ func (m machine) toolOutput(t *testing.T) string {
 	return strings.TrimSpace(string(out))
 }
 
-func TestAddFindsAVersionPastTheFirstPageOfReleases(t *testing.T) {
+func TestB118AddFindsAVersionPastTheFirstPageOfReleases(t *testing.T) {
 	m := newMachine(t)
 
 	var tags []string
@@ -1874,7 +1874,7 @@ func (rw rewriteHost) RoundTrip(req *http.Request) (*http.Response, error) {
 	return http.DefaultTransport.RoundTrip(req)
 }
 
-func TestAddReadsAGitHubEnterpriseHostFromTheRef(t *testing.T) {
+func TestB114AddReadsAGitHubEnterpriseHostFromTheRef(t *testing.T) {
 	m := newMachine(t)
 	manifest, err := os.ReadFile(m.manifest(t, "tool", map[string]string{"tool": script}, `bin = ["tool"]`))
 	must(t, err)
@@ -1929,7 +1929,7 @@ func TestAddReadsAGitHubEnterpriseHostFromTheRef(t *testing.T) {
 	}
 }
 
-func TestAddInfersFromACodebergRepoAndUpdateListsItsReleases(t *testing.T) {
+func TestB115AddInfersFromACodebergRepoAndUpdateListsItsReleases(t *testing.T) {
 	m := newMachine(t)
 	archive, _ := m.archive(t, "release", map[string]string{"tool": script})
 
@@ -1996,7 +1996,7 @@ func TestAddInfersFromACodebergRepoAndUpdateListsItsReleases(t *testing.T) {
 	}
 }
 
-func TestAddInfersFromAGitLabProjectInASubgroup(t *testing.T) {
+func TestB116AddInfersFromAGitLabProjectInASubgroup(t *testing.T) {
 	m := newMachine(t)
 	archive, _ := m.archive(t, "release", map[string]string{"tool": script})
 
@@ -2065,7 +2065,7 @@ func TestAddInfersFromAGitLabProjectInASubgroup(t *testing.T) {
 	}
 }
 
-func TestAddTakesAURLThatIsTheDownloadItself(t *testing.T) {
+func TestB117AddTakesAURLThatIsTheDownloadItself(t *testing.T) {
 	m := newMachine(t)
 	archive, _ := m.archive(t, "release", map[string]string{
 		"tool-1.4.0/tool": "#!/bin/sh\necho from a url\n",
@@ -2114,7 +2114,52 @@ func TestAddTakesAURLThatIsTheDownloadItself(t *testing.T) {
 	}
 }
 
-func TestManifestInitReadsUniversalAndWindowsGnuAssets(t *testing.T) {
+func TestB113AddAtAVersionInfersFromThatVersionsRelease(t *testing.T) {
+	m := newMachine(t)
+	host := platform.Host()
+
+	// The older release names its files another way than the newest one does.
+	older, _ := m.archive(t, "older", map[string]string{"tool": "#!/bin/sh\necho 1.3.0\n"})
+	newest, _ := m.archive(t, "newest", map[string]string{"tool": "#!/bin/sh\necho 1.4.0\n"})
+	olderName := "tool_1.3.0_" + host.OS + "_" + host.Arch + ".tar.gz"
+
+	release := func(tag, name, file string) string {
+		return fmt.Sprintf(
+			`{"tag_name": %q, "assets": [{"name": %q, "browser_download_url": "file://%s"}]}`,
+			tag, name, file,
+		)
+	}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/repos/owner/tool/commits/HEAD":
+			_, _ = w.Write([]byte("5555555555555555555555555555555555555555"))
+		case "/api/repos/owner/tool/releases/latest":
+			_, _ = w.Write([]byte(release("v1.4.0", hostAssetName(), newest)))
+		case "/api/repos/owner/tool/releases/tags/v1.3.0":
+			_, _ = w.Write([]byte(release("v1.3.0", olderName, older)))
+		case "/api/repos/owner/tool/releases":
+			_, _ = w.Write([]byte(`[{"tag_name": "v1.4.0"}, {"tag_name": "v1.3.0"}]`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(server.Close)
+
+	m.opts.GitHubAPI = server.URL + "/api"
+	m.opts.GitHubRaw = server.URL + "/raw"
+
+	out, err := m.run(t, "", "add", "github:owner/tool@1.3.0")
+	if err != nil {
+		t.Fatalf("add: %v\n%s", err, out)
+	}
+
+	if got := m.toolOutput(t); got != "1.3.0" {
+		t.Fatalf("add @1.3.0 installed %q, want the file of the 1.3.0 release", got)
+	}
+}
+
+func TestB120ManifestInitReadsUniversalAndWindowsGnuAssets(t *testing.T) {
 	m := newMachine(t)
 	archive, _ := m.archive(t, "release", map[string]string{"tool": script})
 
@@ -2142,7 +2187,7 @@ func TestManifestInitReadsUniversalAndWindowsGnuAssets(t *testing.T) {
 	}
 }
 
-func TestAddAssetAndBinChooseWhatInferenceUses(t *testing.T) {
+func TestB112AddAssetAndBinChooseWhatInferenceUses(t *testing.T) {
 	m := newMachine(t)
 	archive, _ := m.archive(t, "odd", map[string]string{
 		"main":   "#!/bin/sh\necho steered\n",
@@ -2174,7 +2219,7 @@ func TestAddAssetAndBinChooseWhatInferenceUses(t *testing.T) {
 	}
 }
 
-func TestAddInfersFromACompressedSingleBinary(t *testing.T) {
+func TestB121AddInfersFromACompressedSingleBinary(t *testing.T) {
 	m := newMachine(t)
 
 	var buf bytes.Buffer
@@ -2491,7 +2536,7 @@ func TestB29ManifestBumpMovesVersionAndChecksums(t *testing.T) {
 	}
 }
 
-func TestManifestBumpReadsReleasesFromAGitLabRef(t *testing.T) {
+func TestB119ManifestBumpReadsReleasesFromAGitLabRef(t *testing.T) {
 	m := newMachine(t)
 
 	_, oldSum := m.archive(t, "tool-1.0.0", map[string]string{"tool": "#!/bin/sh\necho 1.0.0\n"})
