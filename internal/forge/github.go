@@ -16,6 +16,8 @@ const maxBody = 8 << 20
 // github is github.com or a GitHub Enterprise Server.
 type github struct {
 	http *http.Client
+	// host is "" for github.com.
+	host string
 	web  string
 	api  string
 	// raw serves files without the API's rate limit. It is empty for an
@@ -48,6 +50,10 @@ func (r githubRelease) release() Release {
 
 	return out
 }
+
+func (g *github) Kind() string { return KindGitHub }
+
+func (g *github) Host() string { return g.host }
 
 func (g *github) Home(repo string) string {
 	return g.web + "/" + repo

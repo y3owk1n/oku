@@ -52,13 +52,6 @@ func NewFetcher(cacheDir string) *Fetcher {
 	}
 }
 
-// forgeOf returns the forge of a GitHub ref and the repo on it.
-func (f *Fetcher) forgeOf(r Ref) (forge.Forge, string) {
-	host, repo := forge.Split(r.Location)
-
-	return f.Hosts.GitHub(host), repo
-}
-
 // file reads one manifest file from a forge.
 func file(ctx context.Context, host forge.Forge, repo, commit, path string) ([]byte, error) {
 	data, err := host.File(ctx, repo, commit, path)
@@ -95,23 +88,25 @@ func (f *Fetcher) Fetch(ctx context.Context, r Ref, commit string, t Target) (Fe
 		}
 
 		return Fetched{Data: data, Path: r.Location}, nil
-	case GitHub:
-		return f.fetchGitHub(ctx, r, commit, t)
+	case Forge:
+		return f.fetchForge(ctx, r, commit, t)
 	default:
 		return f.fetchGit(ctx, r, commit, t)
 	}
 }
 
-func (f *Fetcher) fetchGitHub(
+func (f *Fetcher) fetchForge(
 	ctx context.Context,
 	r Ref,
 	commit string,
 	t Target,
 ) (Fetched, error) {
-	host, repo := f.forgeOf(r)
+	host, repo, err := f.Hosts.Open(r.Scheme, r.Location)
+	if err != nil {
+		return Fetched{}, err
+	}
 
 	if commit == "" {
-		var err error
 		if commit, err = host.Head(ctx, repo); err != nil {
 			return Fetched{}, fmt.Errorf("resolve %s: %w", r, notFound(err))
 		}
@@ -136,7 +131,7 @@ func (f *Fetcher) fetchGitHub(
 	)
 }
 
-// paths lists where a GitHub ref's file may be, in lookup order.
+// paths lists where a Forge ref's file may be, in lookup order.
 func (t Target) paths(name string) []string {
 	if name == "" {
 		return []string{t.Default}
@@ -201,7 +196,7 @@ func (f *Fetcher) fetchGit(
 	}
 
 	// A fragment is a path. fetchGit looks up a bare name, such as "ripgrep", the
-	// way fetchGitHub does.
+	// way fetchForge does.
 	paths := []string{r.Fragment}
 	if !strings.ContainsAny(r.Fragment, "/.") {
 		paths = t.paths(r.Fragment)
@@ -261,8 +256,11 @@ func (f *Fetcher) FetchBeside(
 	switch r.Kind {
 	case File, HTTP:
 		r.Location = at
-	case GitHub:
-		host, repo := f.forgeOf(r)
+	case Forge:
+		host, repo, err := f.Hosts.Open(r.Scheme, r.Location)
+		if err != nil {
+			return Fetched{}, err
+		}
 
 		data, err := file(ctx, host, repo, got.Commit, at)
 		if err != nil {
@@ -342,8 +340,8 @@ func (f *Fetcher) ListManifests(ctx context.Context, r Ref) (map[string][]byte, 
 		}
 
 		return readCollection(dir)
-	case GitHub:
-		return f.listGitHub(ctx, r)
+	case Forge:
+		return f.listForge(ctx, r)
 	default:
 		return nil, fmt.Errorf("%s: a URL cannot be listed, so it cannot be searched", r)
 	}
@@ -371,8 +369,11 @@ func readCollection(dir string) (map[string][]byte, error) {
 	return found, nil
 }
 
-func (f *Fetcher) listGitHub(ctx context.Context, r Ref) (map[string][]byte, error) {
-	host, repo := f.forgeOf(r)
+func (f *Fetcher) listForge(ctx context.Context, r Ref) (map[string][]byte, error) {
+	host, repo, err := f.Hosts.Open(r.Scheme, r.Location)
+	if err != nil {
+		return nil, err
+	}
 
 	commit, err := host.Head(ctx, repo)
 	if err != nil {

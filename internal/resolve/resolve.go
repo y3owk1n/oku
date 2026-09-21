@@ -159,7 +159,7 @@ func Satisfies(version, constraint string) (bool, error) {
 // List returns the releases of v, newest first.
 func (r *Resolver) List(ctx context.Context, v manifest.Version) ([]Release, error) {
 	if v.Tag != "" {
-		release, err := r.movingTag(ctx, v.Repo, v.Tag)
+		release, err := r.movingTag(ctx, v)
 		if err != nil {
 			return nil, err
 		}
@@ -173,8 +173,8 @@ func (r *Resolver) List(ctx context.Context, v manifest.Version) ([]Release, err
 	)
 
 	switch v.From {
-	case manifest.FromGitHubReleases:
-		tags, err = r.githubReleases(ctx, v.Repo)
+	case manifest.FromGitHubReleases, manifest.FromGiteaReleases:
+		tags, err = r.published(ctx, v)
 	case manifest.FromGitTags:
 		tags, err = gitTags(ctx, v.Repo)
 	default:
@@ -205,10 +205,14 @@ func (r *Resolver) List(ctx context.Context, v manifest.Version) ([]Release, err
 // "nightly". Its version is the day of the commit the tag points at and that
 // commit, such as 2026.09.20-a73243f, so one commit always has one version. A
 // prerelease counts, a draft does not.
-func (r *Resolver) movingTag(ctx context.Context, location, tag string) (Release, error) {
-	what := "read the release " + tag + " of " + location
-	server, repo := forge.Split(location)
-	host := r.Hosts.GitHub(server)
+func (r *Resolver) movingTag(ctx context.Context, v manifest.Version) (Release, error) {
+	tag := v.Tag
+	what := "read the release " + tag + " of " + v.Repo
+
+	host, repo, err := r.open(v)
+	if err != nil {
+		return Release{}, err
+	}
 
 	found, err := host.Release(ctx, repo, tag)
 	if err != nil {
@@ -225,7 +229,7 @@ func (r *Resolver) movingTag(ctx context.Context, location, tag string) (Release
 	}
 
 	if len(commit.SHA) < 7 {
-		return Release{}, fmt.Errorf("%s: GitHub named no commit for the tag", what)
+		return Release{}, fmt.Errorf("%s: the host named no commit for the tag", what)
 	}
 
 	digests := map[string]string{}
@@ -244,14 +248,22 @@ func (r *Resolver) movingTag(ctx context.Context, location, tag string) (Release
 	}, nil
 }
 
-// githubReleases returns the tags of published releases. It reads the newest
-// 100 and skips drafts and prereleases.
-func (r *Resolver) githubReleases(ctx context.Context, location string) ([]string, error) {
-	server, repo := forge.Split(location)
+// open returns the forge that v reads releases from.
+func (r *Resolver) open(v manifest.Version) (forge.Forge, string, error) {
+	return r.Hosts.Open(strings.TrimSuffix(v.From, "-releases"), v.Repo)
+}
 
-	found, err := r.Hosts.GitHub(server).Releases(ctx, repo)
+// published returns the tags of published releases. It reads the newest page
+// the host gives and skips drafts and prereleases.
+func (r *Resolver) published(ctx context.Context, v manifest.Version) ([]string, error) {
+	host, repo, err := r.open(v)
 	if err != nil {
-		return nil, explain(err, "list releases of "+location, "the repository was not found")
+		return nil, err
+	}
+
+	found, err := host.Releases(ctx, repo)
+	if err != nil {
+		return nil, explain(err, "list releases of "+v.Repo, "the repository was not found")
 	}
 
 	var tags []string

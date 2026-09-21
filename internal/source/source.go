@@ -118,11 +118,11 @@ func (c *Config) Expand(arg string) (string, error) {
 }
 
 // Member returns the ref of the manifest called name in the collection at
-// target. A GitHub or git collection is searched for "name.toml" and
+// target. A forge or git collection is searched for "name.toml" and
 // "packages/name.toml" when the ref is fetched. Member searches a directory
 // itself. A URL holds "name.toml" only, because oku cannot list a URL.
 func Member(target, name string) string {
-	if strings.HasPrefix(target, "github:") || strings.HasPrefix(target, "git+") {
+	if r, err := ref.Parse(target); err == nil && (r.Kind == ref.Forge || r.Kind == ref.Git) {
 		return target + "#" + name
 	}
 

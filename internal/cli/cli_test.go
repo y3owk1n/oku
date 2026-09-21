@@ -1898,6 +1898,73 @@ func TestAddReadsAGitHubEnterpriseHostFromTheRef(t *testing.T) {
 	}
 }
 
+func TestAddInfersFromACodebergRepoAndUpdateListsItsReleases(t *testing.T) {
+	m := newMachine(t)
+	archive, _ := m.archive(t, "release", map[string]string{"tool": script})
+
+	t.Setenv("GITHUB_TOKEN", "for-github-com")
+	t.Setenv("CODEBERG_TOKEN", "for-codeberg")
+
+	release := fmt.Sprintf(
+		`{"tag_name": "v1.4.0", "assets": [{"name": %q, "browser_download_url": "file://%s"}]}`,
+		hostAssetName(), archive,
+	)
+
+	var tokens []string
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		tokens = append(tokens, r.Header.Get("Authorization"))
+
+		switch r.URL.Path {
+		case "/api/v1/repos/owner/tool/commits":
+			_, _ = w.Write([]byte(`[{"sha": "5555555555555555555555555555555555555555"}]`))
+		case "/api/v1/repos/owner/tool/releases/latest":
+			_, _ = w.Write([]byte(release))
+		case "/api/v1/repos/owner/tool/releases":
+			_, _ = w.Write([]byte("[" + release + "]"))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(server.Close)
+
+	target, err := url.Parse(server.URL)
+	must(t, err)
+
+	client := http.DefaultClient.Transport
+	http.DefaultClient.Transport = rewriteHost{host: "codeberg.org", server: target}
+
+	t.Cleanup(func() { http.DefaultClient.Transport = client })
+
+	out, err := m.run(t, "", "add", "codeberg:owner/tool")
+	if err != nil {
+		t.Fatalf("add: %v\n%s", err, out)
+	}
+
+	for _, want := range []string{
+		`from = "gitea-releases"`, `repo = "codeberg.org/owner/tool"`,
+		`homepage = "https://codeberg.org/owner/tool"`,
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("the inferred manifest lacks %q:\n%s", want, out)
+		}
+	}
+
+	if got := m.toolOutput(t); got != "hello from tool" {
+		t.Fatalf("tool printed %q", got)
+	}
+
+	if out, err = m.run(t, "", "update"); err != nil {
+		t.Fatalf("update: %v\n%s", err, out)
+	}
+
+	for _, token := range tokens {
+		if token != "token for-codeberg" {
+			t.Fatalf("codeberg.org got the token %q", token)
+		}
+	}
+}
+
 func TestManifestInitReadsUniversalAndWindowsGnuAssets(t *testing.T) {
 	m := newMachine(t)
 	archive, _ := m.archive(t, "release", map[string]string{"tool": script})

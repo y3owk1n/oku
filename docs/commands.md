@@ -492,7 +492,7 @@ a large collection takes one request per manifest.
 ## oku manifest init
 
 ```
-oku manifest init --from <owner/repo> [-o file] [--force]
+oku manifest init --from <owner/repo | ref> [-o file] [--force]
 ```
 
 Writes the manifest that oku [infers](manifest.md#inferred-manifests) from a
@@ -501,7 +501,7 @@ check the result, and commit it to the repo as `oku.pkg.toml`.
 
 | Flag | Effect |
 |---|---|
-| `--from` | The repo, as `owner/repo`. Required. |
+| `--from` | The repo, as `owner/repo` on GitHub or as a ref such as `codeberg:owner/repo`. Required. |
 | `-o`, `--output` | The file to write. Default `oku.pkg.toml`. `-` prints to stdout. |
 | `--force` | Replaces the output file when it exists. |
 

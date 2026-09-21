@@ -16,7 +16,8 @@ type Kind int
 const (
 	File Kind = iota
 	HTTP
-	GitHub
+	// Forge is a repo on a host whose API oku reads. Ref.Scheme says which.
+	Forge
 	Git
 )
 
@@ -40,10 +41,12 @@ var (
 type Ref struct {
 	Kind Kind
 	// Location is an absolute path (File), a URL (HTTP), "owner/repo" or
-	// "host/owner/repo" (GitHub), or a repository URL (Git).
+	// "host/owner/repo" (Forge), or a repository URL (Git).
 	Location string
-	// Fragment is the text after "#". For GitHub it is a manifest name, for Git
-	// a path inside the repository.
+	// Scheme is "github", "gitea" or "codeberg" for a Forge ref, else "".
+	Scheme string
+	// Fragment is the text after "#". For a Forge ref it is a manifest name, for
+	// Git a path inside the repository.
 	Fragment string
 	// Version is the text after "@", empty when the ref does not pin one.
 	Version string
@@ -55,12 +58,18 @@ var (
 	githubRe = regexp.MustCompile(
 		`^([A-Za-z0-9][A-Za-z0-9-]*(\.[A-Za-z0-9-]+)+/)?[A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9._-]+$`,
 	)
-	nameRe    = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]*$`)
-	gitSchema = []string{"https://", "http://", "ssh://", "file://"}
+	// An owner on a Gitea or Forgejo server may have a dot, so "gitea:" always
+	// names the host and "codeberg:" never does.
+	giteaRe = regexp.MustCompile(
+		`^[A-Za-z0-9][A-Za-z0-9-]*(\.[A-Za-z0-9-]+)+/[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9._-]+$`,
+	)
+	codebergRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9._-]+$`)
+	nameRe     = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]*$`)
+	gitSchema  = []string{"https://", "http://", "ssh://", "file://"}
 )
 
 // Parse reads a ref such as "./rg.toml", "https://host/rg.toml",
-// "github:owner/repo#name@1.2.0" or "git+https://host/repo#path/rg.toml".
+// "github:owner/repo#name@1.2.0", "codeberg:owner/repo" or "git+https://host/repo#path/rg.toml".
 func Parse(s string) (Ref, error) {
 	return ParseIn("", s)
 }
@@ -88,14 +97,20 @@ func ParseIn(dir, s string) (Ref, error) {
 	}
 
 	switch {
-	case strings.HasPrefix(body, "github:"):
-		r.Kind = GitHub
-		r.Location, r.Fragment, _ = strings.Cut(strings.TrimPrefix(body, "github:"), "#")
+	case hasAnyPrefix(body, []string{"github:", "gitea:", "codeberg:"}):
+		r.Kind = Forge
+		r.Scheme, body, _ = strings.Cut(body, ":")
+		r.Location, r.Fragment, _ = strings.Cut(body, "#")
 
-		if !githubRe.MatchString(r.Location) {
+		switch {
+		case r.Scheme == "github" && !githubRe.MatchString(r.Location):
 			return Ref{}, fmt.Errorf(
 				"%s: want github:owner/repo, github:owner/repo#name or github:host/owner/repo", s,
 			)
+		case r.Scheme == "gitea" && !giteaRe.MatchString(r.Location):
+			return Ref{}, fmt.Errorf("%s: want gitea:host/owner/repo or gitea:host/owner/repo#name", s)
+		case r.Scheme == "codeberg" && !codebergRe.MatchString(r.Location):
+			return Ref{}, fmt.Errorf("%s: want codeberg:owner/repo or codeberg:owner/repo#name", s)
 		}
 
 		if r.Fragment != "" && !nameRe.MatchString(r.Fragment) {
@@ -136,8 +151,8 @@ func (r Ref) String() string {
 	s := r.Location
 
 	switch r.Kind {
-	case GitHub:
-		s = "github:" + s
+	case Forge:
+		s = r.Scheme + ":" + s
 	case Git:
 		s = "git+" + s
 	}
