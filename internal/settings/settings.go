@@ -19,6 +19,10 @@ import (
 // Store is one mechanism of the OS that holds settings, such as the preference
 // domains of macOS.
 type Store interface {
+	// Unavailable says why this machine cannot use the store, or is empty. oku
+	// then skips the store's table and says so, because one list also serves a
+	// machine without a desktop.
+	Unavailable() string
 	// Encode turns a value of the list into a fragment, or says why this store
 	// cannot hold it.
 	Encode(value any) (string, error)

@@ -21,6 +21,8 @@ func run(args ...string) ([]byte, error) {
 	return out, nil
 }
 
+func (Defaults) Unavailable() string { return "" }
+
 func (Defaults) Encode(value any) (string, error) { return EncodePlist(value) }
 
 func (Defaults) Read(domain, key string) (string, bool, error) {

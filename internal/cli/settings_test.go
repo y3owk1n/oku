@@ -18,6 +18,8 @@ type fakeSettings struct {
 	applied [][]string
 }
 
+func (f *fakeSettings) Unavailable() string { return "" }
+
 func (f *fakeSettings) Encode(value any) (string, error) { return settings.EncodePlist(value) }
 
 func (f *fakeSettings) Read(domain, key string) (string, bool, error) {

@@ -3,6 +3,7 @@ package cli
 import (
 	"errors"
 	"fmt"
+	"io"
 	"runtime"
 	"slices"
 
@@ -25,8 +26,19 @@ func settingsStore(opts Options) (settings.Store, string) {
 // resolveSettings turns the settings tables of the merged list into the settings
 // of a generation. A table for another OS is skipped, like a package whose when
 // does not match.
-func resolveSettings(opts Options, listed []list.Setting) ([]profile.Setting, error) {
+func resolveSettings(
+	opts Options,
+	listed []list.Setting,
+	notice io.Writer,
+) ([]profile.Setting, error) {
 	store, backend := settingsStore(opts)
+
+	mine := slices.ContainsFunc(listed, func(s list.Setting) bool { return s.Backend == backend })
+	if mine && store.Unavailable() != "" {
+		fmt.Fprintf(notice, "[%s] is skipped, because %s\n", backend, store.Unavailable())
+
+		return nil, nil
+	}
 
 	var wanted []profile.Setting
 
