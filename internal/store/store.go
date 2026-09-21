@@ -146,6 +146,14 @@ func (s *Store) Realize(
 	pinned string,
 	deps []Dep,
 ) (Realized, error) {
+	// The build oku.lock pinned was verified when it entered the store, so it
+	// needs no second look at the published checksum.
+	if pinned != "" && (a.SHA256 == "" || a.SHA256 == pinned) {
+		if final := s.artifactPath(m, a, p, pinned, deps); exists(final) {
+			return Realized{Path: final, SHA256: pinned}, nil
+		}
+	}
+
 	want := a.SHA256
 	if want == "" && a.SHA256URL != "" {
 		published, err := s.publishedSHA256(ctx, a.SHA256URL, path.Base(a.URL))
@@ -253,7 +261,8 @@ func (s *Store) Realize(
 		return Realized{}, fmt.Errorf("write %s: %w", metaFile, err)
 	}
 
-	if err := os.Rename(tmp, final); err != nil {
+	// Another install of the same package may have put it there first.
+	if err := os.Rename(tmp, final); err != nil && !exists(final) {
 		return Realized{}, fmt.Errorf("move package into store: %w", err)
 	}
 

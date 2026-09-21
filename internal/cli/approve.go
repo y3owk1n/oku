@@ -14,6 +14,7 @@ import (
 
 	"github.com/y3owk1n/oku/internal/manifest"
 	"github.com/y3owk1n/oku/internal/platform"
+	"github.com/y3owk1n/oku/internal/status"
 	"github.com/y3owk1n/oku/internal/trust"
 )
 
@@ -57,6 +58,10 @@ func (e env) approver(
 		}
 
 		if !flags.yes {
+			// Other packages keep installing, and their waits would redraw over the
+			// question.
+			defer status.Pause(cmd.Context())()
+
 			out := cmd.OutOrStdout()
 			fmt.Fprintf(
 				out,

@@ -14,6 +14,7 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/y3owk1n/oku/internal/forge"
 	"github.com/y3owk1n/oku/internal/status"
@@ -189,6 +190,9 @@ func (f *Fetcher) get(ctx context.Context, url string) ([]byte, error) {
 	return data, nil
 }
 
+// clones holds a lock for each clone in the cache, by the location of its ref.
+var clones sync.Map
+
 // fetchGit reads the file from a shallow clone kept in the cache. It needs
 // the git binary, because git hosts share no HTTP API.
 func (f *Fetcher) fetchGit(
@@ -197,6 +201,11 @@ func (f *Fetcher) fetchGit(
 	commit string,
 	t Target,
 ) (Fetched, error) {
+	// Two refs into one repository share a clone, and each checks out its commit.
+	mu, _ := clones.LoadOrStore(r.Location, &sync.Mutex{})
+	mu.(*sync.Mutex).Lock()
+	defer mu.(*sync.Mutex).Unlock()
+
 	dir, head, err := f.checkout(ctx, r, commit)
 	if err != nil {
 		return Fetched{}, err
