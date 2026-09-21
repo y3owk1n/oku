@@ -244,3 +244,42 @@ func TestB95UninstallRemovesFilesAndKeepsTheirSources(t *testing.T) {
 		t.Fatalf("uninstall should delete oku.toml and say what it left:\n%s", out)
 	}
 }
+
+func TestB166ADataPackageHoldsFilesThatTheListLinks(t *testing.T) {
+	m := newMachine(t)
+
+	skills := m.manifest(t, "skills", map[string]string{
+		"skills/deslop/SKILL.md": "remove slop",
+	}, "data = true")
+
+	m.writeFilesList(t, "[packages]\nskills = \""+skills+"\"\n"+
+		"[files]\n\"{{home}}/.skills/deslop\" = { link = \"{{pkg.skills}}/skills/deslop\" }\n")
+
+	_, err := m.run(t, "", "sync")
+	must(t, err)
+
+	if body, _ := os.ReadFile(
+		home(".skills", "deslop", "SKILL.md"),
+	); string(
+		body,
+	) != "remove slop" {
+		t.Fatalf("the link does not reach the file of the data package, got %q", body)
+	}
+
+	entries, _ := os.ReadDir(m.profile("bin"))
+	if len(entries) != 0 {
+		t.Fatalf("a data package should put nothing on PATH, the profile bin holds %v", entries)
+	}
+
+	empty := m.manifest(t, "empty", map[string]string{"x": "y"}, "")
+
+	if _, err := m.run(
+		t,
+		"",
+		"add",
+		empty,
+	); err == nil ||
+		!strings.Contains(err.Error(), "data = true") {
+		t.Fatalf("an artifact with no output and no data key should name data = true, got %v", err)
+	}
+}

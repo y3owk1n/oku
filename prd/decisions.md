@@ -685,6 +685,10 @@ one step, and only a new or a removed target is a ledger step. On Windows a
 linked directory is a junction, and every file is a copy. oku stops before any
 change when a copy no longer has the bytes oku wrote.
 
+A package may hold only files, such as a repo of agent skills. Its artifact
+says `data = true` and exposes nothing. The key is explicit, because a manifest
+that forgot its `bin` must still fail.
+
 oku refuses a target that exists and is not in the ledger. `file` is one more
 ledger kind, so `remove`, `rollback` and `self uninstall` handle it like an
 app or a font.

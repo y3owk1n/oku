@@ -162,9 +162,45 @@ machine, so put specific entries before general ones.
 | `completions` | see below | Shell name to path, such as `{ fish = "complete/rg.fish" }`. |
 | `app` | see below | macOS app bundles, such as `["Foo.app"]`. See [Apps and fonts](#apps-and-fonts). |
 | `font` | see below | Font files, such as `["fonts/ttf/Foo-Regular.ttf"]`. |
+| `data` | see below | `true` for a package that only holds files, see [A package that only holds files](#a-package-that-only-holds-files). |
 
 Each artifact needs at least one of `bin`, `man`, `completions`, `app` and
-`font`.
+`font`, or `data = true`.
+
+### A package that only holds files
+
+Some repos ship no program at all: agent skills, templates, a colour scheme.
+`data = true` makes that a package. It puts nothing on `PATH` and exposes
+nothing, and a list reaches its files with
+[`{{pkg.<name>}}`](list-and-lock.md#files-in-your-home-directory):
+
+```toml
+# packages/my-skills.toml
+[package]
+name = "my-skills"
+
+[version]
+value = "2026.09.18"
+
+[[artifact]]
+url = "https://github.com/someone/skills/archive/032be146865d973682535de75f2287da438550bf.tar.gz"
+sha256 = "1d9c0f75def9a97cedd8cfff5eadc60475c03913a33ed9880bf8987999b3761f"
+strip = 1
+data = true
+```
+
+```toml
+# oku.toml
+[packages]
+my-skills = "./packages/my-skills.toml"
+
+[files]
+"{{home}}/.claude/skills/deslop" = { link = "{{pkg.my-skills}}/skills/deslop" }
+```
+
+The package is in the store, the lock pins it, and `oku rollback` brings back
+the files of the version before. `data = true` together with another output is
+an error, so that a manifest which forgot its `bin` still fails.
 
 ### A program that needs an interpreter
 

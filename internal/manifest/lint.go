@@ -42,6 +42,7 @@ type schema struct {
 		Share        []string          `toml:"share"`
 		App          []string          `toml:"app"`
 		Font         []string          `toml:"font"`
+		Data         bool              `toml:"data"`
 	} `toml:"artifact"`
 	Build    Build             `toml:"build"`
 	Runtime  Runtime           `toml:"runtime"`
