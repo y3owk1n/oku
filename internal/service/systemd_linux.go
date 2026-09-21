@@ -39,6 +39,21 @@ func NewSystem() Manager {
 	return &systemd{units: "/etc/systemd/system", scope: "--system"}
 }
 
+// Unavailable reports a machine that systemd does not run, such as a container
+// or a distro with another init. systemd creates /run/systemd/system when it is
+// the init, and a systemctl on PATH alone does not say that.
+func (s *systemd) Unavailable() string {
+	if _, err := os.Stat("/run/systemd/system"); err != nil {
+		return "systemd does not run this machine"
+	}
+
+	if _, err := exec.LookPath("systemctl"); err != nil {
+		return "the systemctl tool is not on PATH"
+	}
+
+	return ""
+}
+
 func (s *systemd) unit(d Definition) string { return "oku-" + d.Name + ".service" }
 
 func (s *systemd) File(d Definition) string { return filepath.Join(s.units, s.unit(d)) }

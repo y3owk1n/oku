@@ -271,6 +271,9 @@ order step in `prd/product.md`.
 - B73 [8] A package with `service = true` in `oku.toml` is running after
   `sync` and after the next login. Without it, the service is installed and
   stopped.
+- B185 [8] On a Linux machine that systemd does not run, or without
+  `systemctl`, oku installs a package that ships a service, installs no
+  service, and says so once with the reason.
 - B170 [8] The `args` and `env` of a service expand `{{home}}`, `{{config}}` and
   `{{data}}`. On macOS and Linux a service of the user finds the programs of
   the global profile on its `PATH`, unless its `env` sets `PATH`.

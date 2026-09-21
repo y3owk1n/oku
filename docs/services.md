@@ -75,6 +75,16 @@ On Linux a user service only runs while you are logged in, unless lingering is
 on for your account (`loginctl enable-linger`). That is a systemd setting, and
 oku does not change it.
 
+A Linux machine that systemd does not run, such as a container or a distro with
+another init, has no service manager that oku knows. oku installs the packages
+there, writes no unit, and prints one notice:
+
+```
+services are skipped, because systemd does not run this machine
+```
+
+oku checks for `/run/systemd/system`, which systemd creates when it is the init.
+
 Services come from your global list only. A package in a
 [project](projects.md) installs its programs, and oku says that its services
 were skipped. For services that run as root, for the whole machine, see

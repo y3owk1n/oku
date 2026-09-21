@@ -57,6 +57,9 @@ func (l *launchd) held(d Definition) string {
 	return filepath.Join(l.holding, d.Label()+".plist")
 }
 
+// Unavailable is empty, because every Mac has launchd.
+func (l *launchd) Unavailable() string { return "" }
+
 func (l *launchd) Install(ctx context.Context, d Definition, enabled bool) error {
 	_ = l.bootout(ctx, d)
 
