@@ -513,5 +513,39 @@ Check 'a URL of the download installs, with its version from the file name' {
     $hyperfine -match '^hyperfine 1\.19\.0'
 }
 
+# A bin table: a program that runs a dep with arguments in front of the user's.
+# Node stands in for any interpreter, and "-p" prints what it evaluates.
+New-Item -ItemType Directory -Force $fixtures | Out-Null
+Set-Content (Join-Path $fixtures 'node.toml') @'
+[package]
+name = "node"
+[version]
+value = "22.20.0"
+[[artifact]]
+match = { os = "windows", arch = "amd64" }
+url = "https://nodejs.org/dist/v{{version}}/node-v{{version}}-win-x64.zip"
+sha256_url = "https://nodejs.org/dist/v{{version}}/SHASUMS256.txt"
+strip = 1
+bin = ["node.exe"]
+'@
+Set-Content (Join-Path $fixtures 'evaluate.toml') @'
+[package]
+name = "evaluate"
+[version]
+value = "0.3.61"
+[runtime]
+deps = ["./node.toml"]
+[[artifact]]
+url = "https://registry.npmjs.org/@actions/languageserver/-/languageserver-{{version}}.tgz"
+sha256 = "d152725064c64f862da5158cd630d4c67973edfb58bdabaa44054ffef03b9d03"
+strip = 1
+bin = [{ name = "evaluate", run = "{{dep.node.prefix}}/bin/node.exe", args = ["-p"] }]
+'@
+
+Oku add (Join-Path $fixtures 'evaluate.toml')
+$evaluated = & "$bin\evaluate.exe" '6*7'
+Check 'a bin table runs the dep with its arguments before the user ones' { $evaluated -eq '42' }
+Check 'the dep of a bin table stays out of the profile' { -not (Test-Path "$bin\node.exe") }
+
 Remove-Item -Recurse -Force $root
 Write-Host 'live test passed'
