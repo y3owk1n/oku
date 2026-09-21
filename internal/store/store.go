@@ -239,7 +239,7 @@ func (s *Store) Realize(
 		URL:       a.URL,
 		SHA256:    a.SHA256,
 		Launchers: m.Apps,
-		Services:  m.Services,
+		Services:  m.ServicesFor(p),
 	})
 	if err != nil {
 		return Realized{}, fmt.Errorf("write %s: %w", metaFile, err)

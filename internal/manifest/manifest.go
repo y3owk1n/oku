@@ -127,6 +127,8 @@ type Service struct {
 	Args    []string          `toml:"args"`
 	Env     map[string]string `toml:"env"`
 	Restart string            `toml:"restart"`
+	// When limits the service to matching platforms. The zero value matches all.
+	When platform.Selector `toml:"when,omitempty"`
 }
 
 // App is a launcher entry for Linux desktops, from a [[app]] table.
@@ -397,6 +399,19 @@ func (m *Manifest) validate() error {
 	}
 
 	return errors.Join(errs...)
+}
+
+// ServicesFor returns the services whose when matches p.
+func (m *Manifest) ServicesFor(p platform.Platform) []Service {
+	var services []Service
+
+	for _, svc := range m.Services {
+		if svc.When.Matches(p) {
+			services = append(services, svc)
+		}
+	}
+
+	return services
 }
 
 // HasBuild reports whether the manifest declares a source build.

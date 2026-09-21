@@ -271,6 +271,9 @@ order step in `prd/product.md`.
 - B73 [8] A package with `service = true` in `oku.toml` is running after
   `sync` and after the next login. Without it, the service is installed and
   stopped.
+- B184 [8] oku installs a `[[service]]` with `when` on the platforms that
+  `when` matches and on no other. Two services of a package may share a name
+  when their `when` tables match different platforms.
 - B185 [8] On a Linux machine that systemd does not run, or without
   `systemctl`, oku installs a package that ships a service, installs no
   service, and says so once with the reason.

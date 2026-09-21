@@ -223,3 +223,29 @@ func TestB182SyncPinsAPackageWhoseWhenLeavesOutTheHost(t *testing.T) {
 		t.Fatalf("sync of a complete lock read the manifest again: %v\n%s", err, out)
 	}
 }
+
+func TestB184AServiceWithWhenIsInstalledOnMatchingPlatformsOnly(t *testing.T) {
+	m := newMachine(t)
+
+	// Both services have one name, and only the second is for this platform.
+	ref := m.manifest(t, "food", map[string]string{"food": script}, fmt.Sprintf(
+		"bin = [\"food\"]\n"+
+			"[[service]]\nname = \"food\"\ncommand = \"Food.app/food\"\nwhen = { os = %q }\n"+
+			"[[service]]\nname = \"food\"\ncommand = \"bin/food\"\nwhen = { os = %q }\n",
+		otherPlatform().OS, platform.Host().OS,
+	))
+
+	out, err := m.run(t, "", "add", ref, "--service")
+	if err != nil {
+		t.Fatalf("add: %v\n%s", err, out)
+	}
+
+	got, ok := m.services.state["food"]
+	if !ok || !got.running || !strings.HasSuffix(got.def.Program, "/bin/food") {
+		t.Fatalf("the service of this platform is not the one that runs: %+v", got)
+	}
+
+	if len(m.services.state) != 1 {
+		t.Fatalf("oku installed the service of another platform: %v", m.services.state)
+	}
+}
