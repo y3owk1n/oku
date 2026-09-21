@@ -20,6 +20,8 @@ func newAddCmd(opts Options) *cobra.Command {
 		fromSource bool
 		enable     bool
 		system     bool
+		asset      string
+		bin        string
 	)
 
 	cmd := &cobra.Command{
@@ -35,7 +37,7 @@ func newAddCmd(opts Options) *cobra.Command {
   alias/name                          a package in a source, see "oku source"`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runAdd(cmd, opts, args[0], &flags, fromSource, enable, system)
+			return runAdd(cmd, opts, args[0], &flags, fromSource, enable, system, asset, bin)
 		},
 	}
 
@@ -45,6 +47,10 @@ func newAddCmd(opts Options) *cobra.Command {
 	cmd.Flags().
 		BoolVar(&enable, "service", false, "run the package's services now and at every login")
 	cmd.Flags().BoolVar(&system, systemFlag, false, systemUsage)
+	cmd.Flags().
+		StringVar(&asset, "asset", "", "with no manifest, the release asset for this machine, as a glob")
+	cmd.Flags().
+		StringVar(&bin, "bin", "", "with no manifest, the file name of the program in the asset")
 
 	return cmd
 }
@@ -72,6 +78,7 @@ func runAdd(
 	arg string,
 	flags *buildFlags,
 	fromSource, enable, system bool,
+	asset, bin string,
 ) error {
 	e, err := scopedEnv(cmd, opts)
 	if err != nil {
@@ -101,6 +108,8 @@ func runAdd(
 		ref:        r,
 		previous:   previous,
 		fromSource: fromSource,
+		asset:      asset,
+		bin:        bin,
 		service:    enable,
 		acceptKey:  flags.acceptKey,
 		system:     system,

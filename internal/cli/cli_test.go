@@ -1827,6 +1827,93 @@ func TestB27ManifestInitWritesTheInferredManifest(t *testing.T) {
 	}
 }
 
+func TestManifestInitReadsUniversalAndWindowsGnuAssets(t *testing.T) {
+	m := newMachine(t)
+	archive, _ := m.archive(t, "release", map[string]string{"tool": script})
+
+	inferServer(t, &m, map[string]string{
+		hostAssetName():                         archive,
+		"tool-v1.4.0-darwin-all.tar.gz":         archive,
+		"tool-v1.4.0-x86_64-pc-windows-gnu.zip": archive,
+		"checksums.txt.sig":                     archive,
+	})
+
+	out, err := m.run(t, "", "manifest", "init", "--from", "owner/tool", "-o", "-")
+	must(t, err)
+
+	for _, want := range []string{
+		`os = "darwin", arch = "amd64"`, `os = "darwin", arch = "arm64"`,
+		`os = "windows", arch = "amd64"`,
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("the manifest lacks %q:\n%s", want, out)
+		}
+	}
+
+	if strings.Contains(out, "sha256_url") {
+		t.Fatalf("the manifest reads checksums from a signature file:\n%s", out)
+	}
+}
+
+func TestAddAssetAndBinChooseWhatInferenceUses(t *testing.T) {
+	m := newMachine(t)
+	archive, _ := m.archive(t, "odd", map[string]string{
+		"main":   "#!/bin/sh\necho steered\n",
+		"helper": script,
+	})
+
+	inferServer(t, &m, map[string]string{"tool-v1.4.0-odd.tar.gz": archive})
+
+	_, err := m.run(t, "", "add", "github:owner/tool")
+	if err == nil || !strings.Contains(err.Error(), "--asset") {
+		t.Fatalf("want a failure that names --asset, got %v", err)
+	}
+
+	_, err = m.run(t, "", "add", "github:owner/tool", "--asset", "*-odd.*")
+	if err == nil || !strings.Contains(err.Error(), "--bin") {
+		t.Fatalf("want a failure that names --bin, got %v", err)
+	}
+
+	out, err := m.run(t, "", "add", "github:owner/tool", "--asset", "*-odd.*", "--bin", "main")
+	if err != nil {
+		t.Fatalf("add: %v\n%s", err, out)
+	}
+
+	got, err := exec.Command(m.profile("bin", "main")).Output()
+	must(t, err)
+
+	if strings.TrimSpace(string(got)) != "steered" {
+		t.Fatalf("main printed %q", got)
+	}
+}
+
+func TestAddInfersFromACompressedSingleBinary(t *testing.T) {
+	m := newMachine(t)
+
+	var buf bytes.Buffer
+
+	gz := gzip.NewWriter(&buf)
+	_, err := gz.Write([]byte("#!/bin/sh\necho unzipped\n"))
+	must(t, err)
+	must(t, gz.Close())
+
+	binary := filepath.Join(m.fixtures, "tool.gz")
+	must(t, os.WriteFile(binary, buf.Bytes(), 0o644))
+
+	inferServer(t, &m, map[string]string{
+		strings.TrimSuffix(hostAssetName(), ".tar.gz") + ".gz": binary,
+	})
+
+	out, err := m.run(t, "", "add", "github:owner/tool")
+	if err != nil {
+		t.Fatalf("add: %v\n%s", err, out)
+	}
+
+	if got := m.toolOutput(t); got != "unzipped" {
+		t.Fatalf("tool printed %q", got)
+	}
+}
+
 // collectionServer fakes the GitHub repo someone/recipes, a collection that
 // holds the given manifest files by path.
 func collectionServer(t *testing.T, m *machine, files map[string][]byte) {

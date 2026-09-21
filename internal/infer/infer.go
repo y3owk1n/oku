@@ -27,6 +27,8 @@ type File struct {
 	Executable bool
 }
 
+var errNoRelease = errors.New("has no release")
+
 // Inferrer reads releases from GitHub.
 type Inferrer struct {
 	HTTP      *http.Client
@@ -47,23 +49,41 @@ type Release struct {
 	} `json:"assets"`
 }
 
-// target is one platform the inferred manifest may cover. A target with an empty
-// libc takes an asset that names no libc.
+// Options set the release, the asset and the program Manifest uses. With the
+// zero value it reads the newest release and chooses the other two.
+type Options struct {
+	// Version is the release to read, the way the user wrote it after "@".
+	Version string
+	// Asset is a glob that names the asset for the host.
+	Asset string
+	// Bin is the file name of the program inside the assets.
+	Bin string
+}
+
+// target is one platform the inferred manifest may cover. A linux target with an
+// empty libc takes an asset that names no libc.
 type target struct {
 	platform.Selector
 
-	words struct{ os, arch, libc []string }
+	// fat are the words of a build that runs on every arch of the OS.
+	words struct{ os, arch, fat, libc []string }
 }
 
 var (
 	osWords = map[string][]string{
 		"linux":   {"linux"},
-		"darwin":  {"darwin", "macos", "apple", "osx", "mac"},
+		"darwin":  {"darwin", "macos", "macosx", "apple", "osx", "mac"},
 		"windows": {"windows", "win64", "win"},
 	}
 	archWords = map[string][]string{
-		"amd64": {"x86_64", "amd64", "x64"},
-		"arm64": {"aarch64", "arm64"},
+		"amd64":   {"x86_64", "x86-64", "amd64", "x64"},
+		"arm64":   {"aarch64", "arm64"},
+		"386":     {"i386", "i686", "386"},
+		"arm":     {"armv7", "armv7l", "armhf", "arm"},
+		"riscv64": {"riscv64"},
+	}
+	fatWords = map[string][]string{
+		"darwin": {"universal", "universal2", "all"},
 	}
 	libcWords = map[string][]string{
 		"glibc": {"gnu", "glibc"},
@@ -80,9 +100,20 @@ var (
 	skipped = []string{
 		".sha256", ".sha256sum", ".sha512", ".md5", ".sig", ".asc", ".pem", ".sbom", ".json",
 		".txt", ".deb", ".rpm", ".apk", ".msi", ".pkg", ".dmg", ".appimage",
-		".7z", ".minisig", ".crt", ".intoto.jsonl",
+		".minisig", ".crt", ".intoto.jsonl", ".vsix",
 	}
+	// signatures are endings of files that sign or describe a checksum file.
+	signatures = []string{".sig", ".asc", ".pem", ".minisig", ".crt", ".sbom", ".json"}
 )
+
+// choice is one artifact of the inferred manifest.
+type choice struct {
+	platform.Selector
+
+	asset string
+	// others are the assets that fit as well as asset does.
+	others []string
+}
 
 // Manifest returns manifest TOML for the GitHub repo "owner/repo". It needs an
 // asset for host, because it opens that asset to find the executable.
@@ -90,8 +121,9 @@ func (inf *Inferrer) Manifest(
 	ctx context.Context,
 	repo string,
 	host platform.Platform,
+	opts Options,
 ) (string, error) {
-	rel, err := inf.Latest(ctx, repo)
+	rel, err := inf.wanted(ctx, repo, opts.Version)
 	if err != nil {
 		return "", err
 	}
@@ -104,34 +136,20 @@ func (inf *Inferrer) Manifest(
 		urls[asset.Name] = asset.URL
 	}
 
-	hostAsset := ""
-
-	for _, t := range targets() {
-		if t.Matches(host) {
-			if hostAsset = pick(names, t); hostAsset != "" {
-				break
-			}
-		}
+	chosen, err := choose(names, host, opts.Asset)
+	if err != nil {
+		return "", err
 	}
 
-	if hostAsset == "" {
+	if !slices.ContainsFunc(chosen, func(c choice) bool { return c.Matches(host) }) {
 		return "", fmt.Errorf(
-			"no release asset fits this machine (%s)\nrelease %s of %s has: %s",
+			"no release asset fits this machine (%s)\nrelease %s of %s has: %s\n"+
+				"name one with --asset",
 			host, rel.Tag, repo, strings.Join(names, ", "),
 		)
 	}
 
-	files, err := inf.Inspect(ctx, urls[hostAsset])
-	if err != nil {
-		return "", fmt.Errorf("inspect %s: %w", hostAsset, err)
-	}
-
 	name := strings.ToLower(path.Base(repo))
-
-	layout, err := findLayout(files, name, isArchive(hostAsset))
-	if err != nil {
-		return "", fmt.Errorf("%s: %w", hostAsset, err)
-	}
 
 	// The version starts at the tag's first digit, so "v1.2.0" and "jq-1.8.1" both
 	// work. A tag without a digit is kept whole.
@@ -149,40 +167,147 @@ func (inf *Inferrer) Manifest(
 		fmt.Fprintf(&b, "strip_prefix = %q\n", prefix)
 	}
 
+	// Assets with the same ending come from the same packaging step, so oku opens
+	// one of them for all. A zip for Windows is often laid out unlike the tar
+	// archives next to it.
+	layouts := map[string]layout{}
+	hostDone := false
+
+	for _, c := range chosen {
+		isHost := c.Matches(host) && !hostDone
+		kind := ending(c.asset)
+
+		l, known := layouts[kind]
+		if !known {
+			l, err = inf.layoutOf(ctx, urls[c.asset], c.asset, name, opts.Bin)
+
+			switch {
+			case err != nil && isHost:
+				return "", fmt.Errorf("%s: %w", c.asset, err)
+			case err != nil:
+				// oku leaves out a platform whose asset it cannot read. A wrong
+				// artifact would fail on that platform at install.
+				continue
+			}
+
+			layouts[kind] = l
+		}
+
+		b.WriteString("\n")
+
+		if isHost {
+			hostDone = true
+
+			if len(c.others) > 0 {
+				fmt.Fprintf(
+					&b, "# These assets fit this machine too: %s\n# Choose one with --asset.\n",
+					strings.Join(c.others, ", "),
+				)
+			}
+		}
+
+		fmt.Fprintf(&b, "[[artifact]]\nmatch = %s\n", selectorTOML(c.Selector))
+		fmt.Fprintf(&b, "url = %q\n", template(urls[c.asset], rel.Tag, version))
+
+		if sums := checksumAsset(names, c.asset); sums != "" {
+			fmt.Fprintf(&b, "sha256_url = %q\n", template(urls[sums], rel.Tag, version))
+		}
+
+		bin := l.bin
+		if c.OS == "windows" {
+			bin += ".exe"
+		}
+
+		if l.strip > 0 {
+			fmt.Fprintf(&b, "strip = %d\n", l.strip)
+		}
+
+		fmt.Fprintf(&b, "bin = [%q]\n", bin)
+
+		if len(l.man) > 0 {
+			fmt.Fprintf(&b, "man = [%s]\n", quoteAll(l.man))
+		}
+	}
+
+	return b.String(), nil
+}
+
+func (inf *Inferrer) layoutOf(ctx context.Context, url, asset, name, bin string) (layout, error) {
+	files, err := inf.Inspect(ctx, url)
+	if err != nil {
+		return layout{}, fmt.Errorf("inspect it: %w", err)
+	}
+
+	return findLayout(files, name, bin, isArchive(asset))
+}
+
+// choose lists the artifacts to write, in the order of targets. A glob puts the
+// asset it names first, for the host alone.
+func choose(names []string, host platform.Platform, glob string) ([]choice, error) {
+	var chosen []choice
+
+	if glob != "" {
+		var named []string
+
+		for _, name := range names {
+			ok, err := path.Match(glob, name)
+			if err != nil {
+				return nil, fmt.Errorf("--asset %q: %w", glob, err)
+			}
+
+			if ok {
+				named = append(named, name)
+			}
+		}
+
+		if len(named) != 1 {
+			return nil, fmt.Errorf(
+				"--asset %q names %d assets, want one of: %s",
+				glob, len(named), strings.Join(names, ", "),
+			)
+		}
+
+		chosen = append(chosen, choice{
+			Selector: platform.Selector(host),
+			asset:    named[0],
+		})
+	}
+
 	written := map[platform.Selector]bool{}
 
 	for _, t := range targets() {
-		asset := pick(names, t)
-		if asset == "" || written[t.Selector] {
+		fits := pick(names, t)
+		if len(fits) == 0 || written[t.Selector] || glob != "" && t.Matches(host) {
 			continue
 		}
 
 		written[t.Selector] = true
 
-		fmt.Fprintf(&b, "\n[[artifact]]\nmatch = %s\n", selectorTOML(t.Selector))
-		fmt.Fprintf(&b, "url = %q\n", template(urls[asset], rel.Tag, version))
+		// An asset of another rank is the same build in another archive format.
+		others := slices.DeleteFunc(slices.Clone(fits[1:]), func(other string) bool {
+			return rank(other) != rank(fits[0]) || t.fat(other) != t.fat(fits[0])
+		})
 
-		if sums := checksumAsset(names, asset); sums != "" {
-			fmt.Fprintf(&b, "sha256_url = %q\n", template(urls[sums], rel.Tag, version))
-		}
+		chosen = append(chosen, choice{Selector: t.Selector, asset: fits[0], others: others})
+	}
 
-		bin := layout.bin
-		if t.OS == "windows" {
-			bin += ".exe"
-		}
+	return chosen, nil
+}
 
-		if isArchive(asset) && layout.strip > 0 {
-			fmt.Fprintf(&b, "strip = %d\n", layout.strip)
-		}
-
-		fmt.Fprintf(&b, "bin = [%q]\n", bin)
-
-		if len(layout.man) > 0 && isArchive(asset) {
-			fmt.Fprintf(&b, "man = [%s]\n", quoteAll(layout.man))
+// wanted returns the release for version, or the newest one for "". It tries
+// version as a tag and as a "v" tag. With any other prefix it returns the newest
+// release, whose asset names are the best guess there is.
+func (inf *Inferrer) wanted(ctx context.Context, repo, version string) (Release, error) {
+	if version != "" {
+		for _, tag := range []string{version, "v" + version} {
+			rel, err := inf.Tagged(ctx, repo, tag)
+			if !errors.Is(err, errNoRelease) {
+				return rel, err
+			}
 		}
 	}
 
-	return b.String(), nil
+	return inf.Latest(ctx, repo)
 }
 
 // Latest returns the newest release of the GitHub repo "owner/name".
@@ -226,7 +351,9 @@ func (inf *Inferrer) release(ctx context.Context, repo, which string) (Release, 
 
 	switch {
 	case resp.StatusCode == http.StatusNotFound && which != "latest":
-		return rel, fmt.Errorf("%s has no release %s", repo, strings.TrimPrefix(which, "tags/"))
+		return rel, fmt.Errorf(
+			"%s %w %s", repo, errNoRelease, strings.TrimPrefix(which, "tags/"),
+		)
 	case resp.StatusCode == http.StatusNotFound:
 		return rel, fmt.Errorf("%s has no manifest and no release to infer one from", repo)
 	case resp.StatusCode == http.StatusForbidden && resp.Header.Get("X-RateLimit-Remaining") == "0":
@@ -251,10 +378,16 @@ func targets() []target {
 	add := func(os, arch, libc, matchLibc string) {
 		t := target{Selector: platform.Selector{OS: os, Arch: arch, Libc: matchLibc}}
 		t.words.os, t.words.arch, t.words.libc = osWords[os], archWords[arch], libcWords[libc]
+
+		// A universal build holds the arches the OS still runs on.
+		if arch == "amd64" || arch == "arm64" {
+			t.words.fat = fatWords[os]
+		}
+
 		all = append(all, t)
 	}
 
-	for _, arch := range []string{"amd64", "arm64"} {
+	for _, arch := range []string{"amd64", "arm64", "386", "arm", "riscv64"} {
 		add("linux", arch, "glibc", "glibc")
 		add("linux", arch, "musl", "")
 		add("linux", arch, "", "")
@@ -265,43 +398,43 @@ func targets() []target {
 	return all
 }
 
-// pick returns the asset that fits t, or "". It requires the OS and arch words
-// in the name, the libc word when t has one, and no libc word when t has none.
-func pick(names []string, t target) string {
+// pick returns the assets that fit t, the best one first. It requires the OS and
+// arch words in the name. A linux target also requires its libc word, or no libc
+// word when it has none. Elsewhere "gnu" names a toolchain, as in
+// "x86_64-pc-windows-gnu".
+func pick(names []string, t target) []string {
 	var fits []string
 
 	for _, name := range names {
 		lower := strings.ToLower(name)
 
 		if hasAnySuffix(lower, skipped) || !hasWord(lower, t.words.os) ||
-			!hasWord(lower, t.words.arch) {
+			!hasWord(lower, t.words.arch) && !hasWord(lower, t.words.fat) {
 			continue
 		}
 
 		namesLibc := hasWord(lower, libcWords["glibc"]) || hasWord(lower, libcWords["musl"])
 		if len(t.words.libc) > 0 && !hasWord(lower, t.words.libc) ||
-			len(t.words.libc) == 0 && namesLibc {
+			len(t.words.libc) == 0 && namesLibc && t.OS == "linux" {
 			continue
 		}
 
 		fits = append(fits, name)
 	}
 
-	// A tar archive keeps file modes, so it sorts before a zip. A shorter name
-	// sorts before variants such as "-debug".
+	// A build for the arch sorts before a universal one. A tar archive keeps file
+	// modes, so it sorts before a zip. A shorter name sorts before variants such
+	// as "-debug".
 	slices.SortFunc(fits, func(a, b string) int {
 		return cmp.Or(
+			cmp.Compare(t.fat(a), t.fat(b)),
 			cmp.Compare(rank(a), rank(b)),
 			cmp.Compare(len(a), len(b)),
 			strings.Compare(a, b),
 		)
 	})
 
-	if len(fits) == 0 {
-		return ""
-	}
-
-	return fits[0]
+	return fits
 }
 
 func rank(name string) int {
@@ -315,6 +448,15 @@ func rank(name string) int {
 	default:
 		return 2
 	}
+}
+
+// fat is 1 for an asset that fits t as a universal build only.
+func (t target) fat(name string) int {
+	if hasWord(strings.ToLower(name), t.words.arch) {
+		return 0
+	}
+
+	return 1
 }
 
 // hasWord reports whether name holds one of words as a whole word, so that "win"
@@ -346,7 +488,20 @@ func isAlnum(c byte) bool {
 }
 
 func isArchive(name string) bool {
-	return hasAnySuffix(strings.ToLower(name), unpackable)
+	return ending(name) != ""
+}
+
+// ending returns the archive ending of name, or "" for a single binary.
+func ending(name string) string {
+	lower := strings.ToLower(name)
+
+	for _, suffix := range unpackable {
+		if strings.HasSuffix(lower, suffix) {
+			return suffix
+		}
+	}
+
+	return ""
 }
 
 func hasAnySuffix(s string, suffixes []string) bool {
@@ -370,6 +525,10 @@ func checksumAsset(names []string, asset string) string {
 
 	for _, name := range names {
 		lower := strings.ToLower(name)
+		if hasAnySuffix(lower, signatures) {
+			continue
+		}
+
 		if strings.Contains(lower, "checksum") || strings.Contains(lower, "sha256sum") {
 			return name
 		}
@@ -380,13 +539,42 @@ func checksumAsset(names []string, asset string) string {
 
 // template swaps the tag and the version in a release URL for their variables.
 func template(url, tag, version string) string {
-	url = strings.ReplaceAll(url, tag, "{{tag}}")
+	url = swap(url, tag, "{{tag}}")
 
 	if version != tag {
-		url = strings.ReplaceAll(url, version, "{{version}}")
+		url = swap(url, version, "{{version}}")
 	}
 
 	return url
+}
+
+// swap replaces old in s where no digit is next to it, so that the version "1"
+// becomes a variable in "tool-v1-arm64" and the "1" of "10" does not.
+func swap(s, old, with string) string {
+	var b strings.Builder
+
+	from := 0
+
+	for at := 0; ; {
+		i := strings.Index(s[at:], old)
+		if i < 0 {
+			return b.String() + s[from:]
+		}
+
+		start, end := at+i, at+i+len(old)
+		at = end
+
+		if start > 0 && isDigit(s[start-1]) || end < len(s) && isDigit(s[end]) {
+			continue
+		}
+
+		b.WriteString(s[from:start] + with)
+		from = end
+	}
+}
+
+func isDigit(c byte) bool {
+	return c >= '0' && c <= '9'
 }
 
 const maxManPages = 8
@@ -397,9 +585,13 @@ type layout struct {
 	man   []string
 }
 
-// findLayout locates the executable called name among files. Without one it
-// takes the only executable there is.
-func findLayout(files []File, name string, archive bool) (layout, error) {
+// findLayout locates the program among files. That is the file called want, or
+// without a want the executable called name, or the only executable there is.
+func findLayout(files []File, name, want string, archive bool) (layout, error) {
+	if want != "" {
+		name = strings.ToLower(strings.TrimSuffix(want, ".exe"))
+	}
+
 	if !archive {
 		return layout{bin: name}, nil
 	}
@@ -432,7 +624,9 @@ func findLayout(files []File, name string, archive bool) (layout, error) {
 		return p
 	}
 
-	var executables []string
+	// plain are the files called name that are not executable. A zip made on
+	// Windows keeps no modes, so its program is one of them.
+	var executables, plain []string
 
 	for _, f := range files {
 		base := strings.ToLower(strings.TrimSuffix(path.Base(f.Path), ".exe"))
@@ -446,16 +640,25 @@ func findLayout(files []File, name string, archive bool) (layout, error) {
 			l.bin = inside(f.Path)
 		case f.Executable:
 			executables = append(executables, inside(f.Path))
+		case base == name:
+			plain = append(plain, inside(f.Path))
 		}
 	}
 
-	if l.bin == "" && len(executables) == 1 {
+	switch {
+	case l.bin != "":
+	case len(plain) == 1 && (want != "" || len(executables) == 0):
+		l.bin = plain[0]
+	case want != "":
+		return l, fmt.Errorf("no file in it is called %s", want)
+	case len(executables) == 1:
 		l.bin = executables[0]
-	}
-
-	if l.bin == "" {
+	case len(executables) == 0:
+		return l, errors.New("no file in it is executable\nwrite a manifest for it")
+	default:
 		return l, fmt.Errorf(
-			"cannot tell which file is the program, executables found: %s\nwrite a manifest for it",
+			"cannot tell which file is the program, executables found: %s\n"+
+				"name it with --bin, or write a manifest for it",
 			strings.Join(executables, ", "),
 		)
 	}

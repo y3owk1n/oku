@@ -12,6 +12,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/y3owk1n/oku/internal/infer"
 	"github.com/y3owk1n/oku/internal/list"
 	"github.com/y3owk1n/oku/internal/manifest"
 	"github.com/y3owk1n/oku/internal/platform"
@@ -49,7 +50,9 @@ this machine to find the executable, so run it where a release asset exists.`,
 				return err
 			}
 
-			text, err := e.inferrer(opts).Manifest(cmd.Context(), r.Location, platform.Host())
+			text, err := e.inferrer(opts).Manifest(
+				cmd.Context(), r.Location, platform.Host(), infer.Options{},
+			)
 			if err != nil {
 				return err
 			}

@@ -379,7 +379,9 @@ two packages set the same variable, the one whose name sorts last is used.
 ## Inferred manifests
 
 `oku add github:owner/repo` on a repo with no `oku.pkg.toml` writes a manifest
-from the repo's newest release, prints it, and installs from it. To get that
+from the repo's newest release, prints it, and installs from it. With
+`@version` it reads that version's release. It tries the tag `version`, then
+`v<version>`. With any other tag prefix it reads the newest release. To get that
 manifest as a file you can edit and commit:
 
 ```
@@ -391,38 +393,62 @@ How inference reads a release:
 
 - It matches asset names to platforms by the words in them, listed in the table
   below.
+- On macOS an asset for your arch comes before a universal one. `gnu` names a
+  libc on Linux only, so `x86_64-pc-windows-gnu` is a Windows asset.
 - On Linux it writes the glibc build first and the musl build second with no
   `libc` in its `match`, so glibc machines with no build of their own use the
   musl build.
-- It takes tar archives in any compression oku knows, zip archives and single
-  binaries. It skips installers such as `.deb`, `.rpm`, `.msi`, `.dmg` and
+- It takes tar archives in any compression oku knows, zip and 7z archives, and
+  single binaries, compressed or not. It skips editor extensions (`.vsix`) and
+  installers such as `.deb`, `.rpm`, `.msi`, `.dmg` and
   `.pkg`, because the paths inside them cannot be guessed. With several
-  candidates it prefers a tar archive over a zip, then the shortest name.
+  candidates it prefers a tar archive over a zip, then the shortest name. When
+  other assets fit your machine as well, a comment in the manifest lists them.
 - It uses `<asset>.sha256` as `sha256_url` when that exists, else a release file
-  with `checksum` or `sha256sum` in its name. With neither, the package is
+  with `checksum` or `sha256sum` in its name that is not a signature. With neither, the package is
   [trusted on first use](trust.md#trust-on-first-use).
 - The version starts at the first digit of the tag, and everything before it
   becomes `strip_prefix`. `v1.2.0` gives `"v"` and `jq-1.8.1` gives `"jq-"`.
-- It downloads the asset for your machine and looks inside. The program is the
-  executable named after the repo, else the only executable. A single top-level
+- It downloads the asset for your machine and looks inside. It opens one asset
+  per archive ending, so a Windows zip gets its own layout and the tar archives
+  share one. It leaves out a platform whose asset it cannot read. The program is
+  the executable named after the repo, else the only executable. In an archive
+  with no executable files, which is what a zip made on Windows is, it is the
+  file named after the repo. A single top-level
   directory becomes `strip = 1`. Files ending in `.1` become `man`, and with
   more than 8 of them only the program's own page is kept.
 
 | For | Words it looks for in an asset name |
 |---|---|
 | `linux` | `linux` |
-| `darwin` | `darwin`, `macos`, `apple`, `osx`, `mac` |
+| `darwin` | `darwin`, `macos`, `macosx`, `apple`, `osx`, `mac` |
 | `windows` | `windows`, `win64`, `win` |
-| `amd64` | `x86_64`, `amd64`, `x64` |
+| `amd64` | `x86_64`, `x86-64`, `amd64`, `x64` |
 | `arm64` | `aarch64`, `arm64` |
+| `386` | `i386`, `i686`, `386` |
+| `arm` | `armv7`, `armv7l`, `armhf`, `arm` |
+| `riscv64` | `riscv64` |
+| any arch, on `darwin` | `universal`, `universal2`, `all` |
 | `glibc` | `gnu`, `glibc` |
 | `musl` | `musl` |
+
+When inference picks the wrong asset or fails, name the asset and the program:
+
+```
+$ oku add github:owner/repo --asset 'tool-*-macos.zip' --bin tool-cli
+```
+
+`--asset` is a glob that must name exactly one asset of the release, and oku
+uses that asset for your machine. `--bin` is the file name of the program inside
+the assets. Both apply to an inferred manifest only. `oku add` fails when you
+pass them for a ref that has a manifest.
 
 Limits:
 
 - The repo has no releases, or no asset for your machine. The error lists the
-  asset names it saw.
-- The archive holds several executables and none is named after the repo.
+  asset names it saw. Pass one to `--asset`.
+- The archive holds several executables and none is named after the repo. Pass
+  the right one to `--bin`.
 - It names the package after the repo, so `github:cli/cli` installs a package
   called `cli` whose program is `gh`. Commit a manifest to choose the name.
 - It writes `bin` and `man` only. Completions need a manifest.
