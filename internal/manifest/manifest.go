@@ -100,6 +100,12 @@ type Artifact struct {
 	Wrap        []Wrapper         `toml:"-"`
 	Man         []string          `toml:"man"`
 	Completions map[string]string `toml:"completions"`
+	// Lib, Include and Share hold files and directories for the package's lib,
+	// include and share directories, which a build that depends on the package
+	// finds there.
+	Lib     []string `toml:"lib"`
+	Include []string `toml:"include"`
+	Share   []string `toml:"share"`
 	// App holds macOS app bundles, such as "Foo.app". Font holds font files.
 	App  []string `toml:"app"`
 	Font []string `toml:"font"`
@@ -349,13 +355,14 @@ func (m *Manifest) validate() error {
 			errs = append(errs, fmt.Errorf("artifact[%d]: set sha256 or sha256_url, not both", i))
 		}
 
-		exposes := len(a.Bin)+len(a.Wrap)+len(a.Man)+len(a.Completions)+len(a.App)+len(a.Font) > 0
+		exposes := len(a.Bin)+len(a.Wrap)+len(a.Man)+len(a.Completions)+len(a.App)+len(a.Font)+
+			len(a.Lib)+len(a.Include)+len(a.Share) > 0
 
 		switch {
 		case !exposes && !a.Data:
 			errs = append(errs, fmt.Errorf(
-				"artifact[%d]: set at least one of bin, man, completions, app or font, "+
-					"or data = true for a package that only holds files", i,
+				"artifact[%d]: set at least one of bin, lib, include, share, man, completions, app "+
+					"or font, or data = true for a package that only holds files", i,
 			))
 		case exposes && a.Data:
 			errs = append(errs, fmt.Errorf(
