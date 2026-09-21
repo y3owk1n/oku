@@ -12,6 +12,7 @@ import (
 	"os"
 	"path"
 	"strings"
+	"time"
 )
 
 var errNotArchive = errors.New("not an archive")
@@ -116,7 +117,7 @@ func untar(r io.Reader, root *os.Root, strip int) error {
 		case tar.TypeDir:
 			err = root.MkdirAll(name, 0o755)
 		case tar.TypeReg:
-			err = writeFile(root, name, hdr.FileInfo().Mode(), tr)
+			err = writeFile(root, name, hdr.FileInfo().Mode(), hdr.ModTime, tr)
 		case tar.TypeSymlink:
 			err = writeSymlink(root, name, hdr.Linkname)
 		case tar.TypeLink:
@@ -170,6 +171,7 @@ func unzip(f *os.File, root *os.Root, strip int) error {
 // archiveEntry is what a zip entry and a 7z entry have in common.
 type archiveEntry interface {
 	Mode() fs.FileMode
+	FileInfo() fs.FileInfo
 	Open() (io.ReadCloser, error)
 }
 
@@ -195,7 +197,7 @@ func unpackEntry(root *os.Root, name string, entry archiveEntry) error {
 		return writeSymlink(root, name, string(target))
 	}
 
-	return writeFile(root, name, mode, rc)
+	return writeFile(root, name, mode, entry.FileInfo().ModTime(), rc)
 }
 
 // stripPath drops the first n components of an archive path. It reports false
@@ -216,7 +218,11 @@ func stripPath(name string, n int) (string, bool, error) {
 	return name, name != ".", nil
 }
 
-func writeFile(root *os.Root, name string, mode fs.FileMode, r io.Reader) error {
+// writeFile keeps the time the archive gives the file. make compares the times
+// of a source tree, and a release tarball relies on its generated files, such as
+// aclocal.m4, being newer than their inputs. With the time of the unpacking,
+// make sees them as stale and runs autotools, which the machine may not have.
+func writeFile(root *os.Root, name string, mode fs.FileMode, modified time.Time, r io.Reader) error {
 	if err := root.MkdirAll(path.Dir(name), 0o755); err != nil {
 		return err
 	}
@@ -232,7 +238,11 @@ func writeFile(root *os.Root, name string, mode fs.FileMode, r io.Reader) error 
 		err = closeErr
 	}
 
-	return err
+	if err != nil || modified.IsZero() {
+		return err
+	}
+
+	return root.Chtimes(name, modified, modified)
 }
 
 // writeSymlink refuses a target that is absolute or resolves outside the

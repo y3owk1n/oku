@@ -180,7 +180,7 @@ func unrpm(f *os.File, root *os.Root, strip int) error {
 		case hdr.Mode&cpio.TypeSymlink == cpio.TypeSymlink:
 			err = writeSymlink(root, name, hdr.Linkname)
 		case hdr.Mode.IsRegular():
-			err = writeFile(root, name, fs.FileMode(hdr.Mode.Perm()), archive)
+			err = writeFile(root, name, fs.FileMode(hdr.Mode.Perm()), hdr.ModTime, archive)
 		}
 
 		if err != nil {
