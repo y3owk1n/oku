@@ -5,8 +5,13 @@
 ```
 ref -> fetch or infer manifest -> select version -> resolve dep closure
     -> per package: cache hit, else artifact, else build
-    -> realize in store -> new profile generation -> expose apps, fonts, services
+    -> realize in store -> render files into the new generation
+    -> check targets and settings                          (plan ends, D59)
+    -> match the ledger -> switch current -> write oku.lock  (apply)
 ```
+
+A failure in the plan leaves the machine unchanged. A failure in the apply
+makes oku match the ledger to the old generation again (D59).
 
 Strategy per package: the first artifact whose selector matches the host, else
 `[build]`. `--from-source` forces the build. A trusted cache is consulted
@@ -26,6 +31,7 @@ XDG on unix, `%APPDATA%` and `%LOCALAPPDATA%` on Windows. `<root>` is
 <data>/oku/profiles/project-<hash>/  same shape, keyed by the project's path
 <data>/oku/trust/allow.toml, approvals.toml
 <data>/oku/exposed.toml              ledger of every file written elsewhere (D17)
+<data>/oku/pending.toml              present only while oku applies a change (D59)
 <cache>/oku/downloads/, git/
 ```
 
@@ -34,7 +40,8 @@ A store path holds `pkg/` (the whole unpacked download), `bin/`, `lib/`,
 services). For an artifact the output directories hold relative links into
 `pkg/`. A built package has no `pkg/` and holds real files (D28). A profile
 generation mirrors `bin/` and `share/` with links, and holds `oku-gen.toml`
-(time, packages) and a copy of `oku.lock`.
+(time, packages, files, settings), a copy of `oku.lock`, and `files/` with the
+content of every `text` and `render` entry (D60).
 
 ## Ref resolution
 
@@ -152,6 +159,18 @@ fd = { ref = "./recipes/fd.toml", version = "10.2.0" }
 rectangle = { ref = "mine/rectangle", when = { os = "darwin" } }
 postgres = { ref = "mine/postgres", service = true }
 caddy = { ref = "mine/caddy", service = true, system = true }
+
+[vars]                                # global list only (D61)
+scheme = { base16 = "./themes/forest-ink.yml" }
+email = "me@example.com"
+
+[files]                               # global list only (D60)
+"{{home}}/.config/nvim" = { link = "./files/nvim" }
+"{{home}}/.config/ghostty/config" = { render = "./files/ghostty.tmpl" }
+"{{home}}/.ssh/allowed_signers" = { text = "{{email}} ...\n", mode = "0600" }
+
+[defaults."com.apple.dock"]           # macOS. Also [registry], [dconf] (D62)
+tilesize = 48
 ```
 
 ```toml
@@ -199,7 +218,7 @@ Deps nest under the package that needs them (D30). The lock adds a
 platform entry the first time that platform resolves, so one lock serves a
 mixed-OS team.
 
-## Exposure of apps, fonts, services
+## Exposure of apps, fonts, services, files and settings
 
 | Kind | macOS | Linux | Windows |
 |---|---|---|---|
@@ -213,10 +232,19 @@ With `system = true` on the list entry the targets are `/Applications`,
 `/usr/local/share/applications`, `/usr/local/share/fonts/oku` and
 `/etc/systemd/system` on Linux.
 
-A generation records each package with its `service` and `system` flags. After
-every change of generation oku computes the wanted files from the active
-generation and makes the ledger match, so rollback and remove reverse an
-exposure exactly (D41).
+| Kind | macOS and Linux | Windows |
+|---|---|---|
+| file, `link` | symlink to the source | junction for a directory, copy for a file |
+| file, `text` and `render` | symlink through `current/files/` | copy |
+| setting | `defaults` on macOS, dconf on Linux | registry under `HKCU` |
+
+Files and settings exist in user scope only.
+
+A generation records each package with its `service` and `system` flags, each
+file and each wanted setting. oku computes the wanted items from a generation
+and makes the ledger match, so rollback and remove reverse an exposure exactly
+(D41), and a failed change is reverted the same way (D59). The ledger keeps
+the value a setting had before oku first wrote it (D62).
 
 ## Packages
 

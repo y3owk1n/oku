@@ -22,8 +22,9 @@ order step in `prd/product.md`.
 - B6 [1] A failed install leaves the previous profile active and unchanged.
 - B7 [1] `man` and `completions` entries appear under the profile `share`.
 - B8 [1] oku never requires root outside system scope, and writes only under
-  its config, data and cache directories, `oku.toml`, `oku.lock`, and the
-  per-user exposure locations in `prd/architecture.md`.
+  its config, data and cache directories, `oku.toml`, `oku.lock`, the per-user
+  exposure locations in `prd/architecture.md`, and the targets and settings
+  that the global list names.
 - B9 [1] Two packages exposing the same `bin` name fail the second install
   with an error naming both.
 
@@ -278,13 +279,73 @@ order step in `prd/product.md`.
 - B93 [11] The install script puts one static binary in place and prints the
   hook line for the user's shell. It needs no root and edits no existing file.
 
+## Transactions
+
+- B130 [12] An `add`, `remove`, `sync`, `update` or `rollback` that fails at
+  any point leaves the active generation, `oku.lock` and every app, font,
+  service, file and setting as they were before the command.
+- B131 [12] oku finds every failure it can before the first change: a
+  download, a checksum, a build, a template, a target it does not own, a
+  setting of the wrong type.
+- B132 [12] When a step of the apply fails, oku undoes the steps it made and
+  reports the error of the failed step.
+- B133 [12] After an oku process was killed during a change, the next command
+  puts the machine back first, and says so.
+- B134 [12] When oku cannot undo a step, it names what is left, and
+  `oku doctor` reports it until the user resolves it.
+
+## Files
+
+- B135 [13] A `link` entry makes the target a link to the source. An edit to
+  the source shows at the target without a sync.
+- B136 [13] A `text` entry writes that text to the target, with `mode` when
+  given.
+- B137 [13] oku refuses a target that exists and that it did not write, names
+  it, and changes nothing.
+- B138 [13] A target whose entry leaves the list is gone after `sync`.
+  `rollback` brings it back with the bytes it had.
+- B139 [13] A target starts with `{{home}}`, `{{config}}`, `{{data}}`,
+  `{{appdata}}` or `{{localappdata}}`. One that this OS lacks is an error,
+  unless `when` excludes the entry.
+- B140 [13] A link source may start with `{{pkg.<name>}}`, and follows that
+  package to its new version on `update`.
+- B141 [13] On Windows a linked directory is a junction and a file is a copy.
+  oku stops before any change when a copy was edited by hand, and names it.
+- B142 [13] A project list with `[files]`, `[vars]` or a settings table is an
+  error.
+
+## Variables and templates
+
+- B143 [14] A `render` entry writes its template with each `{{name}}` replaced
+  by the value from `[vars]`. The file is read-only.
+- B144 [14] A name that is not set fails before any change, with the file and
+  the line.
+- B145 [14] A `base16` variable makes the colours of that scheme available
+  under the names tinted-theming templates use.
+- B146 [14] Changing a variable re-renders every file that uses it in one
+  generation. `rollback` restores the bytes of the generation before.
+- B147 [14] `[vars]` of an include are overridden by a later include and by
+  the user's own list.
+- B148 [14] The same template and variables give the same bytes on every OS.
+
+## Settings
+
+- B149 [15] After `sync` a key under `[defaults.<domain>]` has the value and
+  the type from the list: boolean, integer, float, string, array or table.
+- B150 [15] A key that leaves the list gets back the value it had before oku
+  first wrote it, or is deleted when it had none. `rollback` does the same.
+- B151 [15] oku skips the settings tables of another OS without an error.
+- B152 [15] A `[registry]` key outside `HKCU` is an error.
+- B153 [15] `[registry]` on Windows and `[dconf]` on Linux behave as B149 and
+  B150 describe.
+
 ## Uninstall
 
 - B94 [1] `oku self uninstall` lists what it will remove, asks once, then
   removes every store path, profile, cache, trust record and the oku binary.
   `--yes` skips the question.
-- B95 [8] Uninstall stops and unregisters every oku service and removes every
-  exposed app, font and launcher entry. Afterwards no file written by oku
+- B95 [8] Uninstall stops and unregisters every oku service, removes every
+  exposed app, font, launcher entry and file, and restores every setting. Afterwards no file written by oku
   remains outside the project lists named in B97.
 - B96 [1] Uninstall keeps the global `oku.toml` and `oku.lock` when given
   `--keep-list`, and says where they are.

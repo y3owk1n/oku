@@ -123,10 +123,11 @@ windows desktop, and a new machine is one command.
 ## D17. Everything oku writes is either in its own dirs or in a ledger
 
 Files oku places outside its config, data, cache and shared-root directories
-(apps, fonts, service units, launcher entries) are recorded in
-`<data>/oku/exposed.toml` at the moment they are written. oku never edits
-shell rc files, the registry or the system PATH. The hook line is printed for
-the user to add. `oku self uninstall` replays the ledger in reverse, stops and
+(apps, fonts, service units, launcher entries, the files of `[files]`) and the
+settings it changes (D62) are recorded in `<data>/oku/exposed.toml` at the
+moment they are written. oku writes only targets the list names. It never
+edits a file it did not place, so it never edits a shell rc file or the system
+PATH. The hook line is printed for the user to add. `oku self uninstall` replays the ledger in reverse, stops and
 unregisters services, deletes oku's directories and then its own binary. Why:
 uninstall is only easy if nothing was scattered in the first place. nix's
 hard uninstall (volumes, daemon users, rc edits) is the counterexample. A
@@ -387,7 +388,10 @@ one and syncs the ledger to it. Each kind has a handler: apps and fonts are
 copies, a service goes through the service manager. Why: one file is what
 `self uninstall` replays, and a derived ledger cannot disagree with the
 generation after a crash. Only the global profile exposes anything, because an
-app, a font or a service is visible to the whole account, not to one directory.
+app, a font, a service, a file in the home directory or a setting is visible
+to the whole account, not to one directory. A project list that holds
+`[files]` or a settings table is an error, because a cloned repo must not
+write into the home directory.
 
 oku copies apps and fonts. Finder, Spotlight and the font services do not treat
 a symlink into the store as installed.
@@ -625,3 +629,119 @@ makes one only from a version bump. A prerelease stays out of
 could not install an unsigned nightly, and a second key would be one more
 secret to rotate. The cost is that the release key now signs every commit on
 `main`. Before, it signed releases only.
+
+## D59. oku checks a change first, and reverts it when it fails
+
+`add`, `remove`, `sync`, `update` and `rollback` run in two parts. The plan
+changes nothing a user can see. It resolves, downloads, verifies and builds
+into the store, renders every template into the new generation, checks each
+target for a file oku does not own, reads the current value of each setting
+and checks its type. A failure there stops the command with the machine
+unchanged. The store and the cache may have gained entries that nothing uses,
+and `gc` deletes them.
+
+The apply writes `<data>/oku/pending.toml` with the numbers of the active and
+the new generation, makes the ledger match the new generation, switches
+`current`, writes `oku.lock` and deletes `pending.toml`. When a step fails oku
+makes the ledger match the old generation again, deletes the new one and
+leaves the lock as it was. It then reports the first error. A command that
+finds `pending.toml` does that revert before anything else, and says so. When
+a revert step fails too, oku stops, names what is left and keeps
+`pending.toml`, and `oku doctor` reports it.
+
+Why: after a half-applied change the machine matches neither the old list nor
+the new one, and the user cannot tell which parts changed. Before this, a
+failure while exposing left the new generation active beside the old lock. Reverting is the ledger sync of D41 run toward the old
+generation, the same code as `rollback`, so there is no second undo mechanism
+to keep correct. No filesystem gives one atomic step over files, services and
+OS settings, so the promise is check first and revert, not a true atomic
+commit.
+
+## D60. The global list places files in the home directory
+
+```toml
+[files]
+"{{home}}/.config/nvim" = { link = "./files/nvim" }
+"{{home}}/.hushlogin" = { text = "", mode = "0600" }
+"{{localappdata}}/nvim" = { link = "./files/nvim", when = { os = "windows" } }
+```
+
+The key is the target. It starts with a location variable: `{{home}}`,
+`{{config}}`, `{{data}}`, and on Windows `{{appdata}}` and `{{localappdata}}`.
+A variable this OS lacks is an error unless `when` excludes the entry. The
+value holds exactly one of `link`, `text` and `render` (D61), and may hold
+`when` and `mode`. A source path starts at the directory of the list that
+declares it. A link source may start with `{{pkg.<name>}}`, the files of a
+package in the list.
+
+`link` makes the target a symlink to the source, so an edit shows at once and
+the user's own repo versions the content. `text` and `render` write the content
+into the generation under `files/`, read-only, and the target is a symlink
+through `current`. Switching `current` therefore switches every such file in
+one step, and only a new or a removed target is a ledger step. On Windows a
+linked directory is a junction, and every file is a copy. oku stops before any
+change when a copy no longer has the bytes oku wrote.
+
+oku refuses a target that exists and is not in the ledger. `file` is one more
+ledger kind, so `remove`, `rollback` and `self uninstall` handle it like an
+app or a font.
+
+Out of scope for now: `[files]` in a list that an `include` reads from a URL
+or a repo.
+
+Why: the table is keyed by target so that two entries for one path are a TOML
+error. Content in the generation makes rollback restore the exact bytes with
+no copy of the user's repo. A link is the exception on purpose, because a
+config the user edits often must not need a sync per edit.
+
+## D61. Templates take variables and have no logic
+
+```toml
+[vars]
+scheme = { base16 = "./themes/forest-ink.yml" }
+font = "JetBrainsMono Nerd Font Propo"
+email = "me@example.com"
+```
+
+`[vars]` holds strings. Includes merge it like `[packages]`, and the user's
+own list wins. A `base16` value loads a scheme file as the variables that
+tinted-theming templates use, such as `{{base00-hex}}`. `render = "./x.tmpl"`
+writes the file with each `{{name}}` replaced. `text` and targets expand the
+same way. A name that is not set is an error that names the file and the line.
+A template can write a literal `{{`. There are no conditionals and no loops.
+
+Why: a difference between platforms belongs in `when` on the entry, and most
+tools can include a second file, so logic in templates would only add a
+language to learn. The same template then gives the same bytes on every OS.
+The variable names of tinted-theming make the existing base16 templates usable
+unchanged. `when` matches a platform, not one machine (D15), so a machine that
+differs sets its own `[vars]` in its own list.
+
+## D62. Settings are per OS, in user scope, with the old value kept
+
+```toml
+[defaults."com.apple.dock"]
+tilesize = 48
+
+[registry.'HKCU\Control Panel\Keyboard']
+KeyboardDelay = "0"
+
+[dconf."org/gnome/desktop/interface"]
+color-scheme = "prefer-dark"
+```
+
+Each table is named after the mechanism of one OS, and oku skips the tables of
+the other OSes like a package whose `when` does not match. TOML types map to
+the types of the mechanism. oku owns a table value, such as
+`NSUserKeyEquivalents`, and writes it whole. oku writes settings in user scope
+only. A registry key outside `HKCU` is an error, and oku never writes
+`/Library/Preferences`.
+
+`setting` is a ledger kind. Before oku first writes a key it records the value
+it found, or that there was none. A key that leaves the list gets that value
+back, also on `rollback` and `self uninstall`. Settings have no atomic switch,
+so each one is a step of the apply in D59.
+
+Why: setting keys are not portable, and one `[settings]` table would suggest
+that a key works on every OS. Without the recorded old value oku could not
+reverse a setting. User scope keeps settings out of the elevation path of D43.
