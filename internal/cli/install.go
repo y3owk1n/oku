@@ -441,7 +441,9 @@ func (e env) install(ctx context.Context, opts Options, req request) (installed,
 	platforms := keptPlatforms(previous, m, r)
 	platforms[host.String()] = entry
 
-	firstUseOthers, err := e.lockOthers(ctx, opts, req, m, release, platforms, entry)
+	firstUseOthers, err := e.lockOthers(ctx, opts, req, m, release, platforms, hostBuild{
+		entry: entry, deps: deps.prefixes, npmRegistry: opts.NPMRegistry, log: req.log,
+	})
 	if err != nil {
 		return installed{}, err
 	}
@@ -542,7 +544,7 @@ func (e env) resolveOnly(
 ) (installed, error) {
 	platforms := keptPlatforms(req.previous, m, req.ref)
 
-	firstUse, err := e.lockOthers(ctx, opts, req, m, release, platforms, lock.Platform{})
+	firstUse, err := e.lockOthers(ctx, opts, req, m, release, platforms, hostBuild{})
 	if err != nil {
 		return installed{}, err
 	}
@@ -572,8 +574,8 @@ func (e env) resolveOnly(
 
 // lockOthers pins m in platforms for each platform of req that has no entry
 // yet, or whose entry only says that the platform builds. It installs nothing.
-// host is the entry of the install on this machine, or the zero value. It
-// returns the platforms whose download it trusted on first use.
+// host is the install on this machine, or the zero value. It returns the
+// platforms whose download it trusted on first use.
 func (e env) lockOthers(
 	ctx context.Context,
 	opts Options,
@@ -581,7 +583,7 @@ func (e env) lockOthers(
 	m *manifest.Manifest,
 	release resolve.Release,
 	platforms map[string]lock.Platform,
-	host lock.Platform,
+	host hostBuild,
 ) ([]string, error) {
 	if req.keepVersion && !req.strictPlatforms && !req.lockOnly {
 		return nil, nil
@@ -615,15 +617,24 @@ func (e env) lockOthers(
 	return firstUse, nil
 }
 
+// hostBuild is what pinning another platform takes from the install on this
+// machine: its lock entry, and the deps and options of its build.
+type hostBuild struct {
+	entry       lock.Platform
+	deps        []store.Dep
+	npmRegistry string
+	log         io.Writer
+}
+
 // pinFor returns the lock entry of m for platform p, and whether oku trusted a
-// download for it. host is the entry of the install on this machine.
+// download for it. host is the install on this machine.
 func pinFor(
 	ctx context.Context,
 	s *store.Store,
 	m *manifest.Manifest,
 	release resolve.Release,
 	p platform.Platform,
-	host lock.Platform,
+	host hostBuild,
 ) (lock.Platform, bool, error) {
 	artifact, ok, err := m.Select(p)
 
@@ -641,13 +652,25 @@ func pinFor(
 		}
 
 		// Go and cargo vendor the same files on every platform, so the digest of
-		// the build on this machine holds for p too.
-		if host.Strategy == strategyBuild && store.VendorPortable(m.Build) {
-			entry.VendorSHA256 = host.VendorSHA256
+		// the build on this machine holds for p too. npm installs the packages of
+		// the platform it is told, so oku downloads those of p and builds nothing.
+		switch {
+		case host.entry.Strategy != strategyBuild:
+		case store.VendorPortable(m.Build):
+			entry.VendorSHA256 = host.entry.VendorSHA256
+		case store.CanCrossVendor(m.Build, p):
+			vendored, err := s.Build(ctx, m, p, store.BuildOptions{
+				Deps: host.deps, Log: host.log, NPMRegistry: host.npmRegistry, VendorOnly: true,
+			})
+			if err != nil {
+				return lock.Platform{}, false, fmt.Errorf("%s for %s: %w", m.Package.Name, p, err)
+			}
+
+			entry.VendorSHA256 = vendored.VendorSHA256
 		}
 
 		// The install on this machine already reported the archive they share.
-		return entry, pin.FirstUse && pin.SourceURL != host.URL, nil
+		return entry, pin.FirstUse && pin.SourceURL != host.entry.URL, nil
 	case !ok:
 		return lock.Platform{}, false, fmt.Errorf("%s has no artifact for %s", m.Package.Name, p)
 	}

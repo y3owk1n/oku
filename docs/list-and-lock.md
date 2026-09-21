@@ -431,7 +431,8 @@ depends on the language:
 | `vendor` | Pinned from another machine |
 |---|---|
 | `go`, `cargo` | Yes. They download the same files on every platform, so the digest of the build on your machine holds for the others. |
-| `npm`, `pip` | No. They pick packages by platform, so the digest comes from the first build on that platform. `oku sync --locked` fails there until a machine of that platform has built the package and you have committed the lock. |
+| `npm` | Yes. npm installs the packages of the platform that oku names, so oku downloads those of the other platform into a temporary directory, hashes them and keeps nothing. It runs none of their scripts. This needs a build on your machine, and a manifest with no `run` step before the `npm` step. |
+| `pip` | No. pip picks packages by platform, so the digest comes from the first build on that platform. `oku sync --locked` fails there until a machine of that platform has built the package and you have committed the lock. |
 
 The digest of a `go` or `cargo` step only holds when no vendor step of the
 manifest has a `when`.

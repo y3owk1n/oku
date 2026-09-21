@@ -174,6 +174,10 @@ order step in `prd/product.md`.
   built by an npm vendor step with `package`. It installs the package with its
   dependencies as of the version's publish time, runs no install scripts, and
   `oku.lock` pins a digest of what it installed.
+- B189 [4] When the host builds a package whose vendor steps are all `npm` and
+  no `run` step comes before them, oku pins the `vendor_sha256` of each other
+  lock platform too. It runs the npm steps for that platform in a temporary
+  directory, with no scripts, and adds nothing to the store.
 - B127 [4] Without `runtimes.node`, the programs of an npm package run the
   `node` on `PATH`, and `add` says how to pin one.
 - B186 [4] A download that is the program itself may list one table `bin`

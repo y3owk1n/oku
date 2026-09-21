@@ -2579,6 +2579,7 @@ done
 dir="$prefix/node_modules/@scope/tool"
 mkdir -p "$dir" "$prefix/node_modules/left-pad"
 echo "echo $spec before $before scripts-off=$safe" > "$dir/tool"
+echo "os=$npm_config_os cpu=$npm_config_cpu libc=$npm_config_libc" > "$dir/target"
 echo "module.exports = 1" > "$prefix/node_modules/left-pad/index.js"
 `
 
