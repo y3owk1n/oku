@@ -49,6 +49,7 @@ export XDG_CACHE_HOME=/tmp/oku-try/cache
         oku-gen.toml           when it was written, the packages in it, and
                                the store paths of their deps
         oku.lock               a copy of oku.lock as it was at that time
+        files/                 the content of the text entries of [files]
       current -> gen-2         the active generation
     project-2d27013d8c67/      one per project, same layout
   exposed.toml                 every file oku wrote outside these directories
@@ -153,6 +154,11 @@ out of the store:
 
 With `system = true` on the package they go to the machine-wide directories
 instead, see [System scope](system-scope.md).
+
+The paths of [`[files]`](list-and-lock.md#files-in-your-home-directory) are
+symlinks. A `link` points at your source. A `text` points at
+`<data>/oku/profiles/global/current/files/`, so moving `current` changes the
+content of every such file in the same step.
 
 On Windows they go to the Start Menu and the user's font folder, see
 [Windows](windows.md#apps-and-fonts).

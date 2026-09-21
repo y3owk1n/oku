@@ -47,9 +47,24 @@ type Package struct {
 	System bool `toml:"system,omitempty"`
 }
 
+// File is one path in the home directory that a generation sets up.
+type File struct {
+	Target string `toml:"target"`
+	// Link is the path the target links to. It is empty for a file with content.
+	Link string `toml:"link,omitempty"`
+	// Content names the file under the generation's files directory that holds
+	// the content. The name depends on Target only, so the target's link through
+	// "current" stays the same from one generation to the next.
+	Content string      `toml:"content,omitempty"`
+	Mode    fs.FileMode `toml:"mode,omitempty"`
+	// Text is the content. The state file does not hold it.
+	Text []byte `toml:"-"`
+}
+
 type state struct {
 	Created  time.Time `toml:"created"`
 	Packages []Package `toml:"package"`
+	Files    []File    `toml:"file,omitempty"`
 }
 
 // Generation is one numbered snapshot of the profile.
@@ -60,6 +75,9 @@ type Generation struct {
 	// Current marks the generation that "current" points at.
 	Current bool
 }
+
+// filesDir is the directory in a generation that holds the content of files.
+const filesDir = "files"
 
 // LockSnapshot is the file in a generation that holds oku.lock as it was when
 // the generation was activated.
@@ -110,21 +128,66 @@ func (p *Profile) PackagesOf(n int) ([]Package, error) {
 }
 
 func (p *Profile) packagesIn(gen string) ([]Package, error) {
+	s, err := p.stateIn(gen)
+
+	return s.Packages, err
+}
+
+func (p *Profile) stateIn(gen string) (state, error) {
+	var s state
+
 	data, err := os.ReadFile(filepath.Join(p.dir, gen, stateFile))
 	if errors.Is(err, fs.ErrNotExist) {
-		return nil, nil
+		return s, nil
 	}
 
 	if err != nil {
-		return nil, fmt.Errorf("read profile: %w", err)
+		return s, fmt.Errorf("read profile: %w", err)
 	}
 
-	var s state
 	if err := toml.Unmarshal(data, &s); err != nil {
-		return nil, fmt.Errorf("read profile: %w", err)
+		return s, fmt.Errorf("read profile: %w", err)
 	}
 
-	return s.Packages, nil
+	return s, nil
+}
+
+// FilesOf lists the files of generation n, without their text.
+func (p *Profile) FilesOf(n int) ([]File, error) {
+	if n == 0 {
+		return nil, nil
+	}
+
+	s, err := p.stateIn(genPrefix + strconv.Itoa(n))
+
+	return s.Files, err
+}
+
+// ContentPath is where the target of a file with content links to. The path
+// goes through "current", so it names the content of the active generation.
+func (p *Profile) ContentPath(f File) string {
+	return filepath.Join(p.dir, current, filesDir, f.Content)
+}
+
+// files returns the files of the active generation with their text, which a
+// new generation with the same files needs.
+func (p *Profile) files() ([]File, error) {
+	s, err := p.stateIn(current)
+	if err != nil {
+		return nil, err
+	}
+
+	for i, f := range s.Files {
+		if f.Content == "" {
+			continue
+		}
+
+		if s.Files[i].Text, err = os.ReadFile(p.ContentPath(f)); err != nil {
+			return nil, fmt.Errorf("read profile: %w", err)
+		}
+	}
+
+	return s.Files, nil
 }
 
 // Add stages a new generation that includes pkg, and returns its number. It
@@ -136,9 +199,14 @@ func (p *Profile) Add(pkg Package, lockData []byte) (int, error) {
 		return 0, err
 	}
 
+	files, err := p.files()
+	if err != nil {
+		return 0, err
+	}
+
 	pkgs = slices.DeleteFunc(pkgs, func(have Package) bool { return have.Name == pkg.Name })
 
-	return p.stage(append(pkgs, pkg), lockData)
+	return p.stage(append(pkgs, pkg), files, lockData)
 }
 
 // Remove stages a new generation without the package called name.
@@ -156,13 +224,23 @@ func (p *Profile) Remove(name string, lockData []byte) (int, error) {
 		return 0, fmt.Errorf("%s: %w", name, ErrNotInstalled)
 	}
 
-	return p.stage(kept, lockData)
+	files, err := p.files()
+	if err != nil {
+		return 0, err
+	}
+
+	return p.stage(kept, files, lockData)
 }
 
-// Replace stages a new generation holding exactly pkgs. It returns 0 when the
-// active generation already holds them with the same lock.
-func (p *Profile) Replace(pkgs []Package, lockData []byte) (int, error) {
+// Replace stages a new generation holding exactly pkgs and files. It returns 0
+// when the active generation already holds them with the same lock.
+func (p *Profile) Replace(pkgs []Package, files []File, lockData []byte) (int, error) {
 	have, err := p.Packages()
+	if err != nil {
+		return 0, err
+	}
+
+	haveFiles, err := p.files()
 	if err != nil {
 		return 0, err
 	}
@@ -176,16 +254,22 @@ func (p *Profile) Replace(pkgs []Package, lockData []byte) (int, error) {
 			maps.Equal(a.Env, b.Env) && a.Service == b.Service && a.System == b.System
 	}
 
-	if slices.EqualFunc(have, pkgs, same) && bytes.Equal(lockData, p.LockSnapshotOfCurrent()) {
+	sameFile := func(a, b File) bool {
+		return a.Target == b.Target && a.Link == b.Link && a.Mode == b.Mode &&
+			bytes.Equal(a.Text, b.Text)
+	}
+
+	if slices.EqualFunc(have, pkgs, same) && slices.EqualFunc(haveFiles, files, sameFile) &&
+		bytes.Equal(lockData, p.LockSnapshotOfCurrent()) {
 		return 0, nil
 	}
 
-	return p.stage(pkgs, lockData)
+	return p.stage(pkgs, files, lockData)
 }
 
 // stage builds the next generation from pkgs and leaves "current" unchanged. A
 // failure deletes the half-built generation.
-func (p *Profile) stage(pkgs []Package, lockData []byte) (int, error) {
+func (p *Profile) stage(pkgs []Package, files []File, lockData []byte) (int, error) {
 	slices.SortFunc(pkgs, func(a, b Package) int { return strings.Compare(a.Name, b.Name) })
 
 	next, err := p.nextGeneration()
@@ -198,7 +282,7 @@ func (p *Profile) stage(pkgs []Package, lockData []byte) (int, error) {
 		return 0, fmt.Errorf("create generation: %w", err)
 	}
 
-	if err := build(gen, pkgs, lockData); err != nil {
+	if err := build(gen, pkgs, files, lockData); err != nil {
 		os.RemoveAll(gen)
 
 		return 0, err
@@ -321,9 +405,9 @@ func (p *Profile) nextGeneration() (int, error) {
 	return highest + 1, nil
 }
 
-// build links every file under each package's bin and share into gen, saves the
-// lock snapshot and writes the state file.
-func build(gen string, pkgs []Package, lockData []byte) error {
+// build links every file under each package's bin and share into gen, writes the
+// content of files, saves the lock snapshot and writes the state file.
+func build(gen string, pkgs []Package, files []File, lockData []byte) error {
 	owners := map[string]string{}
 
 	for _, pkg := range pkgs {
@@ -334,6 +418,33 @@ func build(gen string, pkgs []Package, lockData []byte) error {
 		}
 	}
 
+	for _, f := range files {
+		if f.Content == "" {
+			continue
+		}
+
+		if err := os.MkdirAll(filepath.Join(gen, filesDir), 0o755); err != nil {
+			return fmt.Errorf("write generation: %w", err)
+		}
+
+		// Read-only unless the list gives a mode, so an edit through the link fails
+		// instead of changing a generation.
+		mode := f.Mode
+		if mode == 0 {
+			mode = 0o444
+		}
+
+		path := filepath.Join(gen, filesDir, f.Content)
+		if err := os.WriteFile(path, f.Text, mode); err != nil {
+			return fmt.Errorf("write generation: %w", err)
+		}
+
+		// WriteFile applies the umask, and a mode from the list is meant exactly.
+		if err := os.Chmod(path, mode); err != nil {
+			return fmt.Errorf("write generation: %w", err)
+		}
+	}
+
 	if lockData != nil {
 		if err := os.WriteFile(filepath.Join(gen, LockSnapshot), lockData, 0o644); err != nil {
 			return fmt.Errorf("write generation: %w", err)
@@ -341,7 +452,7 @@ func build(gen string, pkgs []Package, lockData []byte) error {
 	}
 
 	data, err := toml.Marshal(
-		state{Created: time.Now().UTC().Truncate(time.Second), Packages: pkgs},
+		state{Created: time.Now().UTC().Truncate(time.Second), Packages: pkgs, Files: files},
 	)
 	if err != nil {
 		return fmt.Errorf("write generation: %w", err)

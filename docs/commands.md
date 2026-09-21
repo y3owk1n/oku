@@ -812,12 +812,18 @@ oku self uninstall [--keep-list] [--yes] [--system]
 
 Lists what it will delete, asks once, then removes:
 
-- every app, font and service oku set up outside its directories, each listed
-  by path. Services are stopped first.
+- every app, font, service and [file](list-and-lock.md#files-in-your-home-directory)
+  oku set up outside its directories, each listed by path. Services are stopped
+  first.
 - the data directory (store and profiles)
 - the cache directory
-- the config directory
+- `oku.toml`, `oku.lock`, `config.toml` and `signing.key` in the config
+  directory
 - the `oku` binary
+
+Anything else in the config directory is yours, such as the sources of
+`[files]`, your own manifests or a `.git` directory. Uninstall leaves it there
+and lists it.
 
 | Flag | Effect |
 |---|---|

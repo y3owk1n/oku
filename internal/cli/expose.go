@@ -45,11 +45,12 @@ func systemDirs(opts Options) expose.Dirs {
 	return expose.SystemDirs()
 }
 
-// wantedItems lists the apps, fonts and services of pkgs, with the definitions
-// of the services by name.
+// wantedItems lists the apps, fonts and services of pkgs and the files of a
+// generation, with the definitions of the services by name.
 func (e env) wantedItems(
 	opts Options,
 	pkgs []profile.Package,
+	files []profile.File,
 ) ([]expose.Item, map[string]service.Definition, error) {
 	dirs, err := e.userDirs()
 	if err != nil {
@@ -80,6 +81,15 @@ func (e env) wantedItems(
 		)
 	}
 
+	for _, f := range files {
+		source := f.Link
+		if source == "" {
+			source = e.globalProfile().ContentPath(f)
+		}
+
+		wanted = append(wanted, expose.Item{Kind: "file", Source: source, Target: f.Target})
+	}
+
 	services, defs, err := e.serviceItems(opts, pkgs)
 
 	return append(wanted, services...), defs, err
@@ -104,11 +114,12 @@ func (e env) planExposed(
 	cmd *cobra.Command,
 	opts Options,
 	pkgs []profile.Package,
+	files []profile.File,
 	system bool,
 ) (exposePlan, error) {
 	notice := cmd.ErrOrStderr()
 
-	wanted, defs, err := e.wantedItems(opts, pkgs)
+	wanted, defs, err := e.wantedItems(opts, pkgs, files)
 	if err != nil {
 		return exposePlan{}, err
 	}
@@ -185,6 +196,8 @@ func (e env) placeExposed(cmd *cobra.Command, opts Options, plan exposePlan) err
 		}
 
 		switch {
+		case item.Kind == "file":
+			fmt.Fprintf(notice, "wrote %s\n", item.Target)
 		case item.Kind != "service":
 			fmt.Fprintf(notice, "exposed %s %s\n", item.Kind, item.Target)
 		case item.Enabled && item.System:
@@ -260,13 +273,17 @@ func (e env) handlers(
 
 	handlers := map[string]expose.Handler{}
 
-	for _, kind := range []string{"app", "font", "service"} {
+	for _, kind := range []string{"app", "font", "service", "file"} {
 		local := expose.Handler{
 			Place:  expose.Place,
 			Remove: expose.Remove,
 		}
-		if kind == "service" {
+
+		switch kind {
+		case "service":
 			local = serviceHandler(manager, defs)
+		case "file":
+			local = expose.Handler{Place: expose.PlaceLink, Remove: expose.RemoveLink}
 		}
 
 		handlers[kind] = expose.Handler{

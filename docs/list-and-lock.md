@@ -115,6 +115,52 @@ postgres = { ref = "github:you/recipes#postgres", service = true, system = true 
 A plain `oku sync` skips those files and lists them. `oku sync --system` applies
 them with `sudo`.
 
+### Files in your home directory
+
+`[files]` places files in your home directory. Each key is the path to write,
+and `oku sync` applies the table:
+
+```toml
+[files]
+"{{home}}/.config/nvim" = { link = "./files/nvim" }
+"{{home}}/.ssh/allowed_signers" = { text = "me@example.com ssh-ed25519 AAAA\n", mode = "0600" }
+"{{home}}/.claude/skills/deslop" = { link = "{{pkg.cursor-plugins}}/skills/deslop" }
+```
+
+A key starts with a location:
+
+| Location | Path |
+|---|---|
+| `{{home}}` | Your home directory. |
+| `{{config}}` | `$XDG_CONFIG_HOME`, else `~/.config`. `%APPDATA%` on Windows. |
+| `{{data}}` | `$XDG_DATA_HOME`, else `~/.local/share`. `%LOCALAPPDATA%` on Windows. |
+| `{{appdata}}`, `{{localappdata}}` | Windows only. An entry that uses one needs `when = { os = "windows" }`. |
+
+An entry holds `link` or `text`, and may hold `when`, like a package.
+
+| Key | Effect |
+|---|---|
+| `link` | The path becomes a symlink to a file or a directory. A relative source starts at the directory of the list. An edit of the source shows at once, with no sync, and your own repo versions the content. |
+| `link = "{{pkg.<name>}}/..."` | The source is inside a package of the list, in the directory that holds its files. After `oku update` the link points into the new version. |
+| `text` | The path gets this content. oku keeps the content in the generation, read-only, and the path is a symlink to it. `oku rollback` brings back the bytes of that generation. |
+| `mode` | The permission of a `text` file, such as `"0600"`. Without it the file is read-only. |
+
+oku refuses a path that exists and that it did not write. It names the path and
+changes nothing, so move the file away first. The next `sync` removes a path
+whose entry left the list. If you replaced oku's link with a file of your own
+in the meantime, oku leaves that file alone.
+
+`oku add` and `oku remove` carry the files over unchanged. Only `sync` and
+`update` read `[files]` again.
+
+Limits for now:
+
+- Only the global list may hold `[files]`. A project list with `[files]` is an
+  error, so that a cloned repo cannot write into your home directory.
+- An included list may hold `[files]` when it is a file on this machine, not
+  when it comes from a URL or a repo.
+- `[files]` does not work on Windows yet.
+
 ## oku.lock
 
 ```toml
