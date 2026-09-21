@@ -151,6 +151,8 @@ func reconcile(
 
 	var pkgs []profile.Package
 
+	deps := map[string]installed{}
+
 	for _, name := range slices.Sorted(maps.Keys(wanted)) {
 		r := wanted[name].ref
 		previous, _ := locked.Find(name)
@@ -190,6 +192,7 @@ func reconcile(
 			system:       wanted[name].entry.System,
 			approve:      e.approver(cmd, opts, flags),
 			log:          buildLog(cmd, flags),
+			deps:         deps,
 		})
 
 		switch {
@@ -220,7 +223,7 @@ func reconcile(
 			fmt.Fprintf(out, "%s %s, checksum changed\n", name, got.lock.Version)
 		}
 
-		reportInferred(out, got)
+		reportInferred(out, got, flags.verbose)
 		e.reportFirstUse(cmd.ErrOrStderr(), got)
 		reportUnsandboxed(cmd.ErrOrStderr(), got)
 		reportCache(cmd.ErrOrStderr(), got)

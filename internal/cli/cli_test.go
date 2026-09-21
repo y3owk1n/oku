@@ -1807,7 +1807,7 @@ func TestB25AddInfersAManifestForARepoWithoutOne(t *testing.T) {
 		"tool-v1.4.0.deb":               archive,
 	})
 
-	out, err := m.run(t, "", "add", "github:owner/tool")
+	out, err := m.run(t, "", "add", "github:owner/tool", "--verbose")
 	if err != nil {
 		t.Fatalf("add: %v\n%s", err, out)
 	}
@@ -1854,7 +1854,7 @@ func TestB26InferenceWithoutAHostAssetListsWhatItSaw(t *testing.T) {
 		"tool-v1.4.0.deb":                  archive,
 	})
 
-	_, err := m.run(t, "", "add", "github:owner/tool")
+	_, err := m.run(t, "", "add", "github:owner/tool", "--verbose")
 	if err == nil {
 		t.Fatal("add succeeded without an asset for this machine")
 	}
@@ -1863,6 +1863,24 @@ func TestB26InferenceWithoutAHostAssetListsWhatItSaw(t *testing.T) {
 		if !strings.Contains(err.Error(), want) {
 			t.Fatalf("error lacks %q: %v", want, err)
 		}
+	}
+}
+
+func TestB25AddKeepsTheInferredManifestForVerbose(t *testing.T) {
+	m := newMachine(t)
+	archive, _ := m.archive(t, strings.TrimSuffix(hostAssetName(), ".tar.gz"), map[string]string{
+		"tool-1.4.0/tool": "#!/bin/sh\necho inferred\n",
+	})
+
+	inferServer(t, &m, map[string]string{hostAssetName(): archive})
+
+	out, err := m.run(t, "", "add", "github:owner/tool")
+	if err != nil {
+		t.Fatalf("add: %v\n%s", err, out)
+	}
+
+	if !strings.Contains(out, "has no manifest") || strings.Contains(out, "from = ") {
+		t.Fatalf("add should say it inferred a manifest and not print it:\n%s", out)
 	}
 }
 
@@ -2025,7 +2043,7 @@ func TestB115AddInfersFromACodebergRepoAndUpdateListsItsReleases(t *testing.T) {
 
 	t.Cleanup(func() { http.DefaultClient.Transport = client })
 
-	out, err := m.run(t, "", "add", "codeberg:owner/tool")
+	out, err := m.run(t, "", "add", "codeberg:owner/tool", "--verbose")
 	if err != nil {
 		t.Fatalf("add: %v\n%s", err, out)
 	}
@@ -2094,7 +2112,7 @@ func TestB116AddInfersFromAGitLabProjectInASubgroup(t *testing.T) {
 
 	t.Cleanup(func() { http.DefaultClient.Transport = client })
 
-	out, err := m.run(t, "", "add", "gitlab:group/sub/tool")
+	out, err := m.run(t, "", "add", "gitlab:group/sub/tool", "--verbose")
 	if err != nil {
 		t.Fatalf("add: %v\n%s", err, out)
 	}
@@ -2123,6 +2141,33 @@ func TestB116AddInfersFromAGitLabProjectInASubgroup(t *testing.T) {
 	}
 }
 
+func TestSyncAfterAStoppedRunReusesItsDownloads(t *testing.T) {
+	m := newMachine(t)
+	archive, _ := m.archive(t, strings.TrimSuffix(hostAssetName(), ".tar.gz"), map[string]string{
+		"tool-1.4.0/tool": "#!/bin/sh\necho inferred\n",
+	})
+
+	inferServer(t, &m, map[string]string{hostAssetName(): archive})
+
+	out, err := m.run(t, "", "add", "github:owner/tool")
+	if err != nil {
+		t.Fatalf("add: %v\n%s", err, out)
+	}
+
+	// A run that stops early has written no lock and may have no store path.
+	must(t, os.Remove(filepath.Join(m.config, "oku.lock")))
+	must(t, os.RemoveAll(m.data))
+
+	out, err = m.run(t, "", "sync")
+	if err != nil || strings.Contains(out, "downloading") {
+		t.Fatalf("sync downloaded again or failed: %v\n%s", err, out)
+	}
+
+	if got := m.toolOutput(t); got != "inferred" {
+		t.Fatalf("tool printed %q", got)
+	}
+}
+
 func TestB117AddTakesAURLThatIsTheDownloadItself(t *testing.T) {
 	m := newMachine(t)
 	archive, _ := m.archive(t, "release", map[string]string{
@@ -2142,7 +2187,7 @@ func TestB117AddTakesAURLThatIsTheDownloadItself(t *testing.T) {
 	}))
 	t.Cleanup(server.Close)
 
-	out, err := m.run(t, "", "add", server.URL+"/dl/tool-v1.4.0-linux-amd64.tar.gz")
+	out, err := m.run(t, "", "add", server.URL+"/dl/tool-v1.4.0-linux-amd64.tar.gz", "--verbose")
 	if err != nil {
 		t.Fatalf("add: %v\n%s", err, out)
 	}
@@ -2498,7 +2543,7 @@ func TestB126AddInfersAnNPMPackageThatRunsThroughTheConfiguredNode(t *testing.T)
 		[]byte(fmt.Sprintf("[runtimes]\nnode = %q\n", m.fakeNode(t))), 0o644,
 	))
 
-	out, err := m.run(t, "", "add", "npm:@scope/tool")
+	out, err := m.run(t, "", "add", "npm:@scope/tool", "--verbose")
 	if err != nil {
 		t.Fatalf("add: %v\n%s", err, out)
 	}
@@ -2545,7 +2590,7 @@ func TestB129AnNPMPackageThatListsDependenciesIsInstalledWithThem(t *testing.T) 
 		[]byte(fmt.Sprintf("[runtimes]\nnode = %q\n", m.fakeNode(t))), 0o644,
 	))
 
-	out, err := m.run(t, "", "add", "npm:@scope/tool", "--yes")
+	out, err := m.run(t, "", "add", "npm:@scope/tool", "--yes", "--verbose")
 	if err != nil {
 		t.Fatalf("add: %v\n%s", err, out)
 	}
@@ -2590,7 +2635,7 @@ func TestB127AnNPMPackageRunsTheNodeOnPathWhenNoneIsConfigured(t *testing.T) {
 	m := newMachine(t)
 	npmServer(t, &m, "", "1.1.0")
 
-	out, err := m.run(t, "", "add", "npm:@scope/tool")
+	out, err := m.run(t, "", "add", "npm:@scope/tool", "--verbose")
 	if err != nil {
 		t.Fatalf("add: %v\n%s", err, out)
 	}
@@ -2656,7 +2701,7 @@ func TestB112AddAssetAndBinChooseWhatInferenceUses(t *testing.T) {
 
 	inferServer(t, &m, map[string]string{"tool-v1.4.0-odd.tar.gz": archive})
 
-	_, err := m.run(t, "", "add", "github:owner/tool")
+	_, err := m.run(t, "", "add", "github:owner/tool", "--verbose")
 	if err == nil || !strings.Contains(err.Error(), "--asset") {
 		t.Fatalf("want a failure that names --asset, got %v", err)
 	}
@@ -2696,7 +2741,7 @@ func TestB121AddInfersFromACompressedSingleBinary(t *testing.T) {
 		strings.TrimSuffix(hostAssetName(), ".tar.gz") + ".gz": binary,
 	})
 
-	out, err := m.run(t, "", "add", "github:owner/tool")
+	out, err := m.run(t, "", "add", "github:owner/tool", "--verbose")
 	if err != nil {
 		t.Fatalf("add: %v\n%s", err, out)
 	}
@@ -3349,6 +3394,28 @@ install = { bin = ["app"] }
 	got, err := cmd.CombinedOutput()
 	if err != nil || strings.TrimSpace(string(got)) != "hello from libgreet" {
 		t.Fatalf("app from another directory: %v\n%s", err, got)
+	}
+}
+
+func TestUpdateLooksUpADepThatPackagesShareOnce(t *testing.T) {
+	m := newMachine(t)
+	server := newReleaseServer(t, "v1.0.0")
+	m.opts.GitHubAPI = server.URL + "/api"
+
+	m.dataDep(t)
+
+	for _, name := range []string{"first", "second"} {
+		_, err := m.run(t, "", "add", m.dataUser(t, name, ""), "--yes")
+		must(t, err)
+	}
+
+	out, err := m.run(t, "", "update", "--yes")
+	if err != nil {
+		t.Fatalf("update: %v\n%s", err, out)
+	}
+
+	if got := strings.Count(out, "looking up the versions of owner/tool"); got != 1 {
+		t.Fatalf("update looked up the shared dep %d times:\n%s", got, out)
 	}
 }
 

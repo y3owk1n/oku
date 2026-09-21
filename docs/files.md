@@ -63,6 +63,8 @@ export XDG_CACHE_HOME=/tmp/oku-try/cache
 
 <cache>/oku/
   downloads/<sha256>           verified downloads, reused on reinstall
+  downloads/by-url/<hash>      the digest each url gave in the last day, so a
+                               run that stopped early does not download again
   git/<hash>/                  clones for git+ refs
 ```
 

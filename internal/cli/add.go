@@ -167,7 +167,7 @@ func runAdd(
 		return err
 	}
 
-	reportInferred(cmd.OutOrStdout(), got)
+	reportInferred(cmd.OutOrStdout(), got, flags.verbose)
 	e.reportFirstUse(cmd.ErrOrStderr(), got)
 	reportUnsandboxed(cmd.ErrOrStderr(), got)
 	reportCache(cmd.ErrOrStderr(), got)

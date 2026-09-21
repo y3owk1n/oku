@@ -87,6 +87,9 @@ type request struct {
 	// stack holds the refs being installed above this one. A ref that is already
 	// in it is a dependency cycle.
 	stack []string
+	// deps holds the deps this run already installed, so packages that share a
+	// dep look it up once. With a nil map, install installs every dep again.
+	deps map[string]installed
 }
 
 // install fetches the manifest, realizes the host's artifact and returns the
@@ -546,41 +549,36 @@ func reportCache(w io.Writer, got installed) {
 	}
 }
 
-// reportInferred prints a manifest that oku just inferred.
-func reportInferred(w io.Writer, got installed) {
+// reportInferred says that oku just inferred a manifest, and prints the
+// manifest itself when verbose.
+func reportInferred(w io.Writer, got installed, verbose bool) {
 	if got.inferred == "" {
 		return
 	}
 
-	if strings.HasPrefix(got.lock.Ref, "npm:") {
-		fmt.Fprintf(
-			w, "%s is an npm package, so oku inferred this manifest from the registry:\n\n%s\n",
-			got.lock.Ref, got.inferred,
-		)
+	npm := strings.HasPrefix(got.lock.Ref, "npm:")
 
-		if !strings.Contains(got.inferred, "[runtime]") {
-			fmt.Fprintln(
-				w, "its programs run the node on PATH. To pin one, set runtimes.node in config.toml "+
-					"to the ref of a package that provides node",
-			)
-		}
+	why := "has no manifest, so oku inferred one from its newest release"
 
-		return
+	switch {
+	case npm:
+		why = "is an npm package, so oku inferred a manifest from the registry"
+	case strings.HasPrefix(got.lock.Ref, "http"):
+		why = "is a download and no manifest, so oku inferred one from it"
 	}
 
-	if strings.HasPrefix(got.lock.Ref, "http") {
-		fmt.Fprintf(
-			w, "%s is a download and no manifest, so oku inferred this one from it:\n\n%s\n",
-			got.lock.Ref, got.inferred,
-		)
-
-		return
+	if verbose {
+		fmt.Fprintf(w, "%s %s:\n\n%s\n", got.lock.Ref, why, got.inferred)
+	} else {
+		fmt.Fprintf(w, "%s %s, --verbose prints it\n", got.lock.Ref, why)
 	}
 
-	fmt.Fprintf(
-		w, "%s has no manifest, so oku inferred this one from its newest release:\n\n%s\n",
-		got.lock.Ref, got.inferred,
-	)
+	if npm && !strings.Contains(got.inferred, "[runtime]") {
+		fmt.Fprintln(
+			w, "its programs run the node on PATH. To pin one, set runtimes.node in config.toml "+
+				"to the ref of a package that provides node",
+		)
+	}
 }
 
 // reportFirstUse tells the user that oku trusted a download unverified.
@@ -660,21 +658,36 @@ func (e env) installDeps(
 			commit, wantManifest = previous.Commit, previous.ManifestSHA256
 		}
 
-		got, err := e.install(ctx, opts, request{
-			ref:          r,
-			commit:       commit,
-			previous:     previous,
-			wantManifest: wantManifest,
-			acceptDigest: parent.acceptDigest,
-			acceptKey:    parent.acceptKey,
-			keepVersion:  keep,
-			approve:      parent.approve,
-			log:          parent.log,
-			constraint:   dep.Version,
-			stack:        stack,
-		})
-		if err != nil {
-			return set, fmt.Errorf("dep %s: %w", r, err)
+		// Each package pins its own deps, so install reuses a dep only when the
+		// ref, the constraint and the lock entry all match.
+		key := fmt.Sprintf("%s %s %v %v %v", r, dep.Version, keep, parent.acceptDigest, previous)
+
+		got, done := parent.deps[key]
+		if !done {
+			got, err = e.install(ctx, opts, request{
+				ref:          r,
+				commit:       commit,
+				previous:     previous,
+				wantManifest: wantManifest,
+				acceptDigest: parent.acceptDigest,
+				acceptKey:    parent.acceptKey,
+				keepVersion:  keep,
+				approve:      parent.approve,
+				log:          parent.log,
+				constraint:   dep.Version,
+				stack:        stack,
+				deps:         parent.deps,
+			})
+			if err != nil {
+				return set, fmt.Errorf("dep %s: %w", r, err)
+			}
+
+			if parent.deps != nil {
+				// Only the first package reports the dep's cache notes.
+				parent.deps[key] = installed{
+					profile: got.profile, lock: got.lock, closure: got.closure,
+				}
+			}
 		}
 
 		set.prefixes = append(

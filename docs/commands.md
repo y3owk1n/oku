@@ -70,7 +70,7 @@ oku add <ref>[@version] [--from-source] [--asset <glob>] [--bin <name>] [--yes] 
 Installs the package a [ref](refs.md) points at.
 
 1. Fetches the manifest. For a `github:owner/repo` ref whose repo has none, oku
-   [infers one](manifest.md#inferred-manifests) and prints it.
+   [infers one](manifest.md#inferred-manifests) and says so.
 2. Picks the first `[[artifact]]` whose `match` fits this machine. With none, or
    with `--from-source`, it [builds from source](manifest.md#build).
 3. Downloads the artifact, verifies the checksum, and unpacks it into the
@@ -89,7 +89,7 @@ Adding a package that is already installed replaces it.
 | `--bin <name>` | For a repo with no manifest, or a URL of the download itself, the file name of the program inside it. |
 | `--yes`, `-y` | Approves the manifest's build commands without asking, see [Build commands](trust.md#build-commands). |
 | `--accept-key` | Accepts a manifest whose `signing_key` differs from the one in `oku.lock`, see [Signing keys](trust.md#signing-keys). |
-| `--verbose`, `-v` | Shows the output of build commands as they run. |
+| `--verbose`, `-v` | Shows the output of build commands as they run, and prints a manifest that oku inferred. |
 
 `oku sync` and `oku update` take `--yes`, `--verbose` and `--accept-key` too.
 

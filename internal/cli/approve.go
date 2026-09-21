@@ -29,7 +29,7 @@ func (f *buildFlags) register(cmd *cobra.Command) {
 	cmd.Flags().
 		BoolVarP(&f.yes, "yes", "y", false, "run a manifest's build commands without asking")
 	cmd.Flags().
-		BoolVarP(&f.verbose, "verbose", "v", false, "show the output of build commands as they run")
+		BoolVarP(&f.verbose, "verbose", "v", false, "show the output of build commands, and a manifest that oku inferred")
 	cmd.Flags().
 		BoolVar(&f.acceptKey, "accept-key", false, "accept a signing key that differs from the one in oku.lock")
 }
