@@ -15,6 +15,7 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 
 	"github.com/pelletier/go-toml/v2"
@@ -344,6 +345,17 @@ func linkOutputs(tmp string, a manifest.Artifact) error {
 		}
 	}
 
+	// A build that depends on this package looks in these three directories.
+	for dir, entries := range map[string][]string{
+		"lib": a.Lib, "include": a.Include, "share": a.Share,
+	} {
+		for _, entry := range entries {
+			if err := linkAny(tmp, entry, path.Join(dir, path.Base(entry))); err != nil {
+				return fmt.Errorf("%s %q: %w", dir, entry, err)
+			}
+		}
+	}
+
 	for _, entry := range a.Font {
 		if err := link(tmp, entry, path.Join("fonts", path.Base(entry))); err != nil {
 			return fmt.Errorf("font %q: %w", entry, err)
@@ -357,6 +369,24 @@ func linkOutputs(tmp string, a manifest.Artifact) error {
 	}
 
 	return nil
+}
+
+// linkAny links a file or a whole directory, such as include/webp.
+func linkAny(tmp, entry, dest string) error {
+	if !filepath.IsLocal(filepath.FromSlash(entry)) {
+		return errors.New("the path is outside the package")
+	}
+
+	info, err := os.Stat(filepath.Join(tmp, "pkg", filepath.FromSlash(entry)))
+	if err != nil {
+		return errors.New("no such file or directory in the package")
+	}
+
+	if info.IsDir() {
+		return linkDir(tmp, entry, dest)
+	}
+
+	return link(tmp, entry, dest)
 }
 
 // linkDir is link for a directory, which is what a macOS app bundle is.
@@ -382,7 +412,24 @@ func linkDir(tmp, entry, dest string) error {
 		return err
 	}
 
-	return os.Symlink(rel, destPath)
+	err = os.Symlink(rel, destPath)
+	if err == nil || errors.Is(err, os.ErrExist) || runtime.GOOS != "windows" {
+		return err
+	}
+
+	// Windows refuses a symlink without developer mode, so the directory is copied.
+	return filepath.WalkDir(source, func(file string, entry fs.DirEntry, err error) error {
+		if err != nil || entry.IsDir() {
+			return err
+		}
+
+		inside, err := filepath.Rel(source, file)
+		if err != nil {
+			return err
+		}
+
+		return copyFile(file, filepath.Join(destPath, inside))
+	})
 }
 
 // link makes <tmp>/<dest> point at <tmp>/pkg/<entry>. It copies the file where

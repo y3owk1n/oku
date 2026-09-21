@@ -159,14 +159,41 @@ machine, so put specific entries before general ones.
 | `integrity` | no | A sha512 digest the way npm publishes it, `sha512-` and the digest in base64. oku checks the download against it. |
 | `strip` | no | How many leading path components to drop when unpacking. Default 0. |
 | `bin` | see below | Paths of executables inside the package. An entry may also be a table that makes oku write the program, see [A program that needs an interpreter](#a-program-that-needs-an-interpreter). |
+| `lib`, `include`, `share` | see below | Files and directories for the package's `lib`, `include` and `share`, see [A prebuilt library](#a-prebuilt-library). |
 | `man` | see below | Paths of man pages. The file name needs a section, such as `rg.1` or `rg.1.gz`. |
 | `completions` | see below | Shell name to path, such as `{ fish = "complete/rg.fish" }`. |
 | `app` | see below | macOS app bundles, such as `["Foo.app"]`. See [Apps and fonts](#apps-and-fonts). |
 | `font` | see below | Font files, such as `["fonts/ttf/Foo-Regular.ttf"]`. |
 | `data` | see below | `true` for a package that only holds files, see [A package that only holds files](#a-package-that-only-holds-files). |
 
-Each artifact needs at least one of `bin`, `man`, `completions`, `app` and
-`font`, or `data = true`.
+Each artifact needs at least one of `bin`, `lib`, `include`, `share`, `man`,
+`completions`, `app` and `font`, or `data = true`.
+
+### A prebuilt library
+
+A build that [depends](#dependencies) on a package looks for headers in its
+`include`, for libraries in its `lib` and for pkg-config files in
+`lib/pkgconfig` and `share/pkgconfig`. A prebuilt download fills them with
+`lib`, `include` and `share`:
+
+```toml
+[[artifact]]
+match = { os = "darwin", arch = "arm64" }
+url = "https://example.com/libwebp-{{version}}-mac-arm64.tar.gz"
+strip = 1
+bin = ["bin/cwebp"]
+include = ["include/webp"]
+lib = ["lib/libwebp.a", "lib/libsharpyuv.a"]
+```
+
+An entry is a file or a directory in the download, and it keeps its last name.
+`include/webp` becomes the package's `include/webp`, so `#include
+<webp/decode.h>` works, and `lib/libwebp.a` becomes `lib/libwebp.a`.
+
+A static library works as it is. A shared library from a download keeps the
+install name its builder gave it, which on macOS is a path that does not exist
+on your machine, so a program linked against it does not start. Build such a
+library from source with `[build]`.
 
 ### A package that only holds files
 

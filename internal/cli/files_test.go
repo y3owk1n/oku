@@ -2,6 +2,7 @@ package cli_test
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -299,5 +300,38 @@ func TestB126ARelativeNodeRuntimeStartsAtTheConfigDirectory(t *testing.T) {
 	// The working directory is the fixtures directory, which has no packages/.
 	if out, err := m.run(t, "", "add", "npm:@scope/tool"); err != nil {
 		t.Fatalf("a relative runtimes.node should start at the config directory: %v\n%s", err, out)
+	}
+}
+
+func TestB171APrebuiltLibraryServesABuildThatDependsOnIt(t *testing.T) {
+	m := newMachine(t)
+
+	// A prebuilt download with a header in a directory and a file under lib.
+	m.manifest(t, "libgreet", map[string]string{
+		"include/greet/greet.h": "#define GREETING \"hello from the header\"\n",
+		"lib/greet.txt":         "from lib\n",
+	}, "include = [\"include/greet\"]\nlib = [\"lib/greet.txt\"]")
+
+	app := filepath.Join(m.fixtures, "app.toml")
+	must(t, os.WriteFile(app, []byte("[package]\nname = \"app\"\n[version]\nvalue = \"1.0.0\"\n"+
+		"[build]\nneeds = [\"sh\"]\ndeps = [\"./libgreet.toml\"]\n"+
+		"[[build.step]]\nshell = \"sh\"\n"+
+		"run = \"\"\"\nfor dir in $(echo $CPATH | tr ':' ' '); do test -f $dir/greet/greet.h && header=$dir/greet/greet.h; done\n"+
+		"for dir in $(echo $LIBRARY_PATH | tr ':' ' '); do test -f $dir/greet.txt && lib=$dir/greet.txt; done\n"+
+		"printf '#!/bin/sh\\\\ncat %s %s\\\\n' $header $lib > app\n\"\"\"\n"+
+		"[[build.step]]\ninstall = { bin = [\"app\"] }\n"), 0o644))
+
+	m.opts.Interactive = yes()
+
+	out, err := m.run(t, "y\n", "add", app)
+	if err != nil {
+		t.Fatalf("the build should find the header and the library of its dep: %v\n%s", err, out)
+	}
+
+	got, err := exec.Command(m.profile("bin", "app")).Output()
+	must(t, err)
+
+	if !strings.Contains(string(got), "hello from the header") || !strings.Contains(string(got), "from lib") {
+		t.Fatalf("the built program should hold what CPATH and LIBRARY_PATH led to, it printed %q", got)
 	}
 }

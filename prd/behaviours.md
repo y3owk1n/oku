@@ -320,6 +320,9 @@ order step in `prd/product.md`.
   package to its new version on `update`.
 - B141 [13] On Windows a linked directory is a junction and a file is a copy.
   oku stops before any change when a copy was edited by hand, and names it.
+- B171 [5] An artifact's `lib`, `include` and `share` entries, files or
+  directories, fill those directories of the package, and a build that depends
+  on the package finds its headers and libraries there.
 - B166 [13] An artifact with `data = true` exposes nothing and puts nothing on
   `PATH`, and a link source reaches its files with `{{pkg.<name>}}`. An
   artifact with no output and no `data` key is an error that names the key.
