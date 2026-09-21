@@ -699,23 +699,28 @@ config the user edits often must not need a sync per edit.
 
 ```toml
 [vars]
-scheme = { base16 = "./themes/forest-ink.yml" }
 font = "JetBrainsMono Nerd Font Propo"
 email = "me@example.com"
+
+[vars.theme]
+base00 = "0c1410"
 ```
 
-`[vars]` holds strings. Includes merge it like `[packages]`, and the user's
-own list wins. A `base16` value loads a scheme file as the variables that
-tinted-theming templates use, such as `{{base00-hex}}`. `render = "./x.tmpl"`
-writes the file with each `{{name}}` replaced. `text` and targets expand the
-same way. A name that is not set is an error that names the file and the line.
-A template can write a literal `{{`. There are no conditionals and no loops.
+`[vars]` holds strings. A nested table joins its names with a dot, so the
+colour above is `{{theme.base00}}`. Includes merge `[vars]` like `[packages]`,
+and the user's own list wins. `render = "./x.tmpl"` writes the file with each
+`{{name}}` replaced. `text` and targets expand the same way, and a location
+such as `{{data}}` is a variable too. A name that is not set is an error that
+names the file and the line. `\{{` writes the two braces themselves. There are
+no conditionals and no loops.
 
 Why: a difference between platforms belongs in `when` on the entry, and most
 tools can include a second file, so logic in templates would only add a
 language to learn. The same template then gives the same bytes on every OS.
-The variable names of tinted-theming make the existing base16 templates usable
-unchanged. `when` matches a platform, not one machine (D15), so a machine that
+A colour scheme is a table of variables that the user writes, so oku needs no
+loader for one scheme format. A name may hold `-` and spaces may surround it,
+which is how base16 templates are written, so one of those works unchanged with
+variables named `base00-hex`. `when` matches a platform, not one machine (D15), so a machine that
 differs sets its own `[vars]` in its own list.
 
 ## D62. Settings are per OS, in user scope, with the old value kept

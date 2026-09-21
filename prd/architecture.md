@@ -161,8 +161,8 @@ postgres = { ref = "mine/postgres", service = true }
 caddy = { ref = "mine/caddy", service = true, system = true }
 
 [vars]                                # global list only (D61)
-scheme = { base16 = "./themes/forest-ink.yml" }
 email = "me@example.com"
+theme = { base00 = "0c1410" }         # {{theme.base00}}
 
 [files]                               # global list only (D60)
 "{{home}}/.config/nvim" = { link = "./files/nvim" }

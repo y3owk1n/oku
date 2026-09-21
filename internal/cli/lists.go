@@ -39,8 +39,18 @@ type merger struct {
 	packages map[string]listed
 	// files is keyed by the target as the list has it.
 	files    map[string]listedFile
+	vars     map[string]string
 	includes []lock.Include
 	seen     map[string]bool
+}
+
+// merged is a list with its includes merged under it.
+type merged struct {
+	packages map[string]listed
+	// files is sorted by target.
+	files    []listedFile
+	vars     map[string]string
+	includes []lock.Include
 }
 
 // loadList reads the global list and merges its includes under it. An included
@@ -51,10 +61,10 @@ func (e env) loadList(
 	opts Options,
 	locked *lock.Lock,
 	refresh bool,
-) (map[string]listed, []listedFile, []lock.Include, error) {
+) (merged, error) {
 	own, err := list.Read(e.listPath())
 	if err != nil {
-		return nil, nil, nil, err
+		return merged{}, err
 	}
 
 	m := &merger{
@@ -65,11 +75,12 @@ func (e env) loadList(
 		project:  e.project,
 		packages: map[string]listed{},
 		files:    map[string]listedFile{},
+		vars:     map[string]string{},
 		seen:     map[string]bool{},
 	}
 
 	if err := m.merge(own, e.listPath(), filepath.Dir(e.listPath()), "", 0); err != nil {
-		return nil, nil, nil, err
+		return merged{}, err
 	}
 
 	files := make([]listedFile, 0, len(m.files))
@@ -77,7 +88,7 @@ func (e env) loadList(
 		files = append(files, m.files[target])
 	}
 
-	return m.packages, files, m.includes, nil
+	return merged{packages: m.packages, files: files, vars: m.vars, includes: m.includes}, nil
 }
 
 // merge adds l's includes and then l's own packages, so a package in l overrides
@@ -172,6 +183,13 @@ func (m *merger) merge(l *list.List, origin, dir, from string, depth int) error 
 	if m.project != "" && len(l.Files) > 0 {
 		return fmt.Errorf("%s has [files], and only the global list may place files", origin)
 	}
+
+	if m.project != "" && len(l.Vars) > 0 {
+		return fmt.Errorf("%s has [vars], which only the global list uses", origin)
+	}
+
+	// A later list overrides a variable of an earlier one, like a package.
+	maps.Copy(m.vars, l.Vars)
 
 	for _, file := range l.Files {
 		m.files[file.Target] = listedFile{file: file, dir: dir}

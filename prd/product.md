@@ -62,8 +62,8 @@ apps, fonts, services, and environment variables.
 Besides packages, the global list places files in the user's home directory,
 as links, fixed text or templates rendered from the list's variables, and sets
 per-user settings of the OS: preference domains on macOS, dconf on Linux, the
-current user's registry on Windows. A base16 scheme is a set of variables, so
-changing one line of the list changes the colours of every rendered file.
+current user's registry on Windows. A colour scheme is a table of variables, so
+changing it changes the colours of every rendered file in one generation.
 
 ## Platforms
 
@@ -105,8 +105,8 @@ These are permanent edges of the product, not deferrals.
 ## Build order
 
 Everything below is in scope. The order is dependency order, not priority.
-Steps 1 to 13 are built, and `docs/` describes what works today. Steps 14 and
-15 are not built yet.
+Steps 1 to 14 are built, and `docs/` describes what works today. Step 15 is
+not built yet.
 
 1. Core: local ref, artifact, store, global profile. `add`, `remove`, `list`.
 2. Refs, `oku.toml`, `oku.lock`, `sync`, list `include` and `when`, bootstrap
@@ -124,6 +124,6 @@ Steps 1 to 13 are built, and `docs/` describes what works today. Steps 14 and
     after a crash. Covers the apps, fonts and services of step 8.
 13. Files: `[files]` with `link` and `text`, location variables, targets oku
     does not own, junctions and copies on Windows.
-14. Variables and templates: `[vars]`, `render`, base16 schemes.
+14. Variables and templates: `[vars]` and `render`.
 15. Settings: the `setting` ledger kind and `[defaults]` on macOS, then
     `[registry]` on Windows and `[dconf]` on Linux.

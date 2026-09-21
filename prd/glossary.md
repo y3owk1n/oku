@@ -63,7 +63,6 @@
   or `{{localappdata}}`, the start of a target.
 - **Variable**: a named string from `[vars]` that `render`, `text` and targets
   expand.
-- **Scheme**: a base16 colour file loaded as variables.
 - **Setting**: one key of a per-user OS mechanism: a macOS preference domain,
   dconf, or the current user's registry.
 - **Plan** and **apply**: the two parts of a change. The plan checks and

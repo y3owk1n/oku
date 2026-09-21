@@ -39,11 +39,13 @@ type File struct {
 	// Target is the path as the list has it, starting with a location variable
 	// such as {{home}}.
 	Target string
-	// Link is the path the target links to. Text is the content of the target.
-	// An entry has one of the two, and HasText tells an empty text from none.
+	// Link is the path the target links to. Text is the content of the target,
+	// and Render is the path of a template that gives the content. An entry has
+	// one of the three, and HasText tells an empty text from none.
 	Link    string
 	Text    string
 	HasText bool
+	Render  string
 	// Mode is the permission of a file with content. Zero means read-only.
 	Mode fs.FileMode
 	// When limits the entry to matching platforms. The zero value matches all.
@@ -57,6 +59,9 @@ type List struct {
 	Packages map[string]Entry
 	// Files is sorted by target.
 	Files []File
+	// Vars holds [vars]. A nested table becomes names joined by a dot, so
+	// [vars.theme] with base00 is "theme.base00".
+	Vars map[string]string
 }
 
 // Read parses the list at path. A missing file is an empty list.
@@ -75,13 +80,18 @@ func Parse(data []byte, origin string) (*List, error) {
 		Include  []string       `toml:"include"`
 		Packages map[string]any `toml:"packages"`
 		Files    map[string]any `toml:"files"`
+		Vars     map[string]any `toml:"vars"`
 	}
 
 	if err := toml.Unmarshal(data, &raw); err != nil {
 		return nil, fmt.Errorf("parse %s: %w", origin, err)
 	}
 
-	l := &List{Include: raw.Include, Packages: map[string]Entry{}}
+	l := &List{Include: raw.Include, Packages: map[string]Entry{}, Vars: map[string]string{}}
+
+	if err := flattenVars(l.Vars, "", raw.Vars); err != nil {
+		return nil, fmt.Errorf("%s: %w", origin, err)
+	}
 
 	for name, value := range raw.Packages {
 		entry, err := toEntry(value)
@@ -105,11 +115,29 @@ func Parse(data []byte, origin string) (*List, error) {
 	return l, nil
 }
 
+// flattenVars adds the strings of table to vars, with prefix before each name.
+func flattenVars(vars map[string]string, prefix string, table map[string]any) error {
+	for key, value := range table {
+		switch v := value.(type) {
+		case string:
+			vars[prefix+key] = v
+		case map[string]any:
+			if err := flattenVars(vars, prefix+key+".", v); err != nil {
+				return err
+			}
+		default:
+			return fmt.Errorf("vars.%s must be a string or a table of strings", prefix+key)
+		}
+	}
+
+	return nil
+}
+
 // toFile reads the table of one [files] entry.
 func toFile(value any) (File, error) {
 	table, ok := value.(map[string]any)
 	if !ok {
-		return File{}, errors.New("want a table with link or text")
+		return File{}, errors.New("want a table with link, text or render")
 	}
 
 	var f File
@@ -122,6 +150,8 @@ func toFile(value any) (File, error) {
 			f.Link = text
 		case "text":
 			f.Text, f.HasText = text, isText
+		case "render":
+			f.Render = text
 		case "mode":
 			mode, err := strconv.ParseUint(text, 8, 32)
 			if err != nil || !isText || mode > 0o777 {
@@ -132,7 +162,9 @@ func toFile(value any) (File, error) {
 		case "when":
 			continue
 		default:
-			return f, fmt.Errorf("%s is not a key of a file, use link, text, mode or when", key)
+			return f, fmt.Errorf(
+				"%s is not a key of a file, use link, text, render, mode or when", key,
+			)
 		}
 
 		if !isText {
@@ -140,13 +172,21 @@ func toFile(value any) (File, error) {
 		}
 	}
 
+	kinds := 0
+
+	for _, set := range []bool{f.Link != "", f.HasText, f.Render != ""} {
+		if set {
+			kinds++
+		}
+	}
+
 	switch {
-	case f.Link != "" && f.HasText:
-		return f, errors.New("link and text cannot both be set")
-	case f.Link == "" && !f.HasText:
-		return f, errors.New("link or text is required")
+	case kinds != 1:
+		return f, errors.New("a file needs exactly one of link, text and render")
 	case f.Link != "" && f.Mode != 0:
-		return f, errors.New("mode only applies to text, a link has the permissions of its source")
+		return f, errors.New(
+			"mode does not apply to a link, which has the permissions of its source",
+		)
 	}
 
 	var err error

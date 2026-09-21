@@ -570,6 +570,7 @@ $sources = Join-Path $configDir 'files'
 New-Item -ItemType Directory -Force (Join-Path $sources 'nvim') | Out-Null
 Set-Content (Join-Path $sources 'nvim\init.lua') 'first'
 Set-Content (Join-Path $sources 'gitconfig') 'linked file'
+[IO.File]::WriteAllText((Join-Path $sources 'greeting.tmpl'), "say {{ greeting }}`r`n\{{kept}}")
 
 $nvim = Join-Path $env:XDG_CONFIG_HOME 'nvim'
 $gitconfig = Join-Path $env:XDG_CONFIG_HOME 'git\config'
@@ -577,7 +578,11 @@ $note = Join-Path $env:LOCALAPPDATA 'oku-live-files\note.txt'
 
 Add-Content $listPath @'
 
+[vars]
+greeting = "hi"
+
 [files]
+"{{config}}/greeting.txt" = { render = "./files/greeting.tmpl" }
 "{{config}}/nvim" = { link = "./files/nvim" }
 "{{config}}/git/config" = { link = "./files/gitconfig" }
 "{{localappdata}}/oku-live-files/note.txt" = { text = "one", when = { os = "windows" } }
@@ -591,6 +596,10 @@ Check 'a linked directory is a junction, and an edit of its source shows with no
 Check 'a linked file and a text are copies with the right bytes' {
     ((Get-Content $gitconfig) -eq 'linked file') -and ((Get-Content $note -Raw) -eq 'one') -and
     (-not (Get-Item $note).LinkType)
+}
+
+Check 'a template renders to the same bytes as on the other systems' {
+    [IO.File]::ReadAllText((Join-Path $env:XDG_CONFIG_HOME 'greeting.txt')) -ceq "say hi`r`n{{kept}}"
 }
 
 Set-ItemProperty $note IsReadOnly $false
