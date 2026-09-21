@@ -12,10 +12,18 @@ import (
 // edits the plist files themselves.
 type Defaults struct{}
 
-func run(args ...string) ([]byte, error) {
-	out, err := exec.Command("/usr/bin/defaults", args...).CombinedOutput()
+// run calls defaults with verb on domain. A domain that starts with CurrentHost
+// is one of this Mac only.
+func run(verb, domain string, rest ...string) ([]byte, error) {
+	args := []string{verb, domain}
+
+	if plain, thisMac := strings.CutPrefix(domain, CurrentHost); thisMac {
+		args = []string{"-currentHost", verb, plain}
+	}
+
+	out, err := exec.Command("/usr/bin/defaults", append(args, rest...)...).CombinedOutput()
 	if err != nil {
-		return nil, fmt.Errorf("defaults %s: %w: %s", args[0], err, strings.TrimSpace(string(out)))
+		return nil, fmt.Errorf("defaults %s %s: %w: %s", verb, domain, err, strings.TrimSpace(string(out)))
 	}
 
 	return out, nil

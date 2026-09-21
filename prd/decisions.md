@@ -754,6 +754,12 @@ the types of the mechanism. oku owns a table value, such as
 only. A registry key outside `HKCU` is an error, and oku never writes
 `/Library/Preferences`.
 
+macOS keeps some preferences per Mac, which `defaults -currentHost` writes.
+They get their own table, `[defaults-currenthost.<domain>]`, and go to the same
+store with a marked domain. Without it such a setting needs the path of a file
+under one user's home directory as its domain, which ties the list to one user
+name.
+
 `setting` is a ledger kind. Before oku first writes a key it records the value
 it found, or that there was none. A key that leaves the list gets that value
 back, also on `rollback` and `self uninstall`. Settings have no atomic switch,

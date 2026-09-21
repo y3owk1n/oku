@@ -16,6 +16,7 @@ import (
 	"github.com/pelletier/go-toml/v2"
 
 	"github.com/y3owk1n/oku/internal/platform"
+	"github.com/y3owk1n/oku/internal/settings"
 )
 
 // FileName is the list's file name.
@@ -112,6 +113,9 @@ func Parse(data []byte, origin string) (*List, error) {
 		Vars     map[string]any `toml:"vars"`
 		Secrets  map[string]any `toml:"secrets"`
 		Defaults map[string]any `toml:"defaults"`
+		// ThisMac holds the macOS preferences of this one Mac, which go to the same
+		// store as Defaults with a marked domain.
+		ThisMac  map[string]any `toml:"defaults-currenthost"`
 		Registry map[string]any `toml:"registry"`
 		Dconf    map[string]any `toml:"dconf"`
 	}
@@ -158,9 +162,22 @@ func Parse(data []byte, origin string) (*List, error) {
 		l.Packages[name] = entry
 	}
 
-	for backend, domains := range map[string]map[string]any{
-		"defaults": raw.Defaults, "registry": raw.Registry, "dconf": raw.Dconf,
+	thisMac := map[string]any{}
+	for domain, keys := range raw.ThisMac {
+		thisMac[settings.CurrentHost+domain] = keys
+	}
+
+	for _, table := range []struct {
+		backend string
+		domains map[string]any
+	}{
+		{"defaults", raw.Defaults},
+		{"defaults", thisMac},
+		{"registry", raw.Registry},
+		{"dconf", raw.Dconf},
 	} {
+		backend, domains := table.backend, table.domains
+
 		settings, err := toSettings(backend, domains)
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", origin, err)

@@ -339,6 +339,9 @@ order step in `prd/product.md`.
 
 - B149 [15] After `sync` a key under `[defaults.<domain>]` has the value and
   the type from the list: boolean, integer, float, string, array or table.
+- B168 [15] A key under `[defaults-currenthost.<domain>]` is set for this Mac
+  only, the way `defaults -currentHost` does, and leaves the domain of the user
+  alone. B150 holds for it.
 - B150 [15] A key that leaves the list gets back the value it had before oku
   first wrote it, or is deleted when it had none. `rollback` does the same.
 - B151 [15] oku skips the settings tables of another OS without an error.

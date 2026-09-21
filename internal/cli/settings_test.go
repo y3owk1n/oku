@@ -193,3 +193,31 @@ func TestB95UninstallRestoresEverySetting(t *testing.T) {
 		)
 	}
 }
+
+func TestB168ASettingOfThisMacGoesToItsOwnDomain(t *testing.T) {
+	m, store := settingsMachine(t)
+	store.values["currentHost:com.apple.controlcenter BatteryShowPercentage"] = "<false/>"
+
+	m.writeFilesList(t, "[defaults-currenthost.\"com.apple.controlcenter\"]\nBatteryShowPercentage = true\n"+
+		"[defaults.\"com.apple.controlcenter\"]\nOther = 1\n")
+
+	_, err := m.run(t, "", "sync")
+	must(t, err)
+
+	if got := store.values["currentHost:com.apple.controlcenter BatteryShowPercentage"]; got != "<true/>" {
+		t.Fatalf("the setting of this Mac is %q", got)
+	}
+
+	if _, set := store.values["com.apple.controlcenter BatteryShowPercentage"]; set {
+		t.Fatal("a setting of this Mac reached the domain of the user on every Mac")
+	}
+
+	m.writeFilesList(t, "")
+
+	_, err = m.run(t, "", "sync")
+	must(t, err)
+
+	if got := store.values["currentHost:com.apple.controlcenter BatteryShowPercentage"]; got != "<false/>" {
+		t.Fatalf("the setting of this Mac should be back at its old value, it is %q", got)
+	}
+}
