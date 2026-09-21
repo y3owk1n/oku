@@ -135,7 +135,8 @@ node = 'github:you/recipes#node'
 
 Every npm package then gets that package as a runtime dep, and its programs run
 through it. They do not need node on `PATH`, and node does not appear there.
-`oku update` updates that node package too. A local file works as the ref too, and
+`oku update` updates that node package too. The ref may be a
+[source alias](#sources), such as `core/node`. A local file works as the ref too, and
 then a list that holds npm packages only works on machines that have that file.
 
 Without `runtimes.node`, the programs run the `node` on `PATH`, and `oku add`
