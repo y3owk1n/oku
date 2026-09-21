@@ -31,6 +31,7 @@ type schema struct {
 		URL          string            `toml:"url"`
 		SHA256       string            `toml:"sha256"`
 		SHA256URL    string            `toml:"sha256_url"`
+		Integrity    string            `toml:"integrity"`
 		SignatureURL string            `toml:"signature_url"`
 		Strip        int               `toml:"strip"`
 		Bin          []any             `toml:"bin"`
@@ -130,7 +131,8 @@ func Lint(data []byte) Report {
 		}
 
 		switch {
-		case a.SHA256 != "" || a.SHA256URL != "" || full.Package.SigningKey != "":
+		case a.SHA256 != "" || a.SHA256URL != "" || a.Integrity != "" ||
+			full.Package.SigningKey != "" || full.Version.From == FromNPM:
 		case full.Version.Tag == "":
 			report.Warnings = append(report.Warnings, fmt.Sprintf(
 				"artifact[%d]: no sha256 or sha256_url, so users trust the first download", i,

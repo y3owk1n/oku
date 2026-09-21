@@ -79,6 +79,8 @@ const (
 	// starts with its host.
 	FromGitLabReleases = "gitlab-releases"
 	FromGitTags        = "git-tags"
+	// FromNPM reads the versions of a package in the npm registry.
+	FromNPM = "npm"
 )
 
 // Artifact is a prebuilt download for the platforms its selector matches.
@@ -87,7 +89,10 @@ type Artifact struct {
 	URL       string            `toml:"url"`
 	SHA256    string            `toml:"sha256"`
 	SHA256URL string            `toml:"sha256_url"`
-	Strip     int               `toml:"strip"`
+	// Integrity is a sha512 digest the way npm publishes it, "sha512-" and the
+	// digest in base64.
+	Integrity string `toml:"integrity"`
+	Strip     int    `toml:"strip"`
 	// RawBin is "bin" as TOML gives it. Parse splits it into Bin, the files that
 	// are programs, and Wrap, the programs that oku writes.
 	RawBin      []any             `toml:"bin"`
@@ -137,7 +142,9 @@ var (
 		`^[A-Za-z0-9][A-Za-z0-9-]*(\.[A-Za-z0-9-]+)+/[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9._-]+$`,
 	)
 	gitlabRepoRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*(/[A-Za-z0-9_][A-Za-z0-9._-]*)+$`)
+	npmNameRe    = regexp.MustCompile(`^(@[a-z0-9][a-z0-9._~-]*/)?[a-z0-9][a-z0-9._~-]*$`)
 	sha256Re     = regexp.MustCompile(`^[0-9a-f]{64}$`)
+	integrityRe  = regexp.MustCompile(`^sha512-[A-Za-z0-9+/]{86}==$`)
 	templateRe   = regexp.MustCompile(`\{\{\s*([a-zA-Z0-9_.-]+)\s*\}\}`)
 )
 
@@ -258,15 +265,21 @@ func (m *Manifest) validate() error {
 			errs,
 			errors.New(`version.repo must be "group/project" or "host/group/project" for gitlab-releases`),
 		)
+	case m.Version.From == FromNPM && !npmNameRe.MatchString(m.Version.Repo):
+		errs = append(
+			errs, errors.New(`version.repo must be a package name such as "@scope/name" for npm`),
+		)
+	case m.Version.From == FromNPM && m.Version.StripPrefix != "":
+		errs = append(errs, errors.New("version.strip_prefix does not apply to npm, which has no tags"))
 	case m.Version.From == FromGitTags && m.Version.Repo == "":
 		errs = append(errs, errors.New("version.repo must be a git URL for git-tags"))
 	case m.Version.From != "" && !slices.Contains(
-		[]string{FromGitHubReleases, FromGiteaReleases, FromGitLabReleases, FromGitTags},
+		[]string{FromGitHubReleases, FromGiteaReleases, FromGitLabReleases, FromGitTags, FromNPM},
 		m.Version.From,
 	):
 		errs = append(errs, fmt.Errorf(
-			"version.from %q must be %q, %q, %q or %q",
-			m.Version.From, FromGitHubReleases, FromGiteaReleases, FromGitLabReleases, FromGitTags,
+			"version.from %q must be %q, %q, %q, %q or %q", m.Version.From,
+			FromGitHubReleases, FromGiteaReleases, FromGitLabReleases, FromGitTags, FromNPM,
 		))
 	}
 
@@ -297,6 +310,12 @@ func (m *Manifest) validate() error {
 			errs = append(errs, fmt.Errorf(
 				"artifact[%d]: sha256 must be 64 lowercase hex characters",
 				i,
+			))
+		}
+
+		if a.Integrity != "" && !integrityRe.MatchString(a.Integrity) {
+			errs = append(errs, fmt.Errorf(
+				`artifact[%d]: integrity must be "sha512-" and 88 base64 characters`, i,
 			))
 		}
 

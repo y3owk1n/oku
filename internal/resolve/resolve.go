@@ -20,6 +20,8 @@ import (
 // Resolver lists versions.
 type Resolver struct {
 	Hosts forge.Hosts
+	// NPM replaces the URL of the npm registry when set, which tests do.
+	NPM string
 }
 
 // Release is one installable version and the upstream tag it came from.
@@ -32,6 +34,9 @@ type Release struct {
 	// Digests maps a download URL of a moving tag's release to the sha256 that
 	// GitHub reports for it.
 	Digests map[string]string
+	// Integrity maps the download URL of an npm version to the digest the
+	// registry publishes for it, such as "sha512-...".
+	Integrity map[string]string
 }
 
 // Pick returns the release of v to install. want selects an exact version, and
@@ -165,6 +170,10 @@ func (r *Resolver) List(ctx context.Context, v manifest.Version) ([]Release, err
 		}
 
 		return []Release{release}, nil
+	}
+
+	if v.From == manifest.FromNPM {
+		return r.npmVersions(ctx, v.Repo)
 	}
 
 	var (
