@@ -3554,6 +3554,9 @@ func TestB54BuildEnvironmentHoldsOnlyOkuVariables(t *testing.T) {
 	allowed := []string{
 		"EXTRA", "HOME", "OKU_JOBS", "OKU_PREFIX", "OKU_SRC", "PATH", "TMPDIR",
 		"PWD", "OLDPWD", "SHLVL", "_", "__CF_USER_TEXT_ENCODING",
+		// The link environment. On macOS it holds the pkg-config files of the OS
+		// even for a build with no deps.
+		"PKG_CONFIG_PATH",
 	}
 
 	for _, name := range names {

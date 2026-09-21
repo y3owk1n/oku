@@ -274,6 +274,13 @@ install name is already what a correct macOS library has.
 Known limit: the GNU linker ignores `LD_RUN_PATH` when the build passes its own
 `-rpath`. Such a build adds the dep paths itself with `{{dep.<name>.prefix}}`.
 
+macOS ships libraries such as zlib with headers and no pkg-config file. In a
+build on macOS oku writes one for each of them, last on `PKG_CONFIG_PATH`, with
+the version from the SDK on the machine. Why: the pkg-config file of libpng,
+freetype or libtiff says `Requires: zlib`, and without a `zlib.pc` every
+configure script that asks pkg-config for them reports them missing. A manifest
+that wrote those files itself would carry the versions of one SDK.
+
 ## D32. The build environment is scrubbed before the sandbox exists
 
 A `run` step gets `PATH` with the deps' `bin`, the directories of the `needs`
