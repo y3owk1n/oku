@@ -494,7 +494,11 @@ finally {
     Remove-Item -Recurse -Force $served, (Join-Path $env:RUNNER_TEMP 'oku-installed') -ErrorAction SilentlyContinue
 }
 
-# Hosts other than GitHub, and a URL that is the download itself.
+# Hosts other than GitHub, and a URL that is the download itself. The self
+# uninstall check above deleted oku.exe, so this part builds it again.
+go build -C $repoRoot -o $oku ./cmd/oku
+if ($LASTEXITCODE -ne 0) { throw 'go build failed' }
+
 Oku add gitlab:gitlab-org/cli --bin glab
 $glab = & "$bin\glab.exe" --version
 Check 'a gitlab: project installs from a zip with its program in a directory' { $glab -match '^glab \d' }
