@@ -14,6 +14,7 @@ import (
 
 	"github.com/y3owk1n/oku/internal/expose"
 	"github.com/y3owk1n/oku/internal/list"
+	"github.com/y3owk1n/oku/internal/profile"
 )
 
 // pendingFile exists only while oku applies a change. It holds what a revert
@@ -53,6 +54,8 @@ type change struct {
 	before *savedLists
 	// commit edits oku.toml and writes oku.lock.
 	commit func() error
+	// dryRun stops after the plan and prints what the apply would do.
+	dryRun bool
 }
 
 func (e env) readSavedLists() (savedLists, error) {
@@ -109,7 +112,11 @@ func (e env) apply(cmd *cobra.Command, opts Options, c change) error {
 	prof := e.profile()
 
 	p, plan, err := e.plan(cmd, opts, c)
-	if err != nil {
+	if err != nil || c.dryRun {
+		if err == nil {
+			err = e.describe(cmd, c, plan)
+		}
+
 		if c.staged {
 			err = errors.Join(err, prof.Discard(c.to))
 		}
@@ -186,12 +193,105 @@ func (e env) plan(cmd *cobra.Command, opts Options, c change) (pending, exposePl
 		return pending{}, exposePlan{}, err
 	}
 
+	// A dry run stops after the plan, so nothing is pending.
+	if c.dryRun {
+		return p, plan, nil
+	}
+
 	data, err := toml.Marshal(p)
 	if err != nil {
 		return pending{}, exposePlan{}, err
 	}
 
 	return p, plan, list.WriteFile(filepath.Join(e.data, pendingFile), data)
+}
+
+// describe prints what the apply of c would do, for a dry run. The plan has
+// already run, so everything it checks is known to work.
+func (e env) describe(cmd *cobra.Command, c change, plan exposePlan) error {
+	out := cmd.OutOrStdout()
+	prof := e.profile()
+	lines := 0
+
+	say := func(format string, args ...any) {
+		lines++
+
+		fmt.Fprintf(out, format+"\n", args...)
+	}
+
+	have, err := prof.PackagesOf(prof.Current())
+	if err != nil {
+		return err
+	}
+
+	want, err := prof.PackagesOf(c.to)
+	if err != nil {
+		return err
+	}
+
+	for _, pkg := range have {
+		if !slices.ContainsFunc(want, func(p profile.Package) bool { return p.Name == pkg.Name }) {
+			say("would remove the package %s", pkg.Name)
+		}
+	}
+
+	for _, pkg := range want {
+		i := slices.IndexFunc(have, func(p profile.Package) bool { return p.Name == pkg.Name })
+
+		switch {
+		case i < 0:
+			say("would install %s %s", pkg.Name, pkg.Version)
+		case have[i].StorePath != pkg.StorePath:
+			say("would change %s from %s to %s", pkg.Name, have[i].Version, pkg.Version)
+		}
+	}
+
+	// A file with content changes through "current" and has no ledger step.
+	before, err := prof.FilesOf(prof.Current())
+	if err != nil {
+		return err
+	}
+
+	after, err := prof.FilesOf(c.to)
+	if err != nil {
+		return err
+	}
+
+	for _, f := range after {
+		i := slices.IndexFunc(before, func(b profile.File) bool { return b.Target == f.Target })
+		if i >= 0 && before[i].Hash != f.Hash && len(f.Secrets) == 0 && f.Content != "" {
+			say("would change the content of %s", f.Target)
+		}
+	}
+
+	if e.project == "" {
+		ledger, err := expose.ReadLedger(e.data)
+		if err != nil {
+			return err
+		}
+
+		for _, item := range ledger.Items {
+			if !expose.Holds(plan.wanted, item) {
+				say("would remove the %s %s", item.Kind, item.Target)
+			}
+		}
+
+		for _, item := range plan.wanted {
+			if !expose.Holds(ledger.Items, item) {
+				say("would write the %s %s", item.Kind, item.Target)
+			}
+		}
+	}
+
+	if lines == 0 {
+		fmt.Fprintln(out, "dry run: already in sync")
+
+		return nil
+	}
+
+	fmt.Fprintln(out, "dry run: nothing was changed")
+
+	return nil
 }
 
 // revert puts the machine back to generation p.From.
@@ -321,11 +421,23 @@ func (e env) recoverPending(cmd *cobra.Command, opts Options) error {
 	return nil
 }
 
-// recoverFirst runs recoverPending for the command's list.
+// recoverFirst runs recoverPending for the command's list. A dry run changes
+// nothing, so it stops at a change that did not finish.
 func recoverFirst(cmd *cobra.Command, opts Options) error {
 	e, err := scopedEnv(cmd, opts)
 	if err != nil {
 		return err
+	}
+
+	if dryRun, _ := cmd.Flags().GetBool(dryRunFlag); dryRun {
+		if p, err := e.readPending(); err != nil || p != nil {
+			return errors.Join(err, errors.New(
+				"the last change did not finish, and a dry run cannot put the machine back\n"+
+					"run `oku sync` first",
+			))
+		}
+
+		return nil
 	}
 
 	return e.recoverPending(cmd, opts)

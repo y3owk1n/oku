@@ -288,6 +288,9 @@ order step in `prd/product.md`.
 - B131 [12] oku finds every failure it can before the first change: a
   download, a checksum, a build, a template, a target it does not own, a
   setting of the wrong type.
+- B167 [12] `sync --dry-run` and `update --dry-run` run every check of a real
+  run, print what would change, and change nothing: no generation, no lock, no
+  file, no service, no setting. They fail where the real run would fail.
 - B132 [12] When a step of the apply fails, oku undoes the steps it made and
   reports the error of the failed step.
 - B133 [12] After an oku process was killed during a change, the next command

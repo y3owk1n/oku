@@ -211,7 +211,7 @@ name that nothing installed uses.
 ## oku sync
 
 ```
-oku sync [list-ref] [--system]
+oku sync [list-ref] [--system] [--dry-run]
 ```
 
 Makes the profile match `oku.toml` and the lists it includes, at the versions
@@ -245,6 +245,32 @@ or a service cannot be set up, oku takes back the ones it had already changed.
 
 Output is either `already in sync` or a line such as
 `profile now holds 12 packages`.
+
+### A dry run
+
+`oku sync --dry-run` runs every check of a real sync and then stops. It
+resolves, downloads, verifies and builds, renders every template, decrypts
+every secret in memory, and looks for files that oku did not write. Then it
+prints what a sync would do:
+
+```
+$ oku sync --dry-run
+would remove the package fd
+would install ripgrep 15.2.0
+would change the content of /home/you/.config/ghostty/config
+would write the file /home/you/.config/git/config
+would write the setting com.apple.dock tilesize
+dry run: nothing was changed
+```
+
+It fails with the error a real sync would give, so it is the way to try a new
+list or a new machine. It writes no generation, no `oku.lock`, no file, no
+service and no setting. Downloads and builds stay in the store and the cache,
+where the real sync finds them again and `oku gc` deletes the unused ones.
+
+When an earlier change did not finish, a dry run stops and says to run
+`oku sync` first, because putting the machine back would change it.
+`oku update --dry-run` does the same for an update.
 
 ### Setting up a machine from a published list
 
@@ -282,7 +308,7 @@ works once the cause is fixed.
 ## oku update
 
 ```
-oku update [name...] [--system]
+oku update [name...] [--system] [--dry-run]
 ```
 
 Re-resolves packages from their refs and rewrites `oku.lock`. With no names it
