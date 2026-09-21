@@ -67,6 +67,7 @@ func runDoctor(cmd *cobra.Command, opts Options) error {
 	checkSandbox(r)
 	checkHook(r, opts)
 	checkPath(r, e)
+	checkPending(r, e)
 
 	if err := checkProfiles(r, e); err != nil {
 		return err
@@ -95,6 +96,23 @@ func runDoctor(cmd *cobra.Command, opts Options) error {
 	}
 
 	return nil
+}
+
+// checkPending reports a change that stopped halfway and that oku has not put
+// back yet.
+func checkPending(r *report, e env) {
+	p, err := e.readPending()
+
+	switch {
+	case err != nil:
+		r.problem("%v", err)
+	case p != nil:
+		r.problem(
+			"a change from generation %d to %d did not finish, and %s records how to undo it\n"+
+				"run `oku sync`. It puts generation %d back first, and says why when it cannot",
+			p.From, p.To, filepath.Join(e.data, pendingFile), p.From,
+		)
+	}
 }
 
 func checkStore(r *report, e env) {

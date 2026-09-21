@@ -177,10 +177,40 @@ func Wanted(name, storePath string, launchers []Launcher, dirs Dirs, system bool
 	return items
 }
 
+// Check reports the first wanted target that exists and that oku did not put
+// there. It changes nothing.
+func (l *Ledger) Check(wanted []Item) error {
+	for _, want := range wanted {
+		if slices.Contains(l.Items, want) || want.Target == "" {
+			continue
+		}
+
+		owned := slices.ContainsFunc(l.Items, func(have Item) bool {
+			return have.Target == want.Target
+		})
+		if owned {
+			continue
+		}
+
+		if _, err := os.Lstat(want.Target); err == nil {
+			return fmt.Errorf(
+				"%s already exists and oku did not put it there, so %s cannot expose its %s",
+				want.Target, want.Package, want.Kind,
+			)
+		}
+	}
+
+	return nil
+}
+
 // Sync makes what is exposed match wanted. It removes ledger items that are no
 // longer wanted, adds new ones, and saves the ledger after each change, so a
 // crash never leaves a file the ledger does not know.
 func (l *Ledger) Sync(wanted []Item, handlers map[string]Handler) error {
+	if err := l.Check(wanted); err != nil {
+		return err
+	}
+
 	for _, have := range slices.Clone(l.Items) {
 		if slices.Contains(wanted, have) {
 			continue
@@ -194,13 +224,6 @@ func (l *Ledger) Sync(wanted []Item, handlers map[string]Handler) error {
 	for _, want := range wanted {
 		if slices.Contains(l.Items, want) {
 			continue
-		}
-
-		if _, err := os.Lstat(want.Target); err == nil && want.Target != "" {
-			return fmt.Errorf(
-				"%s already exists and oku did not put it there, so %s cannot expose its %s",
-				want.Target, want.Package, want.Kind,
-			)
 		}
 
 		// oku records the target in the ledger before it creates it.

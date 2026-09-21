@@ -22,6 +22,10 @@ func newRemoveCmd(opts Options) *cobra.Command {
 				return err
 			}
 
+			if err := e.recoverPending(cmd, opts); err != nil {
+				return err
+			}
+
 			name := args[0]
 
 			listed, err := list.Read(e.listPath())
@@ -54,20 +58,27 @@ func newRemoveCmd(opts Options) *cobra.Command {
 
 			// A package can be listed without being in the profile, for example
 			// after the data directory was deleted. Remove still has to clear it.
-			err = e.profile().Remove(name, lockData)
+			staged, err := e.profile().Remove(name, lockData)
 			if err != nil && (!errors.Is(err, profile.ErrNotInstalled) || (!inList && !inLock)) {
 				return err
 			}
 
-			if err := e.syncExposed(cmd, opts, false); err != nil {
-				return err
+			c := change{to: staged, staged: true}
+
+			// Nothing to take out of the profile, so the active generation stays.
+			if errors.Is(err, profile.ErrNotInstalled) {
+				c = change{to: e.profile().Current()}
 			}
 
-			if err := list.Delete(e.listPath(), name); err != nil {
-				return err
+			c.commit = func() error {
+				if err := list.Delete(e.listPath(), name); err != nil {
+					return err
+				}
+
+				return locked.Write(e.lockPath())
 			}
 
-			if err := locked.Write(e.lockPath()); err != nil {
+			if err := e.apply(cmd, opts, c); err != nil {
 				return err
 			}
 

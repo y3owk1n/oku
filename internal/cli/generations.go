@@ -123,6 +123,10 @@ func runRollback(cmd *cobra.Command, opts Options, args []string) error {
 		return err
 	}
 
+	if err := e.recoverPending(cmd, opts); err != nil {
+		return err
+	}
+
 	prof := e.profile()
 
 	gens, err := prof.Generations()
@@ -163,12 +167,26 @@ func runRollback(cmd *cobra.Command, opts Options, args []string) error {
 		return fmt.Errorf("generation %d is already active", target.Number)
 	}
 
-	snapshot, err := prof.Switch(target.Number)
+	snapshot, err := prof.LockSnapshotOf(target.Number)
 	if err != nil {
 		return err
 	}
 
-	if err := e.syncExposed(cmd, opts, false); err != nil {
+	err = e.apply(cmd, opts, change{
+		to: target.Number,
+		commit: func() error {
+			if snapshot == nil {
+				return nil
+			}
+
+			if err := list.WriteFile(e.lockPath(), snapshot); err != nil {
+				return fmt.Errorf("restore %s: %w", e.lockPath(), err)
+			}
+
+			return nil
+		},
+	})
+	if err != nil {
 		return err
 	}
 
@@ -184,10 +202,6 @@ func runRollback(cmd *cobra.Command, opts Options, args []string) error {
 		)
 
 		return nil
-	}
-
-	if err := list.WriteFile(e.lockPath(), snapshot); err != nil {
-		return fmt.Errorf("restore %s: %w", e.lockPath(), err)
 	}
 
 	// The list is the user's file. Rollback only reports where it disagrees.
