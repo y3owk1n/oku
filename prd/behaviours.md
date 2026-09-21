@@ -402,6 +402,8 @@ order step in `prd/product.md`.
   setup. After it, `oku` and the programs of the global profile run by name, and
   loading it twice changes nothing. The installer, `oku add` and `oku doctor`
   print that line with the file it goes into.
+- B169 [5] A file that oku unpacks keeps the time its archive gives it, so
+  `make` in a release tarball does not take a generated file for stale.
 - B104 [5] A `patch` step applies a unified diff to the source, the same on
   every OS. A hunk that does not fit fails the build and names the file.
 - B103 [11] With `--json`, `list`, `info`, `why`, `generations`, `search`,

@@ -266,7 +266,10 @@ url = "https://github.com/sharkdp/fd/releases/download/{{tag}}/fd-{{tag}}-aarch6
 
 ### Downloads oku can unpack
 
-oku recognises a download by its content, not by its file name.
+oku recognises a download by its content, not by its file name. A file from a
+tar, zip, 7z or rpm archive keeps the time the archive gives it. A release
+tarball relies on that. Its `aclocal.m4` and `configure` are newer than their
+inputs, so `make` does not try to run autotools.
 
 | Format | Notes |
 |---|---|
