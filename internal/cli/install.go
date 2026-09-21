@@ -84,6 +84,9 @@ type request struct {
 	// the missing ones too. Without it, add and update pin the ones they can.
 	platforms       []platform.Platform
 	strictPlatforms bool
+	// rebuild builds the package again when the store holds its build. "sync
+	// --rebuild" sets it. Deps do not inherit it.
+	rebuild bool
 	// lockOnly pins the package for platforms and installs nothing. sync sets it
 	// for a package whose when leaves out the host.
 	lockOnly bool
@@ -313,18 +316,28 @@ func (e env) install(ctx context.Context, opts Options, req request) (installed,
 		pinnedSource = at.SHA256
 	}
 
+	if req.rebuild && !build {
+		return installed{}, fmt.Errorf(
+			"%s is a download on %s, and --rebuild is for a package that oku builds",
+			m.Package.Name, host,
+		)
+	}
+
 	if build {
 		buildMu.Lock()
 		defer buildMu.Unlock()
 
 		realized.Path = e.store().BuildPath(m, host, deps.prefixes)
 
-		var notes []string
-		if cached, notes, err = e.substitute(ctx, realized.Path); err != nil {
-			return installed{}, fmt.Errorf("%s: %w", m.Package.Name, err)
-		}
+		// A rebuild runs the build on this machine and takes none from a cache.
+		if !req.rebuild {
+			var notes []string
+			if cached, notes, err = e.substitute(ctx, realized.Path); err != nil {
+				return installed{}, fmt.Errorf("%s: %w", m.Package.Name, err)
+			}
 
-		deps.cacheNotes = append(deps.cacheNotes, notes...)
+			deps.cacheNotes = append(deps.cacheNotes, notes...)
+		}
 	}
 
 	switch {
@@ -352,7 +365,7 @@ func (e env) install(ctx context.Context, opts Options, req request) (installed,
 
 		realized, err = e.store().Build(ctx, m, host, store.BuildOptions{
 			Deps: deps.prefixes, Log: req.log, PinnedVendor: pinnedVendor, Progress: req.progress,
-			NPMRegistry: opts.NPMRegistry, PinnedSource: pinnedSource,
+			NPMRegistry: opts.NPMRegistry, PinnedSource: pinnedSource, Rebuild: req.rebuild,
 		})
 		if err != nil {
 			return installed{}, fmt.Errorf("%s: %w", m.Package.Name, err)

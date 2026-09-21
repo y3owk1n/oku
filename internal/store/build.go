@@ -64,7 +64,7 @@ func (s *Store) Build(
 	m *manifest.Manifest,
 	p platform.Platform,
 	opts BuildOptions,
-) (Realized, error) {
+) (_ Realized, failed error) {
 	build := m.Build
 	deps, log := opts.Deps, opts.Log
 	if log != nil {
@@ -73,9 +73,19 @@ func (s *Store) Build(
 
 	prefix := s.BuildPath(m, p, deps)
 
+	// A rebuild that a crash interrupted left the old build aside.
+	if old := prefix + ".old"; !exists(filepath.Join(prefix, metaFile)) &&
+		exists(filepath.Join(old, metaFile)) {
+		removeTree(prefix)
+
+		if err := os.Rename(old, prefix); err != nil {
+			return Realized{}, err
+		}
+	}
+
 	// A build that is in the store reports what it pinned when it ran, so the
 	// lock keeps those pins. A path from before oku recorded them reports none.
-	if meta, err := ReadMeta(prefix); err == nil && !opts.VendorOnly {
+	if meta, err := ReadMeta(prefix); err == nil && !opts.VendorOnly && !opts.Rebuild {
 		if opts.PinnedVendor != "" && meta.VendorSHA256 != "" &&
 			opts.PinnedVendor != meta.VendorSHA256 {
 			return Realized{}, fmt.Errorf(
@@ -143,6 +153,31 @@ func (s *Store) Build(
 
 	if err := checkTagCommit(ctx, m, src); err != nil {
 		return Realized{}, err
+	}
+
+	// Every generation that holds this package points at prefix, so a build that
+	// fails must leave the old one where it was.
+	if opts.Rebuild && exists(filepath.Join(prefix, metaFile)) {
+		old := prefix + ".old"
+		if err := os.RemoveAll(old); err != nil {
+			return Realized{}, err
+		}
+
+		if err := os.Rename(prefix, old); err != nil {
+			return Realized{}, err
+		}
+
+		defer func() {
+			if failed != nil {
+				removeTree(prefix)
+
+				failed = errors.Join(failed, os.Rename(old, prefix))
+
+				return
+			}
+
+			removeTree(old)
+		}()
 	}
 
 	// A crashed build may have left the prefix behind without a meta file.
@@ -710,6 +745,9 @@ type BuildOptions struct {
 	// Progress is called after each step that ran, with its position, the number
 	// of steps, its kind and its error. It may be nil.
 	Progress func(step, total int, kind string, err error)
+	// Rebuild builds again when the store holds the build. Build moves the old
+	// build aside first, and puts it back when the new one fails.
+	Rebuild bool
 	// VendorOnly runs the vendor steps alone, for a platform that may not be the
 	// host, and returns their digest. It builds nothing and keeps nothing. Only a
 	// build that CanCrossVendor accepts may ask for it.

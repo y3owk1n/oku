@@ -26,6 +26,7 @@ const (
 	dryRunFlag  = "dry-run"
 	dryRunUsage = "check everything and print what would change, without changing the machine"
 	lockedFlag  = "locked"
+	rebuildFlag = "rebuild"
 )
 
 const lockedHint = "run `oku sync` without --locked, and commit oku.lock"
@@ -90,6 +91,9 @@ oku.toml yet.`,
 	cmd.Flags().Bool(systemFlag, false, systemUsage)
 	cmd.Flags().Bool(dryRunFlag, false, dryRunUsage)
 	cmd.Flags().Bool(lockedFlag, false, "fail when oku.lock would change, for use in CI")
+	cmd.Flags().StringSlice(
+		rebuildFlag, nil, "build these packages again, even though the store holds their builds",
+	)
 
 	return cmd
 }
@@ -150,9 +154,25 @@ func reconcile(
 
 	wanted, includes := all.packages, all.includes
 
-	for _, name := range names {
+	rebuild, _ := cmd.Flags().GetStringSlice(rebuildFlag)
+
+	for _, name := range slices.Concat(names, rebuild) {
 		if _, ok := wanted[name]; !ok {
 			return fmt.Errorf("%s is not in %s or its includes", name, e.listPath())
+		}
+	}
+
+	// A rebuild replaces a build in the store, which a dry run must not do.
+	if dryRun, _ := cmd.Flags().GetBool(dryRunFlag); dryRun && len(rebuild) > 0 {
+		return errors.New("--rebuild builds a package again, so it does not go with --dry-run")
+	}
+
+	for _, name := range rebuild {
+		if !wanted[name].entry.When.Matches(platform.Host()) {
+			return fmt.Errorf(
+				"%s is not installed on %s, so there is no build of it to replace",
+				name, platform.Host(),
+			)
 		}
 	}
 
@@ -225,6 +245,7 @@ func reconcile(
 				platforms:       platforms,
 				strictPlatforms: strict,
 				lockOnly:        lockOnly,
+				rebuild:         slices.Contains(rebuild, name),
 				commit:          commit,
 				previous:        previous,
 				wantManifest:    wantManifest,
@@ -315,6 +336,8 @@ func reconcile(
 		}
 
 		switch {
+		case j.req.rebuild:
+			fmt.Fprintf(out, "%s %s, built again\n", name, got.lock.Version)
 		case j.req.lockOnly:
 			fmt.Fprintf(out, "%s %s, pinned and not installed on %s\n", name, got.lock.Version, host)
 		case !locksManifest:

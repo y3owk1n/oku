@@ -217,7 +217,7 @@ name that nothing installed uses.
 ## oku sync
 
 ```
-oku sync [list-ref] [--system] [--dry-run] [--locked]
+oku sync [list-ref] [--system] [--dry-run] [--locked] [--rebuild <name>]
 ```
 
 Makes the profile match `oku.toml` and the lists it includes, at the versions
@@ -261,6 +261,25 @@ oku checks that before it downloads anything, so a locked sync never trusts a
 download on first use. It also fails, with `oku.lock is out of date`, when the
 lock holds a package that left the list, or lacks a platform that
 [`[lock]`](list-and-lock.md#one-lock-for-several-machines) names.
+
+`--rebuild <name>` builds a package again, even though the store holds its
+build. Repeat the flag, or separate names with commas:
+
+```
+oku sync --rebuild eza --rebuild pngquant
+```
+
+oku prints `eza 0.23.5, built again` for each one. The new build takes the
+place of the old one in the store, under the same path,
+so every generation gets it. oku moves the old build aside first and puts it
+back when the new build fails. The lock still applies. A build that vendors
+other packages than `oku.lock` pins stops, and the old build stays.
+
+Use it for a build that an older oku made and that has no `vendor_sha256` in
+the lock, or after a change on the machine that a build depends on, such as a
+new compiler. It does not rebuild deps, and it refuses a package that is a
+download on this machine. A service of the package keeps the old program until
+you run `oku service restart <name>`.
 
 If any package fails, `sync` leaves the profile unchanged. When an app, a font
 or a service cannot be set up, oku takes back the ones it had already changed.

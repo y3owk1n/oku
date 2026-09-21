@@ -80,6 +80,10 @@ order step in `prd/product.md`.
   the other lock platforms. It adds the source archive, `impure` and the vendor
   digest it can pin without a build, keeps every pin the entry has, and builds
   nothing for it.
+- B191 [2] `sync --rebuild <name>` builds a package again when the store holds
+  its build, under the same store path, and takes no build from a cache. When
+  the build fails, oku puts the old build back. It refuses a package that is
+  a download on the host, one that the host does not install, and `--dry-run`.
 - B181 [2] `sync --locked` fails before any download when the lock does not pin
   a package of the list for the host, and names the packages and the platform.
   It also fails when the lock would change in any other way. It never writes
