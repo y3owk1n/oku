@@ -142,9 +142,61 @@ status 1 when any file has an error. Warnings do not fail it.`,
 	}
 }
 
-var releaseURLRe = regexp.MustCompile(
-	`github\.com/([A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9._-]+)/releases/download/`,
+// The release URLs of the hosts oku can tell apart by name. Any other host may
+// be GitHub Enterprise, Gitea or GitLab, so bump needs --repo for it.
+var (
+	githubURLRe = regexp.MustCompile(
+		`https://github\.com/([A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9._-]+)/releases/download/`,
+	)
+	codebergURLRe = regexp.MustCompile(
+		`https://(codeberg\.org/[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9._-]+)/releases/download/`,
+	)
+	gitlabURLRe = regexp.MustCompile(`https://gitlab\.com/([A-Za-z0-9._/-]+?)/-/releases/`)
 )
+
+// bumpSource returns the version.from and version.repo that bump lists releases
+// with. flag is --repo, a forge ref or a bare "owner/repo" on GitHub. Without it
+// the artifact URLs in text name the repo.
+func bumpSource(file, text, flag string) (string, string, error) {
+	if flag != "" {
+		if !strings.Contains(flag, ":") {
+			flag = "github:" + flag
+		}
+
+		r, err := ref.Parse(flag)
+		if err != nil || r.Kind != ref.Forge || r.Fragment != "" || r.Version != "" {
+			return "", "", fmt.Errorf(
+				"--repo %q: want owner/repo or a ref such as gitlab:group/project", flag,
+			)
+		}
+
+		switch r.Scheme {
+		case "codeberg":
+			return manifest.FromGiteaReleases, "codeberg.org/" + r.Location, nil
+		default:
+			return r.Scheme + "-releases", r.Location, nil
+		}
+	}
+
+	for _, host := range []struct {
+		from string
+		re   *regexp.Regexp
+	}{
+		{manifest.FromGitHubReleases, githubURLRe},
+		{manifest.FromGiteaReleases, codebergURLRe},
+		{manifest.FromGitLabReleases, gitlabURLRe},
+	} {
+		if found := host.re.FindStringSubmatch(text); found != nil {
+			return host.from, found[1], nil
+		}
+	}
+
+	return "", "", fmt.Errorf(
+		"%s has no release URL on github.com, codeberg.org or gitlab.com to read the repo from, "+
+			"pass --repo with a ref such as gitea:host/owner/repo",
+		file,
+	)
+}
 
 func newBumpCmd(opts Options) *cobra.Command {
 	var repo, prefix, to string
@@ -155,8 +207,8 @@ func newBumpCmd(opts Options) *cobra.Command {
 		Long: `Move a fixed-version manifest to the newest upstream release.
 
 Bump rewrites version.value and every inline sha256, and downloads each artifact
-to compute its new digest. It reads the GitHub repo from the artifact URLs, or
-from --repo. A manifest that discovers its versions needs no bump.`,
+to compute its new digest. It reads the repo from artifact URLs on github.com,
+codeberg.org or gitlab.com, or from --repo, which any other host needs. A manifest that discovers its versions needs no bump.`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			file := ref.Manifest.Default
@@ -168,7 +220,7 @@ from --repo. A manifest that discovers its versions needs no bump.`,
 		},
 	}
 
-	cmd.Flags().StringVar(&repo, "repo", "", "the GitHub repo to read releases from, as owner/repo")
+	cmd.Flags().StringVar(&repo, "repo", "", "the repo to read releases from, as owner/repo on GitHub or a ref such as gitlab:group/project")
 	cmd.Flags().
 		StringVar(&prefix, "strip-prefix", "", `text before the version in a tag, such as "v"`)
 	cmd.Flags().StringVar(&to, "to", "", "the version to move to, instead of the newest")
@@ -198,20 +250,14 @@ func runBump(cmd *cobra.Command, opts Options, file, repo, prefix, to string) er
 	text := string(data)
 	old := m.Version.Value
 
-	if repo == "" {
-		found := releaseURLRe.FindStringSubmatch(text)
-		if found == nil {
-			return fmt.Errorf(
-				"%s has no GitHub release URL to read the repo from, pass --repo owner/repo",
-				file,
-			)
-		}
-
-		repo = found[1]
+	from, repo, err := bumpSource(file, text, repo)
+	if err != nil {
+		return err
 	}
 
 	// A URL such as ".../download/v1.2.0/..." shows that tags start with "v".
-	if !cmd.Flags().Changed("strip-prefix") && strings.Contains(text, "/releases/download/v") {
+	if !cmd.Flags().Changed("strip-prefix") &&
+		(strings.Contains(text, "/releases/download/v") || strings.Contains(text, "/-/releases/v")) {
 		prefix = "v"
 	}
 
@@ -221,7 +267,7 @@ func runBump(cmd *cobra.Command, opts Options, file, repo, prefix, to string) er
 	}
 
 	release, err := e.resolver(opts).Pick(cmd.Context(), manifest.Version{
-		From: manifest.FromGitHubReleases, Repo: repo, StripPrefix: prefix,
+		From: from, Repo: repo, StripPrefix: prefix,
 	}, to)
 	if err != nil {
 		return err
