@@ -61,7 +61,7 @@ needs no manifest change.
 |---|---|
 | `value` | The one version this manifest installs. |
 | `from` | `github-releases` or `git-tags`. Not together with `value`. |
-| `repo` | `owner/repo` for `github-releases`, a git URL for `git-tags`. Required with `from`. |
+| `repo` | `owner/repo` for `github-releases`, or `host/owner/repo` on a GitHub Enterprise Server. A git URL for `git-tags`. Required with `from`. |
 | `strip_prefix` | Text cut off the front of a tag to get the version, such as `"v"`. A tag without the prefix is ignored. |
 | `tag` | One tag that upstream moves, such as `"nightly"`. Only with `github-releases`, and not together with `strip_prefix`. See [A moving tag](#a-moving-tag). |
 

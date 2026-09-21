@@ -14,6 +14,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -1824,6 +1825,76 @@ func TestB27ManifestInitWritesTheInferredManifest(t *testing.T) {
 		target,
 	); err == nil {
 		t.Fatal("manifest init replaced an existing file without --force")
+	}
+}
+
+// rewriteHost sends requests for one host to a test server.
+type rewriteHost struct {
+	host   string
+	server *url.URL
+}
+
+func (rw rewriteHost) RoundTrip(req *http.Request) (*http.Response, error) {
+	if req.URL.Host == rw.host {
+		req = req.Clone(req.Context())
+		req.URL.Scheme, req.URL.Host = rw.server.Scheme, rw.server.Host
+	}
+
+	return http.DefaultTransport.RoundTrip(req)
+}
+
+func TestAddReadsAGitHubEnterpriseHostFromTheRef(t *testing.T) {
+	m := newMachine(t)
+	manifest, err := os.ReadFile(m.manifest(t, "tool", map[string]string{"tool": script}, `bin = ["tool"]`))
+	must(t, err)
+
+	t.Setenv("GITHUB_TOKEN", "for-github-com")
+	t.Setenv("GH_ENTERPRISE_TOKEN", "for-the-server")
+
+	var tokens []string
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		tokens = append(tokens, r.Header.Get("Authorization"))
+
+		switch r.URL.Path {
+		case "/api/v3/repos/owner/tool/commits/HEAD":
+			_, _ = w.Write([]byte("5555555555555555555555555555555555555555"))
+		case "/api/v3/repos/owner/tool/contents/oku.pkg.toml":
+			_, _ = w.Write(manifest)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(server.Close)
+
+	target, err := url.Parse(server.URL)
+	must(t, err)
+
+	client := http.DefaultClient.Transport
+	http.DefaultClient.Transport = rewriteHost{host: "ghe.example.com", server: target}
+
+	t.Cleanup(func() { http.DefaultClient.Transport = client })
+
+	out, err := m.run(t, "", "add", "github:ghe.example.com/owner/tool")
+	if err != nil {
+		t.Fatalf("add: %v\n%s", err, out)
+	}
+
+	if got := m.toolOutput(t); got != "hello from tool" {
+		t.Fatalf("tool printed %q", got)
+	}
+
+	for _, token := range tokens {
+		if token != "Bearer for-the-server" {
+			t.Fatalf("the server got the token %q", token)
+		}
+	}
+
+	list, err := os.ReadFile(filepath.Join(m.config, "oku.toml"))
+	must(t, err)
+
+	if !strings.Contains(string(list), "github:ghe.example.com/owner/tool") {
+		t.Fatalf("oku.toml lacks the ref with its host:\n%s", list)
 	}
 }
 

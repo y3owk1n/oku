@@ -39,8 +39,8 @@ var (
 // Ref is a parsed pointer to a manifest.
 type Ref struct {
 	Kind Kind
-	// Location is an absolute path (File), a URL (HTTP), "owner/repo" (GitHub)
-	// or a repository URL (Git).
+	// Location is an absolute path (File), a URL (HTTP), "owner/repo" or
+	// "host/owner/repo" (GitHub), or a repository URL (Git).
 	Location string
 	// Fragment is the text after "#". For GitHub it is a manifest name, for Git
 	// a path inside the repository.
@@ -50,7 +50,11 @@ type Ref struct {
 }
 
 var (
-	githubRe  = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9._-]+$`)
+	// githubRe takes "owner/repo" and, for a GitHub Enterprise Server,
+	// "host/owner/repo". A host has a dot, which an owner cannot have.
+	githubRe = regexp.MustCompile(
+		`^([A-Za-z0-9][A-Za-z0-9-]*(\.[A-Za-z0-9-]+)+/)?[A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9._-]+$`,
+	)
 	nameRe    = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]*$`)
 	gitSchema = []string{"https://", "http://", "ssh://", "file://"}
 )
@@ -89,7 +93,9 @@ func ParseIn(dir, s string) (Ref, error) {
 		r.Location, r.Fragment, _ = strings.Cut(strings.TrimPrefix(body, "github:"), "#")
 
 		if !githubRe.MatchString(r.Location) {
-			return Ref{}, fmt.Errorf("%s: want github:owner/repo or github:owner/repo#name", s)
+			return Ref{}, fmt.Errorf(
+				"%s: want github:owner/repo, github:owner/repo#name or github:host/owner/repo", s,
+			)
 		}
 
 		if r.Fragment != "" && !nameRe.MatchString(r.Fragment) {

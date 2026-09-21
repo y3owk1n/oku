@@ -247,33 +247,17 @@ func (e env) stores() []*store.Store {
 
 func (e env) fetcher(opts Options) *ref.Fetcher {
 	f := ref.NewFetcher(e.cache)
-
-	if opts.GitHubAPI != "" {
-		f.GitHubAPI = opts.GitHubAPI
-	}
-
-	if opts.GitHubRaw != "" {
-		f.GitHubRaw = opts.GitHubRaw
-	}
+	f.Hosts.GitHubAPI, f.Hosts.GitHubRaw = opts.GitHubAPI, opts.GitHubRaw
 
 	return f
 }
 
 func (e env) resolver(opts Options) *resolve.Resolver {
-	f := e.fetcher(opts)
-
-	return &resolve.Resolver{HTTP: f.HTTP, GitHubAPI: f.GitHubAPI, Token: f.Token}
+	return &resolve.Resolver{Hosts: e.fetcher(opts).Hosts}
 }
 
 func (e env) inferrer(opts Options) *infer.Inferrer {
-	f := e.fetcher(opts)
-
-	return &infer.Inferrer{
-		HTTP:      f.HTTP,
-		GitHubAPI: f.GitHubAPI,
-		Token:     f.Token,
-		Inspect:   e.store().Inspect,
-	}
+	return &infer.Inferrer{Hosts: e.fetcher(opts).Hosts, Inspect: e.store().Inspect}
 }
 
 func (e env) globalProfile() *profile.Profile {

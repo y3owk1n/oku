@@ -224,6 +224,7 @@ exposure exactly (D41).
 cmd/oku/            main
 internal/cli/       cobra commands, thin
 internal/ref/       parse and fetch refs
+internal/forge/     one interface over the hosts that serve repos and releases
 internal/manifest/  TOML types, validation, templating
 internal/infer/     manifest inference from release assets
 internal/platform/  os, arch, libc detection, selector matching

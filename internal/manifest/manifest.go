@@ -59,7 +59,8 @@ type Version struct {
 	Value string `toml:"value"`
 	// From is FromGitHubReleases or FromGitTags.
 	From string `toml:"from"`
-	// Repo is "owner/repo" for GitHub releases and a git URL for git tags.
+	// Repo is "owner/repo" or "host/owner/repo" for GitHub releases and a git URL
+	// for git tags.
 	Repo string `toml:"repo"`
 	// StripPrefix is cut off a tag to get the version, such as "v". A tag
 	// without it is ignored.
@@ -107,8 +108,10 @@ type App struct {
 }
 
 var (
-	nameRe     = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]*$`)
-	repoRe     = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9._-]+$`)
+	nameRe = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]*$`)
+	repoRe = regexp.MustCompile(
+		`^([A-Za-z0-9][A-Za-z0-9-]*(\.[A-Za-z0-9-]+)+/)?[A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9._-]+$`,
+	)
 	sha256Re   = regexp.MustCompile(`^[0-9a-f]{64}$`)
 	templateRe = regexp.MustCompile(`\{\{\s*([a-zA-Z0-9_.-]+)\s*\}\}`)
 )
@@ -222,7 +225,7 @@ func (m *Manifest) validate() error {
 	case m.Version.From != "" && m.Version.Value != "":
 		errs = append(errs, errors.New("set version.value or version.from, not both"))
 	case m.Version.From == FromGitHubReleases && !repoRe.MatchString(m.Version.Repo):
-		errs = append(errs, errors.New(`version.repo must be "owner/repo" for github-releases`))
+		errs = append(errs, errors.New(`version.repo must be "owner/repo" or "host/owner/repo" for github-releases`))
 	case m.Version.From == FromGitTags && m.Version.Repo == "":
 		errs = append(errs, errors.New("version.repo must be a git URL for git-tags"))
 	case m.Version.From != "" && m.Version.From != FromGitHubReleases &&
