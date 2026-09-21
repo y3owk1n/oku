@@ -43,7 +43,7 @@ type Ref struct {
 	// Location is an absolute path (File), a URL (HTTP), "owner/repo" or
 	// "host/owner/repo" (Forge), or a repository URL (Git).
 	Location string
-	// Scheme is "github", "gitea" or "codeberg" for a Forge ref, else "".
+	// Scheme is "github", "gitea", "codeberg" or "gitlab" for a Forge ref, else "".
 	Scheme string
 	// Fragment is the text after "#". For a Forge ref it is a manifest name, for
 	// Git a path inside the repository.
@@ -63,6 +63,9 @@ var (
 	giteaRe = regexp.MustCompile(
 		`^[A-Za-z0-9][A-Za-z0-9-]*(\.[A-Za-z0-9-]+)+/[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9._-]+$`,
 	)
+	// gitlabRe takes a project in any depth of groups, with an optional host in
+	// front.
+	gitlabRe   = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*(/[A-Za-z0-9_][A-Za-z0-9._-]*)+$`)
 	codebergRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9._-]+$`)
 	nameRe     = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]*$`)
 	gitSchema  = []string{"https://", "http://", "ssh://", "file://"}
@@ -97,7 +100,7 @@ func ParseIn(dir, s string) (Ref, error) {
 	}
 
 	switch {
-	case hasAnyPrefix(body, []string{"github:", "gitea:", "codeberg:"}):
+	case hasAnyPrefix(body, []string{"github:", "gitea:", "codeberg:", "gitlab:"}):
 		r.Kind = Forge
 		r.Scheme, body, _ = strings.Cut(body, ":")
 		r.Location, r.Fragment, _ = strings.Cut(body, "#")
@@ -109,6 +112,10 @@ func ParseIn(dir, s string) (Ref, error) {
 			)
 		case r.Scheme == "gitea" && !giteaRe.MatchString(r.Location):
 			return Ref{}, fmt.Errorf("%s: want gitea:host/owner/repo or gitea:host/owner/repo#name", s)
+		case r.Scheme == "gitlab" && !gitlabRe.MatchString(r.Location):
+			return Ref{}, fmt.Errorf(
+				"%s: want gitlab:group/project, gitlab:group/project#name or gitlab:host/group/project", s,
+			)
 		case r.Scheme == "codeberg" && !codebergRe.MatchString(r.Location):
 			return Ref{}, fmt.Errorf("%s: want codeberg:owner/repo or codeberg:owner/repo#name", s)
 		}

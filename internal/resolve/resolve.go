@@ -173,7 +173,7 @@ func (r *Resolver) List(ctx context.Context, v manifest.Version) ([]Release, err
 	)
 
 	switch v.From {
-	case manifest.FromGitHubReleases, manifest.FromGiteaReleases:
+	case manifest.FromGitHubReleases, manifest.FromGiteaReleases, manifest.FromGitLabReleases:
 		tags, err = r.published(ctx, v)
 	case manifest.FromGitTags:
 		tags, err = gitTags(ctx, v.Repo)

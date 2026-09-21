@@ -19,6 +19,7 @@ var ErrNotFound = errors.New("not found")
 const (
 	KindGitHub = "github"
 	KindGitea  = "gitea"
+	KindGitLab = "gitlab"
 )
 
 // Forge is one host. A repo is "owner/name", without the host.
@@ -114,7 +115,7 @@ func (h Hosts) GitHub(host string) Forge {
 
 // Open returns the forge that a ref's scheme and location name, and the repo
 // on it. The schemes are "github", "gitea" for any Gitea or Forgejo server, and
-// "codeberg" for codeberg.org.
+// "codeberg" for codeberg.org, and "gitlab".
 func (h Hosts) Open(scheme, location string) (Forge, string, error) {
 	switch scheme {
 	case KindGitHub:
@@ -128,6 +129,20 @@ func (h Hosts) Open(scheme, location string) (Forge, string, error) {
 		host, repo, _ := strings.Cut(location, "/")
 
 		return h.gitea(host), repo, nil
+	case KindGitLab:
+		host, repo := Split(location)
+		if host == "gitlab.com" {
+			host = ""
+		}
+
+		// GITLAB_TOKEN is for gitlab.com and GITLAB_SERVER_TOKEN for every other
+		// host.
+		env := "GITLAB_TOKEN"
+		if host != "" {
+			env = "GITLAB_SERVER_TOKEN"
+		}
+
+		return &gitlab{http: h.HTTP, host: host, token: os.Getenv(env)}, repo, nil
 	default:
 		return nil, "", fmt.Errorf("%q is not a forge oku knows", scheme)
 	}
