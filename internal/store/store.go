@@ -80,8 +80,10 @@ func New(dataDir, cacheDir string) *Store {
 // Realized is a package in the store.
 type Realized struct {
 	Path string
-	// SHA256 is the digest of the artifact download.
-	SHA256 string
+	// SHA256 is the digest of the artifact download, or of the source archive of
+	// a build, whose expanded address is SourceURL.
+	SHA256    string
+	SourceURL string
 	// FirstUse reports that neither the manifest nor the caller gave a digest, so
 	// oku accepted the download unverified.
 	FirstUse bool

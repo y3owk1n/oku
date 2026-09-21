@@ -31,9 +31,10 @@ from silently misbehaving there.
 
 URLs are templated on `{{version}}`. Versions come from `value` or discovery
 (`github-releases`, `git-tags`). Checksums come from inline `sha256`, from
-`sha256_url`, or are trusted on first use and pinned in the lock. Why: one
-file per version puts a nixpkgs-sized burden on owners. The lock carries the
-strictness instead.
+`sha256_url`, or are trusted on first use and pinned in the lock. The same
+holds for the source archive of a build, so a source build follows upstream
+like an artifact does. Why: one file per version puts a nixpkgs-sized burden on
+owners. The lock carries the strictness instead.
 
 ## D6. Deps form a closure of store paths, so no solver exists
 

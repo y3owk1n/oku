@@ -151,6 +151,20 @@ func Lint(data []byte) Report {
 		}
 	}
 
+	switch source := full.Build.Source; {
+	case source.SHA256 != "" && source.SHA256URL != "":
+		report.Errors = append(report.Errors, "build.source: set sha256 or sha256_url, not both")
+	case source.URL != "" && source.SHA256 == "" && source.SHA256URL == "":
+		report.Warnings = append(report.Warnings,
+			"build.source: no sha256 or sha256_url, so users trust the first download")
+	}
+
+	for _, name := range unknownVars(full.Build.Source.SHA256URL, artifactVars) {
+		report.Errors = append(report.Errors, fmt.Sprintf(
+			"build.source: unknown template variable {{%s}}", name,
+		))
+	}
+
 	for i, s := range full.Build.Steps {
 		report.Errors = append(report.Errors, lintStep(i, s)...)
 	}

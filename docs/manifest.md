@@ -656,8 +656,26 @@ install = { bin = ["tree"], man = ["doc/tree.1"] }
 | Key | Meaning |
 |---|---|
 | `needs` | Tools that must be on the user's `PATH`, such as `cc` or `cargo`. oku checks them before any step runs and never installs them. |
-| `source` | `{ git, tag }` clones that tag at depth 1 and needs `git`. `{ url, sha256, strip }` downloads and unpacks an archive, and `sha256` is required. Without `source` the build starts in an empty directory. |
+| `source` | `{ git, tag }` clones that tag at depth 1 and needs `git`. `{ url, sha256, strip }` downloads and unpacks an archive. `sha256_url` names a checksum file that upstream publishes, in place of `sha256`. With neither, oku trusts the first download and pins its sha256 in `oku.lock`, as it does for an [artifact](#checksums), and `oku manifest lint` warns. Without `source` the build starts in an empty directory. |
 | `deps` | Other oku packages the build uses, see [Dependencies](#dependencies). |
+
+A source archive with no fixed `sha256` can follow upstream. With a
+`[version] from` and `{{version}}` or `{{tag}}` in the `url`, `oku update` builds
+the new release and pins the digest of its archive:
+
+```toml
+[version]
+from = "github-releases"
+repo = "tukaani-project/xz"
+strip_prefix = "v"
+
+[build]
+needs = ["cc", "make"]
+source = { url = "https://github.com/tukaani-project/xz/releases/download/{{tag}}/xz-{{version}}.tar.gz", strip = 1 }
+```
+
+A later download of the same version that has another digest fails, until
+`oku update <name>` accepts it.
 
 ### Steps
 

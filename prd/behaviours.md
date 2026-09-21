@@ -410,6 +410,10 @@ order step in `prd/product.md`.
   setup. After it, `oku` and the programs of the global profile run by name, and
   loading it twice changes nothing. The installer, `oku add` and `oku doctor`
   print that line with the file it goes into.
+- B172 [5] A `build.source` archive takes `sha256`, or `sha256_url`, or
+  neither. With neither, oku pins the digest of the first download in
+  `oku.lock`, says so, and refuses another digest for that version until
+  `oku update <name>`.
 - B169 [5] A file that oku unpacks keeps the time its archive gives it, so
   `make` in a release tarball does not take a generated file for stale.
 - B104 [5] A `patch` step applies a unified diff to the source, the same on

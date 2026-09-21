@@ -25,7 +25,10 @@ type Source struct {
 	Tag    string `toml:"tag"`
 	URL    string `toml:"url"`
 	SHA256 string `toml:"sha256"`
-	Strip  int    `toml:"strip"`
+	// SHA256URL is a checksum file that upstream publishes beside the archive.
+	// With neither, oku trusts the first download and pins its digest in oku.lock.
+	SHA256URL string `toml:"sha256_url"`
+	Strip     int    `toml:"strip"`
 }
 
 // Step is one build step. Exactly one of the type keys must be set.
