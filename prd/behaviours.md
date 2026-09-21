@@ -130,7 +130,8 @@ order step in `prd/product.md`.
 - B126 [4] `oku add npm:@scope/name` infers a manifest from the npm registry
   with one program for each `bin` entry. With `runtimes.node` in `config.toml`
   the programs run through that package, which stays out of the user's
-  profile.
+  profile. A relative path in `runtimes.node` starts at the directory of
+  `config.toml`.
 - B129 [4] With `runtimes.node`, an npm package that lists dependencies is
   built by an npm vendor step with `package`. It installs the package with its
   dependencies as of the version's publish time, runs no install scripts, and

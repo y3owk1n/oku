@@ -283,3 +283,21 @@ func TestB166ADataPackageHoldsFilesThatTheListLinks(t *testing.T) {
 		t.Fatalf("an artifact with no output and no data key should name data = true, got %v", err)
 	}
 }
+
+func TestB126ARelativeNodeRuntimeStartsAtTheConfigDirectory(t *testing.T) {
+	m := newMachine(t)
+	npmServer(t, &m, "", "1.1.0")
+
+	node, err := os.ReadFile(m.fakeNode(t))
+	must(t, err)
+
+	must(t, os.MkdirAll(filepath.Join(m.config, "packages"), 0o755))
+	must(t, os.WriteFile(filepath.Join(m.config, "packages", "node.toml"), node, 0o644))
+	must(t, os.WriteFile(filepath.Join(m.config, "config.toml"),
+		[]byte("[runtimes]\nnode = \"./packages/node.toml\"\n"), 0o644))
+
+	// The working directory is the fixtures directory, which has no packages/.
+	if out, err := m.run(t, "", "add", "npm:@scope/tool"); err != nil {
+		t.Fatalf("a relative runtimes.node should start at the config directory: %v\n%s", err, out)
+	}
+}
