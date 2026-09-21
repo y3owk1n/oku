@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -208,7 +209,20 @@ func (r *Resolver) List(ctx context.Context, v manifest.Version) ([]Release, err
 		releases = append(releases, Release{Version: version, Tag: tag})
 	}
 
-	slices.SortFunc(releases, func(a, b Release) int { return Compare(b.Version, a.Version) })
+	// A prerelease sorts behind every release, so the newest is never one, and
+	// `add <ref>@x` still finds it.
+	slices.SortFunc(releases, func(a, b Release) int {
+		preA, preB := prerelease.MatchString(a.Version), prerelease.MatchString(b.Version)
+
+		switch {
+		case preA && !preB:
+			return 1
+		case preB && !preA:
+			return -1
+		default:
+			return Compare(b.Version, a.Version)
+		}
+	})
 
 	return releases, nil
 }
@@ -328,7 +342,10 @@ func gitTags(ctx context.Context, url string) ([]string, error) {
 // than 1.9.0. A version with a "-" suffix, such as 2.0.0-rc1, is older than the
 // same version without one. Two suffixes compare piece by piece, and a piece
 // that is a number compares as one, so 7.1.2-31 is newer than 7.1.2-9 and rc10
-// is newer than rc9. It returns -1, 0 or 1.
+// is newer than rc9. A number with letters behind it compares as the number
+// first, so 1.9rc2 is older than 1.26. When the numbers are equal, 1.26rc1 is
+// older than 1.26 because rc is a prerelease word, and 1.1.1w is newer than
+// 1.1.1 because w is not. It returns -1, 0 or 1.
 func Compare(a, b string) int {
 	coreA, preA, _ := strings.Cut(a, "-")
 	coreB, preB, _ := strings.Cut(b, "-")
@@ -345,14 +362,8 @@ func Compare(a, b string) int {
 			y = partsB[i]
 		}
 
-		nx, errX := strconv.Atoi(x)
-		ny, errY := strconv.Atoi(y)
-
-		switch {
-		case errX == nil && errY == nil && nx != ny:
-			return cmp.Compare(nx, ny)
-		case (errX != nil || errY != nil) && x != y:
-			return strings.Compare(x, y)
+		if order := comparePart(x, y); order != 0 {
+			return order
 		}
 	}
 
@@ -365,6 +376,56 @@ func Compare(a, b string) int {
 		return compareSuffix(preA, preB)
 	}
 }
+
+// comparePart orders two dot-separated parts of a version.
+func comparePart(x, y string) int {
+	numX, tailX := splitNumber(x)
+	numY, tailY := splitNumber(y)
+
+	nx, errX := strconv.Atoi(numX)
+	ny, errY := strconv.Atoi(numY)
+
+	switch {
+	case errX != nil || errY != nil:
+		return strings.Compare(x, y)
+	case nx != ny:
+		return cmp.Compare(nx, ny)
+	case tailX == "" && tailY == "":
+		return 0
+	case tailX == "":
+		return tailRank(tailY)
+	case tailY == "":
+		return -tailRank(tailX)
+	default:
+		return compareSuffix(tailX, tailY)
+	}
+}
+
+// splitNumber cuts s behind its leading digits, so "9rc2" is "9", "rc2".
+func splitNumber(s string) (number, tail string) {
+	i := 0
+	for i < len(s) && isDigit(s[i]) {
+		i++
+	}
+
+	return s[:i], s[i:]
+}
+
+// tailRank compares a bare number to the same number with tail behind it. It
+// returns 1 when tail is a prerelease word, and -1 for any other letters.
+func tailRank(tail string) int {
+	if prerelease.MatchString(tail) {
+		return 1
+	}
+
+	return -1
+}
+
+// prerelease matches a word that marks a version as a prerelease, such as the
+// rc in 1.26rc1 or 2.0.0-rc.1.
+var prerelease = regexp.MustCompile(
+	`(?i)(^|[^a-z])(rc|alpha|beta|pre|preview|dev|snapshot)([^a-z]|$)`,
+)
 
 // compareSuffix orders two "-" suffixes. It splits each into runs of digits and
 // runs of anything else, and compares run by run.
