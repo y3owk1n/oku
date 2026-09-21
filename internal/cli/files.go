@@ -10,6 +10,7 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/y3owk1n/oku/internal/expose"
 	"github.com/y3owk1n/oku/internal/list"
 	"github.com/y3owk1n/oku/internal/platform"
 	"github.com/y3owk1n/oku/internal/profile"
@@ -124,10 +125,6 @@ func (e env) resolveFiles(listed []listedFile, pkgs []profile.Package) ([]profil
 			continue
 		}
 
-		if runtime.GOOS == "windows" {
-			return nil, errors.New("[files] does not work on Windows yet")
-		}
-
 		path, err := target(f.file.Target, locations)
 		if err != nil {
 			return nil, fmt.Errorf("files.%q: %w", f.file.Target, err)
@@ -142,10 +139,13 @@ func (e env) resolveFiles(listed []listedFile, pkgs []profile.Package) ([]profil
 		if f.file.HasText {
 			sum := sha256.Sum256([]byte(path))
 
+			text := sha256.Sum256([]byte(f.file.Text))
+
 			files = append(files, profile.File{
 				Target:  path,
 				Content: hex.EncodeToString(sum[:])[:12] + "-" + filepath.Base(path),
 				Mode:    f.file.Mode,
+				Hash:    hex.EncodeToString(text[:]),
 				Text:    []byte(f.file.Text),
 			})
 
@@ -157,7 +157,8 @@ func (e env) resolveFiles(listed []listedFile, pkgs []profile.Package) ([]profil
 			return nil, fmt.Errorf("files.%q: %w", f.file.Target, err)
 		}
 
-		if _, err := os.Stat(source); err != nil {
+		info, err := os.Stat(source)
+		if err != nil {
 			return nil, fmt.Errorf(
 				"files.%q: the link source %s does not exist",
 				f.file.Target,
@@ -165,7 +166,16 @@ func (e env) resolveFiles(listed []listedFile, pkgs []profile.Package) ([]profil
 			)
 		}
 
-		files = append(files, profile.File{Target: path, Link: source})
+		linked := profile.File{Target: path, Link: source}
+
+		// Windows copies a linked file, so the generation records which bytes.
+		if runtime.GOOS == "windows" && !info.IsDir() {
+			if linked.Hash, err = expose.FileHash(source); err != nil {
+				return nil, fmt.Errorf("files.%q: %w", f.file.Target, err)
+			}
+		}
+
+		files = append(files, linked)
 	}
 
 	return files, nil

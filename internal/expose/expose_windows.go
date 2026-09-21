@@ -72,3 +72,14 @@ func reg(args ...string) error {
 
 	return nil
 }
+
+// link makes target a junction to the directory source. A normal Windows user
+// may create a junction and may not create a symlink.
+func link(source, target string) error {
+	out, err := exec.Command("cmd", "/c", "mklink", "/J", target, source).CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("mklink /J: %w: %s", err, strings.TrimSpace(string(out)))
+	}
+
+	return nil
+}

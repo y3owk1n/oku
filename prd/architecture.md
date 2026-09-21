@@ -7,7 +7,7 @@ ref -> fetch or infer manifest -> select version -> resolve dep closure
     -> per package: cache hit, else artifact, else build
     -> realize in store -> render files into the new generation
     -> check targets and settings                          (plan ends, D59)
-    -> match the ledger -> switch current -> write oku.lock  (apply)
+    -> switch current -> match the ledger -> write oku.lock  (apply)
 ```
 
 A failure in the plan leaves the machine unchanged. A failure in the apply

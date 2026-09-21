@@ -98,6 +98,28 @@ shortcut through the Windows shell, by way of `powershell`. `oku remove`,
 `oku rollback` and `oku self uninstall` take all of it away, as on the other
 systems.
 
+## Files in your home directory
+
+A normal Windows user cannot create a symlink, so
+[`[files]`](list-and-lock.md#files-in-your-home-directory) works with what
+Windows allows:
+
+| Entry | On Windows |
+|---|---|
+| `link` to a directory | A junction. An edit of the source shows at once, as on the other systems. |
+| `link` to a file | A copy. Run `oku sync` after you edit the source. |
+| `text` | A copy of the content in the generation. `oku rollback` writes the bytes of that generation. |
+
+oku remembers the sha256 of every copy. When a copy no longer holds those
+bytes, someone edited it by hand, and the next `sync`, `add`, `remove`,
+`update` or `rollback` stops before it changes anything and names the file.
+Move the change into the source or into `oku.toml`, delete the copy, and run
+the command again. A copy that you deleted is written again.
+
+`{{appdata}}` and `{{localappdata}}` are locations on Windows only. `{{config}}`
+is `%APPDATA%` and `{{data}}` is `%LOCALAPPDATA%`, unless the XDG variables are
+set.
+
 ## Services
 
 A [service](services.md) is a scheduled task named `oku-<name>`. It runs as you,

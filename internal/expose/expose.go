@@ -3,6 +3,8 @@
 package expose
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -34,6 +36,9 @@ type Item struct {
 	// System reports that Target is in system scope, so writing and removing it
 	// needs administrator rights.
 	System bool `toml:"system,omitempty"`
+	// Hash is the sha256 of a file that oku copied to Target, which is how a file
+	// of the list arrives on Windows. It is empty for a link.
+	Hash string `toml:"hash,omitempty"`
 }
 
 // Handler places and removes items of one kind. Apps and fonts are files, and
@@ -212,10 +217,47 @@ func (l *Ledger) Check(wanted []Item) error {
 	return nil
 }
 
+// Edited lists the targets that oku copied and that no longer hold the bytes it
+// wrote.
+func (l *Ledger) Edited() []string {
+	var edited []string
+
+	for _, item := range l.Items {
+		if item.Hash == "" {
+			continue
+		}
+
+		if sum, err := FileHash(item.Target); err == nil && sum != item.Hash {
+			edited = append(edited, item.Target)
+		}
+	}
+
+	return edited
+}
+
+// FileHash returns the sha256 of the file at path.
+func FileHash(path string) (string, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+
+	sum := sha256.Sum256(data)
+
+	return hex.EncodeToString(sum[:]), nil
+}
+
 // Sync makes what is exposed match wanted. It removes ledger items that are no
 // longer wanted, adds new ones, and saves the ledger after each change, so a
 // crash never leaves a file the ledger does not know.
 func (l *Ledger) Sync(wanted []Item, handlers map[string]Handler) error {
+	// A file of the list that someone deleted is placed again.
+	l.Items = slices.DeleteFunc(l.Items, func(item Item) bool {
+		_, err := os.Lstat(item.Target)
+
+		return item.Kind == "file" && errors.Is(err, fs.ErrNotExist)
+	})
+
 	if err := l.Check(wanted); err != nil {
 		return err
 	}
@@ -274,20 +316,53 @@ func (l *Ledger) remove(item Item, handler Handler) error {
 	return l.write()
 }
 
-// PlaceLink makes the target of a file a symlink to its source.
-func PlaceLink(item Item) error {
+// PlaceFile puts a file of the list at its target. An item with a hash is a
+// copy, and any other is a link.
+func PlaceFile(item Item) error {
 	if err := os.MkdirAll(filepath.Dir(item.Target), 0o755); err != nil {
 		return err
 	}
 
-	return os.Symlink(item.Source, item.Target)
+	if item.Hash == "" {
+		return link(item.Source, item.Target)
+	}
+
+	info, err := os.Stat(item.Source)
+	if err != nil {
+		return err
+	}
+
+	data, err := os.ReadFile(item.Source)
+	if err != nil {
+		return err
+	}
+
+	if err := os.WriteFile(item.Target, data, info.Mode().Perm()); err != nil {
+		return err
+	}
+
+	// A read-only source gives a read-only copy, which WriteFile's umask may undo.
+	return os.Chmod(item.Target, info.Mode().Perm())
 }
 
-// RemoveLink deletes the link oku made for a file. A target that is no link any
-// more is the user's, and stays.
-func RemoveLink(item Item) error {
+// RemoveFile deletes what PlaceFile made. A target that is no link any more, or
+// a copy that no longer holds the bytes oku wrote, is the user's, and stays.
+func RemoveFile(item Item) error {
 	info, err := os.Lstat(item.Target)
-	if err != nil || info.Mode()&fs.ModeSymlink == 0 {
+	if err != nil {
+		return nil
+	}
+
+	if item.Hash == "" {
+		// Go reports a Windows junction as irregular.
+		if info.Mode()&(fs.ModeSymlink|fs.ModeIrregular) == 0 {
+			return nil
+		}
+
+		return os.Remove(item.Target)
+	}
+
+	if sum, err := FileHash(item.Target); err != nil || sum != item.Hash {
 		return nil
 	}
 
