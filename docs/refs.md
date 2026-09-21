@@ -140,7 +140,10 @@ through it. They do not need node on `PATH`, and node does not appear there.
 then a list that holds npm packages only works on machines that have that file.
 A relative path starts at the directory of `config.toml`, so
 `node = "./packages/node.toml"` works in a config directory that you keep in
-git, on every machine and for every user name.
+git, on every machine and for every user name. `oku.lock` stores that relative
+path too. A lock that oku 0.4.0 or older wrote holds the full path from the
+machine that wrote it. Run `oku update <name>` for each npm package to replace
+it.
 
 Without `runtimes.node`, the programs run the `node` on `PATH`, and `oku add`
 says so. That does not work on Windows, where `oku add npm:` then fails and
