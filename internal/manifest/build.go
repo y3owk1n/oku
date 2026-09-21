@@ -37,7 +37,11 @@ type Step struct {
 	Copy    *Copy    `toml:"copy"`
 	// Vendor downloads a language's packages: "cargo", "go", "npm" or "pip".
 	Vendor *string `toml:"vendor"`
-	Patch  *Patch  `toml:"patch"`
+	// Package makes an npm vendor step install that package from the registry,
+	// with its dependencies, into the package's lib directory. Without it the
+	// step installs what the source's lockfile lists.
+	Package string `toml:"package"`
+	Patch   *Patch `toml:"patch"`
 
 	When    platform.Selector `toml:"when"`
 	Shell   string            `toml:"shell"`
@@ -48,7 +52,11 @@ type Step struct {
 // Install names the files a build puts into the package. Paths are relative to
 // the source directory.
 type Install struct {
-	Bin         []string          `toml:"bin"`
+	// RawBin is "bin" as TOML gives it. Parse splits it into Bin, the files that
+	// are programs, and Wrap, the programs that oku writes.
+	RawBin      []any             `toml:"bin"`
+	Bin         []string          `toml:"-"`
+	Wrap        []Wrapper         `toml:"-"`
 	Lib         []string          `toml:"lib"`
 	Include     []string          `toml:"include"`
 	Man         []string          `toml:"man"`

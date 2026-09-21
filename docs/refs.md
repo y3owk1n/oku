@@ -143,12 +143,19 @@ Without `runtimes.node`, the programs run the `node` on `PATH`, and `oku add`
 says so. That does not work on Windows, where `oku add npm:` then fails and
 names the key.
 
-oku installs the package's own download and nothing else. A tool that bundles
-its code works, such as a language server or prettier. A tool that needs its
-`dependencies` installed beside it does not, and neither does one that ships
-its program in a platform package, as typescript 7 does. The inferred manifest
-has a comment when the package lists dependencies, because the registry does
-not say whether the download bundles them.
+A package that lists no dependencies is a plain download, such as prettier. For
+a package that lists some, oku installs them too. That covers a tool that ships
+its program in a platform package, as typescript 7 does. oku then writes
+a [build](manifest.md#vendoring) that runs the `npm` of your node package, so
+that package has to list `bin/npm` beside `bin/node`. npm picks each dependency
+as it was when the version was published and runs no install scripts, and
+`oku.lock` pins a digest of what it installed. A build asks for
+[approval](trust.md#build-commands) once, or takes `--yes`. oku cannot do this
+on Windows yet, and says so there.
+
+Without `runtimes.node` there is no npm to run, so oku installs the package's
+own download only. That works when the download bundles its code, and the
+inferred manifest has a comment that says so.
 
 ## Private repos
 

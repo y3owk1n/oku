@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"time"
 )
 
 // Registry is where npm packages are published.
@@ -110,6 +111,54 @@ func Read(ctx context.Context, client *http.Client, registry, name string) (Pack
 	}
 
 	return pkg, nil
+}
+
+// Published returns when a version of the package called name was published.
+// Only the registry's full answer holds that, so this reads more than Read
+// does.
+func Published(
+	ctx context.Context,
+	client *http.Client,
+	registry, name, version string,
+) (time.Time, error) {
+	if registry == "" {
+		registry = Registry
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, registry+"/"+name, nil)
+	if err != nil {
+		return time.Time{}, err
+	}
+
+	req.Header.Set("User-Agent", "oku")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return time.Time{}, err
+	}
+	defer resp.Body.Close()
+
+	switch {
+	case resp.StatusCode == http.StatusNotFound:
+		return time.Time{}, ErrNotFound
+	case resp.StatusCode != http.StatusOK:
+		return time.Time{}, fmt.Errorf("the registry returned %s", resp.Status)
+	}
+
+	var found struct {
+		Time map[string]time.Time `json:"time"`
+	}
+
+	if err := json.NewDecoder(io.LimitReader(resp.Body, maxBody)).Decode(&found); err != nil {
+		return time.Time{}, err
+	}
+
+	at, ok := found.Time[version]
+	if !ok {
+		return time.Time{}, fmt.Errorf("the registry does not say when %s %s was published", name, version)
+	}
+
+	return at, nil
 }
 
 // BaseName returns "name" for "@scope/name".

@@ -71,6 +71,9 @@ func (e env) approver(
 				switch {
 				case steps[i].Vendor != nil:
 					text = "vendor " + *steps[i].Vendor
+					if steps[i].Package != "" {
+						text += ", which installs " + steps[i].Package + " and its dependencies and runs none of their scripts"
+					}
 					note = "  (downloads packages, checked against oku.lock)"
 				case steps[i].Network:
 					text, note = *steps[i].Run, "  (wants network)"

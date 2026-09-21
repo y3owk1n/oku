@@ -25,6 +25,8 @@ type vendorKind struct {
 	env []string
 }
 
+const npmPackageKind = "npm package"
+
 var vendorKinds = map[string]vendorKind{
 	"go": {
 		tools:  []string{"go"},
@@ -44,6 +46,15 @@ printf '\n[source.crates-io]\nreplace-with = "vendored-sources"\n\n[source.vendo
 		tools:  []string{"npm"},
 		script: `"$tool" ci --ignore-scripts --no-audit --no-fund`,
 		output: "node_modules",
+	},
+	// npmPackageKind is an npm step with "package". It installs one package with
+	// its dependencies and runs none of their scripts.
+	npmPackageKind: {
+		tools: []string{"npm"},
+		script: `"$tool" install --ignore-scripts --omit=dev --no-audit --no-fund --no-package-lock \
+  --before="$OKU_NPM_BEFORE" --prefix "$OKU_PREFIX/lib" "$OKU_NPM_PACKAGE"`,
+		output: "lib/node_modules",
+		env:    []string{"npm_config_update_notifier=false"},
 	},
 	"pip": {
 		tools:  []string{"pip", "pip3"},

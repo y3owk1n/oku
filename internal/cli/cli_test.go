@@ -2221,6 +2221,20 @@ bin = [{ name = "tool", run = "{{dep.interp.prefix}}/bin/interp", args = ["{{pkg
 func npmServer(t *testing.T, m *machine, tampered string, versions ...string) string {
 	t.Helper()
 
+	return npmServerWith(t, m, tampered, false, versions...)
+}
+
+// npmServerWith is npmServer for a package that lists a dependency when deps is
+// true.
+func npmServerWith(
+	t *testing.T,
+	m *machine,
+	tampered string,
+	deps bool,
+	versions ...string,
+) string {
+	t.Helper()
+
 	files := map[string]string{}
 
 	var server *httptest.Server
@@ -2238,7 +2252,7 @@ func npmServer(t *testing.T, m *machine, tampered string, versions ...string) st
 			return
 		}
 
-		var items []string
+		var items, times []string
 
 		for _, version := range versions {
 			at := "/@scope/tool/-/tool-" + version + ".tgz"
@@ -2253,10 +2267,16 @@ func npmServer(t *testing.T, m *machine, tampered string, versions ...string) st
 			}
 
 			sum := sha512.Sum512(data)
+			needs := ""
+			if deps {
+				needs = `"dependencies": {"left-pad": "^1.0.0"}, `
+			}
+
 			items = append(items, fmt.Sprintf(
-				`%q: {"bin": {"tool": "./tool"}, "dist": {"tarball": %q, "integrity": "sha512-%s"}}`,
-				version, server.URL+at, base64.StdEncoding.EncodeToString(sum[:]),
+				`%q: {%s"bin": {"tool": "./tool"}, "dist": {"tarball": %q, "integrity": "sha512-%s"}}`,
+				version, needs, server.URL+at, base64.StdEncoding.EncodeToString(sum[:]),
 			))
+			times = append(times, fmt.Sprintf(`%q: "2026-01-02T03:04:05.000Z"`, version))
 		}
 
 		// The newest version that is no prerelease has the "latest" tag.
@@ -2269,7 +2289,8 @@ func npmServer(t *testing.T, m *machine, tampered string, versions ...string) st
 		}
 
 		_, _ = fmt.Fprintf(
-			w, `{"dist-tags": {"latest": %q}, "versions": {%s}}`, latest, strings.Join(items, ","),
+			w, `{"dist-tags": {"latest": %q}, "time": {%s}, "versions": {%s}}`,
+			latest, strings.Join(times, ","), strings.Join(items, ","),
 		)
 	}))
 	t.Cleanup(server.Close)
@@ -2371,14 +2392,33 @@ func TestB125ManifestHashPrintsTheChecksumsOfADownload(t *testing.T) {
 	}
 }
 
-// fakeNode writes a package called "interp" whose program "node" runs a script
-// with sh, and returns its manifest.
+// fakeNode writes a package called "interp" and returns its manifest. Its
+// program "node" runs a script with sh. Its program "npm" stands in for "npm
+// install": it writes the package as a script that prints what npm was asked
+// for, so a test can see the version and the date.
 func (m machine) fakeNode(t *testing.T) string {
 	t.Helper()
 
+	npm := `#!/bin/sh
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --prefix) prefix="$2"; shift ;;
+    --before=*) before="${1#--before=}" ;;
+    --ignore-scripts) safe=yes ;;
+    -*|install) ;;
+    *) spec="$1" ;;
+  esac
+  shift
+done
+dir="$prefix/node_modules/@scope/tool"
+mkdir -p "$dir" "$prefix/node_modules/left-pad"
+echo "echo $spec before $before scripts-off=$safe" > "$dir/tool"
+echo "module.exports = 1" > "$prefix/node_modules/left-pad/index.js"
+`
+
 	return m.manifest(t, "interp", map[string]string{
-		"node": "#!/bin/sh\nexec sh \"$@\"\n",
-	}, `bin = ["node"]`)
+		"node": "#!/bin/sh\nexec sh \"$@\"\n", "npm": npm,
+	}, `bin = ["node", "npm"]`)
 }
 
 func TestB126AddInfersAnNPMPackageThatRunsThroughTheConfiguredNode(t *testing.T) {
@@ -2425,6 +2465,57 @@ func TestB126AddInfersAnNPMPackageThatRunsThroughTheConfiguredNode(t *testing.T)
 
 	if got := m.toolOutput(t); got != "1.0.0" {
 		t.Fatalf("add @1.0.0 installed %s", got)
+	}
+}
+
+func TestB129AnNPMPackageThatListsDependenciesIsInstalledWithThem(t *testing.T) {
+	m := newMachine(t)
+	npmServerWith(t, &m, "", true, "1.0.0", "1.1.0")
+
+	must(t, os.MkdirAll(m.config, 0o755))
+	must(t, os.WriteFile(
+		filepath.Join(m.config, "config.toml"),
+		[]byte(fmt.Sprintf("[runtimes]\nnode = %q\n", m.fakeNode(t))), 0o644,
+	))
+
+	out, err := m.run(t, "", "add", "npm:@scope/tool", "--yes")
+	if err != nil {
+		t.Fatalf("add: %v\n%s", err, out)
+	}
+
+	for _, want := range []string{
+		"[build]", `vendor = "npm"`, `package = "@scope/tool"`,
+		`args = ["{{prefix}}/lib/node_modules/@scope/tool/tool"]`, "added tool 1.1.0",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("add output lacks %q:\n%s", want, out)
+		}
+	}
+
+	// npm got the version, the day it was published, and ran no scripts.
+	cmd := exec.Command(m.profile("bin", "tool"))
+	cmd.Env = []string{"PATH=/usr/bin:/bin"}
+
+	got, err := cmd.Output()
+	must(t, err)
+
+	want := "@scope/tool@1.1.0 before 2026-01-02T03:04:05Z scripts-off=yes"
+	if strings.TrimSpace(string(got)) != want {
+		t.Fatalf("tool printed %q, want %q", got, want)
+	}
+
+	locked, err := os.ReadFile(filepath.Join(m.config, "oku.lock"))
+	must(t, err)
+
+	if !strings.Contains(string(locked), "vendor_sha256") {
+		t.Fatalf("oku.lock does not pin what npm installed:\n%s", locked)
+	}
+
+	// A new machine installs the same tree from the lock.
+	must(t, os.RemoveAll(m.data))
+
+	if out, err = m.run(t, "", "sync", "--yes"); err != nil {
+		t.Fatalf("sync: %v\n%s", err, out)
 	}
 }
 

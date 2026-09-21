@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"maps"
 	"os"
 	"os/exec"
 	"path"
@@ -17,11 +18,13 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/pelletier/go-toml/v2"
 
 	"github.com/y3owk1n/oku/internal/expose"
 	"github.com/y3owk1n/oku/internal/manifest"
+	"github.com/y3owk1n/oku/internal/npm"
 	"github.com/y3owk1n/oku/internal/platform"
 	"github.com/y3owk1n/oku/internal/sandbox"
 )
@@ -157,7 +160,18 @@ func (s *Store) Build(
 		case step.Vendor != nil:
 			var digest string
 
-			digest, result.Unsandboxed, err = runVendor(ctx, *step.Vendor, src, env, box, log)
+			vendorEnv := env
+
+			if step.Package != "" {
+				vendorEnv, err = s.npmPackageEnv(ctx, env, step.Package, m.Version.Value, opts.NPMRegistry)
+			}
+
+			if err == nil {
+				digest, result.Unsandboxed, err = runVendor(
+					ctx, *step.Vendor, step.Package != "", src, prefix, vendorEnv, box, log,
+				)
+			}
+
 			vendored = append(vendored, digest)
 		default:
 			err = s.runStep(ctx, step, src, prefix, vars)
@@ -355,7 +369,15 @@ func (s *Store) runStep(
 ) error {
 	switch {
 	case step.Install != nil:
-		return installFiles(*step.Install, src, prefix)
+		if err := installFiles(*step.Install, src, prefix); err != nil {
+			return err
+		}
+
+		// A build's files are at the top of the prefix, so {{pkg}} is the prefix.
+		wrapVars := maps.Clone(vars)
+		wrapVars["pkg"] = prefix
+
+		return writeWraps(filepath.Join(prefix, "bin"), step.Install.Wrap, wrapVars, vars["os"])
 	case step.Copy != nil:
 		return copyInto(src, step.Copy.From, prefix, step.Copy.To, 0)
 	case step.Patch != nil:
@@ -566,6 +588,8 @@ type BuildOptions struct {
 	Log io.Writer
 	// PinnedVendor is the vendor digest oku.lock recorded, or empty.
 	PinnedVendor string
+	// NPMRegistry replaces the URL of the npm registry when set, which tests do.
+	NPMRegistry string
 	// Progress is called after each step that ran, with its position, the number
 	// of steps, its kind and its error. It may be nil.
 	Progress func(step, total int, kind string, err error)
@@ -577,13 +601,22 @@ var ErrVendorChanged = errors.New("the vendored packages changed")
 
 // runVendor downloads a language's packages into the source directory, with the
 // network on, and returns the digest of what it downloaded.
+//
+// With pkg, an npm step installs one package from the registry into the
+// prefix, and that is what oku hashes.
 func runVendor(
 	ctx context.Context,
-	kind, src string,
+	kind string,
+	pkg bool,
+	src, prefix string,
 	env []string,
 	box sandbox.Spec,
 	log io.Writer,
 ) (digest, unsandboxed string, err error) {
+	if pkg {
+		kind = npmPackageKind
+	}
+
 	vendor, ok := vendorKinds[kind]
 	if !ok {
 		return "", "", fmt.Errorf(
@@ -614,9 +647,39 @@ func runVendor(
 		return "", unsandboxed, err
 	}
 
-	digest, err = hashTree(filepath.Join(src, filepath.FromSlash(vendor.output)))
+	output := filepath.Join(src, filepath.FromSlash(vendor.output))
+	if pkg {
+		output = filepath.Join(prefix, filepath.FromSlash(vendor.output))
+	}
+
+	digest, err = hashTree(output)
 
 	return digest, unsandboxed, err
+}
+
+// npmPackageEnv returns env with what an npm step needs to install one package:
+// its name, its version and the time that version was published. npm resolves
+// dependencies as of that time, so a later install gets the same packages.
+func (s *Store) npmPackageEnv(
+	ctx context.Context,
+	env []string,
+	name, version, registry string,
+) ([]string, error) {
+	published, err := npm.Published(ctx, s.http, registry, name, version)
+	if err != nil {
+		return nil, fmt.Errorf("read when %s %s was published: %w", name, version, err)
+	}
+
+	env = append(slices.Clone(env),
+		"OKU_NPM_PACKAGE="+name+"@"+version,
+		"OKU_NPM_BEFORE="+published.UTC().Format(time.RFC3339Nano),
+	)
+
+	if registry != "" {
+		env = append(env, "npm_config_registry="+registry)
+	}
+
+	return env, nil
 }
 
 // Dep is a realized package that a build uses.
