@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -100,5 +101,24 @@ func TestB172ASourceArchiveWithoutAChecksumIsPinnedOnFirstDownload(t *testing.T)
 	_, err = m.run(t, "y\n", "sync")
 	if err == nil || !strings.Contains(err.Error(), "checksum mismatch") {
 		t.Fatalf("sync should refuse a source archive that no longer has the pinned digest, got %v", err)
+	}
+}
+
+func TestB173AMacOSBuildFindsThePkgConfigFilesOfSystemLibraries(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("only macOS ships libraries with headers and no pkg-config file")
+	}
+
+	m := newMachine(t)
+	m.opts.Interactive = yes()
+
+	ref := m.buildManifest(t, false, `needs = ["sh"]`,
+		"[[build.step]]\nshell = \"sh\"\nrun = \"\"\"\n"+
+			"dir=$(echo $PKG_CONFIG_PATH | tr ':' '\\\\n' | tail -1)\n"+
+			"grep -q '^Version: [0-9]' $dir/zlib.pc\ngrep -q '^Libs: -lz' $dir/zlib.pc\n"+
+			"grep -q 'libxml2' $dir/libxml-2.0.pc\n\"\"\"\n"+writeTool+installTool)
+
+	if out, err := m.run(t, "y\n", "add", ref); err != nil {
+		t.Fatalf("a build on macOS should find zlib.pc with a version on PKG_CONFIG_PATH: %v\n%s", err, out)
 	}
 }

@@ -410,6 +410,9 @@ order step in `prd/product.md`.
   setup. After it, `oku` and the programs of the global profile run by name, and
   loading it twice changes nothing. The installer, `oku add` and `oku doctor`
   print that line with the file it goes into.
+- B173 [5] In a build on macOS, pkg-config resolves zlib, bzip2, expat,
+  libxml-2.0, sqlite3, libcurl and ncurses of the OS, with the version of the
+  SDK on the machine. A dep of the same name comes first.
 - B172 [5] A `build.source` archive takes `sha256`, or `sha256_url`, or
   neither. With neither, oku pins the digest of the first download in
   `oku.lock`, says so, and refuses another digest for that version until

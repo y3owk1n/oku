@@ -122,7 +122,9 @@ func (s *Store) Build(
 
 	systemDirs, hostVars := hostEnv(filepath.Join(work, "home"), filepath.Join(work, "tmp"))
 
-	env := append(append(linkEnv(deps), hostVars...), []string{
+	systemPC := writeSystemPkgConfig(filepath.Join(work, "pkgconfig"))
+
+	env := append(append(linkEnv(deps, systemPC), hostVars...), []string{
 		"PATH=" + joinPaths(append(append(depDirs(deps, "bin"), toolDirs...), systemDirs...)),
 		"OKU_PREFIX=" + prefix, "OKU_SRC=" + src, "OKU_JOBS=" + vars["jobs"],
 	}...)
@@ -732,13 +734,24 @@ type Dep struct {
 // linker record the deps' lib directories in what it links, so the result finds
 // its shared libraries at runtime. On macOS a library records its own absolute
 // install name, which does the same.
-func linkEnv(deps []Dep) []string {
+//
+// systemPC is a directory of pkg-config files for the libraries of the OS, or
+// empty. It comes last, so a dep wins over the OS.
+func linkEnv(deps []Dep, systemPC string) []string {
 	if len(deps) == 0 {
-		return nil
+		if systemPC == "" {
+			return nil
+		}
+
+		return []string{"PKG_CONFIG_PATH=" + systemPC}
 	}
 
 	lib, include := depDirs(deps, "lib"), depDirs(deps, "include")
 	pkgconfig := append(depDirs(deps, "lib/pkgconfig"), depDirs(deps, "share/pkgconfig")...)
+
+	if systemPC != "" {
+		pkgconfig = append(pkgconfig, systemPC)
+	}
 
 	return []string{
 		"PKG_CONFIG_PATH=" + joinPaths(pkgconfig),

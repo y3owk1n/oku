@@ -789,6 +789,12 @@ pkg-config and cmake find it with no flags in your manifest:
 `{{dep.<name>.prefix}}` expands to a dep's directory when you need the path
 itself.
 
+macOS ships zlib, bzip2, expat, libxml2, sqlite3, libcurl and ncurses with
+headers and with no pkg-config file, so a dep whose own file says
+`Requires: zlib` would not resolve. On macOS oku therefore adds a pkg-config
+file for each of them, last on `PKG_CONFIG_PATH`, with the version it reads from
+the SDK on the machine. A dep with the same name wins over it.
+
 On macOS the linker has no `LD_RUN_PATH`. A shared library must record its own
 absolute install name, which cmake and autotools do when they are given
 `{{prefix}}`. With a bare compiler call it is
