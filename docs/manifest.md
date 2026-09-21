@@ -502,6 +502,22 @@ restart = "on-failure"
 | `args` | no | Arguments. They expand `{{prefix}}`, `{{version}}` and the locations `{{home}}`, `{{config}}` and `{{data}}`, so a service can name its config file, as in `["--config", "{{config}}/tool/rc"]`. |
 | `env` | no | Variables for the service. Values expand the same variables. |
 | `restart` | no | `never`, `on-failure` or `always`. Default `never`. |
+| `when` | no | Limits the service to matching machines, with the keys of [`match`](#match-values). oku installs no service on a machine that `when` leaves out. |
+
+A program that runs from inside an app bundle on macOS and from `bin` on Linux
+gets one service for each:
+
+```toml
+[[service]]
+name = "neru"
+command = "Neru.app/Contents/MacOS/neru"
+when = { os = "darwin" }
+
+[[service]]
+name = "neru"
+command = "bin/neru"
+when = { os = "linux" }
+```
 
 The program must stay in the foreground and must not fork into the background.
 The service manager starts it, watches it, and restarts it according to
