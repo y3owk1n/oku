@@ -3,6 +3,7 @@ package settings
 import (
 	"fmt"
 	"os/exec"
+	"slices"
 	"strings"
 )
 
@@ -47,13 +48,21 @@ func (d Defaults) Delete(domain, key string) error {
 	return err
 }
 
-// Applied makes the system read the settings again. Apps such as the Dock still
-// read theirs only when they start.
-func (Defaults) Applied() {
+// dockDomain holds the settings that the Dock reads only when it starts.
+const dockDomain = "com.apple.dock"
+
+// Applied makes the system read the settings again, so that they show without a
+// logout. The Dock reads its own only when it starts, so oku stops it after a
+// change of them, and launchd starts it again at once. nix-darwin does the same.
+func (Defaults) Applied(domains []string) {
 	_ = exec.Command(
 		"/System/Library/PrivateFrameworks/SystemAdministration.framework/Resources/activateSettings",
 		"-u",
 	).Run()
+
+	if slices.Contains(domains, dockDomain) {
+		_ = exec.Command("/usr/bin/killall", "-q", "Dock").Run()
+	}
 }
 
 // OS returns the settings mechanism of this OS.
