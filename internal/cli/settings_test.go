@@ -2,6 +2,7 @@ package cli_test
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -11,7 +12,8 @@ type fakeSettings struct {
 	values map[string]string
 	// failWrite names the keys whose Write fails.
 	failWrite map[string]bool
-	applied   int
+	// applied holds the domains of each Applied call.
+	applied [][]string
 }
 
 func (f *fakeSettings) Read(domain, key string) (string, bool, error) {
@@ -36,7 +38,7 @@ func (f *fakeSettings) Delete(domain, key string) error {
 	return nil
 }
 
-func (f *fakeSettings) Applied() { f.applied++ }
+func (f *fakeSettings) Applied(domains []string) { f.applied = append(f.applied, domains) }
 
 func settingsMachine(t *testing.T) (machine, *fakeSettings) {
 	t.Helper()
@@ -75,8 +77,16 @@ func TestB149ASettingGetsTheValueAndTheTypeOfTheList(t *testing.T) {
 		}
 	}
 
-	if store.applied != 1 {
-		t.Fatalf("oku told the OS about the change %d times, want once", store.applied)
+	want := []string{".GlobalPreferences", "com.apple.Safari", "com.apple.dock"}
+	if len(store.applied) != 1 || !slices.Equal(store.applied[0], want) {
+		t.Fatalf("oku should tell the OS once which domains changed, got %v", store.applied)
+	}
+
+	_, err = m.run(t, "", "sync")
+	must(t, err)
+
+	if len(store.applied) != 1 {
+		t.Fatalf("a sync that changes no setting should not tell the OS, got %v", store.applied)
 	}
 }
 

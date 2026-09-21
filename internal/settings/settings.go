@@ -23,8 +23,9 @@ type Store interface {
 	Read(domain, key string) (string, bool, error)
 	Write(domain, key, fragment string) error
 	Delete(domain, key string) error
-	// Applied tells the OS that settings changed. It runs once after a change.
-	Applied()
+	// Applied tells the OS that settings in these domains changed. It runs once
+	// after a change.
+	Applied(domains []string)
 }
 
 // Encode turns a value of the list into a fragment. A table keeps its keys in

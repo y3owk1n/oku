@@ -81,16 +81,22 @@ func settingHandler(store settings.Store) expose.Handler {
 	}
 }
 
-// tellSettings runs the store's Applied when before and after differ in a
-// setting.
+// tellSettings runs the store's Applied with the domains in which before and
+// after differ in a setting.
 func tellSettings(opts Options, before, after []expose.Item) {
-	only := func(items []expose.Item) []expose.Item {
-		return slices.DeleteFunc(slices.Clone(items), func(item expose.Item) bool {
-			return item.Kind != "setting"
-		})
+	var domains []string
+
+	for _, pair := range [][2][]expose.Item{{before, after}, {after, before}} {
+		for _, item := range pair[0] {
+			if item.Kind == "setting" && !slices.Contains(pair[1], item) &&
+				!slices.Contains(domains, item.Domain) {
+				domains = append(domains, item.Domain)
+			}
+		}
 	}
 
-	if store, _ := settingsStore(opts); store != nil && !slices.Equal(only(before), only(after)) {
-		store.Applied()
+	if store, _ := settingsStore(opts); store != nil && len(domains) > 0 {
+		slices.Sort(domains)
+		store.Applied(domains)
 	}
 }

@@ -258,9 +258,12 @@ none. A key that leaves the list gets that value back, or is deleted again.
 same check and undo as everything else, see
 [a change that fails](files.md#a-change-that-fails).
 
-oku tells macOS to read its settings again after a change. Some apps, such as
-the Dock and Finder, read theirs only when they start, so restart them with
-`killall Dock`. oku never writes `/Library/Preferences` or anything else that
+After a change oku tells macOS to read its settings again, so they show without
+a logout. The Dock reads its own only when it starts, so oku restarts it when a
+`com.apple.dock` key changed, the way nix-darwin does. Other apps that read
+their settings only at start, such as Finder, show a change after you restart
+them, for example with `killall Finder`. An open System Settings window can
+write its own values over a change, so close it before you sync. oku never writes `/Library/Preferences` or anything else that
 needs root. When oku deletes the last key of a domain that it created, macOS
 keeps an empty file for that domain.
 
