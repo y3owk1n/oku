@@ -231,7 +231,7 @@ AppleLanguages = ["en-SG", "ms-MY"]
 | Table | OS | Status |
 |---|---|---|
 | `[defaults."<domain>"]` | macOS | Works. oku writes through `/usr/bin/defaults`. |
-| `[registry.'HKCU\...']` | Windows | Not built yet. A key outside `HKCU` is an error on every OS. |
+| `[registry.'HKCU\...']` | Windows | Works. oku writes through `reg.exe`. A key outside `HKCU` is an error on every OS. |
 | `[dconf."<path>"]` | Linux | Not built yet. |
 
 oku skips the tables of another OS, so one list serves every machine. On its
@@ -243,14 +243,24 @@ table `com` that holds a table `apple`, and not the domain you meant.
 
 The type comes from the TOML value:
 
-| TOML | macOS |
-|---|---|
-| `true`, `false` | boolean |
-| `48` | integer |
-| `0.5` | float. Write `0.0`, not `0`, where the setting is a float. |
-| `"left"` | string |
-| `["a", "b"]` | array |
-| a table | dictionary. oku owns the whole dictionary and writes it whole. |
+| TOML | macOS | Windows |
+|---|---|---|
+| `true`, `false` | boolean | `REG_DWORD` 1 or 0 |
+| `48` | integer | `REG_DWORD`, or `REG_QWORD` above 4294967295. A negative number is an error. |
+| `0.5` | float. Write `0.0`, not `0`, where the setting is a float. | An error, the registry has no float. |
+| `"left"` | string | `REG_SZ` |
+| `["a", "b"]` | array | `REG_MULTI_SZ`, of strings that are not empty |
+| a table | dictionary. oku owns the whole dictionary and writes it whole. | An error. Write the subkey as its own table. |
+
+Write a registry key in single quotes, so that TOML keeps its backslashes:
+
+```toml
+[registry.'HKCU\Control Panel\Keyboard']
+KeyboardDelay = "0"
+```
+
+A value that oku puts back keeps the type it had, also one that the list cannot
+write, such as `REG_BINARY` or `REG_EXPAND_SZ`.
 
 Before oku first writes a key it records the value the key had, or that it had
 none. A key that leaves the list gets that value back, or is deleted again.

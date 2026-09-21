@@ -1,6 +1,7 @@
-// Package settings reads and writes per-user settings of the OS. A value is a
-// fragment of an XML property list, such as <integer>48</integer>, so it keeps
-// its type when oku writes it to a preference domain and reads it back.
+// Package settings reads and writes per-user settings of the OS. Between the
+// list, the ledger and a store a value is a fragment: a string in the store's
+// own form that holds the type too, such as <integer>48</integer> for macOS or
+// REG_DWORD:48 for the registry. So a value that oku read comes back as it was.
 package settings
 
 import (
@@ -18,6 +19,9 @@ import (
 // Store is one mechanism of the OS that holds settings, such as the preference
 // domains of macOS.
 type Store interface {
+	// Encode turns a value of the list into a fragment, or says why this store
+	// cannot hold it.
+	Encode(value any) (string, error)
 	// Read returns the value of key in domain as a fragment, and whether the key
 	// is set.
 	Read(domain, key string) (string, bool, error)
@@ -28,9 +32,10 @@ type Store interface {
 	Applied(domains []string)
 }
 
-// Encode turns a value of the list into a fragment. A table keeps its keys in
-// sorted order, so the same value always gives the same fragment.
-func Encode(value any) (string, error) {
+// EncodePlist turns a value of the list into a fragment of an XML property
+// list. A table keeps its keys in sorted order, so the same value always gives
+// the same fragment.
+func EncodePlist(value any) (string, error) {
 	switch v := value.(type) {
 	case bool:
 		if v {
@@ -48,7 +53,7 @@ func Encode(value any) (string, error) {
 		var out strings.Builder
 
 		for _, element := range v {
-			fragment, err := Encode(element)
+			fragment, err := EncodePlist(element)
 			if err != nil {
 				return "", err
 			}
@@ -61,7 +66,7 @@ func Encode(value any) (string, error) {
 		var out strings.Builder
 
 		for _, key := range slices.Sorted(maps.Keys(v)) {
-			fragment, err := Encode(v[key])
+			fragment, err := EncodePlist(v[key])
 			if err != nil {
 				return "", fmt.Errorf("%s: %w", key, err)
 			}

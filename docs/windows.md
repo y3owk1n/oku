@@ -121,6 +121,14 @@ writes a deleted copy again.
 is `%APPDATA%` and `{{data}}` is `%LOCALAPPDATA%`, unless the XDG variables are
 set.
 
+## Settings
+
+[`[registry]`](list-and-lock.md#settings-of-the-os) sets values under `HKCU`
+through `reg.exe`. oku records the value a name had before it first wrote it,
+and puts it back, with its type, when the name leaves the list, on
+`oku rollback` and on `oku self uninstall`. A program reads the registry when
+it needs a value, so some changes show only after the program restarts.
+
 ## Services
 
 A [service](services.md) is a scheduled task named `oku-<name>`. It runs as you,

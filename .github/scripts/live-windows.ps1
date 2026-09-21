@@ -629,5 +629,43 @@ Check 'the targets are gone once [files] is, and the source of the junction is k
 }
 Remove-Item -Recurse -Force (Join-Path $env:LOCALAPPDATA 'oku-live-files') -ErrorAction SilentlyContinue
 
+# [registry]. Two values exist before oku, so that it has something to put back.
+$regKey = 'HKCU:\Software\oku-live-test'
+New-Item -Force $regKey | Out-Null
+Set-ItemProperty $regKey -Name Delay -Value 'before oku'
+Set-ItemProperty $regKey -Name Count -Value 7 -Type DWord
+
+Add-Content $listPath @'
+
+[registry.'HKCU\Software\oku-live-test']
+Delay = "0"
+Count = 9
+Enabled = true
+Size = 48
+Names = ["one", "two"]
+
+[defaults."com.apple.dock"]
+tilesize = 48
+'@
+
+Oku sync
+$props = Get-ItemProperty $regKey
+$kinds = Get-Item $regKey
+Check 'registry values arrive with their types, and the table of macOS is skipped' {
+    ($props.Delay -eq '0') -and ($props.Count -eq 9) -and ($props.Enabled -eq 1) -and ($props.Size -eq 48) -and
+    (($props.Names -join ',') -eq 'one,two') -and ($kinds.GetValueKind('Delay') -eq 'String') -and
+    ($kinds.GetValueKind('Size') -eq 'DWord') -and ($kinds.GetValueKind('Names') -eq 'MultiString')
+}
+
+Set-Content $listPath $withoutFiles -NoNewline
+Oku sync
+$props = Get-ItemProperty $regKey
+Check 'a value that leaves the list gets back what it held before oku, and a new one is deleted' {
+    ($props.Delay -eq 'before oku') -and ($props.Count -eq 7) -and
+    ((Get-Item $regKey).GetValueKind('Count') -eq 'DWord') -and
+    ($null -eq $props.Enabled) -and ($null -eq $props.Size) -and ($null -eq $props.Names)
+}
+Remove-Item -Recurse -Force $regKey
+
 Remove-Item -Recurse -Force $root
 Write-Host 'live test passed'
