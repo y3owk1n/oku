@@ -232,25 +232,25 @@ AppleLanguages = ["en-SG", "ms-MY"]
 |---|---|---|
 | `[defaults."<domain>"]` | macOS | Works. oku writes through `/usr/bin/defaults`. |
 | `[registry.'HKCU\...']` | Windows | Works. oku writes through `reg.exe`. A key outside `HKCU` is an error on every OS. |
-| `[dconf."<path>"]` | Linux | Not built yet. |
+| `[dconf."<path>"]` | Linux | Works. oku writes through the `dconf` tool. |
 
-oku skips the tables of another OS, so one list serves every machine. On its
-own OS a table that is not built yet is an error, so that a setting never looks
-applied when it is not.
+oku skips the tables of another OS, so one list serves every machine. On Linux
+it also skips `[dconf]` when the `dconf` tool is not installed, as on a server,
+and prints `[dconf] is skipped, because the dconf tool is not on PATH`.
 
 Quote a domain that has a dot. `[defaults.com.apple.dock]` without quotes is a
 table `com` that holds a table `apple`, and not the domain you meant.
 
 The type comes from the TOML value:
 
-| TOML | macOS | Windows |
-|---|---|---|
-| `true`, `false` | boolean | `REG_DWORD` 1 or 0 |
-| `48` | integer | `REG_DWORD`, or `REG_QWORD` above 4294967295. A negative number is an error. |
-| `0.5` | float. Write `0.0`, not `0`, where the setting is a float. | An error, the registry has no float. |
-| `"left"` | string | `REG_SZ` |
-| `["a", "b"]` | array | `REG_MULTI_SZ`, of strings that are not empty |
-| a table | dictionary. oku owns the whole dictionary and writes it whole. | An error. Write the subkey as its own table. |
+| TOML | macOS | Windows | Linux |
+|---|---|---|---|
+| `true`, `false` | boolean | `REG_DWORD` 1 or 0 | boolean |
+| `48` | integer | `REG_DWORD`, or `REG_QWORD` above 4294967295. A negative number is an error. | `int32`, or `int64` outside its range |
+| `0.5` | float. Write `0.0`, not `0`, where the setting is a float. | An error, the registry has no float. | double |
+| `"left"` | string | `REG_SZ` | string |
+| `["a", "b"]` | array | `REG_MULTI_SZ`, of strings that are not empty | An array of one type. An empty array is an error, because it has no type. |
+| a table | dictionary. oku owns the whole dictionary and writes it whole. | An error. Write the subkey as its own table. | An error. |
 
 Write a registry key in single quotes, so that TOML keeps its backslashes:
 
@@ -258,6 +258,18 @@ Write a registry key in single quotes, so that TOML keeps its backslashes:
 [registry.'HKCU\Control Panel\Keyboard']
 KeyboardDelay = "0"
 ```
+
+A `[dconf]` table is named after the directory of its keys, without the slashes
+at the ends:
+
+```toml
+[dconf."org/gnome/desktop/interface"]
+color-scheme = "prefer-dark"
+```
+
+Writing needs the dconf service and a D-Bus session, which a desktop login has.
+Without a session the write fails and oku undoes the change. oku keeps a dconf
+type that the list cannot write, such as `uint32`, when it puts a value back.
 
 oku puts a value back with the type it had. That includes a type that the list
 cannot write, such as `REG_BINARY` or `REG_EXPAND_SZ`.

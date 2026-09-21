@@ -229,7 +229,7 @@ func reconcile(
 		return err
 	}
 
-	wantedSettings, err := resolveSettings(opts, all.settings)
+	wantedSettings, err := resolveSettings(opts, all.settings, cmd.ErrOrStderr())
 	if err != nil {
 		return err
 	}

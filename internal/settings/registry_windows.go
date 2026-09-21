@@ -19,6 +19,8 @@ func reg(args ...string) (string, error) {
 	return string(out), nil
 }
 
+func (Registry) Unavailable() string { return "" }
+
 func (Registry) Encode(value any) (string, error) { return EncodeRegistry(value) }
 
 func (Registry) Read(key, name string) (string, bool, error) {
