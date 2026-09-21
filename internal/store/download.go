@@ -101,23 +101,32 @@ func (s *Store) get(ctx context.Context, url string) (*http.Response, error) {
 // verifyIntegrity checks the file at path against want, which is "sha512-" and
 // the digest in base64.
 func verifyIntegrity(path, want string) error {
-	f, err := os.Open(path)
+	got, err := fileIntegrity(path)
 	if err != nil {
 		return err
 	}
-	defer f.Close()
 
-	hash := sha512.New()
-	if _, err := io.Copy(hash, f); err != nil {
-		return err
-	}
-
-	got := "sha512-" + base64.StdEncoding.EncodeToString(hash.Sum(nil))
 	if got != want {
 		return fmt.Errorf("integrity mismatch: expected %s, download is %s", want, got)
 	}
 
 	return nil
+}
+
+// fileIntegrity returns the sha512 of the file at path the way npm writes it.
+func fileIntegrity(path string) (string, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+
+	hash := sha512.New()
+	if _, err := io.Copy(hash, f); err != nil {
+		return "", err
+	}
+
+	return "sha512-" + base64.StdEncoding.EncodeToString(hash.Sum(nil)), nil
 }
 
 var hexDigestRe = regexp.MustCompile(`\b[0-9a-fA-F]{64}\b`)

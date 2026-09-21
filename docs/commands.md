@@ -613,6 +613,25 @@ It edits the file as text, so comments and layout stay:
 At the newest version it prints `<name> is already at <version>` and changes
 nothing. A manifest that uses `version.from` needs no bump, and bump says so.
 
+## oku manifest hash
+
+```
+oku manifest hash <url | file>
+```
+
+Downloads the file and prints its checksums as the two lines a manifest can
+hold. An artifact needs one of them:
+
+```
+$ oku manifest hash https://registry.npmjs.org/@actions/languageserver/-/languageserver-0.3.61.tgz
+sha256 = "d152725064c64f862da5158cd630d4c67973edfb58bdabaa44054ffef03b9d03"
+integrity = "sha512-L5Vf3zc3yD11xUSM8zMxrNwYLZpiUNG6U8kFK2BsxVyRKhU8gQEt02ydR+FZgidkrHSQO/2P7eU9vHPcOwwsOQ=="
+```
+
+It trusts the download it gets, the way a first `oku add` would. Compare the
+output with what the project publishes when it publishes a checksum. The
+download stays in oku's cache, so a following `oku add` does not fetch it again.
+
 ## oku shell
 
 ```

@@ -88,7 +88,7 @@ this machine to find the executable, so run it where a release asset exists.`,
 	init.Flags().BoolVar(&force, "force", false, "replace the output file when it exists")
 	_ = init.MarkFlagRequired("from")
 
-	cmd.AddCommand(init, newLintCmd(), newBumpCmd(opts), newTestCmd(opts))
+	cmd.AddCommand(init, newLintCmd(), newBumpCmd(opts), newTestCmd(opts), newHashCmd())
 
 	return cmd
 }
@@ -204,6 +204,45 @@ func bumpSource(file, text, flag string) (string, string, error) {
 			"to read the repo from, pass --repo with a ref such as gitea:host/owner/repo",
 		file,
 	)
+}
+
+func newHashCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "hash <url | file>",
+		Short: "Print the checksums of a download, ready to paste into a manifest",
+		Long: `Print the checksums of a download, ready to paste into a manifest.
+
+An artifact needs one of the two lines. Most projects publish a sha256, and npm
+publishes an integrity.`,
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			at := args[0]
+
+			// A local file is a download that is already here.
+			if !strings.Contains(at, "://") {
+				abs, err := filepath.Abs(at)
+				if err != nil {
+					return err
+				}
+
+				at = "file://" + filepath.ToSlash(abs)
+			}
+
+			e, err := loadEnv()
+			if err != nil {
+				return err
+			}
+
+			sum, integrity, err := e.store().Hashes(cmd.Context(), at)
+			if err != nil {
+				return err
+			}
+
+			fmt.Fprintf(cmd.OutOrStdout(), "sha256 = %q\nintegrity = %q\n", sum, integrity)
+
+			return nil
+		},
+	}
 }
 
 func newBumpCmd(opts Options) *cobra.Command {
