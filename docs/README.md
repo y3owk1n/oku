@@ -7,7 +7,7 @@ has the overview.
 |---|---|
 | [Getting started](getting-started.md) | Install, a first package, `PATH`, uninstall |
 | [Commands](commands.md) | Every command, its flags, what it prints, its JSON |
-| [Refs](refs.md) | The ways to point oku at a manifest, and sources |
+| [Refs](refs.md) | The ways to point oku at a manifest, a repo on GitHub, GitLab, Codeberg or Gitea, or a download, and sources |
 | [List and lock](list-and-lock.md) | `oku.toml`, `oku.lock`, one list for several machines |
 | [Projects](projects.md) | A list, a lock and a profile that belong to one repo, and the shell hook |
 | [Services](services.md) | Running a package's daemon with launchd, systemd or Task Scheduler |

@@ -74,11 +74,25 @@ To pick a version, add `@version`:
 $ oku add github:BurntSushi/ripgrep@14.1.1
 ```
 
+The same works for a repo on another host, and for a URL that is the download
+itself. [Refs](refs.md) lists every form.
+
+```
+$ oku add gitlab:gitlab-org/cli --bin glab
+$ oku add codeberg:owner/repo
+$ oku add gitea:gitea.com/gitea/tea
+$ oku add https://example.com/tool-1.2.0-linux-amd64.tar.gz
+```
+
+`--bin glab` is there because that repo is called `cli` and its program `glab`.
+When oku picks the wrong release file, `--asset '<glob>'` names the right one.
+
 ## Write a manifest yourself
 
 A manifest is a small TOML file that says where a package's downloads are.
-Write one when inference gets a package wrong, or to install something that is
-not on GitHub. Save this as `ripgrep.toml`:
+Write one when inference gets a package wrong and `--asset` and `--bin` do not
+fix it, to build from source, or to install something that has no release for
+oku to read. Save this as `ripgrep.toml`:
 
 ```toml
 [package]

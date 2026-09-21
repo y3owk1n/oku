@@ -1,5 +1,5 @@
-# Runs the real oku.exe on Windows against real GitHub releases, in throwaway
-# directories. Each check throws on failure, which fails the job.
+# Runs the real oku.exe on Windows against real releases on GitHub, GitLab and
+# gitea.com, in throwaway directories. Each check throws on failure, which fails the job.
 $ErrorActionPreference = 'Stop'
 $repoRoot = (Get-Location).Path
 
@@ -492,6 +492,25 @@ finally {
     Stop-Process -Id $server.Id -Force
     Remove-Item Env:OKU_RELEASE_URL, Env:OKU_INSTALL_DIR
     Remove-Item -Recurse -Force $served, (Join-Path $env:RUNNER_TEMP 'oku-installed') -ErrorAction SilentlyContinue
+}
+
+# Hosts other than GitHub, and a URL that is the download itself. The self
+# uninstall check above deleted oku.exe, so this part builds it again.
+go build -C $repoRoot -o $oku ./cmd/oku
+if ($LASTEXITCODE -ne 0) { throw 'go build failed' }
+
+Oku add gitlab:gitlab-org/cli --bin glab
+$glab = & "$bin\glab.exe" --version
+Check 'a gitlab: project installs from a zip with its program in a directory' { $glab -match '^glab \d' }
+
+Oku add gitea:gitea.com/gitea/tea
+$tea = (& "$bin\tea.exe" --version) -join "`n"
+Check 'a gitea: repo installs from a single .exe' { $tea -match '\d+\.\d+' }
+
+Oku add https://github.com/sharkdp/hyperfine/releases/download/v1.19.0/hyperfine-v1.19.0-x86_64-pc-windows-msvc.zip
+$hyperfine = & "$bin\hyperfine.exe" --version
+Check 'a URL of the download installs, with its version from the file name' {
+    $hyperfine -match '^hyperfine 1\.19\.0'
 }
 
 Remove-Item -Recurse -Force $root

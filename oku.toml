@@ -4,7 +4,7 @@ gofumpt = { ref = "github:mvdan/gofumpt", version = "0.10.0" }
 golangci-lint-langserver = { ref = "github:nametake/golangci-lint-langserver", version = "0.0.12" }
 just-lsp = { ref = "github:terror/just-lsp", version = "0.4.7" }
 go = { ref = "./.oku/go.toml", version = "1.26.4" }
-golangci-lint = "./.oku/golangci-lint.toml"
-golines = { ref = "./.oku/golines.toml", version = "0.15.0" }
+golangci-lint = { ref = "github:golangci/golangci-lint", version = "2.12.2" }
+golines = { ref = "github:golangci/golines", version = "0.15.0" }
 goimports = { ref = "./.oku/goimports.toml", version = "0.44.0" }
 gopls = { ref = "./.oku/gopls.toml", version = "0.22.0" }
