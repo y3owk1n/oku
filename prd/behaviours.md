@@ -339,6 +339,33 @@ order step in `prd/product.md`.
 - B153 [15] `[registry]` on Windows and `[dconf]` on Linux behave as B149 and
   B150 describe.
 
+## Secrets
+
+- B154 [16] A `secret` entry writes the decrypted value of `key` to the target.
+  Without `key` it writes the whole decrypted file.
+- B155 [16] oku decrypts an age file with no other program installed, and a
+  sops file through `sops`. It tells the two apart by the file's content.
+- B156 [16] A `text` or a template may use `{{secret.<name>}}` for a value that
+  `[secrets]` names. A name that `[secrets]` lacks is an error.
+- B157 [16] A file that holds a secret can be read by the user alone: mode
+  `0600` unless `mode` is given, and on Windows an access control list with the
+  current user only.
+- B158 [16] The generation holds the encrypted file. No generation, ledger
+  entry, output or error holds the decrypted bytes.
+- B159 [16] A secret that cannot be decrypted fails before any change. The
+  error names the encrypted file and the `key`.
+- B160 [16] After the encrypted file changed, `sync` writes the new value.
+  `rollback` writes the value of the generation it returns to.
+- B161 [16] A secret whose entry leaves the list is deleted with its target.
+  `self uninstall` deletes every decrypted secret.
+- B162 [16] oku finds `sops` in the packages of the list before `PATH`, so the
+  sync that installs sops can also decrypt.
+- B163 [16] oku reads the age identities from `SOPS_AGE_KEY_FILE`, else from
+  `{{config}}/sops/age/keys.txt`, on every OS and for both formats.
+- B164 [16] `oku doctor` reports a list with secrets on a machine without an
+  identity file, or without `sops` when a secret is a sops file.
+- B165 [16] A project list with `[secrets]` or a `secret` entry is an error.
+
 ## Uninstall
 
 - B94 [1] `oku self uninstall` lists what it will remove, asks once, then

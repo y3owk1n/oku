@@ -63,6 +63,10 @@
   or `{{localappdata}}`, the start of a target.
 - **Variable**: a named string from `[vars]` that `render`, `text` and targets
   expand.
+- **Secret**: a value in a sops or an age file. The generation holds the
+  encrypted file, and the decrypted bytes exist only in `<data>/oku/secrets/`.
+- **Identity**: the private age key that decrypts a secret. oku reads it and
+  never writes it.
 - **Setting**: one key of a per-user OS mechanism: a macOS preference domain,
   dconf, or the current user's registry.
 - **Plan** and **apply**: the two parts of a change. The plan checks and

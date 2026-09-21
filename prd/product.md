@@ -60,7 +60,8 @@ apps, fonts, services, and environment variables.
 ## What a list can set up
 
 Besides packages, the global list places files in the user's home directory,
-as links, fixed text or templates rendered from the list's variables, and sets
+as links, fixed text, templates rendered from the list's variables or secrets
+from a sops or an age file, and sets
 per-user settings of the OS: preference domains on macOS, dconf on Linux, the
 current user's registry on Windows. A colour scheme is a table of variables, so
 changing it changes the colours of every rendered file in one generation.
@@ -105,7 +106,8 @@ These are permanent edges of the product, not deferrals.
 ## Build order
 
 Everything below is in scope. The order is dependency order, not priority.
-All fifteen steps are built, and `docs/` describes what works today.
+Steps 1 to 15 are built, and `docs/` describes what works today. Step 16 is
+not built yet.
 
 1. Core: local ref, artifact, store, global profile. `add`, `remove`, `list`.
 2. Refs, `oku.toml`, `oku.lock`, `sync`, list `include` and `when`, bootstrap
@@ -126,3 +128,5 @@ All fifteen steps are built, and `docs/` describes what works today.
 14. Variables and templates: `[vars]` and `render`.
 15. Settings: the `setting` ledger kind and `[defaults]` on macOS, then
     `[registry]` on Windows and `[dconf]` on Linux.
+16. Secrets: `[secrets]` and the `secret` entry of `[files]`, from sops and age
+    files, decrypted at apply time.

@@ -643,20 +643,20 @@ and `gc` deletes them.
 The apply writes `<data>/oku/pending.toml` with the numbers of the active and
 the new generation, switches `current`, makes the ledger match the new
 generation, writes `oku.lock` and deletes `pending.toml`. `current` comes
-first, because the target of a file with content points through it (D60). When a step fails oku
-makes the ledger match the old generation again, deletes the new one and
-leaves the lock as it was. It then reports the first error. A command that
-finds `pending.toml` does that revert before anything else, and says so. When
-a revert step fails too, oku stops, names what is left and keeps
+first, because the target of a file with content points through it (D60). When
+a step fails oku makes the ledger match the old generation again, deletes the
+new one and leaves the lock as it was. It then reports the first error. A
+command that finds `pending.toml` does that revert before anything else, and
+says so. When a revert step fails too, oku stops, names what is left and keeps
 `pending.toml`, and `oku doctor` reports it.
 
 Why: after a half-applied change the machine matches neither the old list nor
 the new one, and the user cannot tell which parts changed. Before this, a
-failure while exposing left the new generation active beside the old lock. Reverting is the ledger sync of D41 run toward the old
-generation, the same code as `rollback`, so there is no second undo mechanism
-to keep correct. No filesystem gives one atomic step over files, services and
-OS settings, so the promise is check first and revert, not a true atomic
-commit.
+failure while exposing left the new generation active beside the old lock.
+Reverting is the ledger sync of D41 run toward the old generation, the same
+code as `rollback`, so there is no second undo mechanism to keep correct. No
+filesystem gives one atomic step over files, services and OS settings, so the
+promise is check first and revert, not a true atomic commit.
 
 ## D60. The global list places files in the home directory
 
@@ -670,10 +670,10 @@ commit.
 The key is the target. It starts with a location variable: `{{home}}`,
 `{{config}}`, `{{data}}`, and on Windows `{{appdata}}` and `{{localappdata}}`.
 A variable this OS lacks is an error unless `when` excludes the entry. The
-value holds exactly one of `link`, `text` and `render` (D61), and may hold
-`when` and `mode`. A source path starts at the directory of the list that
-declares it. A link source may start with `{{pkg.<name>}}`, the files of a
-package in the list.
+value holds exactly one of `link`, `text`, `render` (D61) and `secret` (D63),
+and may hold `when` and `mode`. A source path starts at the directory of the
+list that declares it. A link source may start with `{{pkg.<name>}}`, the
+files of a package in the list.
 
 `link` makes the target a symlink to the source, so an edit shows at once and
 the user's own repo versions the content. `text` and `render` write the content
@@ -716,12 +716,12 @@ no conditionals and no loops.
 
 Why: a difference between platforms belongs in `when` on the entry, and most
 tools can include a second file, so logic in templates would only add a
-language to learn. The same template then gives the same bytes on every OS.
-A colour scheme is a table of variables that the user writes, so oku needs no
+language to learn. The same template then gives the same bytes on every OS. A
+colour scheme is a table of variables that the user writes, so oku needs no
 loader for one scheme format. A name may hold `-` and spaces may surround it,
 which is how base16 templates are written, so one of those works unchanged with
-variables named `base00-hex`. `when` matches a platform, not one machine (D15), so a machine that
-differs sets its own `[vars]` in its own list.
+variables named `base00-hex`. `when` matches a platform, not one machine (D15),
+so a machine that differs sets its own `[vars]` in its own list.
 
 ## D62. Settings are per OS, in user scope, with the old value kept
 
@@ -751,3 +751,70 @@ so each one is a step of the apply in D59.
 Why: setting keys are not portable, and one `[settings]` table would suggest
 that a key works on every OS. Without the recorded old value oku could not
 reverse a setting. User scope keeps settings out of the elevation path of D43.
+
+## D63. oku decrypts a secret at apply time, and keeps only the ciphertext
+
+```toml
+[secrets]
+github_token = { file = "./secrets/secrets.yaml", key = "github/token" }
+
+[files]
+"{{home}}/.ssh/id_ed25519" = { secret = "./secrets/secrets.yaml", key = "ssh/id_ed25519" }
+"{{home}}/.ssh/backup_key" = { secret = "./secrets/backup_key.age" }
+"{{home}}/.config/gh/hosts.yml" = { render = "./files/gh-hosts.tmpl" }
+```
+
+A `secret` entry writes one decrypted value to the target. `[secrets]` names a
+value, and a `text` or a template uses it as `{{secret.github_token}}`. `key` is
+the path of one value in a sops file, with `/` between its parts. Without `key`
+the whole decrypted file is the value. The mode of a file that holds a secret
+is `0600` unless the entry gives one.
+
+oku reads two formats and tells them apart by the content of the file. It
+decrypts an age file itself, with the library of age's author, so a new machine
+needs no tool for it. It runs `sops decrypt` for a sops file, and looks for
+`sops` in the packages of the list first, also in the generation it is about to
+activate, and then on `PATH`. So the first sync of a machine can install sops
+and decrypt with it. The age identities are in `SOPS_AGE_KEY_FILE`, else in
+`{{config}}/sops/age/keys.txt`, for both formats, and oku passes that path to
+sops, which looks elsewhere on macOS and on Windows. oku never writes or
+creates a key.
+
+The generation holds a copy of each encrypted file, never decrypted bytes. For a
+`text` or a template that uses a secret it holds the content with every other
+variable filled in and the secret left as its name. The plan decrypts every
+secret in memory, so a missing identity, a missing `sops`, a wrong `key` or a
+secret that no entry of `[secrets]` names stops the change before it starts. The
+apply writes the final bytes to `<data>/oku/secrets/`, and the target is a link
+to that file. On Windows the target is a copy. Only the user can read that
+directory and those files: mode `0700` and `0600` on macOS and Linux, and on
+Windows an access control list that names the current user alone and inherits
+nothing.
+
+`secret` is a ledger kind. Its identity is the hash of the content the
+generation holds, of the encrypted files it uses and of their `key` values. So
+a changed encrypted file writes the secret again, and `rollback` decrypts the
+encrypted files of the generation it returns to. Removing the entry, and
+`self uninstall`, delete the decrypted file. `oku doctor` reports a list with
+secrets on a machine that has no identity file, or no `sops` for a sops file.
+
+No generation, ledger entry, output or error holds decrypted bytes. An error
+names the encrypted file and the `key`. Only the global list may hold
+`[secrets]` or a `secret` entry, and only a list on this machine, as for
+`[files]`.
+
+Creating and editing secrets is not oku's job and will not become one. `sops`
+and `age` own recipients, key rotation and the editor, and a second tool that
+writes encrypted files would be a second place where a mistake leaks a secret.
+
+Why: the user already has a sops file, a `.sops.yaml` and the habit of `sops
+secrets.yaml`, and sops also covers PGP and cloud keys, which oku would
+otherwise have to support one by one. oku does not link the sops library,
+because it would bring the SDKs of three cloud vendors into a static binary,
+and it does not read the sops format itself, because a second implementation of
+a format with its own integrity check is a risk with no gain. An age file is
+one call into a small audited library, and it lets a machine with nothing
+installed decrypt its first key. Decrypted bytes in a generation would stay on
+disk in every old generation until `gc`, and a generation kept for rollback
+must not store old keys. Keeping the ciphertext there gives rollback the right
+value, and the only decrypted bytes on disk are the files in use.

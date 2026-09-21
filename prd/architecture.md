@@ -32,6 +32,7 @@ XDG on unix, `%APPDATA%` and `%LOCALAPPDATA%` on Windows. `<root>` is
 <data>/oku/trust/allow.toml, approvals.toml
 <data>/oku/exposed.toml              ledger of every file written elsewhere (D17)
 <data>/oku/pending.toml              present only while oku applies a change (D59)
+<data>/oku/secrets/                  decrypted secrets, readable by the user only (D63)
 <cache>/oku/downloads/, git/
 ```
 
@@ -168,6 +169,10 @@ theme = { base00 = "0c1410" }         # {{theme.base00}}
 "{{home}}/.config/nvim" = { link = "./files/nvim" }
 "{{home}}/.config/ghostty/config" = { render = "./files/ghostty.tmpl" }
 "{{home}}/.ssh/allowed_signers" = { text = "{{email}} ...\n", mode = "0600" }
+"{{home}}/.ssh/id_ed25519" = { secret = "./secrets.yaml", key = "ssh/id_ed25519" }  # D63
+
+[secrets]                             # global list only, {{secret.token}} (D63)
+token = { file = "./secrets.yaml", key = "github/token" }
 
 [defaults."com.apple.dock"]           # macOS. Also [registry], [dconf] (D62)
 tilesize = 48
@@ -236,6 +241,7 @@ With `system = true` on the list entry the targets are `/Applications`,
 |---|---|---|
 | file, `link` | symlink to the source | junction for a directory, copy for a file |
 | file, `text` and `render` | symlink through `current/files/` | copy |
+| file, `secret` | symlink to `<data>/oku/secrets/` | copy |
 | setting | `defaults` on macOS, dconf on Linux | registry under `HKCU` |
 
 Files and settings exist in user scope only.
