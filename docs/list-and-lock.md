@@ -435,6 +435,10 @@ A machine whose platform is missing from the lock adds its own entry the first
 time it runs `oku sync`, and does not change the other entries. Commit the lock
 back after that.
 
+In CI, run `oku sync --locked`. It fails when the lock does not pin a package
+for the runner's platform, and it never changes the lock, see
+[oku sync](commands.md#oku-sync).
+
 Platform entries for a package are cleared when `oku update` accepts a changed
 manifest, because they described the old one. Each machine adds its entry
 again on its next sync.
