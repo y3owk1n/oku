@@ -57,6 +57,9 @@ type File struct {
 	// "current" stays the same from one generation to the next.
 	Content string      `toml:"content,omitempty"`
 	Mode    fs.FileMode `toml:"mode,omitempty"`
+	// Hash is the sha256 of the bytes that Windows copies to Target. It is empty
+	// for a linked directory.
+	Hash string `toml:"hash,omitempty"`
 	// Text is the content. The state file does not hold it.
 	Text []byte `toml:"-"`
 }
@@ -256,7 +259,7 @@ func (p *Profile) Replace(pkgs []Package, files []File, lockData []byte) (int, e
 
 	sameFile := func(a, b File) bool {
 		return a.Target == b.Target && a.Link == b.Link && a.Mode == b.Mode &&
-			bytes.Equal(a.Text, b.Text)
+			a.Hash == b.Hash && bytes.Equal(a.Text, b.Text)
 	}
 
 	if slices.EqualFunc(have, pkgs, same) && slices.EqualFunc(haveFiles, files, sameFile) &&

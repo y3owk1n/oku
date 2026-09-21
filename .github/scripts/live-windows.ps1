@@ -562,5 +562,63 @@ Oku add npm:prettier
 $prettier = & "$bin\prettier.exe" --version
 Check 'an npm package runs through the configured node' { $prettier -match '^\d+\.\d+' }
 
+# [files]. A normal Windows user cannot create a symlink, so a linked directory
+# is a junction, and a linked file or a text is a copy.
+$listPath = Join-Path $configDir 'oku.toml'
+$withoutFiles = Get-Content $listPath -Raw
+$sources = Join-Path $configDir 'files'
+New-Item -ItemType Directory -Force (Join-Path $sources 'nvim') | Out-Null
+Set-Content (Join-Path $sources 'nvim\init.lua') 'first'
+Set-Content (Join-Path $sources 'gitconfig') 'linked file'
+
+$nvim = Join-Path $env:XDG_CONFIG_HOME 'nvim'
+$gitconfig = Join-Path $env:XDG_CONFIG_HOME 'git\config'
+$note = Join-Path $env:LOCALAPPDATA 'oku-live-files\note.txt'
+
+Add-Content $listPath @'
+
+[files]
+"{{config}}/nvim" = { link = "./files/nvim" }
+"{{config}}/git/config" = { link = "./files/gitconfig" }
+"{{localappdata}}/oku-live-files/note.txt" = { text = "one", when = { os = "windows" } }
+'@
+
+Oku sync
+Set-Content (Join-Path $sources 'nvim\init.lua') 'second'
+Check 'a linked directory is a junction, and an edit of its source shows with no sync' {
+    ((Get-Item $nvim).LinkType -eq 'Junction') -and ((Get-Content "$nvim\init.lua") -eq 'second')
+}
+Check 'a linked file and a text are copies with the right bytes' {
+    ((Get-Content $gitconfig) -eq 'linked file') -and ((Get-Content $note -Raw) -eq 'one') -and
+    (-not (Get-Item $note).LinkType)
+}
+
+Set-ItemProperty $note IsReadOnly $false
+Set-Content $note 'edited by hand' -NoNewline
+$refused = (& $oku sync 2>&1) -join "`n"
+Check 'B141: a copy that was edited by hand stops the sync, is named, and keeps the edit' {
+    ($LASTEXITCODE -ne 0) -and ($refused -match 'note\.txt') -and
+    ((Get-Content $note -Raw) -eq 'edited by hand')
+}
+
+Remove-Item -Force $note
+Oku sync
+Check 'a copy that was deleted is written again' { (Get-Content $note -Raw) -eq 'one' }
+
+(Get-Content $listPath -Raw).Replace('text = "one"', 'text = "two"') | Set-Content $listPath -NoNewline
+Oku sync
+Check 'a changed text reaches the copy' { (Get-Content $note -Raw) -eq 'two' }
+
+Oku rollback
+Check 'rollback brings back the bytes of the generation before' { (Get-Content $note -Raw) -eq 'one' }
+
+Set-Content $listPath $withoutFiles -NoNewline
+Oku sync
+Check 'the targets are gone once [files] is, and the source of the junction is kept' {
+    (-not (Test-Path $nvim)) -and (-not (Test-Path $gitconfig)) -and (-not (Test-Path $note)) -and
+    ((Get-Content (Join-Path $sources 'nvim\init.lua')) -eq 'second')
+}
+Remove-Item -Recurse -Force (Join-Path $env:LOCALAPPDATA 'oku-live-files') -ErrorAction SilentlyContinue
+
 Remove-Item -Recurse -Force $root
 Write-Host 'live test passed'

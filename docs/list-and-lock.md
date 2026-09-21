@@ -159,7 +159,10 @@ Limits for now:
   error, so that a cloned repo cannot write into your home directory.
 - An included list may hold `[files]` when it is a file on this machine, not
   when it comes from a URL or a repo.
-- `[files]` does not work on Windows yet.
+
+On Windows a normal user cannot create a symlink. A linked directory is a
+junction there, and a linked file or a `text` is a copy, see
+[Windows](windows.md#files-in-your-home-directory).
 
 ## oku.lock
 

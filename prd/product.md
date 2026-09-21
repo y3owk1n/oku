@@ -105,7 +105,7 @@ These are permanent edges of the product, not deferrals.
 ## Build order
 
 Everything below is in scope. The order is dependency order, not priority.
-Steps 1 to 12 are built, and `docs/` describes what works today. Steps 13 to
+Steps 1 to 13 are built, and `docs/` describes what works today. Steps 14 and
 15 are not built yet.
 
 1. Core: local ref, artifact, store, global profile. `add`, `remove`, `list`.

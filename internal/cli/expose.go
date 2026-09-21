@@ -87,7 +87,15 @@ func (e env) wantedItems(
 			source = e.globalProfile().ContentPath(f)
 		}
 
-		wanted = append(wanted, expose.Item{Kind: "file", Source: source, Target: f.Target})
+		item := expose.Item{Kind: "file", Source: source, Target: f.Target}
+
+		// Windows gets a copy of a file, which oku recognizes by its hash, and a
+		// junction for a directory.
+		if runtime.GOOS == "windows" {
+			item.Hash = f.Hash
+		}
+
+		wanted = append(wanted, item)
 	}
 
 	services, defs, err := e.serviceItems(opts, pkgs)
@@ -138,6 +146,14 @@ func (e env) planExposed(
 	ledger, err := expose.ReadLedger(e.data)
 	if err != nil {
 		return exposePlan{}, err
+	}
+
+	if edited := ledger.Edited(); len(edited) > 0 {
+		return exposePlan{}, fmt.Errorf(
+			"%s changed since oku wrote it, and a sync would overwrite it\n"+
+				"move the change into its source or into oku.toml, then delete the file",
+			strings.Join(edited, ", "),
+		)
 	}
 
 	if pending := pendingSystem(ledger.Items, wanted); len(pending) > 0 {
@@ -283,7 +299,7 @@ func (e env) handlers(
 		case "service":
 			local = serviceHandler(manager, defs)
 		case "file":
-			local = expose.Handler{Place: expose.PlaceLink, Remove: expose.RemoveLink}
+			local = expose.Handler{Place: expose.PlaceFile, Remove: expose.RemoveFile}
 		}
 
 		handlers[kind] = expose.Handler{

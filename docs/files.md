@@ -119,8 +119,9 @@ one, and checks that no app or font would overwrite a file it did not write. A
 failure here leaves the machine as it was. The store and the cache may hold
 downloads that nothing uses, and `oku gc` deletes them.
 
-Then oku writes `pending.toml`, sets up the apps, fonts and services, moves
-`current`, writes `oku.toml` and `oku.lock`, and deletes `pending.toml`. When
+Then oku writes `pending.toml`, moves `current`, sets up the apps, fonts,
+services and files, writes `oku.toml` and `oku.lock`, and deletes
+`pending.toml`. When
 one of these steps fails, oku undoes the steps before it, deletes the new
 generation and prints the error of the step that failed.
 

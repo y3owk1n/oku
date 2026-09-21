@@ -641,8 +641,9 @@ unchanged. The store and the cache may have gained entries that nothing uses,
 and `gc` deletes them.
 
 The apply writes `<data>/oku/pending.toml` with the numbers of the active and
-the new generation, makes the ledger match the new generation, switches
-`current`, writes `oku.lock` and deletes `pending.toml`. When a step fails oku
+the new generation, switches `current`, makes the ledger match the new
+generation, writes `oku.lock` and deletes `pending.toml`. `current` comes
+first, because the target of a file with content points through it (D60). When a step fails oku
 makes the ledger match the old generation again, deletes the new one and
 leaves the lock as it was. It then reports the first error. A command that
 finds `pending.toml` does that revert before anything else, and says so. When
