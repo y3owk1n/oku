@@ -16,6 +16,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"slices"
 	"strings"
 
 	"github.com/pelletier/go-toml/v2"
@@ -358,7 +359,12 @@ func linkOutputs(tmp string, a manifest.Artifact) error {
 		}
 	}
 
-	for _, entry := range a.Font {
+	fonts, err := expandGlobs(tmp, a.Font)
+	if err != nil {
+		return err
+	}
+
+	for _, entry := range fonts {
 		if err := link(tmp, entry, path.Join("fonts", path.Base(entry))); err != nil {
 			return fmt.Errorf("font %q: %w", entry, err)
 		}
@@ -371,6 +377,59 @@ func linkOutputs(tmp string, a manifest.Artifact) error {
 	}
 
 	return nil
+}
+
+// expandGlobs replaces each entry that holds "*", "?" or "[" with the files of
+// the package it matches, sorted. A font family ships dozens of files, and "*"
+// does not cross a "/".
+func expandGlobs(tmp string, entries []string) ([]string, error) {
+	var out []string
+
+	for _, entry := range entries {
+		if !strings.ContainsAny(entry, "*?[") {
+			out = append(out, entry)
+
+			continue
+		}
+
+		if _, err := path.Match(entry, ""); err != nil {
+			return nil, fmt.Errorf("font %q is not a valid pattern", entry)
+		}
+
+		var matched []string
+
+		root := filepath.Join(tmp, "pkg")
+
+		err := filepath.WalkDir(root, func(file string, info fs.DirEntry, err error) error {
+			if err != nil || !info.Type().IsRegular() {
+				return err
+			}
+
+			rel, err := filepath.Rel(root, file)
+			if err != nil {
+				return err
+			}
+
+			if ok, _ := path.Match(entry, filepath.ToSlash(rel)); ok {
+				matched = append(matched, filepath.ToSlash(rel))
+			}
+
+			return nil
+		})
+		if err != nil {
+			return nil, err
+		}
+
+		if len(matched) == 0 {
+			return nil, fmt.Errorf("font %q matches no file in the package", entry)
+		}
+
+		slices.Sort(matched)
+
+		out = append(out, matched...)
+	}
+
+	return out, nil
 }
 
 // linkAny links a file or a whole directory, such as include/webp.
