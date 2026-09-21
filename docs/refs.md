@@ -12,6 +12,8 @@ one per package.
 | `github:host/owner/repo` | The same on a GitHub Enterprise Server at `host`. `#name` and `@version` work as above. |
 | `codeberg:owner/repo` | The same on codeberg.org. |
 | `gitea:host/owner/repo` | The same on any Gitea or Forgejo server. The host is required. |
+| `gitlab:group/project` | The same on gitlab.com. A project may be in subgroups, as in `gitlab:group/sub/project`. |
+| `gitlab:host/group/project` | The same on a GitLab server of your own. |
 | `git+https://host/repo` | `oku.pkg.toml` at the root of any git repo. |
 | `git+https://host/repo#name` | `name.toml` at the root, else `packages/name.toml`. A fragment with no `/` and no `.` is a name. |
 | `git+https://host/repo#dir/name.toml` | That file in the repo. |
@@ -62,6 +64,14 @@ reads both.
 Set `CODEBERG_TOKEN` for codeberg.org and `GITEA_TOKEN` for any other server
 that needs a login. oku sends each token to its own host only.
 
+**`gitlab:`** needs no git. oku reads the API at `https://gitlab.com/api/v4`, or
+at `https://host/api/v4` when the ref starts with a host. As with `github:`, a
+first part with a dot is the host. A top-level group on gitlab.com that has a
+dot in its name therefore needs the host written out, as in
+`gitlab:gitlab.com/my.group/project`. Set `GITLAB_TOKEN` for gitlab.com and
+`GITLAB_SERVER_TOKEN` for any other server. oku sends each token to its own
+host only, and does not send it when the server redirects to another host.
+
 **`git+`** needs `git` on `PATH`. oku fetches one commit at depth 1 into its
 cache directory and reads the file from there. git runs with
 `GIT_TERMINAL_PROMPT=0`, so a repo that needs credentials fails instead of
@@ -109,5 +119,6 @@ core = 'github:someone/recipes'
 
 - A manifest may be at most 1 MiB.
 - A `#path` in a `git+` ref must stay inside the repository.
-- Inference covers `github:`, `codeberg:` and `gitea:` refs with no `#name`. A
+- Inference covers `github:`, `codeberg:`, `gitea:` and `gitlab:` refs with no
+  `#name`. A
   ref with a `#name`, and a `git+` ref, needs the manifest file to exist.

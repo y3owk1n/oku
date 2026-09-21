@@ -57,7 +57,8 @@ type Package struct {
 // Version is either fixed by Value or discovered from From.
 type Version struct {
 	Value string `toml:"value"`
-	// From is FromGitHubReleases, FromGiteaReleases or FromGitTags.
+	// From is FromGitHubReleases, FromGiteaReleases, FromGitLabReleases or
+	// FromGitTags.
 	From string `toml:"from"`
 	// Repo is "owner/repo" or "host/owner/repo" for GitHub releases,
 	// "host/owner/repo" for Gitea releases, and a git URL for git tags.
@@ -74,7 +75,10 @@ const (
 	FromGitHubReleases = "github-releases"
 	// FromGiteaReleases reads a Gitea or Forgejo server, such as codeberg.org.
 	FromGiteaReleases = "gitea-releases"
-	FromGitTags       = "git-tags"
+	// FromGitLabReleases reads gitlab.com, or a GitLab server when the repo
+	// starts with its host.
+	FromGitLabReleases = "gitlab-releases"
+	FromGitTags        = "git-tags"
 )
 
 // Artifact is a prebuilt download for the platforms its selector matches.
@@ -117,8 +121,9 @@ var (
 	giteaRepoRe = regexp.MustCompile(
 		`^[A-Za-z0-9][A-Za-z0-9-]*(\.[A-Za-z0-9-]+)+/[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9._-]+$`,
 	)
-	sha256Re   = regexp.MustCompile(`^[0-9a-f]{64}$`)
-	templateRe = regexp.MustCompile(`\{\{\s*([a-zA-Z0-9_.-]+)\s*\}\}`)
+	gitlabRepoRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*(/[A-Za-z0-9_][A-Za-z0-9._-]*)+$`)
+	sha256Re     = regexp.MustCompile(`^[0-9a-f]{64}$`)
+	templateRe   = regexp.MustCompile(`\{\{\s*([a-zA-Z0-9_.-]+)\s*\}\}`)
 )
 
 // Parse validates manifest data. origin names the data in error messages.
@@ -233,23 +238,31 @@ func (m *Manifest) validate() error {
 		errs = append(errs, errors.New(`version.repo must be "owner/repo" or "host/owner/repo" for github-releases`))
 	case m.Version.From == FromGiteaReleases && !giteaRepoRe.MatchString(m.Version.Repo):
 		errs = append(errs, errors.New(`version.repo must be "host/owner/repo" for gitea-releases`))
+	case m.Version.From == FromGitLabReleases && !gitlabRepoRe.MatchString(m.Version.Repo):
+		errs = append(
+			errs,
+			errors.New(`version.repo must be "group/project" or "host/group/project" for gitlab-releases`),
+		)
 	case m.Version.From == FromGitTags && m.Version.Repo == "":
 		errs = append(errs, errors.New("version.repo must be a git URL for git-tags"))
-	case m.Version.From != "" && m.Version.From != FromGitHubReleases &&
-		m.Version.From != FromGiteaReleases && m.Version.From != FromGitTags:
+	case m.Version.From != "" && !slices.Contains(
+		[]string{FromGitHubReleases, FromGiteaReleases, FromGitLabReleases, FromGitTags},
+		m.Version.From,
+	):
 		errs = append(errs, fmt.Errorf(
-			"version.from %q must be %q, %q or %q",
-			m.Version.From, FromGitHubReleases, FromGiteaReleases, FromGitTags,
+			"version.from %q must be %q, %q, %q or %q",
+			m.Version.From, FromGitHubReleases, FromGiteaReleases, FromGitLabReleases, FromGitTags,
 		))
 	}
 
 	switch {
 	case m.Version.Tag == "":
-	case m.Version.From != FromGitHubReleases && m.Version.From != FromGiteaReleases:
-		errs = append(
-			errs,
-			errors.New(`version.tag needs version.from = "github-releases" or "gitea-releases"`),
-		)
+	case !slices.Contains(
+		[]string{FromGitHubReleases, FromGiteaReleases, FromGitLabReleases}, m.Version.From,
+	):
+		errs = append(errs, errors.New(
+			`version.tag needs version.from = "github-releases", "gitea-releases" or "gitlab-releases"`,
+		))
 	case m.Version.StripPrefix != "":
 		errs = append(errs, errors.New("set version.tag or version.strip_prefix, not both"))
 	}

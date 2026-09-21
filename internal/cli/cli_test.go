@@ -1965,6 +1965,75 @@ func TestAddInfersFromACodebergRepoAndUpdateListsItsReleases(t *testing.T) {
 	}
 }
 
+func TestAddInfersFromAGitLabProjectInASubgroup(t *testing.T) {
+	m := newMachine(t)
+	archive, _ := m.archive(t, "release", map[string]string{"tool": script})
+
+	t.Setenv("GITLAB_TOKEN", "for-gitlab-com")
+
+	release := fmt.Sprintf(
+		`{"tag_name": "v1.4.0", "commit": {"id": "5555555555555555555555555555555555555555"},`+
+			` "assets": {"links": [{"name": %q, "url": "file:///encoded", "direct_asset_url": "file://%s"}]}}`,
+		hostAssetName(), archive,
+	)
+
+	var tokens []string
+
+	const project = "/api/v4/projects/group%2Fsub%2Ftool"
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		tokens = append(tokens, r.Header.Get("Authorization"))
+
+		switch r.URL.EscapedPath() {
+		case project + "/repository/commits":
+			_, _ = w.Write([]byte(`[{"id": "5555555555555555555555555555555555555555"}]`))
+		case project + "/releases/permalink/latest":
+			_, _ = w.Write([]byte(release))
+		case project + "/releases":
+			_, _ = w.Write([]byte("[" + release + "]"))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(server.Close)
+
+	target, err := url.Parse(server.URL)
+	must(t, err)
+
+	client := http.DefaultClient.Transport
+	http.DefaultClient.Transport = rewriteHost{host: "gitlab.com", server: target}
+
+	t.Cleanup(func() { http.DefaultClient.Transport = client })
+
+	out, err := m.run(t, "", "add", "gitlab:group/sub/tool")
+	if err != nil {
+		t.Fatalf("add: %v\n%s", err, out)
+	}
+
+	for _, want := range []string{
+		`from = "gitlab-releases"`, `repo = "group/sub/tool"`,
+		`homepage = "https://gitlab.com/group/sub/tool"`,
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("the inferred manifest lacks %q:\n%s", want, out)
+		}
+	}
+
+	if got := m.toolOutput(t); got != "hello from tool" {
+		t.Fatalf("tool printed %q", got)
+	}
+
+	if out, err = m.run(t, "", "update"); err != nil {
+		t.Fatalf("update: %v\n%s", err, out)
+	}
+
+	for _, token := range tokens {
+		if token != "Bearer for-gitlab-com" {
+			t.Fatalf("gitlab.com got the token %q", token)
+		}
+	}
+}
+
 func TestManifestInitReadsUniversalAndWindowsGnuAssets(t *testing.T) {
 	m := newMachine(t)
 	archive, _ := m.archive(t, "release", map[string]string{"tool": script})

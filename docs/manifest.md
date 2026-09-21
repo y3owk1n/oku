@@ -60,10 +60,10 @@ needs no manifest change.
 | Key | Meaning |
 |---|---|
 | `value` | The one version this manifest installs. |
-| `from` | `github-releases`, `gitea-releases` or `git-tags`. Not together with `value`. |
-| `repo` | `owner/repo` for `github-releases`, or `host/owner/repo` on a GitHub Enterprise Server. `host/owner/repo` for `gitea-releases`, such as `codeberg.org/owner/repo`. A git URL for `git-tags`. Required with `from`. |
+| `from` | `github-releases`, `gitea-releases`, `gitlab-releases` or `git-tags`. Not together with `value`. |
+| `repo` | `owner/repo` for `github-releases`, or `host/owner/repo` on a GitHub Enterprise Server. `host/owner/repo` for `gitea-releases`, such as `codeberg.org/owner/repo`. `group/project` for `gitlab-releases`, or `host/group/project` on a GitLab server of your own. A git URL for `git-tags`. Required with `from`. |
 | `strip_prefix` | Text cut off the front of a tag to get the version, such as `"v"`. A tag without the prefix is ignored. |
-| `tag` | One tag that upstream moves, such as `"nightly"`. Only with `github-releases` or `gitea-releases`, and not together with `strip_prefix`. See [A moving tag](#a-moving-tag). |
+| `tag` | One tag that upstream moves, such as `"nightly"`. Only with `github-releases`, `gitea-releases` or `gitlab-releases`, and not together with `strip_prefix`. See [A moving tag](#a-moving-tag). |
 
 ```toml
 [version]
@@ -76,7 +76,8 @@ How oku turns tags into versions:
 
 - `github-releases` reads the newest 100 releases and skips drafts and
   prereleases. `gitea-releases` does the same for the newest 50 on a Gitea or
-  Forgejo server. `git-tags` reads every tag with `git ls-remote`, so it needs
+  Forgejo server. `gitlab-releases` reads the newest 100 and skips a release
+  dated in the future, which GitLab calls upcoming. `git-tags` reads every tag with `git ls-remote`, so it needs
   `git` on `PATH`.
 - After `strip_prefix`, a tag that does not start with a digit is ignored. That
   drops tags such as `nightly`.
@@ -118,7 +119,9 @@ bin = ["bin/nvim"]
 - When the artifact has no `sha256` and no `sha256_url`, oku checks the download
   against the sha256 that the GitHub API reports for that file. `url` must be
   the file's GitHub download URL for that, and `oku manifest lint` warns when
-  it is not.
+  it is not. Gitea, Forgejo and GitLab report no sha256 for a file, so with
+  `gitea-releases` or `gitlab-releases` the user trusts the first download, and
+  `lint` warns about that too.
 - A `[build]` whose `source` clones `{{tag}}` fails when the clone is not at the
   commit of the version.
 
@@ -382,7 +385,8 @@ two packages set the same variable, the one whose name sorts last is used.
 `oku add github:owner/repo` on a repo with no `oku.pkg.toml` writes a manifest
 from the repo's newest release, prints it, and installs from it. A `codeberg:`
 or `gitea:` ref works the same way, and its manifest gets
-`from = "gitea-releases"`.
+`from = "gitea-releases"`. A `gitlab:` ref gets `from = "gitlab-releases"`, and
+its assets are the links of the release, not the source archives GitLab adds.
 
 With `@version` it reads that version's release. It tries the tag `version`,
 then `v<version>`. With any other tag prefix it reads the newest release.

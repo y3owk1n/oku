@@ -9,6 +9,7 @@ import (
 
 	"github.com/pelletier/go-toml/v2"
 
+	"github.com/y3owk1n/oku/internal/forge"
 	"github.com/y3owk1n/oku/internal/platform"
 )
 
@@ -110,12 +111,20 @@ func Lint(data []byte) Report {
 		// For a moving tag oku takes the sha256 from the GitHub API, which only
 		// knows the files of that repo's releases.
 		fromRelease := "https://github.com/" + full.Version.Repo + "/releases/download/"
+		if host, repo := forge.Split(full.Version.Repo); host != "" {
+			fromRelease = "https://" + host + "/" + repo + "/releases/download/"
+		}
 
 		switch {
 		case a.SHA256 != "" || a.SHA256URL != "" || full.Package.SigningKey != "":
 		case full.Version.Tag == "":
 			report.Warnings = append(report.Warnings, fmt.Sprintf(
 				"artifact[%d]: no sha256 or sha256_url, so users trust the first download", i,
+			))
+		case full.Version.From != FromGitHubReleases:
+			report.Warnings = append(report.Warnings, fmt.Sprintf(
+				"artifact[%d]: only GitHub reports a sha256 for the files of a moving tag, "+
+					"so users trust the first download", i,
 			))
 		case !strings.HasPrefix(a.URL, fromRelease):
 			report.Warnings = append(report.Warnings, fmt.Sprintf(

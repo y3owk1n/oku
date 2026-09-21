@@ -35,6 +35,7 @@ func newAddCmd(opts Options) *cobra.Command {
   github:owner/repo#name              name.toml or packages/name.toml in it
   codeberg:owner/repo                 the same on codeberg.org
   gitea:host/owner/repo               the same on a Gitea or Forgejo server
+  gitlab:group/project                the same on gitlab.com
   git+https://host/repo#path/pkg.toml a file in any git repo
   alias/name                          a package in a source, see "oku source"`,
 		Args: cobra.ExactArgs(1),
