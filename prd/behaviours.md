@@ -237,6 +237,9 @@ order step in `prd/product.md`.
 - B73 [8] A package with `service = true` in `oku.toml` is running after
   `sync` and after the next login. Without it, the service is installed and
   stopped.
+- B170 [8] The `args` and `env` of a service expand `{{home}}`, `{{config}}` and
+  `{{data}}`. On macOS and Linux a service of the user finds the programs of
+  the global profile on its `PATH`, unless its `env` sets `PATH`.
 - B74 [8] `oku service start|stop|restart|status|logs` behave the same on all
   three OSes.
 - B75 [8] System scope needs `--system`. oku names what it will write and

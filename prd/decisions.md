@@ -409,6 +409,12 @@ plist in `<data>/oku/services`, because launchd loads everything in
 session. Why: a user does not expect a daemon to start because a package
 arrived as a dep, and the list is the one place that says what runs.
 
+A service of the user gets the `bin` of the global profile first on its `PATH`,
+and its `args` and `env` expand the locations of D60. Why: a service manager
+starts a program with a bare `PATH`, and a manifest cannot know the user's home
+directory. A hotkey daemon that calls another installed program by name would
+otherwise need the full store path in its config.
+
 ## D43. System scope is in the list, and only a flag elevates
 
 `system = true` on a list entry puts that package's apps, fonts and services in
