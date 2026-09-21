@@ -62,6 +62,24 @@ type File struct {
 	Hash string `toml:"hash,omitempty"`
 	// Text is the content. The state file does not hold it.
 	Text []byte `toml:"-"`
+	// Secrets are the secrets that the content uses. Such a file's Text names each
+	// one where its value goes, and never holds the value.
+	Secrets []SecretRef `toml:"secret,omitempty"`
+}
+
+// SecretRef is one secret that the content of a file uses.
+type SecretRef struct {
+	// Name is how the content names the secret.
+	Name string `toml:"name"`
+	// Source is the encrypted file as the list names it, for errors, and Key the
+	// path of one value in it.
+	Source string `toml:"source"`
+	Key    string `toml:"key,omitempty"`
+	// Cipher names the copy of the encrypted file under the generation's files
+	// directory. The name holds the hash of the bytes.
+	Cipher string `toml:"cipher"`
+	// Data is the encrypted file. The state file does not hold it.
+	Data []byte `toml:"-"`
 }
 
 // Setting is one setting of the OS that a generation wants, with its value as
@@ -116,6 +134,11 @@ func (p *Profile) LockSnapshotOfCurrent() []byte {
 // Name is "global" or "project-<hash>".
 func (p *Profile) Name() string {
 	return filepath.Base(p.dir)
+}
+
+// BinDirOf is the bin directory of generation n, which need not be active.
+func (p *Profile) BinDirOf(n int) string {
+	return filepath.Join(p.dir, genPrefix+strconv.Itoa(n), "bin")
 }
 
 // BinDir is the directory a user puts on PATH.
@@ -195,18 +218,42 @@ func (p *Profile) ContentPath(f File) string {
 // files returns the files of the active generation with their text, which a
 // new generation with the same files needs.
 func (p *Profile) files() ([]File, error) {
-	s, err := p.stateIn(current)
+	return p.filesIn(current)
+}
+
+// FilesWithContent lists the files of generation n with their text and the
+// encrypted files they use.
+func (p *Profile) FilesWithContent(n int) ([]File, error) {
+	if n == 0 {
+		return nil, nil
+	}
+
+	return p.filesIn(genPrefix + strconv.Itoa(n))
+}
+
+func (p *Profile) filesIn(gen string) ([]File, error) {
+	s, err := p.stateIn(gen)
 	if err != nil {
 		return nil, err
 	}
+
+	dir := filepath.Join(p.dir, gen, filesDir)
 
 	for i, f := range s.Files {
 		if f.Content == "" {
 			continue
 		}
 
-		if s.Files[i].Text, err = os.ReadFile(p.ContentPath(f)); err != nil {
+		if s.Files[i].Text, err = os.ReadFile(filepath.Join(dir, f.Content)); err != nil {
 			return nil, fmt.Errorf("read profile: %w", err)
+		}
+
+		for j, ref := range f.Secrets {
+			if s.Files[i].Secrets[j].Data, err = os.ReadFile(
+				filepath.Join(dir, ref.Cipher),
+			); err != nil {
+				return nil, fmt.Errorf("read profile: %w", err)
+			}
 		}
 	}
 
@@ -491,6 +538,14 @@ func build(gen string, pkgs []Package, files []File, settings []Setting, lockDat
 		// WriteFile applies the umask, and a mode from the list is meant exactly.
 		if err := os.Chmod(path, mode); err != nil {
 			return fmt.Errorf("write generation: %w", err)
+		}
+
+		// Two files may use one encrypted file, which then has one copy.
+		for _, ref := range f.Secrets {
+			err := os.WriteFile(filepath.Join(gen, filesDir, ref.Cipher), ref.Data, 0o600)
+			if err != nil {
+				return fmt.Errorf("write generation: %w", err)
+			}
 		}
 	}
 

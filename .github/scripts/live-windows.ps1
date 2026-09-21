@@ -667,5 +667,58 @@ Check 'a value that leaves the list gets back what it held before oku, and a new
 }
 Remove-Item -Recurse -Force $regKey
 
+# Secrets. oku installs age, which then makes a throwaway key and an encrypted
+# file. oku decrypts an age file itself, so the sync needs neither program.
+Set-Content (Join-Path $fixtures 'age.toml') @'
+[package]
+name = "age"
+[version]
+value = "1.3.2"
+[[artifact]]
+match = { os = "windows", arch = "amd64" }
+url = "https://github.com/FiloSottile/age/releases/download/v{{version}}/age-v{{version}}-windows-amd64.zip"
+strip = 1
+bin = ["age.exe", "age-keygen.exe"]
+'@
+Oku add (Join-Path $fixtures 'age.toml')
+
+$keys = Join-Path $env:XDG_CONFIG_HOME 'sops\age\keys.txt'
+New-Item -ItemType Directory -Force (Split-Path $keys) | Out-Null
+& "$bin\age-keygen.exe" -o $keys 2>$null
+$recipient = & "$bin\age-keygen.exe" -y $keys
+
+$plain = Join-Path $root 'plain.txt'
+[IO.File]::WriteAllText($plain, 'windows-secret')
+& "$bin\age.exe" -r $recipient -o (Join-Path $sources 'key.age') $plain
+if ($LASTEXITCODE -ne 0) { throw 'age could not encrypt' }
+Remove-Item $plain
+
+$withoutSecret = Get-Content $listPath -Raw
+Add-Content $listPath "`n[files]`n`"{{config}}/secret-key`" = { secret = `"./files/key.age`" }`n"
+Oku sync
+
+$secretTarget = Join-Path $env:XDG_CONFIG_HOME 'secret-key'
+$secretStore = Join-Path $env:XDG_DATA_HOME 'oku\secrets'
+Check 'oku decrypts an age secret itself' {
+    [IO.File]::ReadAllText($secretTarget) -ceq 'windows-secret'
+}
+
+function OnlyTheUser($path) {
+    $acl = Get-Acl $path
+    $me = [Security.Principal.WindowsIdentity]::GetCurrent().User
+    $who = @($acl.Access | ForEach-Object { $_.IdentityReference.Translate([Security.Principal.SecurityIdentifier]) })
+    $acl.AreAccessRulesProtected -and ($who.Count -eq 1) -and ($who[0] -eq $me)
+}
+Check 'only the current user may read the secret, its copy and their directory' {
+    (OnlyTheUser $secretTarget) -and (OnlyTheUser $secretStore) -and
+    (OnlyTheUser (Get-ChildItem $secretStore)[0].FullName)
+}
+
+Set-Content $listPath $withoutSecret -NoNewline
+Oku sync
+Check 'a secret that leaves the list is deleted with its copy' {
+    (-not (Test-Path $secretTarget)) -and (@(Get-ChildItem $secretStore).Count -eq 0)
+}
+
 Remove-Item -Recurse -Force $root
 Write-Host 'live test passed'

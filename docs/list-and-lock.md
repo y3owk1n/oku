@@ -136,8 +136,8 @@ A key starts with a location:
 | `{{data}}` | `$XDG_DATA_HOME`, else `~/.local/share`. `%LOCALAPPDATA%` on Windows. |
 | `{{appdata}}`, `{{localappdata}}` | Windows only. An entry that uses one needs `when = { os = "windows" }`. |
 
-An entry holds one of `link`, `text` and `render`, and may hold `when`, like a
-package.
+An entry holds one of `link`, `text`, `render` and `secret`, and may hold
+`when`, like a package.
 
 | Key | Effect |
 |---|---|
@@ -145,7 +145,8 @@ package.
 | `link = "{{pkg.<name>}}/..."` | The source is inside a package of the list, in the directory that holds its files. After `oku update` the link points into the new version. |
 | `text` | The path gets this content. oku keeps the content in the generation, read-only, and the path is a symlink to it. `oku rollback` brings back the bytes of that generation. |
 | `render` | Like `text`, with the content read from a template beside the list, see [Variables and templates](#variables-and-templates). |
-| `mode` | The permission of a `text` or `render` file, such as `"0600"`. Without it the file is read-only. |
+| `secret` | The path gets a value that oku decrypts from a sops or an age file, see [Secrets](secrets.md). |
+| `mode` | The permission of a `text`, `render` or `secret` file, such as `"0600"`. Without it the file is read-only, and a file that holds a secret is `0600`. |
 
 oku refuses a path that exists and that it did not write. It names the path and
 changes nothing, so move the file away first. The next `sync` removes a path
@@ -295,7 +296,8 @@ list overrides a key that an include sets.
 
 Limits for now:
 
-- Only the global list may hold `[files]`, `[vars]` and settings tables. A project list with `[files]` is an
+- Only the global list may hold `[files]`, `[vars]`, `[secrets]` and settings
+  tables. A project list with `[files]` is an
   error, so that a cloned repo cannot write into your home directory.
 - An included list may hold `[files]` when it is a file on this machine, not
   when it comes from a URL or a repo.

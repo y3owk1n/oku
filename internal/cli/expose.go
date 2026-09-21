@@ -83,6 +83,14 @@ func (e env) wantedItems(
 	}
 
 	for _, f := range files {
+		if len(f.Secrets) > 0 {
+			wanted = append(wanted, expose.Item{
+				Kind: "secret", Source: e.secretPath(f), Target: f.Target, Hash: f.Hash,
+			})
+
+			continue
+		}
+
 		source := f.Link
 		if source == "" {
 			source = e.globalProfile().ContentPath(f)
@@ -115,6 +123,9 @@ func (e env) wantedItems(
 type exposePlan struct {
 	wanted []expose.Item
 	defs   map[string]service.Definition
+	// secrets is the decrypted content of the files that use secrets, by target.
+	// It exists in memory only.
+	secrets map[string]sealed
 	// elevated reports that the user agreed to change system scope.
 	elevated bool
 }
@@ -205,7 +216,7 @@ func (e env) placeExposed(cmd *cobra.Command, opts Options, plan exposePlan) err
 
 	before := slices.Clone(ledger.Items)
 
-	handlers, err := e.handlers(cmd.Context(), opts, plan.defs)
+	handlers, err := e.handlers(cmd.Context(), opts, plan.defs, plan.secrets)
 	if err != nil {
 		return err
 	}
@@ -223,6 +234,8 @@ func (e env) placeExposed(cmd *cobra.Command, opts Options, plan exposePlan) err
 		}
 
 		switch {
+		case item.Kind == "secret":
+			fmt.Fprintf(notice, "wrote the secret %s\n", item.Target)
 		case item.Kind == "setting":
 			fmt.Fprintf(notice, "set %s\n", item.Target)
 		case item.Kind == "file":
@@ -290,6 +303,7 @@ func (e env) handlers(
 	ctx context.Context,
 	opts Options,
 	defs map[string]service.Definition,
+	secrets map[string]sealed,
 ) (map[string]expose.Handler, error) {
 	manager, err := e.services(opts)
 	if err != nil {
@@ -301,7 +315,10 @@ func (e env) handlers(
 	}
 
 	store, _ := settingsStore(opts)
-	handlers := map[string]expose.Handler{"setting": settingHandler(store)}
+	handlers := map[string]expose.Handler{
+		"setting": settingHandler(store),
+		"secret":  secretHandler(secrets),
+	}
 
 	for _, kind := range []string{"app", "font", "service", "file"} {
 		local := expose.Handler{

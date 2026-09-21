@@ -106,8 +106,7 @@ These are permanent edges of the product, not deferrals.
 ## Build order
 
 Everything below is in scope. The order is dependency order, not priority.
-Steps 1 to 15 are built, and `docs/` describes what works today. Step 16 is
-not built yet.
+All sixteen steps are built, and `docs/` describes what works today.
 
 1. Core: local ref, artifact, store, global profile. `add`, `remove`, `list`.
 2. Refs, `oku.toml`, `oku.lock`, `sync`, list `include` and `when`, bootstrap

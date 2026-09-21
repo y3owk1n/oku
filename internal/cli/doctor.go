@@ -12,6 +12,7 @@ import (
 
 	"github.com/y3owk1n/oku/internal/profile"
 	"github.com/y3owk1n/oku/internal/sandbox"
+	"github.com/y3owk1n/oku/internal/secret"
 	"github.com/y3owk1n/oku/internal/store"
 )
 
@@ -68,6 +69,7 @@ func runDoctor(cmd *cobra.Command, opts Options) error {
 	checkHook(r, opts)
 	checkPath(r, e)
 	checkPending(r, e)
+	checkSecrets(r, e)
 
 	if err := checkProfiles(r, e); err != nil {
 		return err
@@ -96,6 +98,45 @@ func runDoctor(cmd *cobra.Command, opts Options) error {
 	}
 
 	return nil
+}
+
+// checkSecrets reports a machine that cannot decrypt the secrets of the active
+// generation, which the next sync would fail on. It decrypts nothing.
+func checkSecrets(r *report, e env) {
+	prof := e.globalProfile()
+
+	files, err := prof.FilesWithContent(prof.Current())
+	if err != nil {
+		r.problem("%v", err)
+
+		return
+	}
+
+	d := e.decrypter(prof.Current())
+	count, needsSops := 0, false
+
+	for _, f := range files {
+		for _, ref := range f.Secrets {
+			count++
+
+			needsSops = needsSops || !secret.IsAge(ref.Data)
+		}
+	}
+
+	switch {
+	case count == 0:
+	case !fileExists(d.Identities):
+		r.problem(
+			"the list has secrets, and the age identities are not at %s\n"+
+				"copy your key file there, or set SOPS_AGE_KEY_FILE", d.Identities,
+		)
+	case needsSops && d.Sops == "":
+		r.problem(
+			"the list has a secret in a sops file, and sops is neither in the list nor on PATH",
+		)
+	default:
+		r.ok("the age identities for %d secrets are at %s", count, d.Identities)
+	}
 }
 
 // checkPending reports a change that stopped halfway and that oku has not put

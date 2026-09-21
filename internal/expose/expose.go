@@ -22,7 +22,7 @@ import (
 
 // Item is one thing oku placed outside its own directories.
 type Item struct {
-	// Kind is "app", "font", "service", "file" or "setting".
+	// Kind is "app", "font", "service", "file", "secret" or "setting".
 	Kind string `toml:"kind"`
 	// Package is the package that ships it.
 	Package string `toml:"package"`
@@ -226,7 +226,7 @@ func (l *Ledger) Check(wanted []Item) error {
 			continue
 		}
 
-		if want.Kind == "file" {
+		if want.Kind == "file" || want.Kind == "secret" {
 			return fmt.Errorf(
 				"%s already exists and oku did not put it there\n"+
 					"move it away, or take it out of [files]", want.Target,
@@ -248,7 +248,8 @@ func (l *Ledger) Edited() []string {
 	var edited []string
 
 	for _, item := range l.Items {
-		if item.Hash == "" {
+		// The hash of a secret is that of its encrypted file, not of the target.
+		if item.Hash == "" || item.Kind != "file" {
 			continue
 		}
 
@@ -276,11 +277,11 @@ func FileHash(path string) (string, error) {
 // longer wanted, adds new ones, and saves the ledger after each change, so a
 // crash never leaves a file the ledger does not know.
 func (l *Ledger) Sync(wanted []Item, handlers map[string]Handler) error {
-	// A file of the list that someone deleted is placed again.
+	// A file or a secret of the list that someone deleted is placed again.
 	l.Items = slices.DeleteFunc(l.Items, func(item Item) bool {
 		_, err := os.Lstat(item.Target)
 
-		return item.Kind == "file" && errors.Is(err, fs.ErrNotExist)
+		return (item.Kind == "file" || item.Kind == "secret") && errors.Is(err, fs.ErrNotExist)
 	})
 
 	if err := l.Check(wanted); err != nil {
