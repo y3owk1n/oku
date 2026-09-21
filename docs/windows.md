@@ -68,6 +68,10 @@ path = C:\Users\you\AppData\Local\oku\store\ripgrep-15.2.0-f635eb888c8bcf4b\bin\
 dir = C:\Users\you\AppData\Local\oku\store\pcre2-10.44-0a1b2c3d4e5f6a7b\bin
 ```
 
+A program from a [`bin` table](manifest.md#a-program-that-needs-an-interpreter)
+also has one `arg` line for each of its `args`. The shim passes them before the
+arguments it got.
+
 Each `dir` line is the `bin` directory of one of the package's deps. The shim
 puts them at the front of `PATH` for the program, which is how Windows finds the
 DLLs of those deps from any working directory. The live test checks that the

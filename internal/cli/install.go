@@ -238,7 +238,7 @@ func (e env) install(ctx context.Context, opts Options, req request) (installed,
 
 		// The locked build of a moving tag is gone once upstream moved the tag, so
 		// a download would be a newer build under the locked version.
-		if keep && m.Version.Tag != "" && !e.store().Has(m, host, pinned) {
+		if keep && m.Version.Tag != "" && !e.store().Has(m, artifact, host, pinned, deps.prefixes) {
 			now, err := e.resolver(opts).Pick(ctx, m.Version, "")
 			if err != nil {
 				return installed{}, fmt.Errorf("%s: %w", r, err)
@@ -265,7 +265,9 @@ func (e env) install(ctx context.Context, opts Options, req request) (installed,
 
 		auth := e.fetcher(opts).Hosts.AuthFor(m.Version.From, m.Version.Repo)
 
-		if realized, err = e.store().As(auth).Realize(ctx, m, artifact, host, pinned); err != nil {
+		if realized, err = e.store().As(auth).Realize(
+			ctx, m, artifact, host, pinned, deps.prefixes,
+		); err != nil {
 			return installed{}, err
 		}
 

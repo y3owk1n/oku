@@ -39,7 +39,14 @@ func (p *Profile) point(gen string) error {
 // program becomes a shim, which also puts the bin directories of the package's
 // deps on PATH so that Windows finds their DLLs. Any other file is a hard link.
 func linkEntry(target, dest string, pkg Package) error {
-	if !strings.EqualFold(filepath.Ext(target), ".exe") {
+	// A wrapper is a shim spec that the store wrote. Its shim goes beside a copy
+	// of the spec that also names the dep directories.
+	wrapper := strings.EqualFold(filepath.Ext(target), shim.Ext)
+	if wrapper {
+		dest = strings.TrimSuffix(dest, filepath.Ext(dest)) + ".exe"
+	}
+
+	if !wrapper && !strings.EqualFold(filepath.Ext(target), ".exe") {
 		return hardLinkOrCopy(target, dest)
 	}
 
@@ -55,6 +62,13 @@ func linkEntry(target, dest string, pkg Package) error {
 	}
 
 	spec := shim.Spec{Target: target}
+
+	if wrapper {
+		if spec, err = shim.Read(target); err != nil {
+			return err
+		}
+	}
+
 	for _, dep := range pkg.Closure {
 		spec.Dirs = append(spec.Dirs, filepath.Join(dep, "bin"))
 	}

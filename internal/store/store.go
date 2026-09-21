@@ -92,9 +92,37 @@ type Realized struct {
 	VendorSHA256 string
 }
 
-// Has reports whether the artifact of m with that digest is in the store.
-func (s *Store) Has(m *manifest.Manifest, p platform.Platform, sha256 string) bool {
-	return sha256 != "" && exists(s.pathFor(m, p, sha256))
+// Has reports whether artifact a of m with that digest is in the store.
+func (s *Store) Has(
+	m *manifest.Manifest,
+	a manifest.Artifact,
+	p platform.Platform,
+	sha256 string,
+	deps []Dep,
+) bool {
+	return sha256 != "" && exists(s.artifactPath(m, a, p, sha256, deps))
+}
+
+// artifactPath returns the store path of artifact a with that digest. A wrapper
+// holds the paths of the store and of the deps, so they count for an artifact
+// that has one.
+func (s *Store) artifactPath(
+	m *manifest.Manifest,
+	a manifest.Artifact,
+	p platform.Platform,
+	sha256 string,
+	deps []Dep,
+) string {
+	extra := []string{sha256}
+
+	if len(a.Wrap) > 0 {
+		extra = append(extra, "wrap", s.dir)
+		for _, dep := range deps {
+			extra = append(extra, filepath.Base(dep.Prefix))
+		}
+	}
+
+	return s.pathFor(m, p, extra...)
 }
 
 // Realize downloads, verifies and unpacks artifact a of manifest m. It returns
@@ -103,13 +131,15 @@ func (s *Store) Has(m *manifest.Manifest, p platform.Platform, sha256 string) bo
 //
 // Realize expects the first digest it finds in a.SHA256, the file at
 // a.SHA256URL, and pinned. pinned is the digest oku.lock recorded earlier. With
-// none of them, Realize trusts the download.
+// none of them, Realize trusts the download. deps are the runtime deps, which a
+// wrapper may name.
 func (s *Store) Realize(
 	ctx context.Context,
 	m *manifest.Manifest,
 	a manifest.Artifact,
 	p platform.Platform,
 	pinned string,
+	deps []Dep,
 ) (Realized, error) {
 	want := a.SHA256
 	if want == "" && a.SHA256URL != "" {
@@ -133,7 +163,7 @@ func (s *Store) Realize(
 	}
 
 	if want != "" {
-		if final := s.pathFor(m, p, want); exists(final) {
+		if final := s.artifactPath(m, a, p, want, deps); exists(final) {
 			return Realized{Path: final, SHA256: want}, nil
 		}
 	}
@@ -143,7 +173,9 @@ func (s *Store) Realize(
 		return Realized{}, err
 	}
 
-	realized := Realized{Path: s.pathFor(m, p, got), SHA256: got, FirstUse: want == ""}
+	realized := Realized{
+		Path: s.artifactPath(m, a, p, got, deps), SHA256: got, FirstUse: want == "",
+	}
 	if exists(realized.Path) {
 		return realized, nil
 	}
@@ -175,6 +207,10 @@ func (s *Store) Realize(
 	}
 
 	if err := linkOutputs(tmp, a); err != nil {
+		return Realized{}, err
+	}
+
+	if err := writeWrappers(tmp, final, m, a, p, deps); err != nil {
 		return Realized{}, err
 	}
 

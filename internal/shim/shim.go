@@ -20,6 +20,9 @@ const Ext = ".shim"
 type Spec struct {
 	// Target is the program in the store.
 	Target string
+	// Args go before the arguments the shim got. A wrapper sets them, such as the
+	// script that an interpreter runs.
+	Args []string
 	// Dirs go to the front of PATH, so that Windows finds the DLLs of the
 	// package's deps from any working directory.
 	Dirs []string
@@ -33,11 +36,20 @@ func sidecar(executable string) string {
 // Write saves spec for the shim at executable.
 func Write(executable string, spec Spec) error {
 	lines := []string{"path = " + spec.Target}
+	for _, arg := range spec.Args {
+		lines = append(lines, "arg = "+arg)
+	}
+
 	for _, dir := range spec.Dirs {
 		lines = append(lines, "dir = "+dir)
 	}
 
 	return os.WriteFile(sidecar(executable), []byte(strings.Join(lines, "\n")+"\n"), 0o644)
+}
+
+// Read returns the spec in file.
+func Read(file string) (Spec, error) {
+	return read(file)
 }
 
 func read(executable string) (Spec, error) {
@@ -57,6 +69,8 @@ func read(executable string) (Spec, error) {
 		switch key {
 		case "path":
 			spec.Target = value
+		case "arg":
+			spec.Args = append(spec.Args, value)
 		case "dir":
 			spec.Dirs = append(spec.Dirs, value)
 		}
@@ -84,7 +98,7 @@ func Run(executable string, args []string) (code int, handled bool) {
 		return 1, true
 	}
 
-	cmd := exec.Command(spec.Target, args...)
+	cmd := exec.Command(spec.Target, append(spec.Args, args...)...)
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
 
 	if len(spec.Dirs) > 0 {

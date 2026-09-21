@@ -7,6 +7,9 @@ order step in `prd/product.md`.
 
 - B1 [1] `oku add ./pkg.toml` realizes the artifact matching the host selector
   and its `bin` entries run from the profile `bin`.
+- B122 [1] A `bin` entry that is a table makes oku write a program that runs
+  `run` with `args` before the user's arguments. `run` may name a runtime dep,
+  and that dep stays out of the user's profile.
 - B2 [1] An artifact whose download does not match its sha256 is rejected and
   nothing enters the store or profile.
 - B3 [1] A manifest with no matching artifact and no `[build]` fails with an
