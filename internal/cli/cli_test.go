@@ -2327,6 +2327,39 @@ func TestB124ADownloadThatDoesNotFitItsIntegrityIsRejected(t *testing.T) {
 	}
 }
 
+func TestB125ManifestHashPrintsTheChecksumsOfADownload(t *testing.T) {
+	m := newMachine(t)
+	archive, sum := m.archive(t, "release", map[string]string{"tool": script})
+
+	data, err := os.ReadFile(archive)
+	must(t, err)
+
+	sum512 := sha512.Sum512(data)
+	integrity := "sha512-" + base64.StdEncoding.EncodeToString(sum512[:])
+
+	for _, at := range []string{archive, "file://" + archive} {
+		out, err := m.run(t, "", "manifest", "hash", at)
+		if err != nil {
+			t.Fatalf("hash %s: %v\n%s", at, err, out)
+		}
+
+		if !strings.Contains(out, fmt.Sprintf("sha256 = %q", sum)) ||
+			!strings.Contains(out, fmt.Sprintf("integrity = %q", integrity)) {
+			t.Fatalf("hash %s printed:\n%s", at, out)
+		}
+	}
+
+	// The printed line is one a manifest accepts.
+	ref := m.rawManifest(t, "tool", fmt.Sprintf(
+		"[[artifact]]\nurl = \"file://%s\"\nintegrity = %q\nbin = [\"tool\"]\n", archive, integrity,
+	))
+
+	out, err := m.run(t, "", "add", ref)
+	if err != nil || strings.Contains(out, "trusted this download") {
+		t.Fatalf("add with the printed integrity: %v\n%s", err, out)
+	}
+}
+
 func TestB120ManifestInitReadsUniversalAndWindowsGnuAssets(t *testing.T) {
 	m := newMachine(t)
 	archive, _ := m.archive(t, "release", map[string]string{"tool": script})

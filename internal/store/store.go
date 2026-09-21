@@ -560,6 +560,19 @@ func (s *Store) Inspect(ctx context.Context, url string) ([]infer.File, error) {
 	return files, err
 }
 
+// Hashes downloads url into the cache and returns the two digests a manifest
+// can state for it: its sha256, and its sha512 as an integrity value.
+func (s *Store) Hashes(ctx context.Context, url string) (string, string, error) {
+	download, sum, err := s.fetch(ctx, url, "")
+	if err != nil {
+		return "", "", err
+	}
+
+	integrity, err := fileIntegrity(download)
+
+	return sum, integrity, err
+}
+
 // Digest downloads url into the cache and returns its sha256.
 func (s *Store) Digest(ctx context.Context, url string) (string, error) {
 	_, sum, err := s.fetch(ctx, url, "")

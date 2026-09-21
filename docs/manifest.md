@@ -271,9 +271,12 @@ the package fails the install. Two outputs with the same file name fail too.
 
 In order, oku uses `sha256`, then the file at `sha256_url`, then the digest the
 user's `oku.lock` pinned earlier. It also checks `integrity` when the artifact
-has one, or when the npm registry publishes one for the download. With none of them it trusts the first
-download and pins it. Publish one of the first two. See
-[Trust and checksums](trust.md).
+has one, or when the npm registry publishes one for the download. With none of
+them it trusts the first download and pins it. Publish `sha256`, `sha256_url` or
+`integrity`. See [Trust and checksums](trust.md).
+
+`oku manifest hash <url>` prints the `sha256` and `integrity` lines for a
+download.
 
 A `sha256_url` file may hold a single digest, or `digest  filename` lines such
 as `sha256sum` writes. oku picks the line that names the download's file.
