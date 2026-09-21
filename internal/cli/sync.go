@@ -201,22 +201,26 @@ func reconcile(
 			wantManifest = previous.ManifestSHA256
 		}
 
+		platforms, strict := e.lockPlatforms(all.own, wanted[name].entry.When)
+
 		jobs = append(jobs, &job{
 			name: name, fresh: fresh, locksManifest: locksManifest,
 			req: request{
-				ref:          r,
-				commit:       commit,
-				previous:     previous,
-				wantManifest: wantManifest,
-				acceptDigest: fresh,
-				acceptKey:    flags.acceptKey,
-				keepVersion:  !fresh && previous.Ref == r.String(),
-				service:      wanted[name].entry.Service,
-				system:       wanted[name].entry.System,
-				approve:      e.approver(cmd, opts, flags),
-				log:          buildLog(cmd, flags),
-				root:         name,
-				deps:         deps,
+				ref:             r,
+				platforms:       platforms,
+				strictPlatforms: strict,
+				commit:          commit,
+				previous:        previous,
+				wantManifest:    wantManifest,
+				acceptDigest:    fresh,
+				acceptKey:       flags.acceptKey,
+				keepVersion:     !fresh && previous.Ref == r.String(),
+				service:         wanted[name].entry.Service,
+				system:          wanted[name].entry.System,
+				approve:         e.approver(cmd, opts, flags),
+				log:             buildLog(cmd, flags),
+				root:            name,
+				deps:            deps,
 			},
 		})
 	}

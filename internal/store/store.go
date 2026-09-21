@@ -193,24 +193,12 @@ func (s *Store) Realize(
 		return realized, nil
 	}
 
-	if a.Integrity != "" {
-		if err := verifyIntegrity(download, a.Integrity); err != nil {
-			os.Remove(download)
-
-			return Realized{}, fmt.Errorf("%s: %s: %w", m.Package.Name, a.URL, err)
-		}
-
-		// A matching sha512 is a checksum the publisher gave, so this is not a
-		// first use.
-		realized.FirstUse = false
+	vouched, err := s.vouched(ctx, m, a, download)
+	if err != nil {
+		return Realized{}, err
 	}
 
-	if m.Package.SigningKey != "" {
-		if err := s.verifySignature(ctx, m.Package.SigningKey, a.URL, download); err != nil {
-			return Realized{}, fmt.Errorf("%s: %w", m.Package.Name, err)
-		}
-
-		// A valid signature replaces the digest, so this is not a first use.
+	if vouched {
 		realized.FirstUse = false
 	}
 
@@ -267,6 +255,62 @@ func (s *Store) Realize(
 	}
 
 	return realized, nil
+}
+
+// vouched checks download against the integrity value of a and the signing key
+// of m. It reports whether one of them vouched for the download, which then is
+// not a first use.
+func (s *Store) vouched(
+	ctx context.Context,
+	m *manifest.Manifest,
+	a manifest.Artifact,
+	download string,
+) (bool, error) {
+	if a.Integrity != "" {
+		if err := verifyIntegrity(download, a.Integrity); err != nil {
+			os.Remove(download)
+
+			return false, fmt.Errorf("%s: %s: %w", m.Package.Name, a.URL, err)
+		}
+	}
+
+	if m.Package.SigningKey != "" {
+		if err := s.verifySignature(ctx, m.Package.SigningKey, a.URL, download); err != nil {
+			return false, fmt.Errorf("%s: %w", m.Package.Name, err)
+		}
+	}
+
+	return a.Integrity != "" || m.Package.SigningKey != "", nil
+}
+
+// Pin returns the sha256 that oku.lock holds for artifact a of m, and whether
+// oku trusted a download for it. It takes the first digest it finds in
+// a.SHA256 and the file at a.SHA256URL. With neither it downloads a and checks
+// it the way Realize does, and it unpacks nothing, so a may be for another
+// platform.
+func (s *Store) Pin(
+	ctx context.Context,
+	m *manifest.Manifest,
+	a manifest.Artifact,
+) (string, bool, error) {
+	if a.SHA256 != "" {
+		return a.SHA256, false, nil
+	}
+
+	if a.SHA256URL != "" {
+		published, err := s.publishedSHA256(ctx, a.SHA256URL, path.Base(a.URL))
+
+		return published, false, err
+	}
+
+	download, got, err := s.fetch(ctx, a.URL, "")
+	if err != nil {
+		return "", false, err
+	}
+
+	vouched, err := s.vouched(ctx, m, a, download)
+
+	return got, !vouched, err
 }
 
 // pathFor names the store path of m. extra is the artifact digest, or "build"

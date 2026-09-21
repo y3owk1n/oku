@@ -2,8 +2,10 @@
 package platform
 
 import (
+	"fmt"
 	"path/filepath"
 	"runtime"
+	"strings"
 )
 
 const (
@@ -45,6 +47,35 @@ func (p Platform) String() string {
 	}
 
 	return s
+}
+
+// All lists the platforms oku runs on.
+func All() []Platform {
+	return []Platform{
+		{OS: "darwin", Arch: "amd64"},
+		{OS: "darwin", Arch: "arm64"},
+		{OS: "linux", Arch: "amd64", Libc: LibcGlibc},
+		{OS: "linux", Arch: "amd64", Libc: LibcMusl},
+		{OS: "linux", Arch: "arm64", Libc: LibcGlibc},
+		{OS: "linux", Arch: "arm64", Libc: LibcMusl},
+		{OS: "windows", Arch: "amd64"},
+		{OS: "windows", Arch: "arm64"},
+	}
+}
+
+// Parse reads a platform the way String writes it.
+func Parse(s string) (Platform, error) {
+	names := make([]string, 0, len(All()))
+
+	for _, p := range All() {
+		if p.String() == s {
+			return p, nil
+		}
+
+		names = append(names, p.String())
+	}
+
+	return Platform{}, fmt.Errorf("%q is not a platform, use one of %s", s, strings.Join(names, ", "))
 }
 
 // Matches reports whether every non-empty selector field equals the platform's.

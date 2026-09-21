@@ -10,6 +10,7 @@ import (
 
 	"github.com/y3owk1n/oku/internal/list"
 	"github.com/y3owk1n/oku/internal/lock"
+	"github.com/y3owk1n/oku/internal/platform"
 	"github.com/y3owk1n/oku/internal/ref"
 	"github.com/y3owk1n/oku/internal/source"
 )
@@ -113,17 +114,26 @@ func runAdd(
 		}
 	}
 
+	own, err := list.Read(e.listPath())
+	if err != nil {
+		return err
+	}
+
+	platforms, strict := e.lockPlatforms(own, platform.Selector{})
+
 	got, err := e.install(cmd.Context(), opts, request{
-		ref:        r,
-		previous:   previous,
-		fromSource: fromSource,
-		asset:      asset,
-		bin:        bin,
-		service:    enable,
-		acceptKey:  flags.acceptKey,
-		system:     system,
-		approve:    e.approver(cmd, opts, flags),
-		log:        buildLog(cmd, flags),
+		ref:             r,
+		previous:        previous,
+		platforms:       platforms,
+		strictPlatforms: strict,
+		fromSource:      fromSource,
+		asset:           asset,
+		bin:             bin,
+		service:         enable,
+		acceptKey:       flags.acceptKey,
+		system:          system,
+		approve:         e.approver(cmd, opts, flags),
+		log:             buildLog(cmd, flags),
 	})
 	if err != nil {
 		return err

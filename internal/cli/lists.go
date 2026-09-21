@@ -11,6 +11,7 @@ import (
 
 	"github.com/y3owk1n/oku/internal/list"
 	"github.com/y3owk1n/oku/internal/lock"
+	"github.com/y3owk1n/oku/internal/platform"
 	"github.com/y3owk1n/oku/internal/ref"
 )
 
@@ -58,6 +59,33 @@ type merged struct {
 	// settings is sorted by backend, domain and key.
 	settings []list.Setting
 	includes []lock.Include
+	// own is the user's own list, without its includes.
+	own *list.List
+}
+
+// lockPlatforms returns the platforms besides the host that oku.lock pins a
+// package of own for, limited to those when matches, and whether each one must
+// resolve. [lock] platforms names them, and they must. Without it a project
+// pins every platform it can, because a project is shared between machines,
+// and the global list pins the host alone.
+func (e env) lockPlatforms(
+	own *list.List,
+	when platform.Selector,
+) ([]platform.Platform, bool) {
+	all, strict := own.LockPlatforms, len(own.LockPlatforms) > 0
+	if !strict && e.project != "" {
+		all = platform.All()
+	}
+
+	var platforms []platform.Platform
+
+	for _, p := range all {
+		if p != platform.Host() && when.Matches(p) {
+			platforms = append(platforms, p)
+		}
+	}
+
+	return platforms, strict
 }
 
 // loadList reads the global list and merges its includes under it. An included
@@ -108,7 +136,7 @@ func (e env) loadList(
 
 	return merged{
 		packages: m.packages, files: files, vars: m.vars, secrets: m.secrets,
-		settings: settings, includes: m.includes,
+		settings: settings, includes: m.includes, own: own,
 	}, nil
 }
 

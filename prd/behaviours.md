@@ -55,6 +55,15 @@ order step in `prd/product.md`.
   afterwards.
 - B15 [2] `sync` on a platform missing from the lock resolves it and appends a
   platform entry without touching existing ones.
+- B179 [2] `[lock] platforms` in the user's own list names platforms. `add`,
+  `update` and `sync` pin every package for each one that its `when` matches,
+  from any host. The entry holds the artifact's URL and its sha256 from the
+  manifest, else from `sha256_url`, else from a download that oku hashes,
+  never unpacks and reports as a first use. For a platform with no artifact
+  oku pins a build when the manifest has one, and stops with an error
+  otherwise.
+- B180 [2] Without `[lock]`, `add` and `update` in a project pin every platform
+  they can and skip the others, and the global list pins the host alone.
 - B16 [2] `include` merges the named lists. A local entry overrides an
   included entry of the same name. `sync` stops when a list from a URL or a
   repo changed since the lock, and reads a list on this machine as it is.
