@@ -220,6 +220,7 @@ func (e env) install(ctx context.Context, opts Options, req request) (installed,
 
 		realized, err = e.store().Build(ctx, m, host, store.BuildOptions{
 			Deps: deps.prefixes, Log: req.log, PinnedVendor: pinnedVendor, Progress: req.progress,
+			NPMRegistry: opts.NPMRegistry,
 		})
 		if err != nil {
 			return installed{}, fmt.Errorf("%s: %w", m.Package.Name, err)
@@ -472,7 +473,18 @@ func (e env) inferNPM(ctx context.Context, opts Options, req request) (string, e
 		)
 	}
 
-	return e.inferrer(opts).FromNPM(ctx, req.ref.Location, npmOpts)
+	text, err := e.inferrer(opts).FromNPM(ctx, req.ref.Location, npmOpts)
+
+	// The build runs npm through sh. The npm.cmd of a Windows node package also
+	// looks for its files in its own directory, and the store's bin holds a copy
+	// of npm.cmd without them.
+	if err == nil && platform.Host().OS == "windows" && strings.Contains(text, "\n[build]\n") {
+		return "", fmt.Errorf(
+			"%s lists dependencies, and oku cannot install those on Windows yet", req.ref,
+		)
+	}
+
+	return text, err
 }
 
 func inferredText(inferred string, req request) string {

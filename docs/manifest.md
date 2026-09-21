@@ -595,7 +595,7 @@ one of these keys:
 | Key | What it does |
 |---|---|
 | `run = "..."` | Runs a command string in a shell. |
-| `install = { bin, lib, include, man, share, completions, app, font }` | Copies files from the source directory into the package. `bin` files become executable. `man` and `completions` go where an artifact's would. |
+| `install = { bin, lib, include, man, share, completions, app, font }` | Copies files from the source directory into the package. `bin` files become executable. A `bin` entry may be a [table](#a-program-that-needs-an-interpreter) too, and there `{{pkg}}` equals `{{prefix}}`. `man` and `completions` go where an artifact's would. |
 | `copy = { from, to }` | Copies one file. `from` is relative to the source directory and `to` to the package. |
 | `patch = { file, strip }` | Applies a unified diff to the source, see below. |
 | `fetch = { url, sha256, to }` | Downloads a file into the source directory. `sha256` is required. |
@@ -740,6 +740,30 @@ install = { bin = ["hey"] }
 The tool must be in `needs`, or come from a dep. `cargo` and `npm` need the
 project's lockfile, and `pip` needs `requirements.txt`. `pip` uses `pip3` when
 there is no `pip`.
+
+An npm step with `package` needs no source and no lockfile. It installs that
+package from the registry with its dependencies, at the manifest's version,
+into `{{prefix}}/lib/node_modules`:
+
+```toml
+[build]
+deps = ["github:someone/recipes#node"]
+
+[[build.step]]
+vendor = "npm"
+package = "typescript"
+
+[[build.step]]
+install = { bin = [{ name = "tsc", run = "{{dep.node.prefix}}/bin/node", args = ["{{prefix}}/lib/node_modules/typescript/bin/tsc"] }] }
+```
+
+oku runs `npm install --ignore-scripts --omit=dev --before=<time>`, where the
+time is when the registry says that version was published. npm then picks each
+dependency as it was at that time, so a later install gets the same packages,
+and the digest in `oku.lock` still fits. No package's install script runs. A
+package whose install script builds something does not work this way.
+`oku add npm:<name>` writes this build for a package that lists dependencies,
+see [npm packages](refs.md#npm-packages).
 
 The user's `oku.lock` pins one digest for what the vendor steps downloaded.
 `oku sync` runs them again and fails if the digest differs, so a locked build

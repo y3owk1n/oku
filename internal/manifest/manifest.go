@@ -196,6 +196,29 @@ func (m *Manifest) validate() error {
 			}
 		}
 
+		for i := range m.Build.Steps {
+			step := &m.Build.Steps[i]
+
+			if step.Install != nil {
+				var err error
+
+				step.Install.Bin, step.Install.Wrap, err = splitBin(step.Install.RawBin)
+				if err != nil {
+					errs = append(errs, fmt.Errorf("build.step[%d]: install.%w", i, err))
+				}
+			}
+
+			switch {
+			case step.Package == "":
+			case step.Vendor == nil || *step.Vendor != "npm":
+				errs = append(errs, fmt.Errorf(`build.step[%d]: package needs vendor = "npm"`, i))
+			case !npmNameRe.MatchString(step.Package):
+				errs = append(errs, fmt.Errorf(
+					`build.step[%d]: package must be an npm package name such as "@scope/name"`, i,
+				))
+			}
+		}
+
 		deps, err := parseDeps(m.Build.RawDeps)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("build.%w", err))
@@ -392,15 +415,27 @@ func reservedEnv(name string) bool {
 	}, upper)
 }
 
-// splitBin reads RawBin. An entry is a path, or a table with name, run and
-// args.
+// splitBin reads an artifact's RawBin.
 func (a *Artifact) splitBin() error {
-	a.Bin, a.Wrap = nil, nil
+	var err error
 
-	for i, value := range a.RawBin {
+	a.Bin, a.Wrap, err = splitBin(a.RawBin)
+
+	return err
+}
+
+// splitBin reads a "bin" list. An entry is a path, or a table with name, run
+// and args, which is a program that oku writes.
+func splitBin(raw []any) ([]string, []Wrapper, error) {
+	var (
+		paths []string
+		wraps []Wrapper
+	)
+
+	for i, value := range raw {
 		switch v := value.(type) {
 		case string:
-			a.Bin = append(a.Bin, v)
+			paths = append(paths, v)
 		case map[string]any:
 			var w Wrapper
 
@@ -411,7 +446,7 @@ func (a *Artifact) splitBin() error {
 			for _, arg := range rawArgs {
 				text, ok := arg.(string)
 				if !ok {
-					return fmt.Errorf("bin[%d]: args must be strings", i)
+					return nil, nil, fmt.Errorf("bin[%d]: args must be strings", i)
 				}
 
 				w.Args = append(w.Args, text)
@@ -419,28 +454,28 @@ func (a *Artifact) splitBin() error {
 
 			for key := range v {
 				if key != "name" && key != "run" && key != "args" {
-					return fmt.Errorf("bin[%d]: unknown key %q, use name, run and args", i, key)
+					return nil, nil, fmt.Errorf("bin[%d]: unknown key %q, use name, run and args", i, key)
 				}
 			}
 
 			if strings.ContainsAny(w.Run+strings.Join(w.Args, ""), "\r\n") {
-				return fmt.Errorf("bin[%d]: run and args must not hold a line break", i)
+				return nil, nil, fmt.Errorf("bin[%d]: run and args must not hold a line break", i)
 			}
 
 			if !nameRe.MatchString(w.Name) || w.Run == "" {
-				return fmt.Errorf(
+				return nil, nil, fmt.Errorf(
 					"bin[%d]: a table needs a name of lowercase letters, digits, '.', '_' or '-', and run",
 					i,
 				)
 			}
 
-			a.Wrap = append(a.Wrap, w)
+			wraps = append(wraps, w)
 		default:
-			return fmt.Errorf("bin[%d]: want a path, or a table with name, run and args", i)
+			return nil, nil, fmt.Errorf("bin[%d]: want a path, or a table with name, run and args", i)
 		}
 	}
 
-	return nil
+	return paths, wraps, nil
 }
 
 // Expand replaces {{name}} with vars[name] and fails on an unknown name.

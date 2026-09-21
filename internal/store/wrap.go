@@ -36,11 +36,21 @@ func writeWrappers(
 		vars["dep."+dep.Name+".prefix"] = dep.Prefix
 	}
 
-	if err := os.MkdirAll(filepath.Join(tmp, "bin"), 0o755); err != nil {
+	return writeWraps(filepath.Join(tmp, "bin"), a.Wrap, vars, p.OS)
+}
+
+// writeWraps writes wraps into the directory bin. vars are what their run and
+// args expand, and goos decides between a shell script and a shim's spec file.
+func writeWraps(bin string, wraps []manifest.Wrapper, vars map[string]string, goos string) error {
+	if len(wraps) == 0 {
+		return nil
+	}
+
+	if err := os.MkdirAll(bin, 0o755); err != nil {
 		return err
 	}
 
-	for _, w := range a.Wrap {
+	for _, w := range wraps {
 		words := make([]string, 0, len(w.Args)+1)
 
 		for _, text := range append([]string{w.Run}, w.Args...) {
@@ -54,9 +64,9 @@ func writeWrappers(
 
 		var err error
 
-		dest := filepath.Join(tmp, "bin", w.Name)
+		dest := filepath.Join(bin, w.Name)
 
-		if p.OS == "windows" {
+		if goos == "windows" {
 			err = shim.Write(dest+".exe", shim.Spec{Target: words[0], Args: words[1:]})
 		} else {
 			err = writeScript(dest, words)

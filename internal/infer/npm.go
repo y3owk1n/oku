@@ -72,10 +72,19 @@ func (inf *Inferrer) FromNPM(ctx context.Context, name string, opts NPMOptions) 
 		fmt.Fprintf(&b, "\n[runtime]\ndeps = [%q]\n", opts.Node)
 	}
 
+	// A package that lists dependencies gets them installed with it. That takes
+	// npm, which comes with the node package.
+	if published.Dependencies && opts.Node != "" {
+		b.WriteString(npmBuild(name, opts, programs, published.Bin))
+
+		return b.String(), nil
+	}
+
 	if published.Dependencies {
 		b.WriteString(
 			"\n# This package lists dependencies. oku installs its download and nothing else,\n" +
-				"# so it runs when the download bundles them.\n",
+				"# so it runs when the download bundles them. With runtimes.node in config.toml,\n" +
+				"# oku installs the dependencies too.\n",
 		)
 	}
 
@@ -85,11 +94,7 @@ func (inf *Inferrer) FromNPM(ctx context.Context, name string, opts NPMOptions) 
 	artifact := func(match, node string) {
 		fmt.Fprintf(&b, "\n[[artifact]]\n%surl = %q\nstrip = 1\nbin = [", match, url)
 
-		for i, program := range programs {
-			if i > 0 {
-				b.WriteString(", ")
-			}
-
+		for _, program := range programs {
 			script := "{{pkg}}/" + strings.TrimPrefix(published.Bin[program], "./")
 
 			// "env" finds node on PATH. A script's own "#!/usr/bin/env node" line
@@ -99,10 +104,10 @@ func (inf *Inferrer) FromNPM(ctx context.Context, name string, opts NPMOptions) 
 				run, args = "{{dep."+opts.NodeName+".prefix}}/bin/"+node, fmt.Sprintf("%q", script)
 			}
 
-			fmt.Fprintf(&b, "\n  { name = %q, run = %q, args = [%s] }", program, run, args)
+			fmt.Fprintf(&b, "\n  { name = %q, run = %q, args = [%s] },", program, run, args)
 		}
 
-		b.WriteString(",\n]\n")
+		b.WriteString("\n]\n")
 	}
 
 	if opts.Node == "" {
@@ -116,4 +121,29 @@ func (inf *Inferrer) FromNPM(ctx context.Context, name string, opts NPMOptions) 
 	artifact("", "node")
 
 	return b.String(), nil
+}
+
+// npmBuild returns the [build] of an npm package that needs its dependencies.
+// One vendor step installs the package with them, as of the time the version
+// was published, and an install step writes the programs.
+func npmBuild(name string, opts NPMOptions, programs []string, bin map[string]string) string {
+	var b strings.Builder
+
+	fmt.Fprintf(&b, "\n[build]\ndeps = [%q]\n", opts.Node)
+	fmt.Fprintf(&b, "\n[[build.step]]\nvendor = \"npm\"\npackage = %q\n", name)
+
+	// oku cannot run this build on Windows yet, so the programs are for unix.
+	b.WriteString("\n[[build.step]]\ninstall = { bin = [")
+
+	for _, program := range programs {
+		fmt.Fprintf(
+			&b, "\n  { name = %q, run = %q, args = [%q] },", program,
+			"{{dep."+opts.NodeName+".prefix}}/bin/node",
+			"{{prefix}}/lib/node_modules/"+name+"/"+strings.TrimPrefix(bin[program], "./"),
+		)
+	}
+
+	b.WriteString("\n] }\n")
+
+	return b.String()
 }

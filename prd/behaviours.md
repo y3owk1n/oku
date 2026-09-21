@@ -128,6 +128,10 @@ order step in `prd/product.md`.
   with one program for each `bin` entry. With `runtimes.node` in `config.toml`
   the programs run through that package, which stays out of the user's
   profile.
+- B129 [4] With `runtimes.node`, an npm package that lists dependencies is
+  built by an npm vendor step with `package`. It installs the package with its
+  dependencies as of the version's publish time, runs no install scripts, and
+  `oku.lock` pins a digest of what it installed.
 - B127 [4] Without `runtimes.node`, the programs of an npm package run the
   `node` on `PATH`, and `add` says how to pin one.
 - B117 [4] `oku add <url>` on a URL that is no manifest infers a one-artifact
