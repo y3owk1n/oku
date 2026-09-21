@@ -981,3 +981,25 @@ temporary directory of macOS is behind a symlink and npm wrote its name into
 directory first. The install runs with `--ignore-scripts`, as every npm step of oku
 does, so no code of the packages runs on the host. pip can name a platform too,
 but only for wheels. oku does not do that yet.
+
+## D70. A rebuild replaces a build under its own store path
+
+`oku sync --rebuild <name>` builds a package again although the store holds
+its build. The store path stays the same, because it is a hash of the
+manifest, the version, the platform and the deps, and none of those changed.
+oku renames the old build to `<path>.old`, builds into the path, and deletes
+the old build on success or renames it back on failure. A build that finds
+`<path>.old` and no build at the path puts the old one back first, which
+covers a rebuild that a crash interrupted. A rebuild takes nothing from a
+cache.
+
+Why: a store path is immutable by rule, and one case needs an exception. A
+build from an older oku holds no vendor digest beside it (D34, B188), and only
+a new build gives one. The way around was to delete the store path by hand,
+which leaves every generation with a broken package until the build ends, and
+with nothing when it fails. A build must write into its final path, because
+build systems write the prefix into the files they install, so oku cannot
+build beside the old one and swap. The flag names packages, and not
+everything, because a rebuild of all thirty builds of a list takes about an
+hour. The flag belongs to `sync` and not to `update`, because it keeps the
+locked version.
