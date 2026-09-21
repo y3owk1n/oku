@@ -129,7 +129,13 @@ func runUninstall(
 		stay = keepSystem(ledger.Items, nil)
 	}
 
-	if err := ledger.Sync(stay, handlers); err != nil {
+	before := slices.Clone(ledger.Items)
+
+	err = ledger.Sync(stay, handlers)
+
+	tellSettings(opts, before, ledger.Items)
+
+	if err != nil {
 		return err
 	}
 

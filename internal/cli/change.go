@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 
 	"github.com/pelletier/go-toml/v2"
 	"github.com/spf13/cobra"
@@ -156,7 +157,12 @@ func (e env) plan(cmd *cobra.Command, opts Options, c change) (pending, exposePl
 		return pending{}, exposePlan{}, err
 	}
 
-	plan, err := e.planExposed(cmd, opts, pkgs, files, c.system)
+	wantedSettings, err := prof.SettingsOf(c.to)
+	if err != nil {
+		return pending{}, exposePlan{}, err
+	}
+
+	plan, err := e.planExposed(cmd, opts, pkgs, files, wantedSettings, c.system)
 	if err != nil {
 		return pending{}, exposePlan{}, err
 	}
@@ -204,7 +210,12 @@ func (e env) revert(ctx context.Context, opts Options, p pending) error {
 			return err
 		}
 
-		wanted, defs, err := e.wantedItems(opts, pkgs, files)
+		wantedSettings, err := prof.SettingsOf(p.From)
+		if err != nil {
+			return err
+		}
+
+		wanted, defs, err := e.wantedItems(opts, pkgs, files, wantedSettings)
 		if err != nil {
 			return err
 		}
@@ -223,7 +234,13 @@ func (e env) revert(ctx context.Context, opts Options, p pending) error {
 			return err
 		}
 
-		if err := ledger.Sync(wanted, handlers); err != nil {
+		before := slices.Clone(ledger.Items)
+
+		err = ledger.Sync(wanted, handlers)
+
+		tellSettings(opts, before, ledger.Items)
+
+		if err != nil {
 			return fmt.Errorf(
 				"could not restore the apps, fonts and services of generation %d: %w",
 				p.From,

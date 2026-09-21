@@ -22,7 +22,7 @@ import (
 
 // Item is one thing oku placed outside its own directories.
 type Item struct {
-	// Kind is "app", "font", "service" or "file".
+	// Kind is "app", "font", "service", "file" or "setting".
 	Kind string `toml:"kind"`
 	// Package is the package that ships it.
 	Package string `toml:"package"`
@@ -39,6 +39,27 @@ type Item struct {
 	// Hash is the sha256 of a file that oku copied to Target, which is how
 	// Windows gets a file of the list. It is empty for a link.
 	Hash string `toml:"hash,omitempty"`
+	// Domain and Key name a setting, and Source is the value oku writes. Target is
+	// the two joined, which keeps a setting unique in the ledger.
+	Domain string `toml:"domain,omitempty"`
+	Key    string `toml:"key,omitempty"`
+	// Prior is the value the setting had before oku first wrote it, and HadPrior
+	// tells a setting that was not set from an empty value. Removing the item
+	// puts that back.
+	Prior    string `toml:"prior,omitempty"`
+	HadPrior bool   `toml:"had_prior,omitempty"`
+}
+
+// wants reports whether items holds item, apart from what a Handler's Before
+// added to the one in the ledger.
+func wants(items []Item, item Item) bool {
+	item.Prior, item.HadPrior = "", false
+
+	return slices.ContainsFunc(items, func(have Item) bool {
+		have.Prior, have.HadPrior = "", false
+
+		return have == item
+	})
 }
 
 // Handler places and removes items of one kind. Apps and fonts are files, and
@@ -46,6 +67,9 @@ type Item struct {
 type Handler struct {
 	Place  func(Item) error
 	Remove func(Item) error
+	// Before returns the item to record in the ledger, and runs before Place. A
+	// setting uses it to keep the value it is about to replace.
+	Before func(Item) (Item, error)
 }
 
 // Ledger is the record of everything oku exposed. "oku self uninstall" replays it.
@@ -186,7 +210,8 @@ func Wanted(name, storePath string, launchers []Launcher, dirs Dirs, system bool
 // there. It changes nothing.
 func (l *Ledger) Check(wanted []Item) error {
 	for _, want := range wanted {
-		if slices.Contains(l.Items, want) || want.Target == "" {
+		// A setting is no path, so nothing of the user's can be in its way.
+		if wants(l.Items, want) || want.Target == "" || want.Kind == "setting" {
 			continue
 		}
 
@@ -263,7 +288,7 @@ func (l *Ledger) Sync(wanted []Item, handlers map[string]Handler) error {
 	}
 
 	for _, have := range slices.Clone(l.Items) {
-		if slices.Contains(wanted, have) {
+		if wants(wanted, have) {
 			continue
 		}
 
@@ -273,8 +298,15 @@ func (l *Ledger) Sync(wanted []Item, handlers map[string]Handler) error {
 	}
 
 	for _, want := range wanted {
-		if slices.Contains(l.Items, want) {
+		if wants(l.Items, want) {
 			continue
+		}
+
+		if before := handlers[want.Kind].Before; before != nil {
+			var err error
+			if want, err = before(want); err != nil {
+				return fmt.Errorf("read %s %s: %w", want.Kind, want.Target, err)
+			}
 		}
 
 		// oku records the target in the ledger before it creates it.

@@ -164,6 +164,9 @@ content of every such file in the same step.
 On Windows they go to the Start Menu and the user's font folder, see
 [Windows](windows.md#apps-and-fonts).
 
+A [setting](list-and-lock.md#settings-of-the-os) is in the ledger too, with the
+value it had before oku first wrote it.
+
 Every such file is written to the ledger `exposed.toml` before oku creates it,
 with the package and the store path it came from. `oku remove`, `oku rollback`
 and `oku sync` remove what the active generation no longer has, and

@@ -205,9 +205,72 @@ names in that machine's own list.
 Changing a variable and running `oku sync` writes every file that uses it
 again, in one generation. `oku rollback` brings the old bytes back.
 
+### Settings of the OS
+
+A settings table sets per-user settings. Each table belongs to the mechanism of
+one OS, because a setting of one OS has no counterpart on another:
+
+```toml
+[defaults."com.apple.dock"]
+autohide = true
+tilesize = 48
+autohide-delay = 0.0
+orientation = "left"
+
+[defaults.NSGlobalDomain]
+AppleInterfaceStyle = "Dark"
+KeyRepeat = 1
+
+[defaults.".GlobalPreferences"]
+AppleLanguages = ["en-SG", "ms-MY"]
+
+[defaults."com.apple.Safari".NSUserKeyEquivalents]
+"Show Next Tab" = "^l"
+```
+
+| Table | OS | Status |
+|---|---|---|
+| `[defaults."<domain>"]` | macOS | Works. oku writes through `/usr/bin/defaults`. |
+| `[registry.'HKCU\...']` | Windows | Not built yet. A key outside `HKCU` is an error on every OS. |
+| `[dconf."<path>"]` | Linux | Not built yet. |
+
+oku skips the tables of another OS, so one list serves every machine. On its
+own OS a table that is not built yet is an error, so that a setting never looks
+applied when it is not.
+
+Quote a domain that has a dot. `[defaults.com.apple.dock]` without quotes is a
+table `com` that holds a table `apple`, and not the domain you meant.
+
+The type comes from the TOML value:
+
+| TOML | macOS |
+|---|---|
+| `true`, `false` | boolean |
+| `48` | integer |
+| `0.5` | float. Write `0.0`, not `0`, where the setting is a float. |
+| `"left"` | string |
+| `["a", "b"]` | array |
+| a table | dictionary. oku owns the whole dictionary and writes it whole. |
+
+Before oku first writes a key it records the value the key had, or that it had
+none. A key that leaves the list gets that value back, or is deleted again.
+`oku rollback` and `oku self uninstall` do the same. Settings go through the
+same check and undo as everything else, see
+[a change that fails](files.md#a-change-that-fails).
+
+oku tells macOS to read its settings again after a change. Some apps, such as
+the Dock and Finder, read theirs only when they start, so restart them with
+`killall Dock`. oku never writes `/Library/Preferences` or anything else that
+needs root. When oku deletes the last key of a domain that it created, macOS
+keeps an empty file for that domain.
+
+`oku add` and `oku remove` carry the settings over unchanged. Only `sync` and
+`update` read the tables again. An included list may hold settings, and your own
+list overrides a key that an include sets.
+
 Limits for now:
 
-- Only the global list may hold `[files]` and `[vars]`. A project list with `[files]` is an
+- Only the global list may hold `[files]`, `[vars]` and settings tables. A project list with `[files]` is an
   error, so that a cloned repo cannot write into your home directory.
 - An included list may hold `[files]` when it is a file on this machine, not
   when it comes from a URL or a repo.

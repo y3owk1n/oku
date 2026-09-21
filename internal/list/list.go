@@ -52,6 +52,19 @@ type File struct {
 	When platform.Selector
 }
 
+// Setting is one key of a settings table, such as [defaults."com.apple.dock"].
+type Setting struct {
+	// Backend is the table's name, which is the mechanism of one OS: "defaults",
+	// "registry" or "dconf".
+	Backend string
+	Domain  string
+	Key     string
+	Value   any
+}
+
+// Backends are the settings tables, each for one OS.
+var Backends = map[string]string{"defaults": "darwin", "registry": "windows", "dconf": "linux"}
+
 // List is a parsed oku.toml.
 type List struct {
 	// Include holds refs of other lists to merge under this one.
@@ -59,6 +72,8 @@ type List struct {
 	Packages map[string]Entry
 	// Files is sorted by target.
 	Files []File
+	// Settings is sorted by backend, domain and key.
+	Settings []Setting
 	// Vars holds [vars]. A nested table becomes names joined by a dot, so
 	// [vars.theme] with base00 is "theme.base00".
 	Vars map[string]string
@@ -81,6 +96,9 @@ func Parse(data []byte, origin string) (*List, error) {
 		Packages map[string]any `toml:"packages"`
 		Files    map[string]any `toml:"files"`
 		Vars     map[string]any `toml:"vars"`
+		Defaults map[string]any `toml:"defaults"`
+		Registry map[string]any `toml:"registry"`
+		Dconf    map[string]any `toml:"dconf"`
 	}
 
 	if err := toml.Unmarshal(data, &raw); err != nil {
@@ -102,6 +120,24 @@ func Parse(data []byte, origin string) (*List, error) {
 		l.Packages[name] = entry
 	}
 
+	for backend, domains := range map[string]map[string]any{
+		"defaults": raw.Defaults, "registry": raw.Registry, "dconf": raw.Dconf,
+	} {
+		settings, err := toSettings(backend, domains)
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", origin, err)
+		}
+
+		l.Settings = append(l.Settings, settings...)
+	}
+
+	slices.SortFunc(l.Settings, func(a, b Setting) int {
+		return strings.Compare(
+			a.Backend+"\x00"+a.Domain+"\x00"+a.Key,
+			b.Backend+"\x00"+b.Domain+"\x00"+b.Key,
+		)
+	})
+
 	for _, target := range slices.Sorted(maps.Keys(raw.Files)) {
 		file, err := toFile(raw.Files[target])
 		if err != nil {
@@ -113,6 +149,36 @@ func Parse(data []byte, origin string) (*List, error) {
 	}
 
 	return l, nil
+}
+
+// toSettings reads the domains of one settings table.
+func toSettings(backend string, domains map[string]any) ([]Setting, error) {
+	var settings []Setting
+
+	for domain, value := range domains {
+		keys, ok := value.(map[string]any)
+		if !ok {
+			return nil, fmt.Errorf("%s.%q must be a table of keys", backend, domain)
+		}
+
+		// oku writes settings of the current user only.
+		if backend == "registry" && !strings.HasPrefix(strings.ToUpper(domain), `HKCU\`) &&
+			!strings.HasPrefix(strings.ToUpper(domain), `HKEY_CURRENT_USER\`) {
+			return nil, fmt.Errorf(
+				"registry.%q is outside HKCU, and oku writes settings of the current user only",
+				domain,
+			)
+		}
+
+		for key, v := range keys {
+			settings = append(
+				settings,
+				Setting{Backend: backend, Domain: domain, Key: key, Value: v},
+			)
+		}
+	}
+
+	return settings, nil
 }
 
 // flattenVars adds the strings of table to vars, with prefix before each name.

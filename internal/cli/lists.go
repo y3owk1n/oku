@@ -38,8 +38,10 @@ type merger struct {
 	project  string
 	packages map[string]listed
 	// files is keyed by the target as the list has it.
-	files    map[string]listedFile
-	vars     map[string]string
+	files map[string]listedFile
+	vars  map[string]string
+	// settings is keyed by backend, domain and key.
+	settings map[[3]string]list.Setting
 	includes []lock.Include
 	seen     map[string]bool
 }
@@ -48,8 +50,10 @@ type merger struct {
 type merged struct {
 	packages map[string]listed
 	// files is sorted by target.
-	files    []listedFile
-	vars     map[string]string
+	files []listedFile
+	vars  map[string]string
+	// settings is sorted by backend, domain and key.
+	settings []list.Setting
 	includes []lock.Include
 }
 
@@ -76,6 +80,7 @@ func (e env) loadList(
 		packages: map[string]listed{},
 		files:    map[string]listedFile{},
 		vars:     map[string]string{},
+		settings: map[[3]string]list.Setting{},
 		seen:     map[string]bool{},
 	}
 
@@ -88,7 +93,18 @@ func (e env) loadList(
 		files = append(files, m.files[target])
 	}
 
-	return merged{packages: m.packages, files: files, vars: m.vars, includes: m.includes}, nil
+	keys := slices.SortedFunc(maps.Keys(m.settings), func(a, b [3]string) int {
+		return slices.Compare(a[:], b[:])
+	})
+
+	settings := make([]list.Setting, 0, len(keys))
+	for _, key := range keys {
+		settings = append(settings, m.settings[key])
+	}
+
+	return merged{
+		packages: m.packages, files: files, vars: m.vars, settings: settings, includes: m.includes,
+	}, nil
 }
 
 // merge adds l's includes and then l's own packages, so a package in l overrides
@@ -188,8 +204,21 @@ func (m *merger) merge(l *list.List, origin, dir, from string, depth int) error 
 		return fmt.Errorf("%s has [vars], which only the global list uses", origin)
 	}
 
-	// A later list overrides a variable of an earlier one, like a package.
+	if m.project != "" && len(l.Settings) > 0 {
+		return fmt.Errorf(
+			"%s has [%s], and only the global list may change settings",
+			origin,
+			l.Settings[0].Backend,
+		)
+	}
+
+	// A later list overrides a variable or a setting of an earlier one, like a
+	// package.
 	maps.Copy(m.vars, l.Vars)
+
+	for _, s := range l.Settings {
+		m.settings[[3]string{s.Backend, s.Domain, s.Key}] = s
+	}
 
 	for _, file := range l.Files {
 		m.files[file.Target] = listedFile{file: file, dir: dir}
