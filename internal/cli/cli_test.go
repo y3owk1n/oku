@@ -20,6 +20,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -1193,9 +1194,18 @@ func newReleaseServer(t *testing.T, tags ...string) *releaseServer {
 
 		rs.hits++
 
+		// The server gives one page of the tags, the way GitHub does.
+		tags := rs.tags
+
+		if size, err := strconv.Atoi(r.URL.Query().Get("per_page")); err == nil {
+			page, _ := strconv.Atoi(r.URL.Query().Get("page"))
+			from := min(max(page-1, 0)*size, len(tags))
+			tags = tags[from:min(from+size, len(tags))]
+		}
+
 		var items []string
 
-		for _, tag := range rs.tags {
+		for _, tag := range tags {
 			items = append(items, fmt.Sprintf(
 				`{"tag_name": %q, "draft": %t, "prerelease": %t}`,
 				tag, strings.HasSuffix(tag, "-draft"), strings.Contains(tag, "-rc"),
@@ -1240,6 +1250,27 @@ func (m machine) toolOutput(t *testing.T) string {
 	must(t, err)
 
 	return strings.TrimSpace(string(out))
+}
+
+func TestAddFindsAVersionPastTheFirstPageOfReleases(t *testing.T) {
+	m := newMachine(t)
+
+	var tags []string
+	for i := 60; i > 0; i-- {
+		tags = append(tags, fmt.Sprintf("v2.0.%d", i))
+	}
+
+	server := newReleaseServer(t, tags...)
+	m.opts.GitHubAPI = server.URL + "/api"
+
+	ref := m.discoveredManifest(t, "2.0.3")
+
+	_, err := m.run(t, "", "add", ref+"@2.0.3")
+	must(t, err)
+
+	if got := m.toolOutput(t); got != "2.0.3" {
+		t.Fatalf("add installed %s, want 2.0.3 from the third page", got)
+	}
 }
 
 func TestB20AddPicksNewestDiscoveredVersionOrThePinnedOne(t *testing.T) {
