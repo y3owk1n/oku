@@ -1,5 +1,70 @@
 # Changelog
 
+## [0.4.0](https://github.com/y3owk1n/oku/compare/v0.3.0...v0.4.0) (2026-09-21)
+
+
+### Features
+
+* **build:** give pkg-config the system libraries of macOS ([#117](https://github.com/y3owk1n/oku/issues/117)) ([75e69ba](https://github.com/y3owk1n/oku/commit/75e69ba72409da37e9ba131830a0510115b92fc2))
+* **build:** install an npm package with its dependencies, dated ([#95](https://github.com/y3owk1n/oku/issues/95)) ([13cb343](https://github.com/y3owk1n/oku/commit/13cb3438d0f95f17cd2d7bd0ef66fcb1bc09546f))
+* **build:** pin a source archive on first download, or read sha256_url ([#116](https://github.com/y3owk1n/oku/issues/116)) ([90074bb](https://github.com/y3owk1n/oku/commit/90074bb97e53165081906aa1776d877c5f775a1c))
+* **cli:** say what oku waits for, with bytes and time on a terminal ([#120](https://github.com/y3owk1n/oku/issues/120)) ([961f0ed](https://github.com/y3owk1n/oku/commit/961f0ed699d8070ed013e2ff21771b57cd95f484))
+* **files:** place files in the home directory from the list ([#98](https://github.com/y3owk1n/oku/issues/98)) ([efdd5fd](https://github.com/y3owk1n/oku/commit/efdd5fd6491cc1c7cb87a95e478a536a698756a2))
+* **files:** place files on Windows with junctions and copies ([#99](https://github.com/y3owk1n/oku/issues/99)) ([fb85a94](https://github.com/y3owk1n/oku/commit/fb85a94565afc7de9d4294206de80050ec38299a))
+* **files:** render files from templates and the list's variables ([#100](https://github.com/y3owk1n/oku/issues/100)) ([666a7e0](https://github.com/y3owk1n/oku/commit/666a7e00811c692a45f7f18dca096a0066a0b363))
+* **forge:** install from Codeberg and any Gitea or Forgejo server ([#82](https://github.com/y3owk1n/oku/issues/82)) ([301afb8](https://github.com/y3owk1n/oku/commit/301afb825411515c5e70a7d74637723991e49f26))
+* **forge:** install from gitlab.com and any GitLab server ([#83](https://github.com/y3owk1n/oku/issues/83)) ([59d7bc1](https://github.com/y3owk1n/oku/commit/59d7bc1b005a8fcae24786bb436cfbc2e50996a9))
+* **forge:** read GitHub through one forge interface, and accept github:host/owner/repo ([#81](https://github.com/y3owk1n/oku/issues/81)) ([6e0e37b](https://github.com/y3owk1n/oku/commit/6e0e37b512b8a50f722e9f0b7131d5bd750d2131))
+* **infer:** install a command-line tool from the npm registry with npm:name ([#93](https://github.com/y3owk1n/oku/issues/93)) ([e269946](https://github.com/y3owk1n/oku/commit/e2699460a640dc02fda8cd1a921aefef7852ece8))
+* **infer:** install from a URL that is the download itself ([#84](https://github.com/y3owk1n/oku/issues/84)) ([7fb5b3f](https://github.com/y3owk1n/oku/commit/7fb5b3f23ddcf4714aa6d17355e8deecfe398140))
+* **infer:** read more release layouts, and add --asset and --bin to oku add ([#79](https://github.com/y3owk1n/oku/issues/79)) ([7ddb68a](https://github.com/y3owk1n/oku/commit/7ddb68acdc5071aece86ae027c1a1fab04b834fa))
+* **manifest:** add "oku manifest hash" to print a download's checksums ([#92](https://github.com/y3owk1n/oku/issues/92)) ([ebb12e9](https://github.com/y3owk1n/oku/commit/ebb12e976502063279ed962ed2ada6bc80fb42de))
+* **manifest:** bump a manifest whose releases are not on github.com ([#88](https://github.com/y3owk1n/oku/issues/88)) ([b1bb927](https://github.com/y3owk1n/oku/commit/b1bb927d97af383303b8d3429d55b2c25515efaf))
+* **manifest:** follow the newest commit of a branch with version.from = "git-branch" ([#125](https://github.com/y3owk1n/oku/issues/125)) ([2b4eacb](https://github.com/y3owk1n/oku/commit/2b4eacb0aaf390db7fb7c5d59f3846cf2d99d7b9))
+* **manifest:** let a bin entry be a program that oku writes ([#90](https://github.com/y3owk1n/oku/issues/90)) ([93d3dcb](https://github.com/y3owk1n/oku/commit/93d3dcbc52cd2f6d82d331ff6e9bd5a86ae084dd))
+* **manifest:** let a font entry be a pattern ([#119](https://github.com/y3owk1n/oku/issues/119)) ([d29d072](https://github.com/y3owk1n/oku/commit/d29d07227081ef80e4cd51e01ee062b7d08d646c))
+* **manifest:** let a package hold only files, with data = true ([#108](https://github.com/y3owk1n/oku/issues/108)) ([e1ae0f5](https://github.com/y3owk1n/oku/commit/e1ae0f593c6617d33c9f967bd3c55910a046bb3a))
+* **manifest:** let a prebuilt download fill lib, include and share ([#115](https://github.com/y3owk1n/oku/issues/115)) ([5959390](https://github.com/y3owk1n/oku/commit/5959390a7a3880ff2851aa9eaa9098787f96a5df))
+* **secrets:** place secrets from sops and age files ([#106](https://github.com/y3owk1n/oku/issues/106)) ([2c009b1](https://github.com/y3owk1n/oku/commit/2c009b1286eaad715a033b23382f172ce4ae3a93))
+* **service:** put the profile on a service's PATH, and expand locations ([#113](https://github.com/y3owk1n/oku/issues/113)) ([e8330cc](https://github.com/y3owk1n/oku/commit/e8330cc3c52d7d93996eac35216f701537cfeb7a))
+* **settings:** restart the Dock when one of its settings changed ([#102](https://github.com/y3owk1n/oku/issues/102)) ([9d5879e](https://github.com/y3owk1n/oku/commit/9d5879e7f70fbe86202b09a272849335090f0a09))
+* **settings:** set dconf keys on Linux with [dconf] ([#104](https://github.com/y3owk1n/oku/issues/104)) ([25af82d](https://github.com/y3owk1n/oku/commit/25af82dcaf1008cf0a901a64ef1368ef799d9273))
+* **settings:** set macOS preferences from the list with [defaults] ([#101](https://github.com/y3owk1n/oku/issues/101)) ([516a5ed](https://github.com/y3owk1n/oku/commit/516a5ed3e4261837f1513a8b57475aa04c44d300))
+* **settings:** set macOS preferences of this one Mac ([#110](https://github.com/y3owk1n/oku/issues/110)) ([2df27bf](https://github.com/y3owk1n/oku/commit/2df27bf11e0d2672e603917e9127c3475808a327))
+* **settings:** set registry values on Windows with [registry] ([#103](https://github.com/y3owk1n/oku/issues/103)) ([43d7557](https://github.com/y3owk1n/oku/commit/43d7557d4f0fde1253f2223a8267cfe00fefc7da))
+* **sync:** add --dry-run to sync and update ([#109](https://github.com/y3owk1n/oku/issues/109)) ([cb279c1](https://github.com/y3owk1n/oku/commit/cb279c1d4dfae03a363cc2f72a88b47380fa43ee))
+* **sync:** reuse downloads after a stopped run, share dep lookups, quiet the inferred manifest ([#122](https://github.com/y3owk1n/oku/issues/122)) ([943038c](https://github.com/y3owk1n/oku/commit/943038ca07213835aea741a0833b6c4434ff235e))
+* **sync:** undo a change that fails partway, and check before the first step ([#97](https://github.com/y3owk1n/oku/issues/97)) ([4ece0bb](https://github.com/y3owk1n/oku/commit/4ece0bb6d2e415b7c1b982fc0731ce79a5f36c08))
+* **version:** follow the versions of an npm package, and check its sha512 ([#91](https://github.com/y3owk1n/oku/issues/91)) ([e4ba9ba](https://github.com/y3owk1n/oku/commit/e4ba9ba2f704440680534eb5445bda863888321d))
+
+
+### Bug Fixes
+
+* **env:** add {{pkg}} so an artifact's [env] can name its own files ([#94](https://github.com/y3owk1n/oku/issues/94)) ([e550a99](https://github.com/y3owk1n/oku/commit/e550a997df5d3aed425c282250530ae389b26d9a))
+* **forge:** list the releases of a repo whose releases have many assets ([#85](https://github.com/y3owk1n/oku/issues/85)) ([5ce2009](https://github.com/y3owk1n/oku/commit/5ce2009575ec443b437897aab6bcd8f068519ad6))
+* **infer:** pick the command line build and the checksums of its own OS ([#118](https://github.com/y3owk1n/oku/issues/118)) ([7c2158b](https://github.com/y3owk1n/oku/commit/7c2158b0e731436fb8dfa258951a1b079a9e9584))
+* **npm:** read a relative runtimes.node from the config directory ([#114](https://github.com/y3owk1n/oku/issues/114)) ([b4abf9a](https://github.com/y3owk1n/oku/commit/b4abf9a15aee9265d3a1a66cc0d830c41e869409))
+* **resolve:** never pick a prerelease such as 1.27rc1 as the newest version ([#123](https://github.com/y3owk1n/oku/issues/123)) ([5c25ca9](https://github.com/y3owk1n/oku/commit/5c25ca915ae0fe3f3057bce7900b0d0868357ba0))
+* **self:** download the nightly build again when its url served an older one ([#126](https://github.com/y3owk1n/oku/issues/126)) ([30bce21](https://github.com/y3owk1n/oku/commit/30bce2149ce9b2580f21aeb0861dcc19dc4a58bc))
+* **service:** wait for the old program to exit before loading a service again ([#124](https://github.com/y3owk1n/oku/issues/124)) ([c96c5ed](https://github.com/y3owk1n/oku/commit/c96c5ede08684fc5bc7002f5491e8326007314b3))
+* **store:** keep the file times of an archive when unpacking it ([#111](https://github.com/y3owk1n/oku/issues/111)) ([8d0902a](https://github.com/y3owk1n/oku/commit/8d0902a6871ae090ed241f5799867011c254017d))
+* **store:** send the host's token with the downloads of a private repo ([#87](https://github.com/y3owk1n/oku/issues/87)) ([c6eb038](https://github.com/y3owk1n/oku/commit/c6eb038f39c8cb7fceb59ba25c3f4b93f08c008b))
+* **sync:** read an included list on this machine as it is ([#107](https://github.com/y3owk1n/oku/issues/107)) ([bf06a7e](https://github.com/y3owk1n/oku/commit/bf06a7e539c3c9ae8db6034083401e2b4648b27f))
+* **version:** compare a number in a version suffix as a number ([#112](https://github.com/y3owk1n/oku/issues/112)) ([e384a9a](https://github.com/y3owk1n/oku/commit/e384a9a4046e9807779777339a8c5dedf1509975))
+
+
+### Performance Improvements
+
+* **sync:** install packages in parallel and skip checks the lock already made ([#127](https://github.com/y3owk1n/oku/issues/127)) ([b469611](https://github.com/y3owk1n/oku/commit/b46961181bf745bce7b25871527f0011dc768030))
+
+
+### Documentation
+
+* **prd:** add behaviours B112 to B121, each with a test named after it ([#89](https://github.com/y3owk1n/oku/issues/89)) ([8573bb3](https://github.com/y3owk1n/oku/commit/8573bb3ad90083188918ffac70cf29baa6352858))
+* **prd:** let the list set up home files and per-user settings ([#96](https://github.com/y3owk1n/oku/issues/96)) ([4e30336](https://github.com/y3owk1n/oku/commit/4e303369b50231a5af1a82f04f542b100753266b))
+* **prd:** plan secrets from sops and age files as build step 16 ([#105](https://github.com/y3owk1n/oku/issues/105)) ([c1aa83a](https://github.com/y3owk1n/oku/commit/c1aa83acc440a85f9b371db240ca68a23d784db5))
+* **readme:** cover home files, templates, secrets, settings and dry runs ([#121](https://github.com/y3owk1n/oku/issues/121)) ([e95c7ec](https://github.com/y3owk1n/oku/commit/e95c7ec92c83064e1ee8dbef62aee17939813032))
+
 ## [0.3.0](https://github.com/y3owk1n/oku/compare/v0.2.2...v0.3.0) (2026-09-20)
 
 
