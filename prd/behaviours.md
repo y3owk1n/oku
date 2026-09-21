@@ -70,6 +70,12 @@ order step in `prd/product.md`.
   are never picked, and an unknown x fails naming the newest versions.
 - B118 [3] `add <ref>@<version>` finds a version that is not on the first page
   of the host's release list, among the newest 100 releases.
+- B123 [3] With `version.from = "npm"`, `add` picks the newest version of the
+  package in the npm registry that is no prerelease, and `add <ref>@x` picks x.
+- B124 [3] oku checks a download against the artifact's `integrity`, or against
+  the sha512 the npm registry publishes for it. A download that does not fit is
+  rejected and nothing enters the store. oku does not count one that fits as a
+  first use.
 - B21 [3] `oku update [name]` re-resolves and rewrites the lock. Without it,
   versions never move, and `sync` installs the locked version without asking
   upstream for versions. A package pinned in `oku.toml` stays on its version
