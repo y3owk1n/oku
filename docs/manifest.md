@@ -354,6 +354,18 @@ define any.
 For a download that is the executable itself, the artifact must list exactly one
 `bin` and nothing else, and the file is installed under that name.
 
+That one `bin` may be a [table](#a-program-that-needs-an-interpreter). The file
+then keeps the name it has in the URL, without `.gz`, `.xz`, `.bz2` or `.zst`,
+and `run` or `args` name it as `{{pkg}}/<name>`. This example starts a program
+with a variable set:
+
+```toml
+[[artifact]]
+match = { os = "linux", arch = "arm64" }
+url = "https://github.com/artempyanykh/marksman/releases/download/{{tag}}/marksman-linux-arm64"
+bin = [{ name = "marksman", run = "/usr/bin/env", args = ["DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1", "{{pkg}}/marksman-linux-arm64"] }]
+```
+
 `strip` applies to tar, zip, 7z, deb and rpm. oku copies a `.dmg`, a `.pkg` and an
 `.msi` whole. From a `.dmg` it leaves out the hidden Finder files and any link that
 points out of the image, such as the shortcut to `/Applications`.

@@ -333,7 +333,8 @@ func exists(path string) bool {
 
 // unpack fills <tmp>/pkg from the download. A download that is not an archive
 // is the binary itself, compressed or not, and takes the name of the artifact's
-// single bin entry.
+// single bin entry. With a single wrapper instead, it keeps the name it has in
+// the URL, so the wrapper can run it as {{pkg}}/<name>.
 func unpack(download, tmp string, a manifest.Artifact) error {
 	pkg := filepath.Join(tmp, "pkg")
 	if err := os.Mkdir(pkg, 0o755); err != nil {
@@ -345,14 +346,19 @@ func unpack(download, tmp string, a manifest.Artifact) error {
 		return err
 	}
 
-	if len(a.Bin) != 1 || len(a.Man)+len(a.Completions) > 0 {
+	if len(a.Bin)+len(a.Wrap) != 1 || len(a.Man)+len(a.Completions) > 0 {
 		return errors.New(
 			"the download is a single file, so the artifact must list exactly one bin and nothing else",
 		)
 	}
 
-	if !filepath.IsLocal(filepath.FromSlash(a.Bin[0])) {
-		return fmt.Errorf("bin %q: the path is outside the package", a.Bin[0])
+	name := singleFileName(a.URL)
+	if len(a.Bin) == 1 {
+		name = a.Bin[0]
+	}
+
+	if !filepath.IsLocal(filepath.FromSlash(name)) {
+		return fmt.Errorf("bin %q: the path is outside the package", name)
 	}
 
 	in, err := os.Open(download)
@@ -366,7 +372,19 @@ func unpack(download, tmp string, a manifest.Artifact) error {
 		return err
 	}
 
-	return writeNew(binary, filepath.Join(pkg, filepath.FromSlash(a.Bin[0])))
+	return writeNew(binary, filepath.Join(pkg, filepath.FromSlash(name)))
+}
+
+// singleFileName names a download that is the program itself after the last
+// part of its URL, without the suffix of a compression.
+func singleFileName(url string) string {
+	name := path.Base(url)
+
+	for _, suffix := range []string{".gz", ".xz", ".bz2", ".zst"} {
+		name = strings.TrimSuffix(name, suffix)
+	}
+
+	return name
 }
 
 var manSectionRe = regexp.MustCompile(`\.([1-9])[a-z]*(\.gz)?$`)

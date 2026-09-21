@@ -1,6 +1,7 @@
 package cli_test
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -404,5 +405,28 @@ func TestB183TheLockOfAnNPMPackageWorksUnderAnotherConfigDirectory(t *testing.T)
 
 	if !exists(m.profile("bin", "tool")) {
 		t.Fatal("sync did not install the npm package")
+	}
+}
+
+func TestB186ADownloadThatIsTheProgramItselfMayHaveAWrapper(t *testing.T) {
+	m := newMachine(t)
+
+	program := filepath.Join(m.fixtures, "tool-prog")
+	must(t, os.WriteFile(program, []byte("#!/bin/sh\necho \"$GREETING $1\"\n"), 0o755))
+
+	ref := m.rawManifest(t, "tool", fmt.Sprintf(
+		"[[artifact]]\nurl = \"file://%s\"\n"+
+			"bin = [{ name = \"tool\", run = \"/usr/bin/env\", "+
+			"args = [\"GREETING=hello\", \"{{pkg}}/tool-prog\"] }]\n",
+		program,
+	))
+
+	if out, err := m.run(t, "", "add", ref); err != nil {
+		t.Fatalf("add: %v\n%s", err, out)
+	}
+
+	out, err := exec.Command(m.profile("bin", "tool"), "you").CombinedOutput()
+	if err != nil || strings.TrimSpace(string(out)) != "hello you" {
+		t.Fatalf("the wrapper did not run the download with the variable: %v\n%s", err, out)
 	}
 }
