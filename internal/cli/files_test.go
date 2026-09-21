@@ -335,3 +335,36 @@ func TestB171APrebuiltLibraryServesABuildThatDependsOnIt(t *testing.T) {
 		t.Fatalf("the built program should hold what CPATH and LIBRARY_PATH led to, it printed %q", got)
 	}
 }
+
+func TestB175AFontEntryMayBeAPattern(t *testing.T) {
+	m := newMachine(t)
+	_, font := m.exposedPaths()
+	fonts := filepath.Dir(font)
+
+	ref := m.manifest(t, "family", map[string]string{
+		"fonts/Family-Bold.ttf":    "bold",
+		"fonts/Family-Regular.ttf": "regular",
+		"fonts/OFL.txt":            "a licence, not a font",
+		"tool":                     script,
+	}, "bin = [\"tool\"]\nfont = [\"fonts/*.ttf\"]")
+
+	_, err := m.run(t, "", "add", ref)
+	must(t, err)
+
+	for _, name := range []string{"Family-Bold.ttf", "Family-Regular.ttf"} {
+		if !exists(filepath.Join(fonts, name)) {
+			t.Fatalf("the pattern should install %s", name)
+		}
+	}
+
+	if exists(filepath.Join(fonts, "OFL.txt")) {
+		t.Fatal("the pattern installed a file it does not match")
+	}
+
+	none := m.manifest(t, "nofont", map[string]string{"tool": script},
+		"bin = [\"tool\"]\nfont = [\"fonts/*.otf\"]")
+
+	if _, err := m.run(t, "", "add", none); err == nil || !strings.Contains(err.Error(), "matches no file") {
+		t.Fatalf("a pattern that matches nothing should fail, got %v", err)
+	}
+}

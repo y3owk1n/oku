@@ -163,7 +163,7 @@ machine, so put specific entries before general ones.
 | `man` | see below | Paths of man pages. The file name needs a section, such as `rg.1` or `rg.1.gz`. |
 | `completions` | see below | Shell name to path, such as `{ fish = "complete/rg.fish" }`. |
 | `app` | see below | macOS app bundles, such as `["Foo.app"]`. See [Apps and fonts](#apps-and-fonts). |
-| `font` | see below | Font files, such as `["fonts/ttf/Foo-Regular.ttf"]`. |
+| `font` | see below | Font files, such as `["fonts/ttf/Foo-Regular.ttf"]`. An entry may be a pattern, such as `["fonts/ttf/*.ttf"]`, for a family that ships dozens of files. `*` matches within one directory, and a pattern that matches no file is an error. |
 | `data` | see below | `true` for a package that only holds files, see [A package that only holds files](#a-package-that-only-holds-files). |
 
 Each artifact needs at least one of `bin`, `lib`, `include`, `share`, `man`,
