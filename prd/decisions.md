@@ -895,8 +895,7 @@ uses.
 
 Known limits: a `vendor_sha256` still comes from the first build on each
 platform (D34). oku pins the build deps of a platform that builds only when
-the host builds too. It does not resolve a package whose `when` leaves out the
-host.
+the host builds too.
 
 ## D66. `sync --locked` refuses to change the lock
 
@@ -912,3 +911,25 @@ to complete the lock (D65). The check runs before the downloads so that CI
 never runs bytes that nobody pinned. The byte comparison afterwards finds the
 changes that the first check does not look for, such as a dep with no entry or
 a package that left the list.
+
+## D67. oku pins a package that the host does not install
+
+`install` handles a package whose `when` leaves out the host too, with a
+request that only locks. oku fetches the manifest, picks
+the version, pins each lock platform that `when` matches (D65) and does the
+same for the deps. It selects no artifact for the host, runs no build and adds
+nothing to the store or the profile. For a repo with no manifest, oku infers
+one for the first of those platforms, because inference opens the asset of one
+platform to find the program. `sync` does not resolve a package again when the
+lock already pins it, so a sync with nothing to do still reads no manifest
+(B178).
+
+Why: before this the first machine that `when` matched resolved such a
+package, so the author of a lock on a Mac could not pin a Linux-only tool, and
+`sync --locked` failed for it on Linux (D66). A second resolver beside
+`install` would have to repeat the rules for versions, signing keys, inferred
+manifests and nested deps, and every later change to one of them would have
+to be made twice.
+
+Known limit: oku pins the build deps when one of the pinned platforms builds,
+and a constraint of a dep picks one version for all platforms.

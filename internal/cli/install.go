@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"net/url"
 	"path/filepath"
 	"slices"
@@ -83,6 +84,9 @@ type request struct {
 	// the missing ones too. Without it, add and update pin the ones they can.
 	platforms       []platform.Platform
 	strictPlatforms bool
+	// lockOnly pins the package for platforms and installs nothing. sync sets it
+	// for a package whose when leaves out the host.
+	lockOnly bool
 	// approve decides whether a manifest may run its build commands.
 	approve func(m *manifest.Manifest, host platform.Platform) error
 	// log receives the output of build commands, or is nil.
@@ -246,6 +250,10 @@ func (e env) install(ctx context.Context, opts Options, req request) (installed,
 
 	m.Version.Value, m.Tag, m.TagCommit = release.Version, release.Tag, release.Commit
 	ctx = status.Scope(ctx, m.Package.Name+" "+m.Version.Value)
+
+	if req.lockOnly {
+		return e.resolveOnly(ctx, opts, req, m, release, fetched, inferred)
+	}
 
 	host := platform.Host()
 
@@ -428,16 +436,7 @@ func (e env) install(ctx context.Context, opts Options, req request) (installed,
 		env[name] = expanded
 	}
 
-	// Entries for other platforms stay while they describe the same manifest.
-	platforms := map[string]lock.Platform{}
-
-	if previous.ManifestSHA256 == m.SHA256 && previous.Ref == r.String() &&
-		previous.Version == m.Version.Value {
-		for name, at := range previous.Platforms {
-			platforms[name] = at
-		}
-	}
-
+	platforms := keptPlatforms(previous, m, r)
 	platforms[host.String()] = entry
 
 	firstUseOthers, err := e.lockOthers(ctx, opts, req, m, release, platforms)
@@ -456,20 +455,7 @@ func (e env) install(ctx context.Context, opts Options, req request) (installed,
 			Service:   req.service,
 			System:    req.system,
 		},
-		lock: lock.Package{
-			Name:           m.Package.Name,
-			Ref:            r.String(),
-			Commit:         fetched.Commit,
-			ManifestSHA256: m.SHA256,
-			Version:        m.Version.Value,
-			SigningKey:     m.Package.SigningKey,
-			Tag:            tagFor(m),
-			TagCommit:      m.TagCommit,
-			Inferred:       inferred != "" || req.previous.Inferred && req.keepVersion,
-			Manifest:       inferredText(inferred, req),
-			Platforms:      platforms,
-			Deps:           deps.locks,
-		},
+		lock: lockEntry(req, m, fetched, inferred, platforms, deps.locks),
 		closure:        append([]string{realized.Path}, deps.closure...),
 		firstUse:       realized.FirstUse,
 		firstUseOthers: firstUseOthers,
@@ -477,6 +463,84 @@ func (e env) install(ctx context.Context, opts Options, req request) (installed,
 		unsandboxed:    realized.Unsandboxed,
 		substituted:    deps.substituted,
 		cacheNotes:     deps.cacheNotes,
+	}, nil
+}
+
+// keptPlatforms returns the platform entries of previous that still describe m.
+func keptPlatforms(previous lock.Package, m *manifest.Manifest, r ref.Ref) map[string]lock.Platform {
+	platforms := map[string]lock.Platform{}
+
+	if previous.ManifestSHA256 == m.SHA256 && previous.Ref == r.String() &&
+		previous.Version == m.Version.Value {
+		maps.Copy(platforms, previous.Platforms)
+	}
+
+	return platforms
+}
+
+// lockEntry returns the lock entry of m.
+func lockEntry(
+	req request,
+	m *manifest.Manifest,
+	fetched ref.Fetched,
+	inferred string,
+	platforms map[string]lock.Platform,
+	deps []lock.Package,
+) lock.Package {
+	return lock.Package{
+		Name:           m.Package.Name,
+		Ref:            req.ref.String(),
+		Commit:         fetched.Commit,
+		ManifestSHA256: m.SHA256,
+		Version:        m.Version.Value,
+		SigningKey:     m.Package.SigningKey,
+		Tag:            tagFor(m),
+		TagCommit:      m.TagCommit,
+		Inferred:       inferred != "" || req.previous.Inferred && req.keepVersion,
+		Manifest:       inferredText(inferred, req),
+		Platforms:      platforms,
+		Deps:           deps,
+	}
+}
+
+// resolveOnly returns the lock entry of m for the platforms of req, none of
+// which is the host, and the entries of its deps. It installs nothing.
+func (e env) resolveOnly(
+	ctx context.Context,
+	opts Options,
+	req request,
+	m *manifest.Manifest,
+	release resolve.Release,
+	fetched ref.Fetched,
+	inferred string,
+) (installed, error) {
+	platforms := keptPlatforms(req.previous, m, req.ref)
+
+	firstUse, err := e.lockOthers(ctx, opts, req, m, release, platforms)
+	if err != nil {
+		return installed{}, err
+	}
+
+	// A platform that builds needs the build deps too.
+	wanted := m.Runtime.Deps
+
+	for _, at := range platforms {
+		if at.Strategy == strategyBuild {
+			wanted = append(slices.Clone(m.Build.Deps), wanted...)
+
+			break
+		}
+	}
+
+	deps, err := e.installDeps(ctx, opts, req, wanted)
+	if err != nil {
+		return installed{}, err
+	}
+
+	return installed{
+		lock:           lockEntry(req, m, fetched, inferred, platforms, deps.locks),
+		firstUseOthers: firstUse,
+		inferred:       inferred,
 	}, nil
 }
 
@@ -491,7 +555,7 @@ func (e env) lockOthers(
 	release resolve.Release,
 	platforms map[string]lock.Platform,
 ) ([]string, error) {
-	if req.keepVersion && !req.strictPlatforms {
+	if req.keepVersion && !req.strictPlatforms && !req.lockOnly {
 		return nil, nil
 	}
 
@@ -556,6 +620,16 @@ func pinFor(
 	return lock.Platform{Strategy: strategyArtifact, URL: artifact.URL, SHA256: sum}, trusted, nil
 }
 
+// target returns the platform that an inferred manifest must fit. That is the
+// host, or the first platform of a request that only locks.
+func (req request) target() platform.Platform {
+	if req.lockOnly {
+		return req.platforms[0]
+	}
+
+	return platform.Host()
+}
+
 // manifestData returns the manifest for req. A GitHub repo without a manifest
 // gets an inferred one, which is returned a second time as text. Sync reuses the
 // inferred text in the lock, so it installs from what the user saw.
@@ -584,7 +658,7 @@ func (e env) manifestData(
 			return fetched, "", fmt.Errorf("--asset does not apply, %s is the asset", req.ref)
 		}
 
-		text, err := e.inferrer(opts).FromURL(ctx, req.ref.Location, platform.Host(), req.bin)
+		text, err := e.inferrer(opts).FromURL(ctx, req.ref.Location, req.target(), req.bin)
 		if err != nil {
 			return ref.Fetched{}, "", err
 		}
@@ -604,7 +678,7 @@ func (e env) manifestData(
 	}
 
 	text, err := e.inferrer(opts).Manifest(
-		ctx, req.ref.Scheme, req.ref.Location, platform.Host(), infer.Options{
+		ctx, req.ref.Scheme, req.ref.Location, req.target(), infer.Options{
 			Version: req.ref.Version,
 			Asset:   req.asset,
 			Bin:     req.bin,
@@ -848,7 +922,8 @@ func (e env) installDeps(
 		// Each package pins its own deps, so install reuses a dep only when the
 		// ref, the constraint and the lock entry all match.
 		key := fmt.Sprintf(
-			"%s %s %v %v %v %v", r, dep.Version, keep, parent.acceptDigest, previous, parent.platforms,
+			"%s %s %v %v %v %v %v", r, dep.Version, keep, parent.acceptDigest, previous,
+			parent.platforms, parent.lockOnly,
 		)
 
 		got, err := parent.deps.do(parent.root, key, func() (installed, error) {
@@ -862,6 +937,7 @@ func (e env) installDeps(
 				keepVersion:     keep,
 				platforms:       parent.platforms,
 				strictPlatforms: parent.strictPlatforms,
+				lockOnly:        parent.lockOnly,
 				approve:         parent.approve,
 				log:             parent.log,
 				constraint:      dep.Version,
