@@ -449,7 +449,14 @@ func (e env) inferNPM(ctx context.Context, opts Options, req request) (string, e
 	npmOpts := infer.NPMOptions{Registry: opts.NPMRegistry, Version: req.ref.Version}
 
 	if node := config.Runtimes["node"]; node != "" {
-		r, err := e.parseRef(node)
+		// A relative path in config.toml starts at the directory of config.toml,
+		// not at the working directory.
+		node, err := config.Expand(node)
+		if err != nil {
+			return "", fmt.Errorf("runtimes.node in %s: %w", e.configPath(), err)
+		}
+
+		r, err := ref.ParseIn(filepath.Dir(e.configPath()), node)
 		if err != nil {
 			return "", fmt.Errorf("runtimes.node in %s: %w", e.configPath(), err)
 		}

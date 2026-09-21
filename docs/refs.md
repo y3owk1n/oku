@@ -138,6 +138,9 @@ through it. They do not need node on `PATH`, and node does not appear there.
 `oku update` updates that node package too. The ref may be a
 [source alias](#sources), such as `core/node`. A local file works as the ref too, and
 then a list that holds npm packages only works on machines that have that file.
+A relative path starts at the directory of `config.toml`, so
+`node = "./packages/node.toml"` works in a config directory that you keep in
+git, on every machine and for every user name.
 
 Without `runtimes.node`, the programs run the `node` on `PATH`, and `oku add`
 says so. That does not work on Windows, where `oku add npm:` then fails and
