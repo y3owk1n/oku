@@ -73,8 +73,21 @@ func (s *Store) Build(
 
 	prefix := s.BuildPath(m, p, deps)
 
-	if exists(filepath.Join(prefix, metaFile)) {
-		return Realized{Path: prefix}, nil
+	// A build that is in the store reports what it pinned when it ran, so the
+	// lock keeps those pins. A path from before oku recorded them reports none.
+	if meta, err := ReadMeta(prefix); err == nil {
+		if opts.PinnedVendor != "" && meta.VendorSHA256 != "" &&
+			opts.PinnedVendor != meta.VendorSHA256 {
+			return Realized{}, fmt.Errorf(
+				"%w: oku.lock pinned %s, the build in the store downloaded %s",
+				ErrVendorChanged, opts.PinnedVendor, meta.VendorSHA256,
+			)
+		}
+
+		return Realized{
+			Path: prefix, Impure: meta.Impure, VendorSHA256: meta.VendorSHA256,
+			SourceURL: meta.URL, SHA256: meta.SHA256,
+		}, nil
 	}
 
 	toolDirs, err := findNeeds(build.Needs)
@@ -235,6 +248,7 @@ func (s *Store) Build(
 	meta, err := toml.Marshal(Meta{
 		Name: m.Package.Name, Version: m.Version.Value, Platform: p.String(),
 		Impure: result.Impure, Launchers: m.Apps, Services: m.ServicesFor(p),
+		URL: result.SourceURL, SHA256: result.SHA256, VendorSHA256: result.VendorSHA256,
 	})
 	if err == nil {
 		err = os.WriteFile(filepath.Join(prefix, metaFile), meta, 0o644)

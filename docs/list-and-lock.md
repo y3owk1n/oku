@@ -385,7 +385,9 @@ Keys of a `[[package]]` entry:
 
 A platform entry has `strategy`, which is `artifact` or `build`. An artifact
 also has `url` and `sha256`. A build has `vendor_sha256` when it has vendor
-steps, and `impure = true` when one of its steps used `network = true`.
+steps, and `impure = true` when one of its steps used `network = true`. oku keeps
+these beside the build in the store, so `oku update` of a build that did not
+change writes the same lock.
 
 Platform names are `os-arch`, plus `-glibc` or `-musl` on Linux.
 

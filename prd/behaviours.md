@@ -73,6 +73,9 @@ order step in `prd/product.md`.
   source archive and its sha256, and the `vendor_sha256` of the host's build
   when every vendor step is `go` or `cargo` and has no `when`. oku pins again
   an entry that only says `strategy = 'build'`.
+- B188 [2] oku keeps the `vendor_sha256`, the source pin and `impure` of a build
+  in the lock when the store or a cache already holds that build. `update` of a
+  build that did not change writes the same lock.
 - B181 [2] `sync --locked` fails before any download when the lock does not pin
   a package of the list for the host, and names the packages and the platform.
   It also fails when the lock would change in any other way. It never writes

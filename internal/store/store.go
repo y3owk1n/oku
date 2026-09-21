@@ -61,6 +61,9 @@ type Meta struct {
 	SHA256   string `toml:"sha256"`
 	// Impure marks a build whose run steps could use the network.
 	Impure bool `toml:"impure,omitempty"`
+	// VendorSHA256 is the digest of what the vendor steps of a build downloaded.
+	// For a build, URL and SHA256 are its source archive.
+	VendorSHA256 string `toml:"vendor_sha256,omitempty"`
 	// Launchers are the package's Linux desktop entries.
 	Launchers []manifest.App `toml:"launcher,omitempty"`
 	// Services are the package's long-running programs.

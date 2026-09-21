@@ -332,11 +332,19 @@ func (e env) install(ctx context.Context, opts Options, req request) (installed,
 		// A package from a cache runs none of the manifest's commands, so it needs
 		// no approval. A cache never holds an impure package.
 		deps.substituted = append(deps.substituted, m.Package.Name)
-		entry = lock.Platform{Strategy: strategyBuild, VendorSHA256: pinnedVendor}
 
-		if at := previous.Platforms[host.String()]; pinnedSource != "" {
-			entry.URL, entry.SHA256 = at.URL, at.SHA256
+		// The cache entry holds the pins of the build that made it.
+		meta, _ := store.ReadMeta(realized.Path)
+		if pinnedVendor != "" && meta.VendorSHA256 != "" && pinnedVendor != meta.VendorSHA256 {
+			return installed{}, fmt.Errorf(
+				"%s: %w: oku.lock pinned %s, the build in the cache downloaded %s",
+				m.Package.Name, store.ErrVendorChanged, pinnedVendor, meta.VendorSHA256,
+			)
 		}
+
+		entry = keepPins(lock.Platform{
+			Strategy: strategyBuild, VendorSHA256: meta.VendorSHA256, URL: meta.URL, SHA256: meta.SHA256,
+		}, previous, m, host)
 	case build:
 		if err := req.approve(m, host); err != nil {
 			return installed{}, err
@@ -350,16 +358,10 @@ func (e env) install(ctx context.Context, opts Options, req request) (installed,
 			return installed{}, fmt.Errorf("%s: %w", m.Package.Name, err)
 		}
 
-		entry = lock.Platform{
+		entry = keepPins(lock.Platform{
 			Strategy: strategyBuild, Impure: realized.Impure, VendorSHA256: realized.VendorSHA256,
 			URL: realized.SourceURL, SHA256: realized.SHA256,
-		}
-
-		// A package that was in the store already was not downloaded again, so the
-		// pin it had stays.
-		if at := previous.Platforms[host.String()]; realized.SHA256 == "" && pinnedSource != "" {
-			entry.URL, entry.SHA256 = at.URL, at.SHA256
-		}
+		}, previous, m, host)
 	default:
 		// A digest that oku.lock pinned for this version and URL still applies,
 		// even when the manifest gives none.
@@ -464,6 +466,30 @@ func (e env) install(ctx context.Context, opts Options, req request) (installed,
 		substituted:    deps.substituted,
 		cacheNotes:     deps.cacheNotes,
 	}, nil
+}
+
+// keepPins fills the pins that entry lacks from the entry of the same build in
+// previous. A store path from before oku recorded the pins of a build reports
+// none, and the lock would lose them otherwise.
+func keepPins(
+	entry lock.Platform,
+	previous lock.Package,
+	m *manifest.Manifest,
+	host platform.Platform,
+) lock.Platform {
+	at := previous.Platforms[host.String()]
+	if at.Strategy != strategyBuild || previous.ManifestSHA256 != m.SHA256 ||
+		previous.Version != m.Version.Value {
+		return entry
+	}
+
+	entry.VendorSHA256 = cmp.Or(entry.VendorSHA256, at.VendorSHA256)
+
+	if entry.SHA256 == "" {
+		entry.URL, entry.SHA256 = at.URL, at.SHA256
+	}
+
+	return entry
 }
 
 // keptPlatforms returns the platform entries of previous that still describe m.
