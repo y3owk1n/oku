@@ -36,8 +36,8 @@ type Item struct {
 	// System reports that Target is in system scope, so writing and removing it
 	// needs administrator rights.
 	System bool `toml:"system,omitempty"`
-	// Hash is the sha256 of a file that oku copied to Target, which is how a file
-	// of the list arrives on Windows. It is empty for a link.
+	// Hash is the sha256 of a file that oku copied to Target, which is how
+	// Windows gets a file of the list. It is empty for a link.
 	Hash string `toml:"hash,omitempty"`
 }
 
@@ -337,12 +337,7 @@ func PlaceFile(item Item) error {
 		return err
 	}
 
-	if err := os.WriteFile(item.Target, data, info.Mode().Perm()); err != nil {
-		return err
-	}
-
-	// A read-only source gives a read-only copy, which WriteFile's umask may undo.
-	return os.Chmod(item.Target, info.Mode().Perm())
+	return os.WriteFile(item.Target, data, info.Mode().Perm())
 }
 
 // RemoveFile deletes what PlaceFile made. A target that is no link any more, or

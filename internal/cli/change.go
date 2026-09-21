@@ -116,8 +116,8 @@ func (e env) apply(cmd *cobra.Command, opts Options, c change) error {
 		return err
 	}
 
-	// The generation comes first, because a file with content reaches it through
-	// "current".
+	// The generation comes first, because the target of a file with content
+	// points through "current".
 	err = prof.Activate(c.to)
 	if err == nil {
 		err = e.placeExposed(cmd, opts, plan)

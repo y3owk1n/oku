@@ -13,6 +13,7 @@ Tested on a GitHub Actions `windows-latest` machine with real releases:
 - Programs start through the profile from any directory, with their arguments,
   stdin, stdout and exit code unchanged.
 - Apps and fonts for your user, see [Apps and fonts](#apps-and-fonts).
+- `[files]`, see [Files in your home directory](#files-in-your-home-directory).
 - Services for your user, see [Services](#services).
 - [System scope](#system-scope): apps, fonts and services for the whole machine,
   and the shared store root.
@@ -110,11 +111,11 @@ Windows allows:
 | `link` to a file | A copy. Run `oku sync` after you edit the source. |
 | `text` | A copy of the content in the generation. `oku rollback` writes the bytes of that generation. |
 
-oku remembers the sha256 of every copy. When a copy no longer holds those
-bytes, someone edited it by hand, and the next `sync`, `add`, `remove`,
-`update` or `rollback` stops before it changes anything and names the file.
-Move the change into the source or into `oku.toml`, delete the copy, and run
-the command again. A copy that you deleted is written again.
+oku records the sha256 of every copy. A copy that no longer holds those bytes
+was edited by hand. The next `sync`, `add`, `remove`, `update` or `rollback`
+then stops before it changes anything and names the file. Move the change into
+the source or into `oku.toml`, delete the copy, and run the command again. oku
+writes a deleted copy again.
 
 `{{appdata}}` and `{{localappdata}}` are locations on Windows only. `{{config}}`
 is `%APPDATA%` and `{{data}}` is `%LOCALAPPDATA%`, unless the XDG variables are
