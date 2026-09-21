@@ -55,7 +55,7 @@ On a command that prints no data, `--json` changes nothing.
 ## oku add
 
 ```
-oku add <ref>[@version] [--from-source] [--yes] [--verbose]
+oku add <ref>[@version] [--from-source] [--asset <glob>] [--bin <name>] [--yes] [--verbose]
 ```
 
 Installs the package a [ref](refs.md) points at.
@@ -76,6 +76,8 @@ Adding a package that is already installed replaces it.
 | `--system` | Puts the package's apps, fonts and services in [system scope](system-scope.md), and writes `system = true` to `oku.toml`. oku lists the files, asks, and uses `sudo`. |
 | `--service` | Runs the package's [services](services.md) now and at every login, and writes `service = true` to `oku.toml`. |
 | `--from-source` | Builds from source even when a prebuilt download fits. `oku.lock` records the choice, so `oku sync` builds too. |
+| `--asset <glob>` | For a repo with no manifest, the release asset to use on this machine. The glob must name exactly one asset. See [Inferred manifests](manifest.md#inferred-manifests). |
+| `--bin <name>` | For a repo with no manifest, the file name of the program inside the asset. |
 | `--yes`, `-y` | Approves the manifest's build commands without asking, see [Build commands](trust.md#build-commands). |
 | `--accept-key` | Accepts a manifest whose `signing_key` differs from the one in `oku.lock`, see [Signing keys](trust.md#signing-keys). |
 | `--verbose`, `-v` | Shows the output of build commands as they run. |
@@ -111,6 +113,9 @@ Common failures:
 | Message | Meaning |
 |---|---|
 | `<name> has no artifact for darwin-arm64` | No `[[artifact]]` matches this machine. |
+| `no release asset fits this machine` | The repo has no manifest, and no asset of its release names this OS and arch. The asset names follow. Pass one to `--asset`. |
+| `cannot tell which file is the program` | The inferred asset holds several executables and none is named after the repo. Pass one to `--bin`. |
+| `--asset and --bin apply when oku infers a manifest` | The ref has a manifest, and these flags apply to an inferred manifest only. |
 | `<name> has no [build], so it cannot be built from source` | `--from-source` on a manifest with artifacts only. |
 | `the build needs "<tool>", which is not on PATH` | Install that tool yourself. oku does not install `needs`. |
 | `<name> needs approval to run them, and this is not a terminal` | The manifest runs build commands and stdin is not a terminal. Pass `--yes` after reading them. |

@@ -3,6 +3,7 @@ package store
 import (
 	"archive/tar"
 	"archive/zip"
+	"bufio"
 	"bytes"
 	"errors"
 	"fmt"
@@ -18,7 +19,8 @@ var errNotArchive = errors.New("not an archive")
 // extract unpacks the archive at src into the directory dest, dropping the
 // first strip path components of every entry. It returns errNotArchive when src
 // is not an archive oku knows: tar (plain, gz, bz2, xz, zst), zip, deb, rpm,
-// and on macOS dmg and pkg. Every write goes through an
+// and on macOS dmg and pkg. A compressed file that holds no tar archive is not
+// an archive either. Every write goes through an
 // os.Root, so extract cannot write outside dest.
 func extract(src, dest string, strip int) error {
 	f, err := os.Open(src)
@@ -72,7 +74,16 @@ func extract(src, dest string, strip int) error {
 				return err
 			}
 
-			return untar(data, root, strip)
+			// A compressed file that is no tar archive is a single binary.
+			buffered := bufio.NewReader(data)
+			block, _ := buffered.Peek(512)
+
+			_, err = tar.NewReader(bytes.NewReader(block)).Next()
+			if len(block) < 512 || errors.Is(err, tar.ErrHeader) {
+				return errNotArchive
+			}
+
+			return untar(buffered, root, strip)
 		}
 	}
 

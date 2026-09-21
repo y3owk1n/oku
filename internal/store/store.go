@@ -210,7 +210,8 @@ func exists(path string) bool {
 }
 
 // unpack fills <tmp>/pkg from the download. A download that is not an archive
-// is the binary itself and takes the name of the artifact's single bin entry.
+// is the binary itself, compressed or not, and takes the name of the artifact's
+// single bin entry.
 func unpack(download, tmp string, a manifest.Artifact) error {
 	pkg := filepath.Join(tmp, "pkg")
 	if err := os.Mkdir(pkg, 0o755); err != nil {
@@ -232,7 +233,18 @@ func unpack(download, tmp string, a manifest.Artifact) error {
 		return fmt.Errorf("bin %q: the path is outside the package", a.Bin[0])
 	}
 
-	return copyFile(download, filepath.Join(pkg, filepath.FromSlash(a.Bin[0])))
+	in, err := os.Open(download)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+
+	binary, err := decompress(in)
+	if err != nil {
+		return err
+	}
+
+	return writeNew(binary, filepath.Join(pkg, filepath.FromSlash(a.Bin[0])))
 }
 
 var manSectionRe = regexp.MustCompile(`\.([1-9])[a-z]*(\.gz)?$`)
@@ -368,6 +380,11 @@ func copyFile(source, dest string) error {
 	}
 	defer in.Close()
 
+	return writeNew(in, dest)
+}
+
+// writeNew writes in to the new file dest.
+func writeNew(in io.Reader, dest string) error {
 	out, err := os.OpenFile(dest, os.O_CREATE|os.O_WRONLY|os.O_EXCL, 0o755)
 	if err != nil {
 		return err

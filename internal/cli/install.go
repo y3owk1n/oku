@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/y3owk1n/oku/internal/infer"
 	"github.com/y3owk1n/oku/internal/lock"
 	"github.com/y3owk1n/oku/internal/manifest"
 	"github.com/y3owk1n/oku/internal/platform"
@@ -61,6 +62,9 @@ type request struct {
 	// keepVersion installs the version in previous without listing versions
 	// again. "oku sync" sets it.
 	keepVersion bool
+	// asset and bin name the asset and the program for an inferred manifest.
+	// "--asset" and "--bin" set them.
+	asset, bin string
 	// service enables the package's services.
 	service bool
 	// system puts the package's apps, fonts and services in system scope.
@@ -344,12 +348,22 @@ func (e env) manifestData(
 	}
 
 	fetched, err := e.fetcher(opts).Fetch(ctx, req.ref, req.commit, ref.Manifest)
+	if err == nil && (req.asset != "" || req.bin != "") {
+		return fetched, "", fmt.Errorf(
+			"--asset and --bin apply when oku infers a manifest, and %s has one", req.ref,
+		)
+	}
+
 	if err == nil || !errors.Is(err, ref.ErrNotFound) ||
 		req.ref.Kind != ref.GitHub || req.ref.Fragment != "" {
 		return fetched, "", err
 	}
 
-	text, err := e.inferrer(opts).Manifest(ctx, req.ref.Location, platform.Host())
+	text, err := e.inferrer(opts).Manifest(ctx, req.ref.Location, platform.Host(), infer.Options{
+		Version: req.ref.Version,
+		Asset:   req.asset,
+		Bin:     req.bin,
+	})
 	if err != nil {
 		return ref.Fetched{}, "", err
 	}
