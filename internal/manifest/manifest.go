@@ -57,8 +57,8 @@ type Package struct {
 // Version is either fixed by Value or discovered from From.
 type Version struct {
 	Value string `toml:"value"`
-	// From is FromGitHubReleases, FromGiteaReleases, FromGitLabReleases or
-	// FromGitTags.
+	// From is FromGitHubReleases, FromGiteaReleases, FromGitLabReleases,
+	// FromGitTags, FromGitBranch or FromNPM.
 	From string `toml:"from"`
 	// Repo is "owner/repo" or "host/owner/repo" for GitHub releases,
 	// "host/owner/repo" for Gitea releases, and a git URL for git tags.
@@ -69,6 +69,8 @@ type Version struct {
 	// Tag names one tag that upstream moves, such as "nightly". oku follows that
 	// release instead of listing releases.
 	Tag string `toml:"tag"`
+	// Branch names the branch that FromGitBranch follows, such as "main".
+	Branch string `toml:"branch"`
 }
 
 const (
@@ -79,6 +81,9 @@ const (
 	// starts with its host.
 	FromGitLabReleases = "gitlab-releases"
 	FromGitTags        = "git-tags"
+	// FromGitBranch follows the newest commit of a branch. It has no releases,
+	// so a manifest that uses it builds from source.
+	FromGitBranch = "git-branch"
 	// FromNPM reads the versions of a package in the npm registry.
 	FromNPM = "npm"
 )
@@ -305,14 +310,30 @@ func (m *Manifest) validate() error {
 		errs = append(errs, errors.New("version.strip_prefix does not apply to npm, which has no tags"))
 	case m.Version.From == FromGitTags && m.Version.Repo == "":
 		errs = append(errs, errors.New("version.repo must be a git URL for git-tags"))
+	case m.Version.From == FromGitBranch && (m.Version.Repo == "" || m.Version.Branch == ""):
+		errs = append(errs, errors.New(
+			"version.repo must be a git URL and version.branch a branch for git-branch",
+		))
+	case m.Version.From == FromGitBranch && m.Version.StripPrefix != "":
+		errs = append(errs, errors.New(
+			"version.strip_prefix does not apply to git-branch, which reads no tags",
+		))
 	case m.Version.From != "" && !slices.Contains(
-		[]string{FromGitHubReleases, FromGiteaReleases, FromGitLabReleases, FromGitTags, FromNPM},
+		[]string{
+			FromGitHubReleases, FromGiteaReleases, FromGitLabReleases,
+			FromGitTags, FromGitBranch, FromNPM,
+		},
 		m.Version.From,
 	):
 		errs = append(errs, fmt.Errorf(
-			"version.from %q must be %q, %q, %q, %q or %q", m.Version.From,
-			FromGitHubReleases, FromGiteaReleases, FromGitLabReleases, FromGitTags, FromNPM,
+			"version.from %q must be %q, %q, %q, %q, %q or %q", m.Version.From,
+			FromGitHubReleases, FromGiteaReleases, FromGitLabReleases,
+			FromGitTags, FromGitBranch, FromNPM,
 		))
+	}
+
+	if m.Version.Branch != "" && m.Version.From != FromGitBranch {
+		errs = append(errs, errors.New(`version.branch needs version.from = "git-branch"`))
 	}
 
 	switch {

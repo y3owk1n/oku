@@ -60,10 +60,11 @@ needs no manifest change.
 | Key | Meaning |
 |---|---|
 | `value` | The one version this manifest installs. |
-| `from` | `github-releases`, `gitea-releases`, `gitlab-releases`, `git-tags` or `npm`. Not together with `value`. |
-| `repo` | `owner/repo` for `github-releases`, or `host/owner/repo` on a GitHub Enterprise Server. `host/owner/repo` for `gitea-releases`, such as `codeberg.org/owner/repo`. `group/project` for `gitlab-releases`, or `host/group/project` on a GitLab server of your own. A git URL for `git-tags`. A package name for `npm`, such as `@scope/name`. Required with `from`. |
+| `from` | `github-releases`, `gitea-releases`, `gitlab-releases`, `git-tags`, `git-branch` or `npm`. Not together with `value`. |
+| `repo` | `owner/repo` for `github-releases`, or `host/owner/repo` on a GitHub Enterprise Server. `host/owner/repo` for `gitea-releases`, such as `codeberg.org/owner/repo`. `group/project` for `gitlab-releases`, or `host/group/project` on a GitLab server of your own. A git URL for `git-tags` and `git-branch`. A package name for `npm`, such as `@scope/name`. Required with `from`. |
 | `strip_prefix` | Text cut off the front of a tag to get the version, such as `"v"`. A tag without the prefix is ignored. |
 | `tag` | One tag that upstream moves, such as `"nightly"`. Only with `github-releases`, `gitea-releases` or `gitlab-releases`, and not together with `strip_prefix`. See [A moving tag](#a-moving-tag). |
+| `branch` | The branch that `git-branch` follows, such as `"main"`. See [A branch](#a-branch). |
 
 ```toml
 [version]
@@ -149,6 +150,33 @@ run `oku update nvim` to take the new build
 `oku add <ref>@2026.09.20-a73243f` works only while upstream is at that build.
 A [cache](caches.md) does not keep old builds, because it holds no plain
 downloads.
+
+### A branch
+
+A manifest can build the newest commit of a branch, to run a program before
+its next release. It needs `git` on `PATH`:
+
+```toml
+[version]
+from = "git-branch"
+repo = "https://github.com/someone/tool"
+branch = "main"
+
+[build]
+needs = ["git", "make"]
+source = { git = "https://github.com/someone/tool", tag = "{{tag}}" }
+```
+
+- The version is `<date>-<commit>`, such as `2026.09.20-a73243f`, the day and
+  the first seven characters of the newest commit. `{{tag}}` is the branch.
+- `oku.lock` records the commit. `oku sync` fetches that commit, so every
+  machine builds the same source after the branch has newer commits. The host must
+  serve a commit by its id, which GitHub, GitLab and Gitea do.
+- `oku update <name>` takes the newest commit. Every push is a new version with
+  its own store path, so `oku rollback` returns to the earlier build.
+- A branch has no releases, so the manifest needs a `[build]`. An `[[artifact]]`
+  whose `url` has no `{{version}}` would install one download under every
+  version.
 
 ## [[artifact]]
 

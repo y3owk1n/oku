@@ -102,7 +102,13 @@ func (s *Store) Build(
 		"prefix": prefix, "src": src, "jobs": strconv.Itoa(runtime.NumCPU()),
 	}
 
-	source, err := s.fetchSource(ctx, build.Source, src, vars, opts.PinnedSource)
+	// A branch moves with every push, so its source is the commit of the version.
+	commit := ""
+	if m.Version.From == manifest.FromGitBranch {
+		commit = m.TagCommit
+	}
+
+	source, err := s.fetchSource(ctx, build.Source, src, vars, opts.PinnedSource, commit)
 	if err != nil {
 		return Realized{}, fmt.Errorf("fetch the source: %w", err)
 	}
@@ -339,8 +345,28 @@ func (s *Store) fetchSource(
 	src string,
 	vars map[string]string,
 	pinned string,
+	commit string,
 ) (fetchedSource, error) {
 	switch {
+	case source.Git != "" && commit != "":
+		defer status.Start(ctx, "fetching commit %s of %s", commit[:7], source.Git)()
+
+		for _, args := range [][]string{
+			{"init", "--quiet", src},
+			{"-C", src, "fetch", "--quiet", "--depth", "1", "--", source.Git, commit},
+			{"-C", src, "checkout", "--quiet", "FETCH_HEAD"},
+		} {
+			cmd := exec.CommandContext(ctx, "git", args...)
+			cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+
+			if out, err := cmd.CombinedOutput(); err != nil {
+				return fetchedSource{}, fmt.Errorf(
+					"git %s: %w: %s", strings.Join(args, " "), err, strings.TrimSpace(string(out)),
+				)
+			}
+		}
+
+		return fetchedSource{}, nil
 	case source.Git != "":
 		tag, err := manifest.Expand(source.Tag, vars)
 		if err != nil {

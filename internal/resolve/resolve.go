@@ -12,6 +12,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 	"unicode"
 
 	"github.com/y3owk1n/oku/internal/forge"
@@ -180,6 +181,15 @@ func (r *Resolver) List(ctx context.Context, v manifest.Version) ([]Release, err
 		return r.npmVersions(ctx, v.Repo)
 	}
 
+	if v.From == manifest.FromGitBranch {
+		release, err := branchHead(ctx, v)
+		if err != nil {
+			return nil, err
+		}
+
+		return []Release{release}, nil
+	}
+
 	var (
 		tags []string
 		err  error
@@ -311,6 +321,54 @@ func explain(err error, what, missing string) error {
 	}
 
 	return fmt.Errorf("%s: %w", what, err)
+}
+
+// branchHead returns the one release of a branch, which is its newest commit.
+// Its version has the form of a moving tag's, such as 2026.09.20-a73243f, and
+// its tag is the branch. The clone holds that commit and no files.
+func branchHead(ctx context.Context, v manifest.Version) (Release, error) {
+	if _, err := exec.LookPath("git"); err != nil {
+		return Release{}, errors.New(`version.from = "git-branch" needs git on PATH`)
+	}
+
+	what := "read the branch " + v.Branch + " of " + v.Repo
+
+	dir, err := os.MkdirTemp("", "oku-branch-")
+	if err != nil {
+		return Release{}, err
+	}
+	defer os.RemoveAll(dir)
+
+	clone := exec.CommandContext(
+		ctx, "git", "clone", "--quiet", "--bare", "--depth", "1", "--filter=tree:0",
+		"--single-branch", "--branch", v.Branch, "--", v.Repo, dir,
+	)
+	// A credential prompt would hang a non-interactive install.
+	clone.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+
+	if out, err := clone.CombinedOutput(); err != nil {
+		return Release{}, fmt.Errorf("%s: %w: %s", what, err, strings.TrimSpace(string(out)))
+	}
+
+	out, err := exec.CommandContext(
+		ctx, "git", "-C", dir, "log", "-1", "--format=%H %ct", "refs/heads/"+v.Branch,
+	).Output()
+	if err != nil {
+		return Release{}, fmt.Errorf("%s: %w", what, err)
+	}
+
+	sha, seconds, _ := strings.Cut(strings.TrimSpace(string(out)), " ")
+
+	unix, err := strconv.ParseInt(seconds, 10, 64)
+	if err != nil || len(sha) < 7 {
+		return Release{}, fmt.Errorf("%s: git printed %q for its newest commit", what, out)
+	}
+
+	return Release{
+		Version: time.Unix(unix, 0).UTC().Format("2006.01.02") + "-" + sha[:7],
+		Tag:     v.Branch,
+		Commit:  sha,
+	}, nil
 }
 
 func gitTags(ctx context.Context, url string) ([]string, error) {

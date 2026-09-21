@@ -855,3 +855,17 @@ installed decrypt its first key. Decrypted bytes in a generation would stay on
 disk in every old generation until `gc`, and a generation kept for rollback
 must not store old keys. Keeping the ciphertext there gives rollback the right
 value, and the only decrypted bytes on disk are the files in use.
+
+## D64. A branch is a source of versions, and the lock holds its commit
+
+`version.from = "git-branch"` with `version.branch` follows the newest commit of
+a branch. The version is `<date>-<commit>`, the form a moving tag has (D57), and
+`{{tag}}` is the branch. oku reads the commit with a bare clone of depth 1 that
+holds no files. `oku.lock` records the commit in `tag_commit`, and a build
+fetches that commit instead of the branch.
+
+Why: a developer wants to run the programs they write from `main`, before a
+release. A fixed version with `tag = "main"` builds once and never again, and
+its lock names no commit. A moving tag loses the locked build when upstream
+moves it, because a release holds one set of files. A git host keeps every
+commit, so `sync` can fetch the locked commit of a branch at any time.
