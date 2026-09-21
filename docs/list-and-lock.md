@@ -339,8 +339,11 @@ commit = 'dc2478ae14dc9931336430027ff284d4dc8e4d44'
 sha256 = 'd60f12df...'
 ```
 
-`oku sync` reads an included list at its pinned commit and stops if its content
-no longer has the pinned sha256:
+A list that is a file on this machine is yours, like `oku.toml`. oku does not
+pin it, so you edit it and run `oku sync`.
+
+`oku sync` reads a list from a URL or a repo at its pinned commit and stops if
+its content no longer has the pinned sha256:
 
 ```
 oku: include github:you/machines#base: the included list changed since oku.lock was written

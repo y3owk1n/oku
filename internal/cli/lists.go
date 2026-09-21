@@ -158,11 +158,20 @@ func (m *merger) merge(l *list.List, origin, dir, from string, depth int) error 
 		sum := sha256.Sum256(fetched.Data)
 		digest := hex.EncodeToString(sum[:])
 
-		if pin.SHA256 != "" && pin.SHA256 != digest {
+		// A list on this machine is the user's own file, like oku.toml itself, so
+		// oku reads it as it is. The pin protects against a list that changes
+		// somewhere else.
+		local := r.Kind == ref.File
+
+		if !local && pin.SHA256 != "" && pin.SHA256 != digest {
 			return fmt.Errorf(
 				"include %s: the included list changed since oku.lock was written\n"+
 					"run `oku update` to accept it", r,
 			)
+		}
+
+		if local {
+			digest = ""
 		}
 
 		m.includes = append(m.includes, lock.Include{
