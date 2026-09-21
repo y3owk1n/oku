@@ -267,3 +267,28 @@ func TestB167ADryRunChecksEverythingAndChangesNothing(t *testing.T) {
 		t.Fatalf("the dry run should fail like the sync would, got %v", err)
 	}
 }
+
+func TestB170AServiceSeesTheProfileAndMayNameALocation(t *testing.T) {
+	m := newMachine(t)
+
+	ref := m.manifest(t, "hotkeys", map[string]string{"hotkeys": script},
+		"bin = [\"hotkeys\"]\n[[service]]\nname = \"hotkeys\"\ncommand = \"bin/hotkeys\"\n"+
+			"args = [\"--config\", \"{{config}}/hotkeys/rc\"]\nenv = { LOG = \"{{data}}/hotkeys.log\" }\n")
+
+	_, err := m.run(t, "", "add", ref)
+	must(t, err)
+
+	got := m.services.state["hotkeys"].def
+
+	if want := filepath.Join(filepath.Dir(m.config), "hotkeys", "rc"); len(got.Args) != 2 || got.Args[1] != want {
+		t.Fatalf("the service should get the config path %s, its arguments are %v", want, got.Args)
+	}
+
+	if want := filepath.Join(filepath.Dir(m.data), "hotkeys.log"); got.Env["LOG"] != want {
+		t.Fatalf("the service should get LOG=%s, got %q", want, got.Env["LOG"])
+	}
+
+	if !strings.HasPrefix(got.Env["PATH"], m.profile("bin")+":") {
+		t.Fatalf("the programs of the profile should come first on the service's PATH, it is %q", got.Env["PATH"])
+	}
+}

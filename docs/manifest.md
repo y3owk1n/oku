@@ -439,7 +439,7 @@ restart = "on-failure"
 |---|---|---|
 | `name` | yes | What the user types in `oku service start <name>`. Same characters as a package name. Two installed packages cannot ship a service of the same name. |
 | `command` | yes | A path inside the installed package, normally `bin/<program>`. |
-| `args` | no | Arguments. They expand `{{prefix}}` and `{{version}}`. |
+| `args` | no | Arguments. They expand `{{prefix}}`, `{{version}}` and the locations `{{home}}`, `{{config}}` and `{{data}}`, so a service can name its config file, as in `["--config", "{{config}}/tool/rc"]`. |
 | `env` | no | Variables for the service. Values expand the same variables. |
 | `restart` | no | `never`, `on-failure` or `always`. Default `never`. |
 
@@ -447,6 +447,11 @@ The program must stay in the foreground and must not fork into the background.
 The service manager starts it, watches it, and restarts it according to
 `restart`. What it prints goes to a log file on macOS and to the user journal on
 Linux.
+
+A service manager starts a program with a bare `PATH`. On macOS and Linux a
+service of the user gets the `bin` of the global profile in front of it, so a
+program such as a hotkey daemon can call other installed programs by name. A
+`PATH` in `env` replaces that. A service in system scope keeps the bare `PATH`.
 
 Installing a package never starts its service. The user turns it on with
 `service = true` in their list.

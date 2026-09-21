@@ -6,6 +6,7 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"text/tabwriter"
@@ -57,7 +58,14 @@ func (e env) definition(pkg profile.Package, svc manifest.Service) (service.Defi
 		d.LogFile = filepath.Join(service.SystemLogDir(), svc.Name+".log")
 	}
 
-	vars := map[string]string{"prefix": pkg.StorePath, "version": pkg.Version}
+	// A service also takes the locations that a [files] target takes, so it can
+	// name a config file in the home directory.
+	vars, err := e.locations()
+	if err != nil {
+		return d, err
+	}
+
+	vars["prefix"], vars["version"] = pkg.StorePath, pkg.Version
 
 	for _, arg := range svc.Args {
 		expanded, err := manifest.Expand(arg, vars)
@@ -75,6 +83,13 @@ func (e env) definition(pkg profile.Package, svc manifest.Service) (service.Defi
 		}
 
 		d.Env[name] = expanded
+	}
+
+	// A service manager starts a program with a bare PATH. A service of the user
+	// gets the programs of the global profile in front of it, because a program
+	// such as a hotkey daemon calls other installed programs by name.
+	if _, set := d.Env["PATH"]; !set && !pkg.System && runtime.GOOS != "windows" {
+		d.Env["PATH"] = e.globalProfile().BinDir() + ":/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 	}
 
 	return d, nil
