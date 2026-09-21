@@ -30,7 +30,8 @@ func newAddCmd(opts Options) *cobra.Command {
 		Long: `Install a package from a manifest. A ref is one of:
 
   ./pkg.toml                          a local file
-  https://host/pkg.toml               a URL
+  https://host/pkg.toml               a URL of a manifest
+  https://host/tool-1.2.3.tar.gz      a URL of the download itself
   github:owner/repo                   oku.pkg.toml in a GitHub repo
   github:owner/repo#name              name.toml or packages/name.toml in it
   codeberg:owner/repo                 the same on codeberg.org
