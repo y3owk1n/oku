@@ -103,6 +103,9 @@ type Artifact struct {
 	// App holds macOS app bundles, such as "Foo.app". Font holds font files.
 	App  []string `toml:"app"`
 	Font []string `toml:"font"`
+	// Data marks a package that only holds files and exposes nothing, such as a
+	// repo of templates. A list reaches them with {{pkg.<name>}}.
+	Data bool `toml:"data"`
 }
 
 // Service is a long-running program, from a [[service]] table. Command is a
@@ -346,10 +349,17 @@ func (m *Manifest) validate() error {
 			errs = append(errs, fmt.Errorf("artifact[%d]: set sha256 or sha256_url, not both", i))
 		}
 
-		if len(a.Bin)+len(a.Wrap)+len(a.Man)+len(a.Completions)+len(a.App)+len(a.Font) == 0 {
+		exposes := len(a.Bin)+len(a.Wrap)+len(a.Man)+len(a.Completions)+len(a.App)+len(a.Font) > 0
+
+		switch {
+		case !exposes && !a.Data:
 			errs = append(errs, fmt.Errorf(
-				"artifact[%d]: set at least one of bin, man, completions, app or font",
-				i,
+				"artifact[%d]: set at least one of bin, man, completions, app or font, "+
+					"or data = true for a package that only holds files", i,
+			))
+		case exposes && a.Data:
+			errs = append(errs, fmt.Errorf(
+				"artifact[%d]: data = true says the package exposes nothing, so remove data or the outputs", i,
 			))
 		}
 
