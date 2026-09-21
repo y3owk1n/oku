@@ -77,9 +77,11 @@ func verifyFile(key minisign.PublicKey, path string, signature []byte) (bool, er
 	return verifier.Verify(key, signature), nil
 }
 
-// Download saves url in the download cache and returns the file's path.
+// Download saves url in the download cache and returns the file's path. It
+// always downloads, because the assets of a moving tag such as nightly keep
+// their url when their bytes change.
 func (s *Store) Download(ctx context.Context, url string) (string, error) {
-	path, _, err := s.fetch(ctx, url, "")
+	path, _, err := s.download(ctx, url, "", false)
 
 	return path, err
 }

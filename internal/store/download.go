@@ -27,6 +27,16 @@ const recentDownload = 24 * time.Hour
 // verifies. With a wantSHA it deletes a download whose digest differs. With an
 // empty wantSHA it accepts the download, and the caller pins the digest.
 func (s *Store) fetch(ctx context.Context, url, wantSHA string) (string, string, error) {
+	return s.download(ctx, url, wantSHA, true)
+}
+
+// download does the work of fetch. With reuseRecent false it ignores the digest
+// that an earlier download of url gave, which a url whose bytes change needs.
+func (s *Store) download(
+	ctx context.Context,
+	url, wantSHA string,
+	reuseRecent bool,
+) (string, string, error) {
 	dir := filepath.Join(s.cache, "downloads")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", "", fmt.Errorf("create download cache: %w", err)
@@ -37,7 +47,7 @@ func (s *Store) fetch(ctx context.Context, url, wantSHA string) (string, string,
 	recent := filepath.Join(dir, "by-url", fmt.Sprintf("%x", sha256.Sum256([]byte(url))))
 
 	cached := wantSHA
-	if info, err := os.Stat(recent); cached == "" && err == nil &&
+	if info, err := os.Stat(recent); reuseRecent && cached == "" && err == nil &&
 		time.Since(info.ModTime()) < recentDownload {
 		data, _ := os.ReadFile(recent)
 		cached = strings.TrimSpace(string(data))
