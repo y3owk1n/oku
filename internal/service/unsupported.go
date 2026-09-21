@@ -12,6 +12,7 @@ var errUnsupported = errors.New("oku cannot manage services on " + runtime.GOOS 
 
 type unsupported struct{}
 
+func (unsupported) Unavailable() string                             { return "" }
 func (unsupported) Install(context.Context, Definition, bool) error { return errUnsupported }
 func (unsupported) Remove(context.Context, Definition) error        { return nil }
 func (unsupported) Start(context.Context, Definition) error         { return errUnsupported }

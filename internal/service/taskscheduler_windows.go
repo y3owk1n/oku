@@ -69,6 +69,9 @@ func ReadStored(path string) (Stored, error) {
 	return stored, json.Unmarshal(data, &stored)
 }
 
+// Unavailable is empty, because every Windows machine has the Task Scheduler.
+func (t *taskScheduler) Unavailable() string { return "" }
+
 func (t *taskScheduler) Install(ctx context.Context, d Definition, enabled bool) error {
 	self, err := os.Executable()
 	if err != nil {

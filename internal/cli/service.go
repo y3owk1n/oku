@@ -110,6 +110,11 @@ func (e env) serviceItems(
 
 	defs := map[string]service.Definition{}
 
+	// A machine without a service manager gets no service, see skippedServices.
+	if user.Unavailable() != "" {
+		return nil, defs, nil
+	}
+
 	for _, pkg := range pkgs {
 		meta, err := store.ReadMeta(pkg.StorePath)
 		if err != nil {
@@ -145,6 +150,23 @@ func (e env) serviceItems(
 	}
 
 	return items, defs, nil
+}
+
+// skippedServices says why this machine runs no services, when pkgs ship some.
+// It is empty otherwise.
+func (e env) skippedServices(opts Options, pkgs []profile.Package) string {
+	user, err := e.services(opts)
+	if err != nil || user.Unavailable() == "" {
+		return ""
+	}
+
+	for _, pkg := range pkgs {
+		if meta, err := store.ReadMeta(pkg.StorePath); err == nil && len(meta.Services) > 0 {
+			return user.Unavailable()
+		}
+	}
+
+	return ""
 }
 
 // serviceHandler installs and removes services through the manager.

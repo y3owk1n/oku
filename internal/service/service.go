@@ -41,6 +41,9 @@ type Status struct {
 // Manager installs and controls services for the current user. Tests replace it
 // with a fake, because a real one changes the user's login session.
 type Manager interface {
+	// Unavailable says why this machine cannot run services, or is empty. oku
+	// then installs no service and says so once.
+	Unavailable() string
 	// Install writes the definition where the OS reads it. With enabled it also
 	// starts the service now and at every login.
 	Install(ctx context.Context, d Definition, enabled bool) error

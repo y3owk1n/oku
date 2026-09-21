@@ -274,6 +274,9 @@ order step in `prd/product.md`.
 - B184 [8] oku installs a `[[service]]` with `when` on the platforms that
   `when` matches and on no other. Two services of a package may share a name
   when their `when` tables match different platforms.
+- B185 [8] On a Linux machine that systemd does not run, or without
+  `systemctl`, oku installs a package that ships a service, installs no
+  service, and says so once with the reason.
 - B170 [8] The `args` and `env` of a service expand `{{home}}`, `{{config}}` and
   `{{data}}`. On macOS and Linux a service of the user finds the programs of
   the global profile on its `PATH`, unless its `env` sets `PATH`.

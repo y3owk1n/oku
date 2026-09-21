@@ -152,6 +152,10 @@ func (e env) planExposed(
 		return exposePlan{}, err
 	}
 
+	if reason := e.skippedServices(opts, pkgs); reason != "" && e.project == "" {
+		fmt.Fprintf(notice, "services are skipped, because %s\n", reason)
+	}
+
 	if e.project != "" {
 		if len(wanted) > 0 {
 			fmt.Fprintln(

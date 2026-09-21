@@ -54,7 +54,11 @@ type fakeServices struct {
 	failInstall map[string]bool
 	// dieInInstall makes Install panic, which stands in for a killed process.
 	dieInInstall bool
+	// unavailable is why the machine runs no services, or empty.
+	unavailable string
 }
+
+func (f *fakeServices) Unavailable() string { return f.unavailable }
 
 type fakeService struct {
 	def              service.Definition
@@ -4690,6 +4694,24 @@ func (m machine) serviceManifest(t *testing.T) string {
 	return m.manifest(t, "food", map[string]string{"food": script},
 		"bin = [\"food\"]\n[[service]]\nname = \"food\"\ncommand = \"bin/food\"\n"+
 			"args = [\"--data\", \"{{prefix}}/share\"]\nenv = { PORT = \"8080\" }\nrestart = \"on-failure\"\n")
+}
+
+func TestB185AMachineWithoutAServiceManagerInstallsThePackageAndSkipsItsService(t *testing.T) {
+	m := newMachine(t)
+	m.services.unavailable = "systemd does not run this machine"
+
+	out, err := m.run(t, "", "add", m.serviceManifest(t), "--service")
+	if err != nil {
+		t.Fatalf("add: %v\n%s", err, out)
+	}
+
+	if !strings.Contains(out, "services are skipped, because systemd does not run this machine") {
+		t.Fatalf("add did not say that it skipped the service:\n%s", out)
+	}
+
+	if !exists(m.profile("bin", "food")) || len(m.services.state) != 0 {
+		t.Fatalf("want the program and no service, got %v", m.services.state)
+	}
 }
 
 func TestB73ServiceRunsWhenTheListEnablesItAndIsStoppedOtherwise(t *testing.T) {
