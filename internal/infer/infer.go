@@ -1,5 +1,5 @@
-// Package infer writes a manifest for a GitHub repo that has none, from the
-// assets of its newest release.
+// Package infer writes a manifest for a repo that has none, from the assets of
+// its newest release.
 package infer
 
 import (
@@ -99,16 +99,21 @@ type choice struct {
 	others []string
 }
 
-// Manifest returns manifest TOML for the GitHub repo "owner/repo", which may
-// have a host in front. It needs an
-// asset for host, because it opens that asset to find the executable.
+// Manifest returns manifest TOML for the repo that a forge ref's scheme and
+// location name. It needs an asset for host, because it opens that asset to
+// find the executable.
 func (inf *Inferrer) Manifest(
 	ctx context.Context,
-	repo string,
+	scheme, location string,
 	host platform.Platform,
 	opts Options,
 ) (string, error) {
-	rel, err := inf.wanted(ctx, repo, opts.Version)
+	server, repo, err := inf.Hosts.Open(scheme, location)
+	if err != nil {
+		return "", err
+	}
+
+	rel, err := wanted(ctx, server, repo, opts.Version)
 	if err != nil {
 		return "", err
 	}
@@ -145,13 +150,14 @@ func (inf *Inferrer) Manifest(
 
 	var b strings.Builder
 
-	server, onServer := forge.Split(repo)
+	// version.repo names the host, which a "codeberg:" ref leaves out.
+	versionRepo := repo
+	if server.Host() != "" {
+		versionRepo = server.Host() + "/" + repo
+	}
 
-	fmt.Fprintf(
-		&b, "[package]\nname = %q\nhomepage = %q\n\n",
-		name, inf.Hosts.GitHub(server).Home(onServer),
-	)
-	fmt.Fprintf(&b, "[version]\nfrom = \"github-releases\"\nrepo = %q\n", repo)
+	fmt.Fprintf(&b, "[package]\nname = %q\nhomepage = %q\n\n", name, server.Home(repo))
+	fmt.Fprintf(&b, "[version]\nfrom = %q\nrepo = %q\n", server.Kind()+"-releases", versionRepo)
 
 	if prefix != "" {
 		fmt.Fprintf(&b, "strip_prefix = %q\n", prefix)
@@ -287,45 +293,45 @@ func choose(names []string, host platform.Platform, glob string) ([]choice, erro
 // wanted returns the release for version, or the newest one for "". It tries
 // version as a tag and as a "v" tag. With any other prefix it returns the newest
 // release, whose asset names are the best guess there is.
-func (inf *Inferrer) wanted(ctx context.Context, repo, version string) (forge.Release, error) {
+func wanted(ctx context.Context, server forge.Forge, repo, version string) (forge.Release, error) {
 	if version != "" {
 		for _, tag := range []string{version, "v" + version} {
-			rel, err := inf.Tagged(ctx, repo, tag)
+			rel, err := release(ctx, server, repo, tag)
 			if !errors.Is(err, errNoRelease) {
 				return rel, err
 			}
 		}
 	}
 
-	return inf.Latest(ctx, repo)
+	return release(ctx, server, repo, "")
 }
 
 // Latest returns the newest release of the GitHub repo at location, which is
 // "owner/name" with an optional host in front.
 func (inf *Inferrer) Latest(ctx context.Context, location string) (forge.Release, error) {
-	return inf.release(ctx, location, "")
+	return inf.Tagged(ctx, location, "")
 }
 
 // Tagged returns the release of location with that tag. Unlike Latest, it also
 // returns a prerelease.
 func (inf *Inferrer) Tagged(ctx context.Context, location, tag string) (forge.Release, error) {
-	return inf.release(ctx, location, tag)
-}
-
-func (inf *Inferrer) release(ctx context.Context, location, tag string) (forge.Release, error) {
 	host, repo := forge.Split(location)
 
-	rel, err := inf.Hosts.GitHub(host).Release(ctx, repo, tag)
+	return release(ctx, inf.Hosts.GitHub(host), repo, tag)
+}
+
+func release(ctx context.Context, server forge.Forge, repo, tag string) (forge.Release, error) {
+	rel, err := server.Release(ctx, repo, tag)
 
 	switch {
 	case errors.Is(err, forge.ErrNotFound) && tag != "":
-		return rel, fmt.Errorf("%s %w %s", location, errNoRelease, tag)
+		return rel, fmt.Errorf("%s %w %s", repo, errNoRelease, tag)
 	case errors.Is(err, forge.ErrNotFound):
-		return rel, fmt.Errorf("%s has no manifest and no release to infer one from", location)
+		return rel, fmt.Errorf("%s has no manifest and no release to infer one from", repo)
 	case err != nil && tag != "":
-		return rel, fmt.Errorf("read the release %s of %s: %w", tag, location, err)
+		return rel, fmt.Errorf("read the release %s of %s: %w", tag, repo, err)
 	case err != nil:
-		return rel, fmt.Errorf("read the newest release of %s: %w", location, err)
+		return rel, fmt.Errorf("read the newest release of %s: %w", repo, err)
 	}
 
 	return rel, nil

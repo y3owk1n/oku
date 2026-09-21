@@ -33,16 +33,21 @@ func newManifestCmd(opts Options) *cobra.Command {
 	init := &cobra.Command{
 		Use:   "init --from <owner/repo>",
 		Short: "Write a manifest inferred from a GitHub repo's newest release",
-		Long: `Write a manifest inferred from a GitHub repo's newest release.
+		Long: `Write a manifest inferred from a repo's newest release.
 
 This is the manifest "oku add github:owner/repo" uses for a repo that has none.
 Commit it as oku.pkg.toml to control it yourself. Inference opens the asset for
 this machine to find the executable, so run it where a release asset exists.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			r, err := ref.Parse("github:" + strings.TrimPrefix(from, "github:"))
-			if err != nil || r.Fragment != "" || r.Version != "" {
-				return fmt.Errorf("--from %q: want owner/repo", from)
+			// A bare "owner/repo" is a GitHub repo.
+			if !strings.Contains(from, ":") {
+				from = "github:" + from
+			}
+
+			r, err := ref.Parse(from)
+			if err != nil || r.Kind != ref.Forge || r.Fragment != "" || r.Version != "" {
+				return fmt.Errorf("--from %q: want owner/repo or a ref such as codeberg:owner/repo", from)
 			}
 
 			e, err := loadEnv()
@@ -51,7 +56,7 @@ this machine to find the executable, so run it where a release asset exists.`,
 			}
 
 			text, err := e.inferrer(opts).Manifest(
-				cmd.Context(), r.Location, platform.Host(), infer.Options{},
+				cmd.Context(), r.Scheme, r.Location, platform.Host(), infer.Options{},
 			)
 			if err != nil {
 				return err
@@ -77,7 +82,7 @@ this machine to find the executable, so run it where a release asset exists.`,
 		},
 	}
 
-	init.Flags().StringVar(&from, "from", "", "the GitHub repo to read, as owner/repo")
+	init.Flags().StringVar(&from, "from", "", "the repo to read, as owner/repo on GitHub or as a ref such as codeberg:owner/repo")
 	init.Flags().
 		StringVarP(&output, "output", "o", ref.Manifest.Default, `the file to write, or "-" for stdout`)
 	init.Flags().BoolVar(&force, "force", false, "replace the output file when it exists")

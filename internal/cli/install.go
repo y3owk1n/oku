@@ -355,15 +355,16 @@ func (e env) manifestData(
 	}
 
 	if err == nil || !errors.Is(err, ref.ErrNotFound) ||
-		req.ref.Kind != ref.GitHub || req.ref.Fragment != "" {
+		req.ref.Kind != ref.Forge || req.ref.Fragment != "" {
 		return fetched, "", err
 	}
 
-	text, err := e.inferrer(opts).Manifest(ctx, req.ref.Location, platform.Host(), infer.Options{
-		Version: req.ref.Version,
-		Asset:   req.asset,
-		Bin:     req.bin,
-	})
+	text, err := e.inferrer(opts).Manifest(
+		ctx, req.ref.Scheme, req.ref.Location, platform.Host(), infer.Options{
+			Version: req.ref.Version,
+			Asset:   req.asset,
+			Bin:     req.bin,
+		})
 	if err != nil {
 		return ref.Fetched{}, "", err
 	}

@@ -60,10 +60,10 @@ needs no manifest change.
 | Key | Meaning |
 |---|---|
 | `value` | The one version this manifest installs. |
-| `from` | `github-releases` or `git-tags`. Not together with `value`. |
-| `repo` | `owner/repo` for `github-releases`, or `host/owner/repo` on a GitHub Enterprise Server. A git URL for `git-tags`. Required with `from`. |
+| `from` | `github-releases`, `gitea-releases` or `git-tags`. Not together with `value`. |
+| `repo` | `owner/repo` for `github-releases`, or `host/owner/repo` on a GitHub Enterprise Server. `host/owner/repo` for `gitea-releases`, such as `codeberg.org/owner/repo`. A git URL for `git-tags`. Required with `from`. |
 | `strip_prefix` | Text cut off the front of a tag to get the version, such as `"v"`. A tag without the prefix is ignored. |
-| `tag` | One tag that upstream moves, such as `"nightly"`. Only with `github-releases`, and not together with `strip_prefix`. See [A moving tag](#a-moving-tag). |
+| `tag` | One tag that upstream moves, such as `"nightly"`. Only with `github-releases` or `gitea-releases`, and not together with `strip_prefix`. See [A moving tag](#a-moving-tag). |
 
 ```toml
 [version]
@@ -75,7 +75,8 @@ strip_prefix = "v"
 How oku turns tags into versions:
 
 - `github-releases` reads the newest 100 releases and skips drafts and
-  prereleases. `git-tags` reads every tag with `git ls-remote`, so it needs
+  prereleases. `gitea-releases` does the same for the newest 50 on a Gitea or
+  Forgejo server. `git-tags` reads every tag with `git ls-remote`, so it needs
   `git` on `PATH`.
 - After `strip_prefix`, a tag that does not start with a digit is ignored. That
   drops tags such as `nightly`.
@@ -379,9 +380,14 @@ two packages set the same variable, the one whose name sorts last is used.
 ## Inferred manifests
 
 `oku add github:owner/repo` on a repo with no `oku.pkg.toml` writes a manifest
-from the repo's newest release, prints it, and installs from it. With
-`@version` it reads that version's release. It tries the tag `version`, then
-`v<version>`. With any other tag prefix it reads the newest release. To get that
+from the repo's newest release, prints it, and installs from it. A `codeberg:`
+or `gitea:` ref works the same way, and its manifest gets
+`from = "gitea-releases"`.
+
+With `@version` it reads that version's release. It tries the tag `version`,
+then `v<version>`. With any other tag prefix it reads the newest release.
+
+To get that
 manifest as a file you can edit and commit:
 
 ```

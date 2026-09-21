@@ -10,6 +10,8 @@ one per package.
 | `github:owner/repo` | `oku.pkg.toml` at the root of the repo's default branch. Without one, oku [infers a manifest](manifest.md#inferred-manifests) from the newest release. |
 | `github:owner/repo#name` | `name.toml` at the root, else `packages/name.toml`. |
 | `github:host/owner/repo` | The same on a GitHub Enterprise Server at `host`. `#name` and `@version` work as above. |
+| `codeberg:owner/repo` | The same on codeberg.org. |
+| `gitea:host/owner/repo` | The same on any Gitea or Forgejo server. The host is required. |
 | `git+https://host/repo` | `oku.pkg.toml` at the root of any git repo. |
 | `git+https://host/repo#name` | `name.toml` at the root, else `packages/name.toml`. A fragment with no `/` and no `.` is a name. |
 | `git+https://host/repo#dir/name.toml` | That file in the repo. |
@@ -52,6 +54,13 @@ with a dot is the host, because no owner name has one. oku reads everything
 from `https://host/api/v3`, the manifest included. Set `GH_ENTERPRISE_TOKEN`
 for a server that needs a login. oku never sends `GITHUB_TOKEN` to such a
 server, and never sends `GH_ENTERPRISE_TOKEN` to github.com.
+
+**`codeberg:`** and **`gitea:`** need no git either. oku reads the server's API
+at `https://host/api/v1`. It asks for the newest commit, then reads the
+manifest at that commit. Gitea and Forgejo serve the same API, so `gitea:`
+reads both.
+Set `CODEBERG_TOKEN` for codeberg.org and `GITEA_TOKEN` for any other server
+that needs a login. oku sends each token to its own host only.
 
 **`git+`** needs `git` on `PATH`. oku fetches one commit at depth 1 into its
 cache directory and reads the file from there. git runs with
@@ -100,5 +109,5 @@ core = 'github:someone/recipes'
 
 - A manifest may be at most 1 MiB.
 - A `#path` in a `git+` ref must stay inside the repository.
-- Inference only covers `github:owner/repo`. A `github:owner/repo#name` ref or
-  a `git+` ref needs the manifest file to exist.
+- Inference covers `github:`, `codeberg:` and `gitea:` refs with no `#name`. A
+  ref with a `#name`, and a `git+` ref, needs the manifest file to exist.

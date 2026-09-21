@@ -4,6 +4,7 @@ package forge
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"os"
 	"strings"
@@ -14,8 +15,18 @@ import (
 // release.
 var ErrNotFound = errors.New("not found")
 
+// The kinds of forge. A manifest's version.from is a kind plus "-releases".
+const (
+	KindGitHub = "github"
+	KindGitea  = "gitea"
+)
+
 // Forge is one host. A repo is "owner/name", without the host.
 type Forge interface {
+	// Kind is the API the host serves.
+	Kind() string
+	// Host is the host's name, or "" for github.com.
+	Host() string
 	// Home returns the web page of repo.
 	Home(repo string) string
 	// Head returns the newest commit of the default branch.
@@ -73,6 +84,7 @@ func (h Hosts) GitHub(host string) Forge {
 	if host != "" {
 		return &github{
 			http:  h.HTTP,
+			host:  host,
 			web:   "https://" + host,
 			api:   "https://" + host + "/api/v3",
 			token: os.Getenv("GH_ENTERPRISE_TOKEN"),
@@ -98,6 +110,38 @@ func (h Hosts) GitHub(host string) Forge {
 	}
 
 	return g
+}
+
+// Open returns the forge that a ref's scheme and location name, and the repo
+// on it. The schemes are "github", "gitea" for any Gitea or Forgejo server, and
+// "codeberg" for codeberg.org.
+func (h Hosts) Open(scheme, location string) (Forge, string, error) {
+	switch scheme {
+	case KindGitHub:
+		host, repo := Split(location)
+
+		return h.GitHub(host), repo, nil
+	case "codeberg":
+		return h.gitea("codeberg.org"), location, nil
+	case KindGitea:
+		// An owner on these servers may have a dot, so the host is always there.
+		host, repo, _ := strings.Cut(location, "/")
+
+		return h.gitea(host), repo, nil
+	default:
+		return nil, "", fmt.Errorf("%q is not a forge oku knows", scheme)
+	}
+}
+
+// gitea returns the Gitea or Forgejo server at host. CODEBERG_TOKEN is for
+// codeberg.org and GITEA_TOKEN for every other host.
+func (h Hosts) gitea(host string) Forge {
+	env := "GITEA_TOKEN"
+	if host == "codeberg.org" {
+		env = "CODEBERG_TOKEN"
+	}
+
+	return &gitea{http: h.HTTP, host: host, token: os.Getenv(env)}
 }
 
 // Split cuts the host off a location such as "git.example.com/owner/repo". A
