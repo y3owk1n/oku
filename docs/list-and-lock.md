@@ -259,8 +259,8 @@ Write a registry key in single quotes, so that TOML keeps its backslashes:
 KeyboardDelay = "0"
 ```
 
-A value that oku puts back keeps the type it had, also one that the list cannot
-write, such as `REG_BINARY` or `REG_EXPAND_SZ`.
+oku puts a value back with the type it had. That includes a type that the list
+cannot write, such as `REG_BINARY` or `REG_EXPAND_SZ`.
 
 Before oku first writes a key it records the value the key had, or that it had
 none. A key that leaves the list gets that value back, or is deleted again.

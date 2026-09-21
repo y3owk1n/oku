@@ -124,8 +124,8 @@ set.
 ## Settings
 
 [`[registry]`](list-and-lock.md#settings-of-the-os) sets values under `HKCU`
-through `reg.exe`. oku records the value a name had before it first wrote it,
-and puts it back, with its type, when the name leaves the list, on
+through `reg.exe`. oku records the value a name had before it first wrote it.
+It puts that value back, with its type, when the name leaves the list, on
 `oku rollback` and on `oku self uninstall`. A program reads the registry when
 it needs a value, so some changes show only after the program restarts.
 
