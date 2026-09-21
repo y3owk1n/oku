@@ -138,6 +138,8 @@ order step in `prd/product.md`.
 - B29 [4] `oku manifest bump` rewrites a static version and its checksums to
   the newest upstream release, or to `--to <version>`. It keeps the file's
   comments, and it refuses a manifest that discovers its versions.
+- B125 [4] `oku manifest hash <url | file>` prints the download's `sha256` and
+  `integrity` as lines a manifest accepts.
 - B119 [4] `oku manifest bump --repo <ref>` reads releases from any forge ref.
 - B30 [4] `oku source add <alias> <ref>` makes `alias/name` resolve to the
   manifest `name` in that collection, and `add` accepts `alias/name` refs.
