@@ -2034,6 +2034,55 @@ func TestAddInfersFromAGitLabProjectInASubgroup(t *testing.T) {
 	}
 }
 
+func TestAddTakesAURLThatIsTheDownloadItself(t *testing.T) {
+	m := newMachine(t)
+	archive, _ := m.archive(t, "release", map[string]string{
+		"tool-1.4.0/tool": "#!/bin/sh\necho from a url\n",
+	})
+	manifest := m.manifest(t, "other", map[string]string{"other": script}, `bin = ["other"]`)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/dl/tool-v1.4.0-linux-amd64.tar.gz":
+			http.ServeFile(w, r, archive)
+		case "/manifest-without-an-ending":
+			http.ServeFile(w, r, manifest)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(server.Close)
+
+	out, err := m.run(t, "", "add", server.URL+"/dl/tool-v1.4.0-linux-amd64.tar.gz")
+	if err != nil {
+		t.Fatalf("add: %v\n%s", err, out)
+	}
+
+	for _, want := range []string{
+		"is a download", `name = "tool"`, `value = "1.4.0"`, "strip = 1", `bin = ["tool"]`,
+		"added tool 1.4.0", "trusted this download",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("add output lacks %q:\n%s", want, out)
+		}
+	}
+
+	if got := m.toolOutput(t); got != "from a url" {
+		t.Fatalf("tool printed %q", got)
+	}
+
+	// A URL that holds a manifest stays a manifest, whatever its name.
+	out, err = m.run(t, "", "add", server.URL+"/manifest-without-an-ending")
+	if err != nil || !strings.Contains(out, "added other 1.2.3") {
+		t.Fatalf("add of a manifest URL: %v\n%s", err, out)
+	}
+
+	_, err = m.run(t, "", "add", server.URL+"/dl/missing.tar.gz")
+	if err == nil || !strings.Contains(err.Error(), "not found") {
+		t.Fatalf("want a missing URL to fail as not found, got %v", err)
+	}
+}
+
 func TestManifestInitReadsUniversalAndWindowsGnuAssets(t *testing.T) {
 	m := newMachine(t)
 	archive, _ := m.archive(t, "release", map[string]string{"tool": script})

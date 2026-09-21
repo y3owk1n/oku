@@ -6,7 +6,8 @@ one per package.
 | Ref | Reads |
 |---|---|
 | `./ripgrep.toml`, `/abs/ripgrep.toml` | A local file. oku stores a file inside the list's directory as `./path`, and any other file as its absolute path. |
-| `https://host/ripgrep.toml` | A URL. `http://` works too. |
+| `https://host/ripgrep.toml` | A URL of a manifest. `http://` works too. |
+| `https://host/tool-1.2.3-linux-amd64.tar.gz` | A URL of the download itself. oku [infers a manifest](manifest.md#a-url-of-the-download) for this machine from it. |
 | `github:owner/repo` | `oku.pkg.toml` at the root of the repo's default branch. Without one, oku [infers a manifest](manifest.md#inferred-manifests) from the newest release. |
 | `github:owner/repo#name` | `name.toml` at the root, else `packages/name.toml`. |
 | `github:host/owner/repo` | The same on a GitHub Enterprise Server at `host`. `#name` and `@version` work as above. |

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/url"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -348,6 +349,20 @@ func (e env) manifestData(
 	}
 
 	fetched, err := e.fetcher(opts).Fetch(ctx, req.ref, req.commit, ref.Manifest)
+
+	if req.ref.Kind == ref.HTTP && isDownload(req.ref, fetched.Data, err) {
+		if req.asset != "" {
+			return fetched, "", fmt.Errorf("--asset does not apply, %s is the asset", req.ref)
+		}
+
+		text, err := e.inferrer(opts).FromURL(ctx, req.ref.Location, platform.Host(), req.bin)
+		if err != nil {
+			return ref.Fetched{}, "", err
+		}
+
+		return ref.Fetched{Data: []byte(text)}, text, nil
+	}
+
 	if err == nil && (req.asset != "" || req.bin != "") {
 		return fetched, "", fmt.Errorf(
 			"--asset and --bin apply when oku infers a manifest, and %s has one", req.ref,
@@ -370,6 +385,27 @@ func (e env) manifestData(
 	}
 
 	return ref.Fetched{Data: []byte(text), Commit: fetched.Commit}, text, nil
+}
+
+// isDownload reports whether a URL is the package itself and not a manifest.
+// data and err are what reading it as a manifest gave. A path that ends in
+// ".toml" is always a manifest, and so is a URL that does not exist, so that
+// the user sees that error. Anything else is a download unless it parses as a
+// manifest. Reading a download over the manifest size limit fails, so err is
+// set for it.
+func isDownload(r ref.Ref, data []byte, err error) bool {
+	at, parseErr := url.Parse(r.Location)
+	if parseErr != nil || strings.HasSuffix(at.Path, ".toml") || errors.Is(err, ref.ErrNotFound) {
+		return false
+	}
+
+	if err != nil {
+		return true
+	}
+
+	_, err = manifest.Parse(data, r.String())
+
+	return err != nil
 }
 
 func inferredText(inferred string, req request) string {
@@ -405,6 +441,15 @@ func reportCache(w io.Writer, got installed) {
 // reportInferred prints a manifest that oku just inferred.
 func reportInferred(w io.Writer, got installed) {
 	if got.inferred == "" {
+		return
+	}
+
+	if strings.HasPrefix(got.lock.Ref, "http") {
+		fmt.Fprintf(
+			w, "%s is a download and no manifest, so oku inferred this one from it:\n\n%s\n",
+			got.lock.Ref, got.inferred,
+		)
+
 		return
 	}
 

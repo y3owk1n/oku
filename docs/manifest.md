@@ -453,6 +453,25 @@ uses that asset for your machine. `--bin` is the file name of the program inside
 the assets. Both apply to an inferred manifest only. `oku add` fails when you
 pass them for a ref that has a manifest.
 
+### A URL of the download
+
+`oku add https://host/tool-1.2.3-linux-amd64.tar.gz` installs from a URL that is
+the package itself. A URL whose path ends in `.toml` is always a manifest. oku
+reads any other URL as a manifest first, and takes it as the download when it
+does not parse as one or is larger than 1 MiB.
+
+The inferred manifest has one artifact, for the OS and arch of the machine that
+ran `oku add`. `oku sync` on another kind of machine fails with "no artifact".
+The package name is the file name up to its version, and the version is the
+first `1.2.3` in the file name. A file name with no version gives the version
+`0`. The version is fixed, so `oku update` never changes it. To get a newer
+version, add that version's URL.
+
+oku finds the program the way it does in a release asset, and `--bin` names it
+when that fails. `--asset` does not apply. A URL on its own has no checksum, so
+oku [trusts the download on first use](trust.md#trust-on-first-use) and pins
+its digest in `oku.lock`.
+
 Limits:
 
 - The repo has no releases, or no asset for your machine. The error lists the
