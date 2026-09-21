@@ -75,7 +75,7 @@ func (s *Store) Build(
 
 	// A build that is in the store reports what it pinned when it ran, so the
 	// lock keeps those pins. A path from before oku recorded them reports none.
-	if meta, err := ReadMeta(prefix); err == nil {
+	if meta, err := ReadMeta(prefix); err == nil && !opts.VendorOnly {
 		if opts.PinnedVendor != "" && meta.VendorSHA256 != "" &&
 			opts.PinnedVendor != meta.VendorSHA256 {
 			return Realized{}, fmt.Errorf(
@@ -101,7 +101,22 @@ func (s *Store) Build(
 	}
 	defer removeTree(work)
 
+	// The temporary directory of macOS is behind a symlink. npm writes the keys of
+	// its lockfile relative to the real path, so a prefix behind a symlink would
+	// put the name of this directory into the vendored files. On Windows this
+	// would only turn a short path such as RUNNER~1 into the long one.
+	if runtime.GOOS != "windows" {
+		if work, err = filepath.EvalSymlinks(work); err != nil {
+			return Realized{}, err
+		}
+	}
+
 	src := filepath.Join(work, "src")
+
+	// The packages of another platform never enter the store.
+	if opts.VendorOnly {
+		prefix = filepath.Join(work, "prefix")
+	}
 
 	for _, dir := range []string{src, filepath.Join(work, "home"), filepath.Join(work, "tmp")} {
 		if err := os.Mkdir(dir, 0o755); err != nil {
@@ -175,7 +190,7 @@ func (s *Store) Build(
 	var vendored []string
 
 	for i, step := range build.Steps {
-		if !step.When.Matches(p) {
+		if !step.When.Matches(p) || opts.VendorOnly && step.Vendor == nil {
 			continue
 		}
 
@@ -195,6 +210,10 @@ func (s *Store) Build(
 
 			if step.Package != "" {
 				vendorEnv, err = s.npmPackageEnv(ctx, env, step.Package, m.Version.Value, opts.NPMRegistry)
+			}
+
+			if opts.VendorOnly {
+				vendorEnv = append(slices.Clone(vendorEnv), npmTarget(p)...)
 			}
 
 			if err == nil {
@@ -226,6 +245,10 @@ func (s *Store) Build(
 	if len(vendored) > 0 {
 		sum := sha256.Sum256([]byte(strings.Join(vendored, "\n")))
 		result.VendorSHA256 = hex.EncodeToString(sum[:])
+	}
+
+	if opts.VendorOnly {
+		return Realized{VendorSHA256: result.VendorSHA256}, nil
 	}
 
 	// The check comes after the build on purpose. The vendored files decide what
@@ -687,6 +710,10 @@ type BuildOptions struct {
 	// Progress is called after each step that ran, with its position, the number
 	// of steps, its kind and its error. It may be nil.
 	Progress func(step, total int, kind string, err error)
+	// VendorOnly runs the vendor steps alone, for a platform that may not be the
+	// host, and returns their digest. It builds nothing and keeps nothing. Only a
+	// build that CanCrossVendor accepts may ask for it.
+	VendorOnly bool
 }
 
 // ErrVendorChanged reports vendor steps that downloaded something other than

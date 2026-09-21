@@ -95,6 +95,52 @@ func VendorPortable(b *manifest.Build) bool {
 	return found
 }
 
+// CanCrossVendor reports whether oku can download what b vendors for platform
+// p on a machine of another platform. That needs npm vendor steps alone, since
+// npm installs for the platform it is told, and no command of the manifest
+// before them, because a command for p may not run here.
+func CanCrossVendor(b *manifest.Build, p platform.Platform) bool {
+	last := -1
+
+	for i, step := range b.Steps {
+		if step.Vendor != nil && step.When.Matches(p) {
+			if *step.Vendor != "npm" {
+				return false
+			}
+
+			last = i
+		}
+	}
+
+	for _, step := range b.Steps[:last+1] {
+		if step.Run != nil && step.When.Matches(p) {
+			return false
+		}
+	}
+
+	return last >= 0
+}
+
+// npmTarget returns the variables that make npm install the optional packages
+// of platform p and not those of the host.
+func npmTarget(p platform.Platform) []string {
+	os, cpu := p.OS, p.Arch
+	if os == "windows" {
+		os = "win32"
+	}
+
+	if cpu == "amd64" {
+		cpu = "x64"
+	}
+
+	env := []string{"npm_config_os=" + os, "npm_config_cpu=" + cpu}
+	if p.Libc != "" {
+		env = append(env, "npm_config_libc="+p.Libc)
+	}
+
+	return env
+}
+
 // BuildPin is what oku.lock holds for a build before a machine of its platform
 // ran it.
 type BuildPin struct {

@@ -954,3 +954,30 @@ installs optional packages by `os` and `cpu`, and pip downloads wheels for the
 platform, so their trees differ. A wrong pin stops the build on the other
 platform with "the vendored packages changed", and the message names `oku
 update`.
+
+## D69. oku downloads the npm packages of another platform to pin them
+
+npm installs optional packages by `os`, `cpu` and `libc`, so the tree differs
+between platforms (D68). npm also takes those three as configuration. To pin a
+build for another platform, oku runs the npm vendor steps with
+`npm_config_os`, `npm_config_cpu` and `npm_config_libc` set to that platform,
+in the sandbox and the environment of a build, with a temporary directory for
+the prefix. It hashes what npm wrote and deletes it. It runs no other step.
+
+oku does this only when the host built the package, because the build was
+approved and its deps, such as node, are in the store. It also needs every
+vendor step of the manifest to be `npm`, and no `run` step before them, because
+a command for another platform may not run on the host.
+
+Why: a lock for several platforms (D65) was complete for every package but
+the npm ones, and `sync --locked` (D66) failed for them on the second platform.
+On 2026-09-22 `npm install --os=linux --cpu=arm64 --libc=glibc` of esbuild
+0.25.0 on darwin-arm64 gave the same tree as the install on linux-arm64, with
+`@esbuild/linux-arm64` in it, and the install on darwin-arm64 without the flags
+gave another. Both sides ran npm 10.9.3, and the lock pins one node for all
+platforms. The first runs on a Mac gave a new digest each time, because the
+temporary directory of macOS is behind a symlink and npm wrote its name into
+`node_modules/.package-lock.json`. A build now resolves the symlinks of its
+directory first. The install runs with `--ignore-scripts`, as every npm step of oku
+does, so no code of the packages runs on the host. pip can name a platform too,
+but only for wheels. oku does not do that yet.
