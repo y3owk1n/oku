@@ -98,7 +98,8 @@ func (s *Store) Build(
 		"prefix": prefix, "src": src, "jobs": strconv.Itoa(runtime.NumCPU()),
 	}
 
-	if err := s.fetchSource(ctx, build.Source, src, vars); err != nil {
+	source, err := s.fetchSource(ctx, build.Source, src, vars, opts.PinnedSource)
+	if err != nil {
 		return Realized{}, fmt.Errorf("fetch the source: %w", err)
 	}
 
@@ -142,7 +143,9 @@ func (s *Store) Build(
 		}
 	}
 
-	result := Realized{Path: prefix}
+	result := Realized{
+		Path: prefix, SHA256: source.sha256, SourceURL: source.url, FirstUse: source.firstUse,
+	}
 
 	var vendored []string
 
@@ -308,17 +311,29 @@ func checkTagCommit(ctx context.Context, m *manifest.Manifest, src string) error
 	return nil
 }
 
+// fetchedSource says which archive a build used.
+type fetchedSource struct {
+	url, sha256 string
+	// firstUse reports that nothing stated the digest, so oku trusted the download.
+	firstUse bool
+}
+
+// fetchSource puts the source of a build into src. For an archive it expects the
+// first digest it finds in source.SHA256, the file at source.SHA256URL, and
+// pinned. With none of them it trusts the download, like Realize does for an
+// artifact.
 func (s *Store) fetchSource(
 	ctx context.Context,
 	source manifest.Source,
 	src string,
 	vars map[string]string,
-) error {
+	pinned string,
+) (fetchedSource, error) {
 	switch {
 	case source.Git != "":
 		tag, err := manifest.Expand(source.Tag, vars)
 		if err != nil {
-			return err
+			return fetchedSource{}, err
 		}
 
 		args := []string{"clone", "--quiet", "--depth", "1"}
@@ -330,7 +345,7 @@ func (s *Store) fetchSource(
 		cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
 
 		if out, err := cmd.CombinedOutput(); err != nil {
-			return fmt.Errorf(
+			return fetchedSource{}, fmt.Errorf(
 				"git clone %s: %w: %s",
 				source.Git,
 				err,
@@ -338,25 +353,46 @@ func (s *Store) fetchSource(
 			)
 		}
 
-		return nil
+		return fetchedSource{}, nil
 	case source.URL != "":
-		if source.SHA256 == "" {
-			return errors.New("build.source.url needs sha256")
-		}
-
 		url, err := manifest.Expand(source.URL, vars)
 		if err != nil {
-			return err
+			return fetchedSource{}, err
 		}
 
-		download, _, err := s.fetch(ctx, url, source.SHA256)
+		want := source.SHA256
+
+		if want == "" && source.SHA256URL != "" {
+			checksums, err := manifest.Expand(source.SHA256URL, vars)
+			if err != nil {
+				return fetchedSource{}, err
+			}
+
+			if want, err = s.publishedSHA256(ctx, checksums, path.Base(url)); err != nil {
+				return fetchedSource{}, err
+			}
+		}
+
+		if want != "" && pinned != "" && want != pinned {
+			return fetchedSource{}, fmt.Errorf(
+				"%w: upstream publishes sha256 %s, oku.lock pinned %s", ErrPinConflict, want, pinned,
+			)
+		}
+
+		stated := want != ""
+		if !stated {
+			want = pinned
+		}
+
+		download, got, err := s.fetch(ctx, url, want)
 		if err != nil {
-			return err
+			return fetchedSource{}, err
 		}
 
-		return extract(download, src, source.Strip)
+		return fetchedSource{url: url, sha256: got, firstUse: !stated && pinned == ""},
+			extract(download, src, source.Strip)
 	default:
-		return nil
+		return fetchedSource{}, nil
 	}
 }
 
@@ -588,6 +624,9 @@ type BuildOptions struct {
 	Log io.Writer
 	// PinnedVendor is the vendor digest oku.lock recorded, or empty.
 	PinnedVendor string
+	// PinnedSource is the digest of the source archive that oku.lock recorded for
+	// this version and URL, or empty.
+	PinnedSource string
 	// NPMRegistry replaces the URL of the npm registry when set, which tests do.
 	NPMRegistry string
 	// Progress is called after each step that ran, with its position, the number

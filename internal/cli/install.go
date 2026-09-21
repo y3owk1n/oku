@@ -196,6 +196,15 @@ func (e env) install(ctx context.Context, opts Options, req request) (installed,
 		pinnedVendor = at.VendorSHA256
 	}
 
+	// The digest of a source archive stays pinned for the version it was pinned
+	// for. Update drops it only together with the version, or when the manifest
+	// now states a digest itself.
+	pinnedSource := ""
+	if at := previous.Platforms[host.String()]; previous.Version == m.Version.Value &&
+		at.Strategy == strategyBuild && !req.acceptDigest {
+		pinnedSource = at.SHA256
+	}
+
 	if build {
 		realized.Path = e.store().BuildPath(m, host, deps.prefixes)
 
@@ -213,6 +222,10 @@ func (e env) install(ctx context.Context, opts Options, req request) (installed,
 		// no approval. A cache never holds an impure package.
 		deps.substituted = append(deps.substituted, m.Package.Name)
 		entry = lock.Platform{Strategy: strategyBuild, VendorSHA256: pinnedVendor}
+
+		if at := previous.Platforms[host.String()]; pinnedSource != "" {
+			entry.URL, entry.SHA256 = at.URL, at.SHA256
+		}
 	case build:
 		if err := req.approve(m, host); err != nil {
 			return installed{}, err
@@ -220,7 +233,7 @@ func (e env) install(ctx context.Context, opts Options, req request) (installed,
 
 		realized, err = e.store().Build(ctx, m, host, store.BuildOptions{
 			Deps: deps.prefixes, Log: req.log, PinnedVendor: pinnedVendor, Progress: req.progress,
-			NPMRegistry: opts.NPMRegistry,
+			NPMRegistry: opts.NPMRegistry, PinnedSource: pinnedSource,
 		})
 		if err != nil {
 			return installed{}, fmt.Errorf("%s: %w", m.Package.Name, err)
@@ -228,6 +241,13 @@ func (e env) install(ctx context.Context, opts Options, req request) (installed,
 
 		entry = lock.Platform{
 			Strategy: strategyBuild, Impure: realized.Impure, VendorSHA256: realized.VendorSHA256,
+			URL: realized.SourceURL, SHA256: realized.SHA256,
+		}
+
+		// A package that was in the store already was not downloaded again, so the
+		// pin it had stays.
+		if at := previous.Platforms[host.String()]; realized.SHA256 == "" && pinnedSource != "" {
+			entry.URL, entry.SHA256 = at.URL, at.SHA256
 		}
 	default:
 		// A digest that oku.lock pinned for this version and URL still applies,

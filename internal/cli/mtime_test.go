@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -54,5 +55,50 @@ func TestB169AnUnpackedSourceKeepsTheFileTimesOfTheArchive(t *testing.T) {
 
 	if out, err := m.run(t, "y\n", "add", ref); err != nil {
 		t.Fatalf("the generated file should still be newer than its input after unpacking: %v\n%s", err, out)
+	}
+}
+
+// sourceArchive writes a source tarball that holds one script and returns its
+// path.
+func (m machine) sourceArchive(t *testing.T, name, script string) string {
+	t.Helper()
+
+	path, _ := m.archive(t, name, map[string]string{"tool": script})
+
+	return path
+}
+
+func TestB172ASourceArchiveWithoutAChecksumIsPinnedOnFirstDownload(t *testing.T) {
+	m := newMachine(t)
+	m.opts.Interactive = yes()
+
+	archive := m.sourceArchive(t, "src", "#!/bin/sh\necho one\n")
+
+	ref := m.buildManifest(t, false,
+		fmt.Sprintf("needs = [\"sh\"]\nsource = { url = \"file://%s\" }", archive), installTool)
+
+	out, err := m.run(t, "y\n", "add", ref)
+	must(t, err)
+
+	locked, err := os.ReadFile(filepath.Join(m.config, "oku.lock"))
+	must(t, err)
+
+	data, err := os.ReadFile(archive)
+	must(t, err)
+
+	sum := sha256.Sum256(data)
+
+	if !strings.Contains(string(locked), hex.EncodeToString(sum[:])) || !strings.Contains(out, "trusted") {
+		t.Fatalf("oku.lock should pin the digest of the source, and add should say so:\n%s\n%s", out, locked)
+	}
+
+	// The archive changes under the same version, on a machine with an empty store.
+	m.sourceArchive(t, "src", "#!/bin/sh\necho tampered\n")
+	must(t, os.RemoveAll(m.data))
+	must(t, os.RemoveAll(m.cache))
+
+	_, err = m.run(t, "y\n", "sync")
+	if err == nil || !strings.Contains(err.Error(), "checksum mismatch") {
+		t.Fatalf("sync should refuse a source archive that no longer has the pinned digest, got %v", err)
 	}
 }
