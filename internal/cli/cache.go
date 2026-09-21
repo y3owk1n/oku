@@ -16,6 +16,7 @@ import (
 
 	"github.com/y3owk1n/oku/internal/profile"
 	"github.com/y3owk1n/oku/internal/source"
+	"github.com/y3owk1n/oku/internal/status"
 	"github.com/y3owk1n/oku/internal/store"
 )
 
@@ -251,7 +252,12 @@ func runPush(cmd *cobra.Command, dir string, names []string) error {
 			continue
 		}
 
-		if err := e.store().Pack(path, dir, key); err != nil {
+		done := status.Start(cmd.Context(), "packing %s", filepath.Base(path))
+		err = e.store().Pack(path, dir, key)
+
+		done()
+
+		if err != nil {
 			return fmt.Errorf("%s: %w", filepath.Base(path), err)
 		}
 

@@ -18,6 +18,7 @@ import (
 	"github.com/y3owk1n/oku/internal/ref"
 	"github.com/y3owk1n/oku/internal/resolve"
 	"github.com/y3owk1n/oku/internal/source"
+	"github.com/y3owk1n/oku/internal/status"
 	"github.com/y3owk1n/oku/internal/store"
 )
 
@@ -146,6 +147,7 @@ func (e env) install(ctx context.Context, opts Options, req request) (installed,
 	}
 
 	m.Version.Value, m.Tag, m.TagCommit = release.Version, release.Tag, release.Commit
+	ctx = status.Scope(ctx, m.Package.Name+" "+m.Version.Value)
 
 	host := platform.Host()
 

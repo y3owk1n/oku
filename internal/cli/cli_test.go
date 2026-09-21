@@ -970,7 +970,10 @@ func TestB16SyncStopsWhenAListFromAURLChanged(t *testing.T) {
 	m.namedManifest(t, "other", "other", "other")
 
 	base := filepath.Join(m.fixtures, "base.toml")
-	must(t, os.WriteFile(base, []byte("[packages]\nextra = \""+server.URL+"/extra.toml\"\n"), 0o644))
+	must(
+		t,
+		os.WriteFile(base, []byte("[packages]\nextra = \""+server.URL+"/extra.toml\"\n"), 0o644),
+	)
 
 	must(t, os.MkdirAll(m.config, 0o755))
 	must(t, os.WriteFile(filepath.Join(m.config, "oku.toml"),
@@ -980,7 +983,10 @@ func TestB16SyncStopsWhenAListFromAURLChanged(t *testing.T) {
 		t.Fatalf("sync: %v\n%s", err, out)
 	}
 
-	must(t, os.WriteFile(base, []byte("[packages]\nother = \""+server.URL+"/other.toml\"\n"), 0o644))
+	must(
+		t,
+		os.WriteFile(base, []byte("[packages]\nother = \""+server.URL+"/other.toml\"\n"), 0o644),
+	)
 
 	_, err := m.run(t, "", "sync")
 	if err == nil || !strings.Contains(err.Error(), "oku update") {
@@ -1491,7 +1497,7 @@ func TestB106AMovingTagInstallsUpdatesAndRollsBack(t *testing.T) {
 	out, err = m.run(t, "", "update")
 	must(t, err)
 
-	if strings.Contains(out, "tool") {
+	if strings.HasPrefix(out, "tool ") || strings.Contains(out, "\ntool ") {
 		t.Fatalf("update changed a tag that did not move:\n%s", out)
 	}
 
@@ -1926,7 +1932,9 @@ func (rw rewriteHost) RoundTrip(req *http.Request) (*http.Response, error) {
 
 func TestB114AddReadsAGitHubEnterpriseHostFromTheRef(t *testing.T) {
 	m := newMachine(t)
-	manifest, err := os.ReadFile(m.manifest(t, "tool", map[string]string{"tool": script}, `bin = ["tool"]`))
+	manifest, err := os.ReadFile(
+		m.manifest(t, "tool", map[string]string{"tool": script}, `bin = ["tool"]`),
+	)
 	must(t, err)
 
 	t.Setenv("GITHUB_TOKEN", "for-github-com")
@@ -2255,10 +2263,18 @@ bin = [{ name = "tool", run = "{{dep.interp.prefix}}/bin/interp", args = ["{{pkg
 	bad := strings.Replace(path, "tool.toml", "bad.toml", 1)
 	must(t, os.WriteFile(bad, []byte(fmt.Sprintf(
 		"[package]\nname = \"bad\"\n[version]\nvalue = \"1.0.0\"\n[[artifact]]\nurl = \"file://%s\"\n"+
-			"bin = [{ name = \"bad\", run = \"{{nope}}/x\" }]\n", archive,
+			"bin = [{ name = \"bad\", run = \"{{nope}}/x\" }]\n",
+		archive,
 	)), 0o644))
 
-	if out, err = m.run(t, "", "manifest", "lint", bad); err == nil || !strings.Contains(out, "nope") {
+	if out, err = m.run(
+		t,
+		"",
+		"manifest",
+		"lint",
+		bad,
+	); err == nil ||
+		!strings.Contains(out, "nope") {
 		t.Fatalf("lint accepted an unknown variable in a bin table: %v\n%s", err, out)
 	}
 }
@@ -2322,7 +2338,10 @@ func npmServerWith(
 
 			items = append(items, fmt.Sprintf(
 				`%q: {%s"bin": {"tool": "./tool"}, "dist": {"tarball": %q, "integrity": "sha512-%s"}}`,
-				version, needs, server.URL+at, base64.StdEncoding.EncodeToString(sum[:]),
+				version,
+				needs,
+				server.URL+at,
+				base64.StdEncoding.EncodeToString(sum[:]),
 			))
 			times = append(times, fmt.Sprintf(`%q: "2026-01-02T03:04:05.000Z"`, version))
 		}
@@ -4102,7 +4121,11 @@ func TestB128EnvPkgNamesTheFilesOfAnArtifact(t *testing.T) {
 	m.apply(t)
 
 	if _, err := os.Stat(filepath.Join(os.Getenv("JDK_HOME"), "release")); err != nil {
-		t.Fatalf("JDK_HOME is %q, which does not hold the download's files: %v", os.Getenv("JDK_HOME"), err)
+		t.Fatalf(
+			"JDK_HOME is %q, which does not hold the download's files: %v",
+			os.Getenv("JDK_HOME"),
+			err,
+		)
 	}
 }
 
@@ -5813,5 +5836,38 @@ func TestB105OneHookLineSetsUpPathForOkuAndItsPrograms(t *testing.T) {
 
 	if !strings.Contains(out, "~/.zshrc") || !strings.Contains(out, "hook zsh") {
 		t.Fatalf("add did not say which line goes into which file:\n%s", out)
+	}
+}
+
+func TestB176WaitsSayWhatTheyWaitFor(t *testing.T) {
+	m := newMachine(t)
+
+	out, err := m.run(
+		t,
+		"",
+		"add",
+		"--yes",
+		m.buildManifest(t, false, `needs = ["sh"]`, writeTool+installTool),
+	)
+	must(t, err)
+
+	if !strings.Contains(out, "tool 1.0.0: building, step 1 of 2 (run)\n") {
+		t.Fatalf("add did not say which build step it waited for:\n%s", out)
+	}
+
+	script := "#!/bin/sh\necho hi\n"
+
+	out, err = m.run(
+		t,
+		"",
+		"add",
+		m.manifest(t, "other", map[string]string{"other": script}, `bin = ["other"]`),
+	)
+	must(t, err)
+
+	for _, want := range []string{"other 1.2.3: downloading file://", "other 1.2.3: unpacking other"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("add did not print %q:\n%s", want, out)
+		}
 	}
 }

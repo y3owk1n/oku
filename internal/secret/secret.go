@@ -16,6 +16,8 @@ import (
 
 	"filippo.io/age"
 	"filippo.io/age/armor"
+
+	"github.com/y3owk1n/oku/internal/status"
 )
 
 // ageIntro starts a binary age file.
@@ -141,7 +143,11 @@ func (d Decrypter) sops(ctx context.Context, s Source) ([]byte, error) {
 
 	cmd.Stderr = &stderr
 
+	done := status.Start(ctx, "decrypting %s", describe(s))
 	value, err := cmd.Output()
+
+	done()
+
 	if err != nil {
 		// sops explains a failure on stderr, and prints a value only on stdout.
 		reason := strings.ReplaceAll(strings.TrimSpace(stderr.String()), file, s.Name)

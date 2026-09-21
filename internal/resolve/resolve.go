@@ -15,6 +15,7 @@ import (
 
 	"github.com/y3owk1n/oku/internal/forge"
 	"github.com/y3owk1n/oku/internal/manifest"
+	"github.com/y3owk1n/oku/internal/status"
 )
 
 // Resolver lists versions.
@@ -163,6 +164,8 @@ func Satisfies(version, constraint string) (bool, error) {
 
 // List returns the releases of v, newest first.
 func (r *Resolver) List(ctx context.Context, v manifest.Version) ([]Release, error) {
+	defer status.Start(ctx, "looking up the versions of %s", v.Repo)()
+
 	if v.Tag != "" {
 		release, err := r.movingTag(ctx, v)
 		if err != nil {

@@ -16,6 +16,7 @@ import (
 	"strings"
 
 	"github.com/y3owk1n/oku/internal/forge"
+	"github.com/y3owk1n/oku/internal/status"
 )
 
 // maxManifest is the most bytes Fetch reads from a server.
@@ -69,6 +70,10 @@ func file(ctx context.Context, host forge.Forge, repo, commit, path string) ([]b
 // Fetch reads the file r points at as a t. A non-empty commit pins GitHub and
 // Git refs to it. An empty commit means the default branch's newest commit.
 func (f *Fetcher) Fetch(ctx context.Context, r Ref, commit string, t Target) (Fetched, error) {
+	if r.Kind != File {
+		defer status.Start(ctx, "reading %s", r)()
+	}
+
 	switch r.Kind {
 	case File:
 		data, err := os.ReadFile(r.Location)

@@ -14,6 +14,8 @@ import (
 
 	"aead.dev/minisign"
 	"github.com/klauspost/compress/zstd"
+
+	"github.com/y3owk1n/oku/internal/status"
 )
 
 const (
@@ -44,7 +46,11 @@ func (s *Store) Substitute(
 	for _, location := range locations {
 		url := entryURL(location, filepath.Base(prefix))
 
+		done := status.Start(ctx, "looking in the cache %s", location)
 		note, err := s.substituteFrom(ctx, prefix, url, keys)
+
+		done()
+
 		if err != nil {
 			return false, notes, err
 		}

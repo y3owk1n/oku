@@ -24,6 +24,7 @@ import (
 	"github.com/y3owk1n/oku/internal/service"
 	"github.com/y3owk1n/oku/internal/settings"
 	"github.com/y3owk1n/oku/internal/source"
+	"github.com/y3owk1n/oku/internal/status"
 	"github.com/y3owk1n/oku/internal/store"
 )
 
@@ -70,6 +71,9 @@ func NewRootCmd(opts Options) *cobra.Command {
 		Version:       opts.Version,
 		SilenceUsage:  true,
 		SilenceErrors: true,
+		PersistentPreRun: func(cmd *cobra.Command, _ []string) {
+			cmd.SetContext(status.With(cmd.Context(), status.New(cmd.ErrOrStderr())))
+		},
 	}
 
 	root.PersistentFlags().BoolP(

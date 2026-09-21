@@ -25,6 +25,7 @@ import (
 	"github.com/y3owk1n/oku/internal/infer"
 	"github.com/y3owk1n/oku/internal/manifest"
 	"github.com/y3owk1n/oku/internal/platform"
+	"github.com/y3owk1n/oku/internal/status"
 )
 
 // metaFile is the description oku writes into every store path.
@@ -218,7 +219,12 @@ func (s *Store) Realize(
 	}
 	defer os.RemoveAll(tmp)
 
-	if err := unpack(download, tmp, a); err != nil {
+	done := status.Start(ctx, "unpacking %s", path.Base(a.URL))
+	err = unpack(download, tmp, a)
+
+	done()
+
+	if err != nil {
 		return Realized{}, fmt.Errorf("unpack %s: %w", a.URL, err)
 	}
 
