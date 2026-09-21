@@ -50,6 +50,10 @@ type Item struct {
 	HadPrior bool   `toml:"had_prior,omitempty"`
 }
 
+// Holds reports whether items holds item, apart from the value a setting had
+// before oku wrote it.
+func Holds(items []Item, item Item) bool { return wants(items, item) }
+
 // wants reports whether items holds item, apart from what a Handler's Before
 // added to the one in the ledger.
 func wants(items []Item, item Item) bool {

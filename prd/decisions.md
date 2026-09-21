@@ -652,6 +652,11 @@ command that finds `pending.toml` does that revert before anything else, and
 says so. When a revert step fails too, oku stops, names what is left and keeps
 `pending.toml`, and `oku doctor` reports it.
 
+`--dry-run` on `sync` and `update` runs the plan, prints what the apply would
+do, and stops. It can still fill the store and the cache, like any plan. It does
+not revert a change that did not finish, because that would change the machine,
+and says to run `oku sync` first.
+
 Why: after a half-applied change the machine matches neither the old list nor
 the new one, and the user cannot tell which parts changed. Before this, a
 failure while exposing left the new generation active beside the old lock.

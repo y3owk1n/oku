@@ -15,6 +15,11 @@ import (
 	"github.com/y3owk1n/oku/internal/store"
 )
 
+const (
+	dryRunFlag  = "dry-run"
+	dryRunUsage = "check everything and print what would change, without changing the machine"
+)
+
 func newSyncCmd(opts Options) *cobra.Command {
 	var flags buildFlags
 
@@ -57,7 +62,10 @@ oku.toml yet.`,
 					return err
 				}
 
-				if err := reconcile(cmd, opts, &flags, nil, false, &before); err != nil {
+				err = reconcile(cmd, opts, &flags, nil, false, &before)
+
+				// A dry run adopts nothing either.
+				if dryRun, _ := cmd.Flags().GetBool(dryRunFlag); err != nil || dryRun {
 					return errors.Join(err, e.restoreSavedLists(before))
 				}
 
@@ -70,6 +78,7 @@ oku.toml yet.`,
 
 	flags.register(cmd)
 	cmd.Flags().Bool(systemFlag, false, systemUsage)
+	cmd.Flags().Bool(dryRunFlag, false, dryRunUsage)
 
 	return cmd
 }
@@ -91,6 +100,7 @@ func newUpdateCmd(opts Options) *cobra.Command {
 
 	flags.register(cmd)
 	cmd.Flags().Bool(systemFlag, false, systemUsage)
+	cmd.Flags().Bool(dryRunFlag, false, dryRunUsage)
 
 	return cmd
 }
@@ -240,16 +250,17 @@ func reconcile(
 	}
 
 	system, _ := cmd.Flags().GetBool(systemFlag)
+	dryRun, _ := cmd.Flags().GetBool(dryRunFlag)
 
 	c := change{
-		to: staged, staged: true, system: system, before: before,
+		to: staged, staged: true, system: system, before: before, dryRun: dryRun,
 		commit: func() error { return next.Write(e.lockPath()) },
 	}
 	if staged == 0 {
 		c.to, c.staged = e.profile().Current(), false
 	}
 
-	if err := e.apply(cmd, opts, c); err != nil {
+	if err := e.apply(cmd, opts, c); err != nil || dryRun {
 		return err
 	}
 

@@ -216,3 +216,54 @@ func TestB134DoctorReportsAChangeThatOkuCouldNotUndo(t *testing.T) {
 		t.Fatal("the sync after the repair did not install the service")
 	}
 }
+
+func TestB167ADryRunChecksEverythingAndChangesNothing(t *testing.T) {
+	m := newMachine(t)
+
+	_, err := m.run(t, "", "add", m.desktopManifest(t))
+	must(t, err)
+
+	lock, err := os.ReadFile(filepath.Join(m.config, "oku.lock"))
+	must(t, err)
+
+	m.writeList(t, map[string]string{"bard": m.serviceNamed(t, "bard")})
+	must(t, os.WriteFile(filepath.Join(m.config, "oku.toml"), []byte(
+		"[packages]\nbard = \""+m.serviceNamed(t, "bard")+"\"\n"+
+			"[files]\n\"{{home}}/.hello\" = { text = \"hi\" }\n",
+	), 0o644))
+
+	out, err := m.run(t, "", "sync", "--dry-run")
+	must(t, err)
+
+	for _, want := range []string{
+		"would remove the package foo", "would install bard",
+		"would write the file " + home(".hello"), "would remove the font",
+		"dry run: nothing was changed",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("the dry run does not say %q:\n%s", want, out)
+		}
+	}
+
+	_, font := m.exposedPaths()
+
+	if !exists(font) || exists(home(".hello")) || m.generation(t) != "gen-1" ||
+		exists(filepath.Join(m.data, "profiles", "global", "gen-2")) || exists(m.pending()) {
+		t.Fatalf("the dry run changed the machine:\n%s", out)
+	}
+
+	if _, installed := m.services.state["bard"]; installed {
+		t.Fatal("the dry run installed a service")
+	}
+
+	if got, _ := os.ReadFile(filepath.Join(m.config, "oku.lock")); string(got) != string(lock) {
+		t.Fatal("the dry run wrote oku.lock")
+	}
+
+	// A dry run finds what a sync would fail on.
+	must(t, os.WriteFile(home(".hello"), []byte("mine"), 0o644))
+
+	if _, err := m.run(t, "", "sync", "--dry-run"); err == nil || !strings.Contains(err.Error(), home(".hello")) {
+		t.Fatalf("the dry run should fail like the sync would, got %v", err)
+	}
+}
