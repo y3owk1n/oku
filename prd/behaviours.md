@@ -86,6 +86,9 @@ order step in `prd/product.md`.
   versions never move, and `sync` installs the locked version without asking
   upstream for versions. A package pinned in `oku.toml` stays on its version
   through `update`.
+- B177 [3] With `version.from = "git-branch"`, `add` builds the newest commit of
+  `version.branch` as version `<date>-<commit>`. `sync` builds the locked commit
+  after the branch has moved, and `update` takes the newest commit.
 - B106 [3] With `[version] tag`, `add` installs the release of that tag, also
   when it is a prerelease, as version `<date>-<commit>`, the day and the first
   seven characters of the commit the tag points at. `update` moves the
