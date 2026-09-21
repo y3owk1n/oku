@@ -112,17 +112,36 @@ func (g *github) Release(ctx context.Context, repo, tag string) (Release, error)
 	return found.release(), err
 }
 
+// releasePage and releasePages give the newest 100 releases. One page of 100
+// can be larger than maxBody, because every release lists all of its assets.
+const (
+	releasePage  = 25
+	releasePages = 4
+)
+
 // Releases reads the newest 100 releases.
 func (g *github) Releases(ctx context.Context, repo string) ([]Release, error) {
-	var found []githubRelease
+	var releases []Release
 
-	if err := g.json(ctx, "/repos/"+repo+"/releases?per_page=100", &found); err != nil {
-		return nil, err
-	}
+	for page := 1; page <= releasePages; page++ {
+		var found []githubRelease
 
-	releases := make([]Release, len(found))
-	for i, release := range found {
-		releases[i] = release.release()
+		err := g.json(
+			ctx,
+			fmt.Sprintf("/repos/%s/releases?per_page=%d&page=%d", repo, releasePage, page),
+			&found,
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		for _, release := range found {
+			releases = append(releases, release.release())
+		}
+
+		if len(found) < releasePage {
+			break
+		}
 	}
 
 	return releases, nil
