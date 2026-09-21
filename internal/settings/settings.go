@@ -16,6 +16,12 @@ import (
 	"strings"
 )
 
+// CurrentHost starts the domain of a macOS preference that belongs to this one
+// Mac and not to the user on every Mac, which `defaults -currentHost` writes.
+// The list names such a domain in its own table, and the store reads the prefix
+// to tell the two apart.
+const CurrentHost = "currentHost:"
+
 // Store is one mechanism of the OS that holds settings, such as the preference
 // domains of macOS.
 type Store interface {

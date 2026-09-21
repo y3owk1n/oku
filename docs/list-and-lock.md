@@ -232,12 +232,25 @@ AppleLanguages = ["en-SG", "ms-MY"]
 | Table | OS | Status |
 |---|---|---|
 | `[defaults."<domain>"]` | macOS | Works. oku writes through `/usr/bin/defaults`. |
+| `[defaults-currenthost."<domain>"]` | macOS | Works. A setting of this one Mac, which `defaults -currentHost` writes. |
 | `[registry.'HKCU\...']` | Windows | Works. oku writes through `reg.exe`. A key outside `HKCU` is an error on every OS. |
 | `[dconf."<path>"]` | Linux | Works. oku writes through the `dconf` tool. |
 
 oku skips the tables of another OS, so one list serves every machine. On Linux
 it also skips `[dconf]` when the `dconf` tool is not installed, as on a server,
 and prints `[dconf] is skipped, because the dconf tool is not on PATH`.
+
+macOS keeps some settings per Mac and not per user, in
+`~/Library/Preferences/ByHost/`. The battery percentage in the menu bar is one.
+Such a key does nothing in `[defaults]`. Put it in `[defaults-currenthost]`:
+
+```toml
+[defaults-currenthost."com.apple.controlcenter"]
+BatteryShowPercentage = true
+```
+
+`defaults -currentHost read <domain>` shows what a Mac holds there. oku prints
+such a setting as `currentHost:com.apple.controlcenter BatteryShowPercentage`.
 
 Quote a domain that has a dot. `[defaults.com.apple.dock]` without quotes is a
 table `com` that holds a table `apple`, and not the domain you meant.
