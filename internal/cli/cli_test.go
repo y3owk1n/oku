@@ -2491,6 +2491,55 @@ func TestB29ManifestBumpMovesVersionAndChecksums(t *testing.T) {
 	}
 }
 
+func TestManifestBumpReadsReleasesFromAGitLabRef(t *testing.T) {
+	m := newMachine(t)
+
+	_, oldSum := m.archive(t, "tool-1.0.0", map[string]string{"tool": "#!/bin/sh\necho 1.0.0\n"})
+	_, newSum := m.archive(t, "tool-1.1.0", map[string]string{"tool": "#!/bin/sh\necho 1.1.0\n"})
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.EscapedPath() != "/api/v4/projects/group%2Fsub%2Ftool/releases" {
+			http.NotFound(w, r)
+
+			return
+		}
+
+		_, _ = w.Write([]byte(`[{"tag_name": "v1.1.0"}, {"tag_name": "v1.0.0"}]`))
+	}))
+	t.Cleanup(server.Close)
+
+	target, err := url.Parse(server.URL)
+	must(t, err)
+
+	client := http.DefaultClient.Transport
+	http.DefaultClient.Transport = rewriteHost{host: "gitlab.com", server: target}
+
+	t.Cleanup(func() { http.DefaultClient.Transport = client })
+
+	path := filepath.Join(m.fixtures, "tool.toml")
+	must(t, os.WriteFile(path, []byte(fmt.Sprintf(
+		"[package]\nname = \"tool\"\n[version]\nvalue = \"1.0.0\"\n"+
+			"[[artifact]]\nurl = \"file://%s/tool-{{version}}.tar.gz\"\nsha256 = %q\nbin = [\"tool\"]\n",
+		m.fixtures, oldSum,
+	)), 0o644))
+
+	out, err := m.run(
+		t, "", "manifest", "bump", path, "--repo", "gitlab:group/sub/tool", "--strip-prefix", "v",
+	)
+	if err != nil {
+		t.Fatalf("bump: %v\n%s", err, out)
+	}
+
+	bumped, err := os.ReadFile(path)
+	must(t, err)
+
+	for _, want := range []string{`value = "1.1.0"`, newSum} {
+		if !strings.Contains(string(bumped), want) {
+			t.Fatalf("the bumped manifest lacks %q:\n%s", want, bumped)
+		}
+	}
+}
+
 // buildManifest writes a manifest for "tool" that has a prebuilt artifact
 // printing "prebuilt" and a [build] made of steps. extra goes into [build].
 func (m machine) buildManifest(t *testing.T, withArtifact bool, extra, steps string) string {
