@@ -169,6 +169,9 @@ order step in `prd/product.md`.
   `oku.lock` pins a digest of what it installed.
 - B127 [4] Without `runtimes.node`, the programs of an npm package run the
   `node` on `PATH`, and `add` says how to pin one.
+- B186 [4] A download that is the program itself may list one table `bin`
+  instead of a path. The file keeps the name it has in the URL, without the
+  suffix of a compression, and `run` or `args` name it as `{{pkg}}/<name>`.
 - B117 [4] `oku add <url>` on a URL that is no manifest infers a one-artifact
   manifest for the host from the download, says so, prints it with `--verbose`,
   and warns that it trusted the download. A URL that holds a manifest stays a
