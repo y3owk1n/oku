@@ -86,7 +86,7 @@ fd --version
 oku doctor                     # checks PATH, the hook, the sandbox and the profiles
 ```
 
-[Getting started](docs/getting-started.md)
+[Getting started](docs/getting-started.md) . [Author Config That Replaced Nix Darwin](https://github.com/y3owk1n/oku-config)
 
 ---
 
