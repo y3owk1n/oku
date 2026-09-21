@@ -287,6 +287,10 @@ order step in `prd/product.md`.
 - B111 [11] `oku self update --nightly` replaces the oku binary with the build
   of the `nightly` release after the same signature check, and changes nothing
   when the running binary is that build.
+- B176 [11] While oku waits for a download, a lookup, a clone, an unpack, a
+  cache or a build step, stderr says what it waits for and for which package.
+  A terminal shows one line with the time and the bytes so far, which goes
+  away when the wait ends. Anything else gets one line for each wait.
 - B93 [11] The install script puts one static binary in place and prints the
   hook line for the user's shell. It needs no root and edits no existing file.
 

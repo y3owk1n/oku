@@ -10,6 +10,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/y3owk1n/oku/internal/profile"
+	"github.com/y3owk1n/oku/internal/status"
 )
 
 func newGCCmd() *cobra.Command {
@@ -110,7 +111,11 @@ func runGC(cmd *cobra.Command, keep int, dryRun bool) error {
 	var freed int64
 
 	for _, st := range e.stores() {
+		done := status.Start(cmd.Context(), "scanning the store for unused packages")
 		found, err := st.Unreferenced(used)
+
+		done()
+
 		if err != nil {
 			return err
 		}
@@ -124,7 +129,7 @@ func runGC(cmd *cobra.Command, keep int, dryRun bool) error {
 
 			unused[path] = found[path]
 			freed += found[path]
-			fmt.Fprintf(out, "%s %s (%s)\n", verb, filepath.Base(path), formatSize(found[path]))
+			fmt.Fprintf(out, "%s %s (%s)\n", verb, filepath.Base(path), status.Size(found[path]))
 		}
 	}
 
@@ -144,26 +149,7 @@ func runGC(cmd *cobra.Command, keep int, dryRun bool) error {
 		summary = "would free"
 	}
 
-	fmt.Fprintf(out, "%s %s from %d %s\n", summary, formatSize(freed), len(unused), noun)
+	fmt.Fprintf(out, "%s %s from %d %s\n", summary, status.Size(freed), len(unused), noun)
 
 	return nil
-}
-
-func formatSize(bytes int64) string {
-	const unit = 1024
-
-	if bytes < unit {
-		return fmt.Sprintf("%d B", bytes)
-	}
-
-	value, suffix := float64(bytes)/unit, "KiB"
-	for _, next := range []string{"MiB", "GiB", "TiB"} {
-		if value < unit {
-			break
-		}
-
-		value, suffix = value/unit, next
-	}
-
-	return fmt.Sprintf("%.1f %s", value, suffix)
 }

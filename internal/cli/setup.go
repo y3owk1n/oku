@@ -15,6 +15,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/y3owk1n/oku/internal/source"
+	"github.com/y3owk1n/oku/internal/status"
 )
 
 func newSetupCmd(opts Options) *cobra.Command {
@@ -128,6 +129,8 @@ func elevate(ctx context.Context, opts Options, argv []string) error {
 	if opts.Elevate != nil {
 		return opts.Elevate(ctx, argv)
 	}
+
+	defer status.Pause(ctx)()
 
 	command := elevatedCommand(ctx, argv)
 	command.Stdin, command.Stdout, command.Stderr = os.Stdin, os.Stdout, os.Stderr

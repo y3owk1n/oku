@@ -13,6 +13,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"github.com/y3owk1n/oku/internal/status"
 )
 
 // fetch downloads url into the cache and returns the file's path and digest. It
@@ -32,6 +34,8 @@ func (s *Store) fetch(ctx context.Context, url, wantSHA string) (string, string,
 		}
 	}
 
+	defer status.Start(ctx, "downloading %s", url)()
+
 	resp, err := s.get(ctx, url)
 	if err != nil {
 		return "", "", err
@@ -46,7 +50,7 @@ func (s *Store) fetch(ctx context.Context, url, wantSHA string) (string, string,
 
 	hash := sha256.New()
 
-	_, err = io.Copy(io.MultiWriter(tmp, hash), resp.Body)
+	_, err = io.Copy(io.MultiWriter(tmp, hash), status.Reader(ctx, resp.Body, resp.ContentLength))
 	if closeErr := tmp.Close(); err == nil {
 		err = closeErr
 	}
@@ -134,6 +138,8 @@ var hexDigestRe = regexp.MustCompile(`\b[0-9a-fA-F]{64}\b`)
 // publishedSHA256 reads the digest of fileName from a checksum file at url. The
 // file holds either one digest or "digest  name" lines such as sha256sum writes.
 func (s *Store) publishedSHA256(ctx context.Context, url, fileName string) (string, error) {
+	defer status.Start(ctx, "reading the checksums at %s", url)()
+
 	resp, err := s.get(ctx, url)
 	if err != nil {
 		return "", err

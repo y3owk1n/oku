@@ -15,6 +15,7 @@ import (
 	"github.com/y3owk1n/oku/internal/expose"
 	"github.com/y3owk1n/oku/internal/list"
 	"github.com/y3owk1n/oku/internal/profile"
+	"github.com/y3owk1n/oku/internal/status"
 )
 
 // pendingFile exists only while oku applies a change. It holds what a revert
@@ -296,6 +297,8 @@ func (e env) describe(cmd *cobra.Command, c change, plan exposePlan) error {
 
 // revert puts the machine back to generation p.From.
 func (e env) revert(ctx context.Context, opts Options, p pending) error {
+	defer status.Start(ctx, "undoing the change")()
+
 	e.project = p.Project
 	prof := e.profile()
 

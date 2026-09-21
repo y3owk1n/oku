@@ -27,6 +27,7 @@ import (
 	"github.com/y3owk1n/oku/internal/npm"
 	"github.com/y3owk1n/oku/internal/platform"
 	"github.com/y3owk1n/oku/internal/sandbox"
+	"github.com/y3owk1n/oku/internal/status"
 )
 
 // outputTail is how many lines of a failed step's output the error shows.
@@ -66,6 +67,9 @@ func (s *Store) Build(
 ) (Realized, error) {
 	build := m.Build
 	deps, log := opts.Deps, opts.Log
+	if log != nil {
+		log = status.Writer(ctx, log)
+	}
 
 	prefix := s.BuildPath(m, p, deps)
 
@@ -158,6 +162,9 @@ func (s *Store) Build(
 
 		var err error
 
+		kinds := strings.Join(step.Kinds(), ",")
+		done := status.Start(ctx, "building, step %d of %d (%s)", i+1, len(build.Steps), kinds)
+
 		switch {
 		case step.Run != nil:
 			result.Impure = result.Impure || step.Network
@@ -182,15 +189,17 @@ func (s *Store) Build(
 			err = s.runStep(ctx, step, src, prefix, vars)
 		}
 
+		done()
+
 		if opts.Progress != nil {
-			opts.Progress(i, len(build.Steps), strings.Join(step.Kinds(), ","), err)
+			opts.Progress(i, len(build.Steps), kinds, err)
 		}
 
 		if err != nil {
 			os.RemoveAll(prefix)
 
 			return Realized{}, fmt.Errorf(
-				"build.step[%d] (%s) failed: %w", i, strings.Join(step.Kinds(), ","), err,
+				"build.step[%d] (%s) failed: %w", i, kinds, err,
 			)
 		}
 	}
@@ -343,6 +352,8 @@ func (s *Store) fetchSource(
 			args = append(args, "--branch", tag)
 		}
 
+		defer status.Start(ctx, "cloning %s", source.Git)()
+
 		cmd := exec.CommandContext(ctx, "git", append(args, "--", source.Git, src)...)
 		cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
 
@@ -390,6 +401,8 @@ func (s *Store) fetchSource(
 		if err != nil {
 			return fetchedSource{}, err
 		}
+
+		defer status.Start(ctx, "unpacking %s", path.Base(url))()
 
 		return fetchedSource{url: url, sha256: got, firstUse: !stated && pinned == ""},
 			extract(download, src, source.Strip)

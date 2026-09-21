@@ -25,6 +25,12 @@ a list act on that [project](projects.md) and print `project <dir>` on stderr.
 `--global`, or `-g`, makes them use the global list instead. It works on every
 command.
 
+While oku waits, it says on stderr what it waits for: reading a manifest,
+looking up versions, downloading, unpacking, cloning, asking a cache, or running
+a build step, with the package's name in front. In a terminal that is one line
+with the bytes and the time so far, and it goes away when the wait ends. In a
+pipe or a CI log, each wait is one plain line, as it is with `TERM=dumb`.
+
 ## JSON output
 
 The commands that print data take `--json` and then print JSON on stdout in
