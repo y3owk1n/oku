@@ -77,6 +77,11 @@ func (s *Store) get(ctx context.Context, url string) (*http.Response, error) {
 
 	req.Header.Set("User-Agent", "oku")
 
+	// Go drops this header when a redirect leaves the host.
+	if header := s.auth.For(url); header != "" {
+		req.Header.Set("Authorization", header)
+	}
+
 	resp, err := s.http.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("download %s: %w", url, err)

@@ -44,6 +44,14 @@ func (g *gitea) Kind() string { return KindGitea }
 
 func (g *gitea) Host() string { return g.host }
 
+func (g *gitea) Auth() Auth {
+	if g.token == "" {
+		return Auth{}
+	}
+
+	return Auth{Host: g.host, Header: "token " + g.token}
+}
+
 func (g *gitea) Home(repo string) string {
 	return "https://" + g.host + "/" + repo
 }

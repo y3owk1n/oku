@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -28,6 +29,8 @@ type Forge interface {
 	Kind() string
 	// Host is the host's name, or "" for github.com.
 	Host() string
+	// Auth returns the login for downloads from this host.
+	Auth() Auth
 	// Home returns the web page of repo.
 	Home(repo string) string
 	// Head returns the newest commit of the default branch.
@@ -62,6 +65,24 @@ type Asset struct {
 	URL  string
 	// Digest is the sha256 the host reports, or "".
 	Digest string
+}
+
+// Auth is the Authorization header for the downloads of one host. The zero
+// value sends nothing.
+type Auth struct {
+	Host   string
+	Header string
+}
+
+// For returns the header for a download at rawURL, or "". It is for https URLs
+// on Host only, so a token never goes to another server or over plain http.
+func (a Auth) For(rawURL string) string {
+	at, err := url.Parse(rawURL)
+	if err != nil || a.Header == "" || at.Scheme != "https" || at.Host != a.Host {
+		return ""
+	}
+
+	return a.Header
 }
 
 // Commit is a commit and the time it was made.
@@ -146,6 +167,23 @@ func (h Hosts) Open(scheme, location string) (Forge, string, error) {
 	default:
 		return nil, "", fmt.Errorf("%q is not a forge oku knows", scheme)
 	}
+}
+
+// AuthFor returns the login for a package's downloads. from and repo are the
+// version.from and version.repo of its manifest. A manifest that does not
+// follow a forge's releases gets nothing.
+func (h Hosts) AuthFor(from, repo string) Auth {
+	kind, ok := strings.CutSuffix(from, "-releases")
+	if !ok {
+		return Auth{}
+	}
+
+	server, _, err := h.Open(kind, repo)
+	if err != nil {
+		return Auth{}
+	}
+
+	return server.Auth()
 }
 
 // gitea returns the Gitea or Forgejo server at host. CODEBERG_TOKEN is for

@@ -19,6 +19,7 @@ import (
 
 	"github.com/pelletier/go-toml/v2"
 
+	"github.com/y3owk1n/oku/internal/forge"
 	"github.com/y3owk1n/oku/internal/infer"
 	"github.com/y3owk1n/oku/internal/manifest"
 	"github.com/y3owk1n/oku/internal/platform"
@@ -36,6 +37,16 @@ type Store struct {
 	dir   string
 	cache string
 	http  *http.Client
+	// auth is the login for downloads from one host.
+	auth forge.Auth
+}
+
+// As returns a store that sends auth with the downloads it is for.
+func (s *Store) As(auth forge.Auth) *Store {
+	with := *s
+	with.auth = auth
+
+	return &with
 }
 
 // Meta describes a realized package.

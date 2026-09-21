@@ -13,6 +13,7 @@ import (
 
 	"github.com/y3owk1n/oku/internal/dirs"
 	"github.com/y3owk1n/oku/internal/expose"
+	"github.com/y3owk1n/oku/internal/forge"
 	"github.com/y3owk1n/oku/internal/infer"
 	"github.com/y3owk1n/oku/internal/list"
 	"github.com/y3owk1n/oku/internal/lock"
@@ -257,7 +258,12 @@ func (e env) resolver(opts Options) *resolve.Resolver {
 }
 
 func (e env) inferrer(opts Options) *infer.Inferrer {
-	return &infer.Inferrer{Hosts: e.fetcher(opts).Hosts, Inspect: e.store().Inspect}
+	return &infer.Inferrer{
+		Hosts: e.fetcher(opts).Hosts,
+		Inspect: func(ctx context.Context, url string, auth forge.Auth) ([]infer.File, error) {
+			return e.store().As(auth).Inspect(ctx, url)
+		},
+	}
 }
 
 func (e env) globalProfile() *profile.Profile {
