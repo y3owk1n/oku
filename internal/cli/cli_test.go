@@ -737,6 +737,56 @@ func TestArtifactChecksumComesFromSHA256URL(t *testing.T) {
 	}
 }
 
+func TestB178SyncOfAnInstalledPackageReadsNoChecksums(t *testing.T) {
+	m := newMachine(t)
+	archive, sum := m.archive(t, "tool", map[string]string{"tool": script})
+	sums := filepath.Join(m.fixtures, "checksums.txt")
+
+	must(t, os.WriteFile(sums, []byte(sum+"  tool.tar.gz\n"), 0o644))
+
+	ref := m.rawManifest(t, "tool", fmt.Sprintf(
+		"[[artifact]]\nurl = \"file://%s\"\nsha256_url = \"file://%s\"\nbin = [\"tool\"]\n",
+		archive, sums,
+	))
+
+	_, err := m.run(t, "", "add", ref)
+	must(t, err)
+
+	must(t, os.Remove(sums))
+
+	if out, err := m.run(t, "", "sync"); err != nil {
+		t.Fatalf("sync read the checksums of a package the store holds: %v\n%s", err, out)
+	}
+}
+
+func TestB178ParallelEnvLimitsHowManyPackagesInstallAtOnce(t *testing.T) {
+	m := newMachine(t)
+	one := m.manifest(t, "one", map[string]string{"one": script}, `bin = ["one"]`)
+	two := m.manifest(t, "two", map[string]string{"two": script}, `bin = ["two"]`)
+
+	t.Setenv("OKU_PARALLEL", "1")
+
+	for _, ref := range []string{one, two} {
+		_, err := m.run(t, "", "add", ref)
+		must(t, err)
+	}
+
+	must(t, os.RemoveAll(m.data))
+
+	out, err := m.run(t, "", "sync")
+	must(t, err)
+
+	if !strings.Contains(out, "profile now holds 2 packages") {
+		t.Fatalf("sync with one package at a time installed something else:\n%s", out)
+	}
+
+	t.Setenv("OKU_PARALLEL", "many")
+
+	if _, err := m.run(t, "", "sync"); err == nil || !strings.Contains(err.Error(), "OKU_PARALLEL") {
+		t.Fatalf("want an error that names OKU_PARALLEL, got %v", err)
+	}
+}
+
 func TestB12SyncMakesProfileMatchListAtLockedVersions(t *testing.T) {
 	const first, second = "1111111111111111111111111111111111111111", "2222222222222222222222222222222222222222"
 

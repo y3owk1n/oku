@@ -46,6 +46,9 @@ order step in `prd/product.md`.
   `oku.lock`.
 - B12 [2] `oku sync` makes the profile match `oku.toml`: missing packages are
   installed, undeclared ones are dropped, locked versions are used.
+- B178 [2] `sync` and `update` install 8 packages at once, or the number in
+  `OKU_PARALLEL`, and build one package at a time. A package the store holds
+  at its locked checksum is not checked against its server again.
 - B13 [2] `sync` stops with an error when a fetched manifest's hash differs
   from the lock. `update` clears it.
 - B14 [2] A checksum learned on first use is written to the lock and enforced

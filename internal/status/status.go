@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"slices"
 	"sync"
 	"time"
 
@@ -36,7 +37,9 @@ type Reporter struct {
 }
 
 type task struct {
-	text    string
+	text string
+	// scope is the Scope of the context that started the wait.
+	scope   string
 	started time.Time
 	// read and total count the bytes of a download. total is -1 when unknown.
 	read, total int64
@@ -86,15 +89,18 @@ func Start(ctx context.Context, format string, args ...any) func() {
 	}
 
 	text := fmt.Sprintf(format, args...)
-	if scope, _ := ctx.Value(scopeKey{}).(string); scope != "" {
+
+	scope, _ := ctx.Value(scopeKey{}).(string)
+	if scope != "" {
 		text = scope + ": " + text
 	}
 
-	return r.start(text)
+	return r.start(text, scope)
 }
 
 // Reader adds the bytes read from in to the innermost wait of ctx. total is the
-// expected size, or -1.
+// expected size, or -1. Packages install in parallel, so the wait is the newest
+// one with the Scope of ctx.
 func Reader(ctx context.Context, in io.Reader, total int64) io.Reader {
 	r, _ := ctx.Value(reporterKey{}).(*Reporter)
 	if r == nil || !r.live {
@@ -104,14 +110,17 @@ func Reader(ctx context.Context, in io.Reader, total int64) io.Reader {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	if len(r.tasks) == 0 {
-		return in
+	scope, _ := ctx.Value(scopeKey{}).(string)
+
+	for _, t := range slices.Backward(r.tasks) {
+		if t.scope == scope {
+			t.total = total
+
+			return &countingReader{in: in, r: r, t: t}
+		}
 	}
 
-	t := r.tasks[len(r.tasks)-1]
-	t.total = total
-
-	return &countingReader{in: in, r: r, t: t}
+	return in
 }
 
 // Writer returns a writer for output that may arrive during a wait, such as a
@@ -145,8 +154,8 @@ func Pause(ctx context.Context) func() {
 	}
 }
 
-func (r *Reporter) start(text string) func() {
-	t := &task{text: text, started: time.Now(), total: -1}
+func (r *Reporter) start(text, scope string) func() {
+	t := &task{text: text, scope: scope, started: time.Now(), total: -1}
 
 	r.mu.Lock()
 	defer r.mu.Unlock()

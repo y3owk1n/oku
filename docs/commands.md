@@ -249,6 +249,12 @@ run `oku update ripgrep` to accept it
 If any package fails, `sync` leaves the profile unchanged. When an app, a font
 or a service cannot be set up, oku takes back the ones it had already changed.
 
+`sync` and `update` install 8 packages at once, and `OKU_PARALLEL` sets another
+number, such as `OKU_PARALLEL=1` for one after another. Builds from source still
+run one at a time, because each build uses every core. A package that is in the
+store already at the version in the lock needs no request to its server, so a
+sync with nothing to do is fast and works offline.
+
 Output is either `already in sync` or a line such as
 `profile now holds 12 packages`.
 

@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 
 	"github.com/y3owk1n/oku/internal/infer"
 	"github.com/y3owk1n/oku/internal/lock"
@@ -87,9 +88,95 @@ type request struct {
 	// stack holds the refs being installed above this one. A ref that is already
 	// in it is a dependency cycle.
 	stack []string
-	// deps holds the deps this run already installed, so packages that share a
-	// dep look it up once. With a nil map, install installs every dep again.
-	deps map[string]installed
+	// root names the package of the list that this install belongs to.
+	root string
+	// deps holds the deps this run installs, so packages that share a dep install
+	// it once. With nil, install installs every dep again.
+	deps *depCache
+}
+
+// buildMu lets one package build at a time. A build uses every core, and its
+// approval prompt needs the terminal to itself.
+var buildMu sync.Mutex
+
+// depCache shares deps between the packages of one run, which install in
+// parallel.
+type depCache struct {
+	mu      sync.Mutex
+	entries map[string]*depEntry
+	// waiting holds the key each root waits for. A cycle between the deps of two
+	// roots would otherwise leave both waiting forever.
+	waiting map[string]string
+}
+
+type depEntry struct {
+	root string
+	done chan struct{}
+	got  installed
+	err  error
+}
+
+func newDepCache() *depCache {
+	return &depCache{entries: map[string]*depEntry{}, waiting: map[string]string{}}
+}
+
+// do returns what install gives for key, and runs install once for all roots.
+func (c *depCache) do(root, key string, install func() (installed, error)) (installed, error) {
+	if c == nil {
+		return install()
+	}
+
+	c.mu.Lock()
+
+	entry, ok := c.entries[key]
+	if !ok {
+		entry = &depEntry{root: root, done: make(chan struct{})}
+		c.entries[key] = entry
+		c.mu.Unlock()
+
+		got, err := install()
+
+		// Only the first package reports the dep's cache notes.
+		entry.got = installed{profile: got.profile, lock: got.lock, closure: got.closure}
+		entry.err = err
+		close(entry.done)
+
+		return got, err
+	}
+
+	select {
+	case <-entry.done:
+		c.mu.Unlock()
+
+		return entry.got, entry.err
+	default:
+	}
+
+	for at := entry; ; {
+		if at.root == root {
+			c.mu.Unlock()
+
+			return installed{}, errors.New("dependency cycle between the deps of two packages")
+		}
+
+		next, waits := c.entries[c.waiting[at.root]]
+		if !waits {
+			break
+		}
+
+		at = next
+	}
+
+	c.waiting[root] = key
+	c.mu.Unlock()
+
+	<-entry.done
+
+	c.mu.Lock()
+	delete(c.waiting, root)
+	c.mu.Unlock()
+
+	return entry.got, entry.err
 }
 
 // install fetches the manifest, realizes the host's artifact and returns the
@@ -211,6 +298,9 @@ func (e env) install(ctx context.Context, opts Options, req request) (installed,
 	}
 
 	if build {
+		buildMu.Lock()
+		defer buildMu.Unlock()
+
 		realized.Path = e.store().BuildPath(m, host, deps.prefixes)
 
 		var notes []string
@@ -662,9 +752,8 @@ func (e env) installDeps(
 		// ref, the constraint and the lock entry all match.
 		key := fmt.Sprintf("%s %s %v %v %v", r, dep.Version, keep, parent.acceptDigest, previous)
 
-		got, done := parent.deps[key]
-		if !done {
-			got, err = e.install(ctx, opts, request{
+		got, err := parent.deps.do(parent.root, key, func() (installed, error) {
+			return e.install(ctx, opts, request{
 				ref:          r,
 				commit:       commit,
 				previous:     previous,
@@ -676,18 +765,12 @@ func (e env) installDeps(
 				log:          parent.log,
 				constraint:   dep.Version,
 				stack:        stack,
+				root:         parent.root,
 				deps:         parent.deps,
 			})
-			if err != nil {
-				return set, fmt.Errorf("dep %s: %w", r, err)
-			}
-
-			if parent.deps != nil {
-				// Only the first package reports the dep's cache notes.
-				parent.deps[key] = installed{
-					profile: got.profile, lock: got.lock, closure: got.closure,
-				}
-			}
+		})
+		if err != nil {
+			return set, fmt.Errorf("dep %s: %w", r, err)
 		}
 
 		set.prefixes = append(

@@ -1,11 +1,16 @@
 package cli
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
 	"maps"
+	"os"
 	"slices"
+	"strconv"
+	"sync"
+	"sync/atomic"
 
 	"github.com/spf13/cobra"
 
@@ -149,9 +154,25 @@ func reconcile(
 	host := platform.Host()
 	next := &lock.Lock{Includes: includes}
 
-	var pkgs []profile.Package
+	limit, err := parallel()
+	if err != nil {
+		return err
+	}
 
-	deps := map[string]installed{}
+	// job is one package to install, and what install gave for it.
+	type job struct {
+		name          string
+		req           request
+		fresh         bool
+		locksManifest bool
+		got           installed
+		err           error
+	}
+
+	var (
+		jobs []*job
+		deps = newDepCache()
+	)
 
 	for _, name := range slices.Sorted(maps.Keys(wanted)) {
 		r := wanted[name].ref
@@ -180,20 +201,74 @@ func reconcile(
 			wantManifest = previous.ManifestSHA256
 		}
 
-		got, err := e.install(cmd.Context(), opts, request{
-			ref:          r,
-			commit:       commit,
-			previous:     previous,
-			wantManifest: wantManifest,
-			acceptDigest: fresh,
-			acceptKey:    flags.acceptKey,
-			keepVersion:  !fresh && previous.Ref == r.String(),
-			service:      wanted[name].entry.Service,
-			system:       wanted[name].entry.System,
-			approve:      e.approver(cmd, opts, flags),
-			log:          buildLog(cmd, flags),
-			deps:         deps,
+		jobs = append(jobs, &job{
+			name: name, fresh: fresh, locksManifest: locksManifest,
+			req: request{
+				ref:          r,
+				commit:       commit,
+				previous:     previous,
+				wantManifest: wantManifest,
+				acceptDigest: fresh,
+				acceptKey:    flags.acceptKey,
+				keepVersion:  !fresh && previous.Ref == r.String(),
+				service:      wanted[name].entry.Service,
+				system:       wanted[name].entry.System,
+				approve:      e.approver(cmd, opts, flags),
+				log:          buildLog(cmd, flags),
+				root:         name,
+				deps:         deps,
+			},
 		})
+	}
+
+	// The first failure stops the packages that are still installing.
+	ctx, cancel := context.WithCancel(cmd.Context())
+	defer cancel()
+
+	var (
+		wg     sync.WaitGroup
+		failed atomic.Pointer[job]
+		slots  = make(chan struct{}, limit)
+	)
+
+	for _, j := range jobs {
+		wg.Add(1)
+
+		go func() {
+			defer wg.Done()
+
+			slots <- struct{}{}
+			defer func() { <-slots }()
+
+			if ctx.Err() != nil {
+				return
+			}
+
+			j.got, j.err = e.install(ctx, opts, j.req)
+			if j.err != nil && failed.CompareAndSwap(nil, j) {
+				cancel()
+			}
+		}()
+	}
+
+	wg.Wait()
+
+	// An interrupted run leaves packages that never started.
+	if err := cmd.Context().Err(); err != nil {
+		return err
+	}
+
+	// The packages that stopped because of the first failure have nothing to say.
+	if j := failed.Load(); j != nil {
+		jobs = []*job{j}
+	}
+
+	var pkgs []profile.Package
+
+	for _, j := range jobs {
+		name, r, previous := j.name, j.req.ref, j.req.previous
+		fresh, locksManifest := j.fresh, j.locksManifest
+		got, err := j.got, j.err
 
 		switch {
 		case errors.Is(err, errManifestChanged):
@@ -279,6 +354,25 @@ func reconcile(
 	}
 
 	return nil
+}
+
+// parallelEnv names the variable that sets how many packages install at once.
+const parallelEnv = "OKU_PARALLEL"
+
+// parallel returns how many packages install at once. Most of an install is
+// waiting for a server, so the default does not follow the number of cores.
+func parallel() (int, error) {
+	value := os.Getenv(parallelEnv)
+	if value == "" {
+		return 8, nil
+	}
+
+	n, err := strconv.Atoi(value)
+	if err != nil || n < 1 {
+		return 0, fmt.Errorf("%s is %q, and it must be a number from 1 up", parallelEnv, value)
+	}
+
+	return n, nil
 }
 
 func buildLog(cmd *cobra.Command, flags *buildFlags) io.Writer {
