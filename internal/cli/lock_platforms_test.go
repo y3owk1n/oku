@@ -294,19 +294,19 @@ func TestB187ABuildIsPinnedForAnotherPlatformWithItsSourceArchive(t *testing.T) 
 	}
 }
 
-func TestB187AGoVendorDigestIsPinnedForEveryPlatform(t *testing.T) {
+// goVendorManifest writes a manifest that builds a Go program with a vendor
+// step. The vendored module is a local directory, so it needs no network.
+func (m machine) goVendorManifest(t *testing.T) string {
+	t.Helper()
+
 	if _, err := exec.LookPath("go"); err != nil {
 		t.Skip("needs go")
 	}
-
-	m := newMachine(t)
-	other := otherPlatform()
 
 	tmp := filepath.Join(m.fixtures, "tmp")
 	must(t, os.Mkdir(tmp, 0o755))
 	t.Setenv("TMPDIR", tmp)
 
-	// The vendored module is a local directory, so the test needs no network.
 	lib := filepath.Join(m.fixtures, "greet")
 	must(t, os.MkdirAll(lib, 0o755))
 	must(t, os.WriteFile(filepath.Join(lib, "go.mod"),
@@ -337,6 +337,14 @@ env = { GOTOOLCHAIN = "local", GOFLAGS = "-buildvcs=false" }
 install = { bin = ["gotool"] }
 `, lib)), 0o644))
 
+	return ref
+}
+
+func TestB187AGoVendorDigestIsPinnedForEveryPlatform(t *testing.T) {
+	m := newMachine(t)
+	other := otherPlatform()
+	ref := m.goVendorManifest(t)
+
 	must(t, os.MkdirAll(m.config, 0o755))
 	must(t, os.WriteFile(filepath.Join(m.config, "oku.toml"), []byte(fmt.Sprintf(
 		"[lock]\nplatforms = [%q]\n\n[packages]\ngotool = %q\n", other.String(), ref,
@@ -353,5 +361,33 @@ install = { bin = ["gotool"] }
 	if !strings.Contains(entry, "vendor_sha256 = '") ||
 		entry != platformEntry(string(locked), platform.Host().String()) {
 		t.Fatalf("the entry of %s lacks the vendor digest of this machine:\n%s", other, locked)
+	}
+}
+
+func TestB188UpdateKeepsThePinsOfABuildThatTheStoreHolds(t *testing.T) {
+	m := newMachine(t)
+	ref := m.goVendorManifest(t)
+
+	_, err := m.run(t, "", "add", ref, "--yes")
+	must(t, err)
+
+	lockPath := filepath.Join(m.config, "oku.lock")
+	before, err := os.ReadFile(lockPath)
+	must(t, err)
+
+	if !strings.Contains(string(before), "vendor_sha256 = '") {
+		t.Fatalf("oku.lock does not pin the vendor output:\n%s", before)
+	}
+
+	// The store holds the build, so update builds nothing.
+	if out, err := m.run(t, "", "update", "--yes"); err != nil {
+		t.Fatalf("update: %v\n%s", err, out)
+	}
+
+	after, err := os.ReadFile(lockPath)
+	must(t, err)
+
+	if string(after) != string(before) {
+		t.Fatalf("update changed the lock of a build that did not change:\n%s", after)
 	}
 }
