@@ -146,6 +146,11 @@ func (p *Profile) BinDir() string {
 	return filepath.Join(p.dir, current, "bin")
 }
 
+// ShareDir holds the man pages and completions of the active generation.
+func (p *Profile) ShareDir() string {
+	return filepath.Join(p.dir, current, "share")
+}
+
 // Packages lists the active generation, sorted by name. A profile with no
 // generation has no packages.
 func (p *Profile) Packages() ([]Package, error) {

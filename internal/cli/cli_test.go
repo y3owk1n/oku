@@ -4409,6 +4409,85 @@ func TestB65HookUsesNoNetworkAndRunsNoManifestCode(t *testing.T) {
 	}
 }
 
+func TestB219HookLoadsPackageAndOkuCompletions(t *testing.T) {
+	m := newMachine(t)
+
+	// The fake binary answers "completion <shell>" with one completion of its
+	// own, so a real shell can load the hook.
+	must(t, os.WriteFile(m.exe, []byte("#!/bin/sh\n"+
+		"case \"$1 $2\" in\n"+
+		"'completion bash') echo 'complete -W self oku' ;;\n"+
+		"'completion zsh') echo '_oku() { :; }; compdef _oku oku' ;;\n"+
+		"'completion fish') echo 'complete -c oku -a self' ;;\n"+
+		"esac\n"), 0o755))
+
+	dir := filepath.Join(m.data, "profiles", "global", "current", "share", "completions")
+	files := map[string]string{
+		"bash/tool.bash": "complete -W one tool\n",
+		"zsh/_tool":      "#compdef tool\n_arguments '--one[o]'\n",
+		"fish/tool.fish": "complete -c tool -l one\n",
+	}
+
+	for name, body := range files {
+		must(t, os.MkdirAll(filepath.Dir(filepath.Join(dir, name)), 0o755))
+		must(t, os.WriteFile(filepath.Join(dir, name), []byte(body), 0o644))
+	}
+
+	checks := map[string]string{
+		"bash": `complete -p tool; complete -p oku`,
+		"zsh": `autoload -Uz compinit; compinit -d "$HOME/.zcompdump"; _oku_complete
+echo "tool ${_comps[tool]} oku ${_comps[oku]}"`,
+		"fish": `complete -C'tool --o'; complete -C'oku s'`,
+	}
+	wants := map[string][]string{
+		"bash": {"complete -W 'one' tool", "complete -W 'self' oku"},
+		"zsh":  {"tool _tool oku _oku"},
+		"fish": {"--one", "self"},
+	}
+
+	// fish reads a completion file only for a program it finds on PATH.
+	bin := t.TempDir()
+	must(t, os.WriteFile(filepath.Join(bin, "tool"), []byte("#!/bin/sh\n"), 0o755))
+
+	for shell, check := range checks {
+		path, err := exec.LookPath(shell)
+		if err != nil {
+			continue
+		}
+
+		hook, err := m.run(t, "", "hook", shell)
+		must(t, err)
+
+		if !strings.Contains(hook, "completion "+shell) {
+			t.Fatalf("%s hook does not load oku's completions:\n%s", shell, hook)
+		}
+
+		script := filepath.Join(t.TempDir(), "hook")
+		must(t, os.WriteFile(script, []byte(hook), 0o644))
+
+		cmd := exec.Command(path, "-c", "source "+script+"\n"+check)
+		cmd.Env = []string{"PATH=" + bin + ":/usr/bin:/bin", "HOME=" + t.TempDir()}
+
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("%s: %v\n%s", shell, err, out)
+		}
+
+		for _, want := range wants[shell] {
+			if !strings.Contains(string(out), want) {
+				t.Fatalf("%s did not load the completions, want %q:\n%s", shell, want, out)
+			}
+		}
+	}
+
+	hook, err := m.run(t, "", "hook", "pwsh")
+	must(t, err)
+
+	if !strings.Contains(hook, "completion powershell") {
+		t.Fatalf("pwsh hook does not load oku's completions:\n%s", hook)
+	}
+}
+
 func TestB66EnvPrintsTheExportsForEachShell(t *testing.T) {
 	m := newMachine(t)
 	t.Setenv("PATH", "/usr/bin:/bin")
@@ -6229,6 +6308,9 @@ func TestB105OneHookLineSetsUpPathForOkuAndItsPrograms(t *testing.T) {
 
 	bin := filepath.Dir(m.profile("bin", "tool"))
 	okuDir := filepath.Dir(m.exe)
+
+	// The hook runs the binary for its completions, so the fake one must run.
+	must(t, os.WriteFile(m.exe, []byte("#!/bin/sh\n"), 0o755))
 
 	for shell, show := range map[string]string{
 		"bash": `printf '%s' "$PATH"`, "zsh": `printf '%s' "$PATH"`, "fish": `string join : $PATH`,

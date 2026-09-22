@@ -87,16 +87,61 @@ func Render(shell string, change Change) (string, error) {
 }
 
 // Hook returns the code a shell's startup file loads. It puts dirs on PATH, the
-// first one in front, and runs "oku env" before each prompt. dirs are oku's own
-// directory and the global profile's bin, so the one hook line is the whole
-// shell setup.
-func Hook(shell string, dirs []string) (string, error) {
+// first one in front, loads the completions of installed programs and of oku
+// itself, and runs "oku env" before each prompt. dirs are oku's own directory
+// and the global profile's bin, completions is the profile's share/completions,
+// and oku is the path of the binary. The one hook line is the whole shell setup.
+func Hook(shell string, dirs []string, completions, oku string) (string, error) {
 	code, err := promptHook(shell)
 	if err != nil {
 		return "", err
 	}
 
-	return pathSetup(shell, dirs) + code, nil
+	return pathSetup(shell, dirs) + completionSetup(shell, completions, oku) + code, nil
+}
+
+// completionSetup loads the completions that packages put under dir, and the
+// ones oku prints for itself. Each shell finds them its own way: bash sources
+// every file now, zsh autoloads the files in dir once compinit has run, fish
+// reads dir on demand, and PowerShell has no package completions.
+func completionSetup(shell, dir, oku string) string {
+	quote := quoter(shell)
+
+	switch shell {
+	case "bash":
+		return fmt.Sprintf(`if [ -d %[1]s ]; then
+  for _oku_file in %[1]s/*; do [ -r "$_oku_file" ] && . "$_oku_file"; done
+  unset _oku_file
+fi
+eval "$(%[2]s completion bash)"
+`, quote(dir+"/bash"), quote(oku))
+	case "zsh":
+		// compinit reads fpath once, so _oku_complete registers the files by name
+		// after it has run, from the hook line or from the first prompt, whichever
+		// is later.
+		return fmt.Sprintf(`fpath=(%[1]s $fpath)
+_oku_complete() {
+  [ -z "${_OKU_COMPLETE:-}" ] && (( $+functions[compdef] )) || return 0
+  _OKU_COMPLETE=1
+  local file
+  for file in %[1]s/_*(N); do
+    autoload -Uz "${file:t}" && compdef "${file:t}" "${${file:t}#_}"
+  done
+  source <(%[2]s completion zsh)
+}
+_oku_complete
+`, quote(dir+"/zsh"), quote(oku))
+	case "fish":
+		return fmt.Sprintf(`if test -d %[1]s; and not contains -- %[1]s $fish_complete_path
+    set -g fish_complete_path %[1]s $fish_complete_path
+end
+%[2]s completion fish | source
+`, quote(dir+"/fish"), quote(oku))
+	case "pwsh":
+		return fmt.Sprintf("& %s completion powershell | Out-String | Invoke-Expression\n", quote(oku))
+	}
+
+	return ""
 }
 
 // pathSetup adds each of dirs to PATH unless it is there already, so loading the
@@ -141,6 +186,7 @@ esac
 `, nil
 	case "zsh":
 		return `_oku_hook() {
+  _oku_complete
   command -v oku >/dev/null 2>&1 && eval "$(oku env --shell zsh)"
 }
 typeset -ag precmd_functions

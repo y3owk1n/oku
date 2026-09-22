@@ -143,11 +143,13 @@ echo '[ -x "$HOME/.local/bin/oku" ] && eval "$("$HOME/.local/bin/oku" hook zsh)"
 exec zsh
 ```
 
-The line does three things:
+The line does four things:
 
 - It puts the directory of `oku` on `PATH`.
 - It puts `<data>/oku/profiles/global/current/bin` on `PATH`, where the programs
   you install are.
+- It loads the shell completions of those programs, and of `oku` itself, in
+  bash, zsh and fish. PowerShell gets the completions of `oku`.
 - It applies a [project's](projects.md) tools and variables while you are inside
   an allowed project.
 

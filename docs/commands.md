@@ -452,9 +452,19 @@ startup file with one line, which `oku hook --help` and
 oku never edits that file.
 
 The code puts the directory of `oku` and the global profile's `bin` on `PATH`,
-unless they are there already. It also runs `oku env` before each prompt, which
-applies a [project's](projects.md) environment. In PowerShell it wraps your `prompt`
-function, keeps `$LASTEXITCODE`, and works on Windows, macOS and Linux.
+unless they are there already. It loads the shell completions of the programs
+you installed and of `oku` itself. It also runs `oku env` before each prompt,
+which applies a [project's](projects.md) environment. In PowerShell it wraps
+your `prompt` function, keeps `$LASTEXITCODE`, and works on Windows, macOS and
+Linux.
+
+Completions come from the profile's `share/completions`, where a package's
+[`completions`](manifest.md#completions) entry puts them. bash sources every
+file there. zsh puts the directory on `fpath` and registers each file by name
+once `compinit` has run, so the hook line may come before or after
+`compinit` in `~/.zshrc`. fish adds the directory to `fish_complete_path` and
+reads a file when you first complete that program. PowerShell gets the
+completions of `oku` only.
 
 ## oku env
 

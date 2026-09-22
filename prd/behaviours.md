@@ -337,6 +337,10 @@ order step in `prd/product.md`.
   that controls other programs is rejected.
 - B67 [7] Project packages shadow global ones on PATH while active.
 - B68 [7] The hook exports `[env]` of global packages in every shell.
+- B219 [7] The hook loads the completions under the global profile
+  `share/completions` for bash, zsh and fish, and the completions of `oku`
+  itself in every shell. In zsh the hook registers the package files by name
+  once `compinit` has run, whether the hook line comes before or after it.
 
 ## Apps, fonts, services
 
