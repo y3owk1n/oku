@@ -198,16 +198,16 @@ oku manifest hash <url>   # print the checksums of a download
 
 ## How oku compares
 
-oku covers what a package manager, a dotfile manager and a settings script do separately.
+oku covers what a package manager, a dotfile manager and a settings script do separately. The rows come from each tool's own documentation, checked in September 2026.
 
-| Setup                                                                                                          | Tools from                           | Home files and secrets | OS settings | Lock with hashes | Rollback | Root        | You write        |
-| :------------------------------------------------------------------------------------------------------------- | :----------------------------------- | :--------------------: | :---------: | :--------------: | :------: | :---------- | :--------------- |
-| **oku**                                                                                                        | Any repo, URL, file or npm package   |          Yes           |     Yes     |       Yes        |   Yes    | Never       | TOML, or nothing |
-| [Nix](https://nixos.org) + [home-manager](https://github.com/nix-community/home-manager) + [nix-darwin](https://github.com/nix-darwin/nix-darwin) | nixpkgs, plus flakes                 |          Yes           |     Yes     |       Yes        |   Yes    | To install  | The Nix language |
-| [Homebrew](https://brew.sh) + [chezmoi](https://www.chezmoi.io)                                                | A central tap, plus third-party taps |          Yes           |  Scripts    |        No        |    No    | To install  | Ruby, templates  |
-| [mise](https://mise.jdx.dev)                                                                                   | A registry of tools and backends     |           No           |     No      |     Optional     |    No    | Never       | TOML             |
+| Setup | Tools from | Home files | Secrets | OS settings | Lock with hashes | Rollback | Root | You write |
+| :-- | :-- | :-- | :-- | :-- | :-- | :-- | :-- | :-- |
+| **oku** | Any repo, URL, file or npm package. No registry of its own | Links, text, templates | sops and age files | macOS defaults, Windows registry, dconf | Always, every download | Packages, files and settings, in one generation | Only for [system scope](docs/system-scope.md) | TOML, or nothing |
+| [Nix](https://nixos.org) + [home-manager](https://github.com/nix-community/home-manager) + [nix-darwin](https://github.com/nix-darwin/nix-darwin) | nixpkgs, plus flakes | Yes | Separate projects, sops-nix or agenix | macOS defaults, dconf | `flake.lock` pins inputs, nixpkgs pins each source | Per tool, each with its own generations | To create `/nix` | The Nix language |
+| [Homebrew](https://brew.sh) + [chezmoi](https://www.chezmoi.io) | homebrew-core, plus taps | Templates | Password managers, age, gpg | Scripts you write | No. A Brewfile pins nothing | No. Revert the source in git and apply again | Homebrew, to install on macOS | Ruby, Go templates, shell |
+| [mise](https://mise.jdx.dev) | A registry, plus backends such as `github:owner/repo` | Links, copies, templates | Environment variables | macOS defaults | Optional, `mise.lock` | Files only. Tools and packages are not restored | For packages and files outside your home | TOML |
 
-oku fits if you want a machine you can rebuild and roll back without learning Nix, or you ship software and do not want to maintain it in several registries. It does not fit if you need the catalogues that Homebrew and nixpkgs already have. oku has none until someone points it at a repo. It covers the per-user part of what home-manager and nix-darwin do, and nothing that needs root.
+oku fits if you want a machine you can rebuild and roll back without learning Nix, or you ship software and do not want to maintain it in several registries. It does not fit if you need the catalogues that Homebrew and nixpkgs already have. oku has none until someone points it at a repo. It covers the per-user part of what home-manager and nix-darwin do, and nothing that needs root. mise covers dotfiles and macOS defaults too. oku differs from it in five ways: one generation for the whole machine, a lock on every download rather than an optional one, secrets from sops and age files, settings on Windows and Linux, and source builds that run in a sandbox.
 
 ---
 
