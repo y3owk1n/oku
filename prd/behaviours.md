@@ -51,8 +51,13 @@ order step in `prd/product.md`.
 - B235 [1] A command names its project on stderr once. On a terminal the
   rows of `sync --dry-run` start with a yellow tilde, not a check.
 - B236 [1] `oku add` takes several refs and adds them one after another, one
-  generation each, and says how to run their programs once. A failure stops
+  generation each, and says once how to run their programs, with "it" for one
+  package and "them" for several. A failure stops
   it and keeps the packages added before. `--asset` and `--bin` take one ref.
+- B241 [1] Each generation records the generation it replaced. `generations`
+  shows what changed from that one, and starts the line with `from <n>,`
+  when it is not the one numbered before, as after a rollback. `--json`
+  gives it as `from`.
 - B237 [1] On a terminal each `command` in a hint, a note, an error or a
   `doctor` line is in colour without its backticks, and the lines of an
   error after the first are not dimmed. A pipe keeps the backticks.

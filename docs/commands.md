@@ -548,12 +548,16 @@ oku generations
 
 Every command that changes the installed packages writes a new generation.
 `generations` lists them, oldest first, with `*` on the active one. Each line
-has the time, what the generation holds, and what changed from the one before:
+has the time, what the generation holds, and what changed from the generation
+it replaced:
 `+` for a package, file or setting that came, `-` for one that went, `->`
 between two versions, `rebuilt` for a new build of the same version, and `~`
 for a file with other bytes or a setting with another value. A change with
 more than six parts ends in `and N more`. A first generation that holds nothing
-says `empty`.
+says `empty`. After a rollback, the next generation replaces an older one, and
+its line starts with that number, such as `from 1, + hello 1.0.0`. Generations
+from an older oku do not record this, so they compare with the one numbered
+before.
 
 ```
   1  2026-09-20 14:02  1 package                        + ripgrep 14.1.1
@@ -563,7 +567,7 @@ says `empty`.
 ```
 
 `oku generations --json` lists every package, file and setting of every
-generation.
+generation, and `from`, the generation it replaced, when oku knows it.
 
 ## oku rollback
 

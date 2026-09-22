@@ -51,6 +51,7 @@ func newGenerationsCmd(opts Options) *cobra.Command {
 
 				type row struct {
 					Number   int          `json:"number"`
+					From     int          `json:"from,omitempty"`
 					Current  bool         `json:"current"`
 					Created  time.Time    `json:"created"`
 					Packages []pkgRow     `json:"packages"`
@@ -77,7 +78,7 @@ func newGenerationsCmd(opts Options) *cobra.Command {
 					}
 
 					rows = append(rows, row{
-						gen.Number, gen.Current, gen.Created, held, files, settings,
+						gen.Number, gen.From, gen.Current, gen.Created, held, files, settings,
 					})
 				}
 
@@ -97,6 +98,15 @@ func newGenerationsCmd(opts Options) *cobra.Command {
 			var previous profile.Generation
 
 			for _, gen := range gens {
+				// A generation says what changed from the one it replaced, which after
+				// a rollback is not the one numbered before it.
+				base, prefix := previous, ""
+				if i := slices.IndexFunc(gens, func(g profile.Generation) bool {
+					return g.Number == gen.From
+				}); i >= 0 && gen.From != previous.Number {
+					base, prefix = gens[i], s.Dim("from "+strconv.Itoa(gen.From)+",")+" "
+				}
+
 				marker, mark := " ", s.Dim
 				if gen.Current {
 					marker, mark = s.Pick("●", "*"), s.Bold
@@ -106,7 +116,7 @@ func newGenerationsCmd(opts Options) *cobra.Command {
 					marker + " " + strconv.Itoa(gen.Number),
 					gen.Created.Local().Format("2006-01-02 15:04"),
 					holds(gen),
-					changes(s, previous, gen),
+					prefix + changes(s, base, gen),
 				}
 
 				if gen.Current {

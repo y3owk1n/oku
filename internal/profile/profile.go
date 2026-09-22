@@ -95,6 +95,9 @@ type state struct {
 	Packages []Package `toml:"package"`
 	Files    []File    `toml:"file,omitempty"`
 	Settings []Setting `toml:"setting,omitempty"`
+	// From is the generation that was active when this one was staged, and 0
+	// for the first one or one written before oku recorded it.
+	From int `toml:"from,omitempty"`
 }
 
 // Generation is one numbered snapshot of the profile.
@@ -104,6 +107,8 @@ type Generation struct {
 	Packages []Package
 	Files    []File
 	Settings []Setting
+	// From is the generation this one replaced, or 0 when unknown.
+	From int
 	// Current marks the generation that "current" points at.
 	Current bool
 }
@@ -396,7 +401,7 @@ func (p *Profile) stage(
 		return 0, fmt.Errorf("create generation: %w", err)
 	}
 
-	if err := build(gen, pkgs, files, settings, lockData); err != nil {
+	if err := build(gen, p.Current(), pkgs, files, settings, lockData); err != nil {
 		os.RemoveAll(gen)
 
 		return 0, err
@@ -473,6 +478,7 @@ func (p *Profile) Generations() ([]Generation, error) {
 		gens = append(gens, Generation{
 			Number:   n,
 			Created:  s.Created,
+			From:     s.From,
 			Packages: s.Packages,
 			Files:    s.Files,
 			Settings: s.Settings,
@@ -526,7 +532,14 @@ func (p *Profile) nextGeneration() (int, error) {
 // file. A build that installed its manuals under {{prefix}}/man, as `make
 // install` with a bare prefix does, gets them under share/man like every other
 // package.
-func build(gen string, pkgs []Package, files []File, settings []Setting, lockData []byte) error {
+func build(
+	gen string,
+	from int,
+	pkgs []Package,
+	files []File,
+	settings []Setting,
+	lockData []byte,
+) error {
 	owners := map[string]string{}
 
 	for _, pkg := range pkgs {
@@ -583,6 +596,7 @@ func build(gen string, pkgs []Package, files []File, settings []Setting, lockDat
 	data, err := toml.Marshal(
 		state{
 			Created:  time.Now().UTC().Truncate(time.Second),
+			From:     from,
 			Packages: pkgs, Files: files, Settings: settings,
 		},
 	)
