@@ -27,6 +27,7 @@ type giteaRelease struct {
 	Assets     []struct {
 		Name string `json:"name"`
 		URL  string `json:"browser_download_url"`
+		Size int64  `json:"size"`
 	} `json:"assets"`
 }
 
@@ -34,7 +35,7 @@ func (r giteaRelease) release() Release {
 	out := Release{Tag: r.Tag, Commit: r.Commit, Draft: r.Draft, Prerelease: r.Prerelease}
 
 	for _, asset := range r.Assets {
-		out.Assets = append(out.Assets, Asset{Name: asset.Name, URL: asset.URL})
+		out.Assets = append(out.Assets, Asset{Name: asset.Name, URL: asset.URL, Size: asset.Size})
 	}
 
 	return out
@@ -127,18 +128,29 @@ func (g *gitea) Release(ctx context.Context, repo, tag string) (Release, error) 
 	return found.release(), err
 }
 
-// Releases reads the newest 50 releases, which is the most a server gives in
-// one page by default.
+// giteaPage is the releases oku asks for in one answer, which is the most a
+// server gives by default.
+const giteaPage = 50
+
+// Releases reads the newest maxReleases releases, one page at a time.
 func (g *gitea) Releases(ctx context.Context, repo string) ([]Release, error) {
-	var found []giteaRelease
+	var releases []Release
 
-	if err := g.json(ctx, repo, "/releases?limit=50", &found); err != nil {
-		return nil, err
-	}
+	for page := 1; len(releases) < maxReleases; page++ {
+		var found []giteaRelease
 
-	releases := make([]Release, len(found))
-	for i, release := range found {
-		releases[i] = release.release()
+		err := g.json(ctx, repo, fmt.Sprintf("/releases?limit=%d&page=%d", giteaPage, page), &found)
+		if err != nil {
+			return nil, err
+		}
+
+		for _, release := range found {
+			releases = append(releases, release.release())
+		}
+
+		if len(found) < giteaPage {
+			break
+		}
 	}
 
 	return releases, nil

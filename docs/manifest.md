@@ -81,11 +81,11 @@ How oku turns tags into versions:
   registry publishes a sha512 for each version's download. When the artifact's
   `url` is that download and the manifest has no checksum of its own, oku
   checks the download against it.
-- `github-releases` reads the newest 100 releases and skips drafts and
-  prereleases. `gitea-releases` does the same for the newest 50 on a Gitea or
-  Forgejo server. `gitlab-releases` reads the newest 100 and skips a release
-  dated in the future, which GitLab calls upcoming. `git-tags` reads every tag with `git ls-remote`, so it needs
-  `git` on `PATH`.
+- `github-releases` reads the newest 1000 releases, page by page, and skips
+  drafts and prereleases. `gitea-releases` does the same on a Gitea or Forgejo
+  server. `gitlab-releases` reads the newest 1000 and skips a release dated in
+  the future, which GitLab calls upcoming. `git-tags` reads every tag with
+  `git ls-remote`, so it needs `git` on `PATH`.
 - After `strip_prefix`, a tag that does not start with a digit is ignored. That
   drops tags such as `nightly`.
 - The newest version is the highest by its dot-separated numbers, so `1.10.0` is
@@ -391,7 +391,18 @@ them it trusts the first download and pins it. Publish `sha256`, `sha256_url` or
 download.
 
 A `sha256_url` file may hold a single digest, or `digest  filename` lines such
-as `sha256sum` writes. oku picks the line that names the download's file.
+as `sha256sum` writes. oku picks the line that names the download's file. It
+may also be JSON, either an object that maps file names to digests or an array
+of objects with `name` and `sha256` fields. A name may hold a path, and oku
+matches its base name against the download's file name:
+
+```json
+{"tool-1.2.3-linux-amd64.tar.gz": "9f86d0..."}
+```
+
+```json
+[{"name": "dist/tool-1.2.3-linux-amd64.tar.gz", "sha256": "9f86d0..."}]
+```
 
 ### Signatures
 
@@ -601,15 +612,22 @@ How inference reads a release:
   installers such as `.deb`, `.rpm`, `.msi`, `.dmg` and
   `.pkg`, because the paths inside them cannot be guessed. With several
   candidates it prefers a command line build over a desktop app, which is an
-  asset with `desktop`, `gui`, `installer`, `setup` or `.app.` in its name. Then
-  it prefers a tar archive over a zip, then the shortest name. When other assets
-  fit your machine as well, a comment in the manifest lists them, and so does
-  the error when oku cannot find the program in the asset it chose.
+  asset with `desktop`, `app`, `gui`, `dmg`, `installer`, `setup` or `.app.` in
+  its name. Then it prefers a tar archive over a zip, then the smaller asset
+  when the host reports sizes, then the shortest name. When other assets fit
+  your machine as well, a comment in the manifest lists them, and so does the
+  error when oku cannot find the program in the asset it chose.
 - It uses `<asset>.sha256` as `sha256_url` when that exists, else a release file
   with `checksum` or `sha256sum` in its name that is not a signature. When a
-  release has one such file for each OS, such as `tool-mac-checksums.txt`, oku
-  takes the one that names the OS of the asset. With neither, the package is
+  release has one such file for each OS or platform, such as
+  `tool-mac-checksums.txt` or `tool-linux-arm64-checksums.txt`, oku takes the
+  one that names the asset's OS and arch, then one that names its OS or arch
+  alone, then a generic file such as `checksums.txt` or `SHA256SUMS`. It never
+  takes a file that names another OS or arch. With none, the package is
   [trusted on first use](trust.md#trust-on-first-use).
+- When the install from an inferred manifest fails, the error ends with the
+  manifest oku inferred, so you can see what it tried and change the pick
+  with `--asset` or `--bin`, or write a manifest for it.
 - The version starts at the first digit of the tag, and everything before it
   becomes `strip_prefix`. `v1.2.0` gives `"v"` and `jq-1.8.1` gives `"jq-"`.
 - It downloads the asset for your machine and looks inside. It opens one asset

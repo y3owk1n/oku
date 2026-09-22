@@ -37,6 +37,7 @@ type githubRelease struct {
 		Name   string `json:"name"`
 		URL    string `json:"browser_download_url"`
 		Digest string `json:"digest"`
+		Size   int64  `json:"size"`
 	} `json:"assets"`
 }
 
@@ -45,7 +46,9 @@ func (r githubRelease) release() Release {
 
 	for _, asset := range r.Assets {
 		digest, _ := strings.CutPrefix(asset.Digest, "sha256:")
-		out.Assets = append(out.Assets, Asset{Name: asset.Name, URL: asset.URL, Digest: digest})
+		out.Assets = append(out.Assets, Asset{
+			Name: asset.Name, URL: asset.URL, Digest: digest, Size: asset.Size,
+		})
 	}
 
 	return out
@@ -116,26 +119,26 @@ func (g *github) Release(ctx context.Context, repo, tag string) (Release, error)
 	return found.release(), err
 }
 
-// releasePage and releasePages give the newest 100 releases. One page of 100
-// can be larger than maxBody, because every release lists all of its assets.
-const (
-	releasePage  = 25
-	releasePages = 4
-)
+// releasePage is the releases oku asks for in one answer. A page of 100 can be
+// larger than maxBody, because every release lists all of its assets.
+const releasePage = 25
 
-// Releases reads the newest 100 releases.
+// Releases reads the newest maxReleases releases, following the "next" link of
+// each page.
 func (g *github) Releases(ctx context.Context, repo string) ([]Release, error) {
 	var releases []Release
 
-	for page := 1; page <= releasePages; page++ {
+	next := fmt.Sprintf("%s/repos/%s/releases?per_page=%d", g.api, repo, releasePage)
+
+	for next != "" && len(releases) < maxReleases {
 		var found []githubRelease
 
-		err := g.json(
-			ctx,
-			fmt.Sprintf("/repos/%s/releases?per_page=%d&page=%d", repo, releasePage, page),
-			&found,
-		)
+		body, after, err := g.page(ctx, next, "application/vnd.github+json")
 		if err != nil {
+			return nil, err
+		}
+
+		if err := json.Unmarshal(body, &found); err != nil {
 			return nil, err
 		}
 
@@ -143,9 +146,7 @@ func (g *github) Releases(ctx context.Context, repo string) ([]Release, error) {
 			releases = append(releases, release.release())
 		}
 
-		if len(found) < releasePage {
-			break
-		}
+		next = after
 	}
 
 	return releases, nil
@@ -176,9 +177,17 @@ func (g *github) json(ctx context.Context, path string, into any) error {
 }
 
 func (g *github) get(ctx context.Context, url, accept string) ([]byte, error) {
+	body, _, err := g.page(ctx, url, accept)
+
+	return body, err
+}
+
+// page reads url and returns the body and the URL of the next page, or "". A
+// next page on another host would get the token, so oku does not follow it.
+func (g *github) page(ctx context.Context, url, accept string) ([]byte, string, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
 	req.Header.Set("User-Agent", "oku")
@@ -193,27 +202,33 @@ func (g *github) get(ctx context.Context, url, accept string) ([]byte, error) {
 
 	resp, err := g.http.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	defer resp.Body.Close()
 
 	switch {
 	case resp.StatusCode == http.StatusNotFound:
-		return nil, ErrNotFound
+		return nil, "", ErrNotFound
 	case resp.StatusCode == http.StatusForbidden && resp.Header.Get("X-RateLimit-Remaining") == "0":
-		return nil, fmt.Errorf("GitHub rate limit reached, set %s to raise it", g.env)
+		return nil, "", fmt.Errorf("GitHub rate limit reached, set %s to raise it", g.env)
 	case resp.StatusCode != http.StatusOK:
-		return nil, fmt.Errorf("server returned %s", resp.Status)
+		return nil, "", fmt.Errorf("server returned %s", resp.Status)
 	}
 
 	body, err := io.ReadAll(io.LimitReader(resp.Body, maxBody+1))
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
 	if len(body) > maxBody {
-		return nil, fmt.Errorf("response is larger than %d bytes", maxBody)
+		return nil, "", fmt.Errorf("response is larger than %d bytes", maxBody)
 	}
 
-	return body, nil
+	next := ""
+	if m := nextPageRe.FindStringSubmatch(resp.Header.Get("Link")); m != nil &&
+		strings.HasPrefix(m[1], g.api+"/") {
+		next = m[1]
+	}
+
+	return body, next, nil
 }

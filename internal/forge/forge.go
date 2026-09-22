@@ -65,7 +65,14 @@ type Asset struct {
 	URL  string
 	// Digest is the sha256 the host reports, or "".
 	Digest string
+	// Size is the bytes of the download, or 0 when the host does not say.
+	Size int64
 }
+
+// maxReleases is the most releases a forge lists. A repo with two release
+// streams, such as a stable and a nightly one, needs more than one page for the
+// older stream to show.
+const maxReleases = 1000
 
 // Auth is the Authorization header for the downloads of one host. The zero
 // value sends nothing.

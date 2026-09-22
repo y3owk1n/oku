@@ -105,6 +105,20 @@ inferred manifest, and the lock pins it. `oku manifest init --from` writes the
 same inference to a file for the developer to commit. Why: the strongest form
 of "publish once" is "publish nothing new".
 
+When several assets fit one platform, oku takes the command line build. It
+skips a name with `desktop`, `app`, `gui`, `dmg`, `installer`, `setup` or
+`.app.`, prefers a tar archive over a zip, then the smaller asset when the
+host reports sizes, then the shorter name. For the checksum file it takes
+`<asset>.sha256`, else the shared file that names the asset's OS and arch,
+then one that names its OS or arch alone, then a generic file such as
+`checksums.txt`, and never one that names another platform. Why: a repo that
+ships a desktop app beside its CLI (sst/opencode) or one checksum file per OS
+(stripe/stripe-cli) is common, and a wrong pick fails at install with a
+checksum that lists no such file or an archive with no program in it. When an
+install from a manifest inferred in the same run fails, the error ends with
+that manifest, because the user never saw it and cannot tell what oku tried
+otherwise.
+
 ## D14. Output kinds beyond bin
 
 `app`, `font`, `service` and `[env]` are first-class. Apps and fonts are

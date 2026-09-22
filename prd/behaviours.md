@@ -117,7 +117,10 @@ order step in `prd/product.md`.
   in a `-` suffix compares as a number, so 7.1.2-31 is newer than 7.1.2-9. A
   version that names a prerelease, such as 1.27rc1, is never the newest.
 - B118 [3] `add <ref>@<version>` finds a version that is not on the first page
-  of the host's release list, among the newest 100 releases.
+  of the host's release list.
+- B200 [3] `github-releases`, `gitea-releases` and `gitlab-releases` read the
+  newest 1000 releases, one page after another, so a repo whose newest 100
+  releases belong to another stream still yields the version `add` wants.
 - B123 [3] With `version.from = "npm"`, `add` picks the newest version of the
   package in the npm registry that is no prerelease, and `add <ref>@x` picks x.
 - B124 [3] oku checks a download against the artifact's `integrity`, or against
@@ -167,6 +170,15 @@ order step in `prd/product.md`.
 - B174 [4] With several assets for a platform, inference prefers a command
   line build over a desktop app. With one checksum file for each OS, it reads
   the one of the asset's OS.
+- B197 [4] Among shared checksum files, inference takes one that names the
+  asset's OS and arch, then one that names its OS or arch alone, then a generic
+  one such as `checksums.txt` or `SHA256SUMS`, and never one that names another
+  OS or arch.
+- B198 [4] With several assets that fit a platform equally, inference skips
+  one whose name says `desktop`, `app`, `gui`, `dmg`, `installer` or `setup`,
+  and takes the smaller of the rest when the host reports sizes.
+- B199 [4] When an install from a manifest oku inferred in the same run fails,
+  the error ends with the inferred manifest.
 - B26 [4] Inference that finds no asset for the host fails and lists the asset
   names it saw.
 - B27 [4] `oku manifest init --from <repo>` writes the inferred manifest to a
@@ -488,6 +500,10 @@ order step in `prd/product.md`.
 - B173 [5] In a build on macOS, pkg-config resolves zlib, bzip2, expat,
   libxml-2.0, sqlite3, libcurl and ncurses of the OS, with the version of the
   SDK on the machine. A dep of the same name comes first.
+- B201 [1] A `sha256_url` file may be a JSON object that maps file names to
+  sha256 digests, or a JSON array of objects with `name` and `sha256` fields.
+  oku reads the digest of the download's file name from it, and a download
+  that differs is rejected.
 - B172 [5] A `build.source` archive takes `sha256`, or `sha256_url`, or
   neither. With neither, oku pins the digest of the first download in
   `oku.lock`, says so, and refuses another digest for that version until
