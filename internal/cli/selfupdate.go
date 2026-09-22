@@ -30,7 +30,10 @@ const (
 var commitRe = regexp.MustCompile(`^[0-9a-f]{40}$`)
 
 func newSelfUpdateCmd(opts Options) *cobra.Command {
-	var check, nightly bool
+	var (
+		check, nightly, release bool
+		to                      string
+	)
 
 	cmd := &cobra.Command{
 		Use:   "update",
@@ -42,11 +45,21 @@ minisign signature beside it. It replaces itself only when the release key that
 is built into this binary made that signature.
 
 --nightly takes the build of the newest commit on main instead. It is a
-prerelease with the same signature. Run "oku self update" without the flag to go
-back to the newest release.`,
+prerelease with the same signature. A nightly build stays on nightly until you
+pass --release, which goes back to the newest release.
+
+--to <tag> takes that release, older or newer, after the same check.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			return runSelfUpdate(cmd, opts, check, nightly)
+			if nightly && release {
+				return errors.New("--nightly and --release exclude each other")
+			}
+
+			if to != "" && (nightly || release) {
+				return errors.New("--to names the release, so it excludes --nightly and --release")
+			}
+
+			return runSelfUpdate(cmd, opts, check, nightly, release, to)
 		},
 	}
 
@@ -54,6 +67,9 @@ back to the newest release.`,
 		BoolVar(&check, "check", false, "say whether a newer release exists, and change nothing")
 	cmd.Flags().
 		BoolVar(&nightly, "nightly", false, "take the build of the newest commit on main")
+	cmd.Flags().
+		BoolVar(&release, "release", false, "go from a nightly build back to the newest release")
+	cmd.Flags().StringVar(&to, "to", "", "take the release with this tag, such as v0.5.0")
 
 	return cmd
 }
@@ -68,7 +84,17 @@ func releaseAsset() string {
 	return name
 }
 
-func runSelfUpdate(cmd *cobra.Command, opts Options, check, nightly bool) error {
+func runSelfUpdate(cmd *cobra.Command, opts Options, check, nightly, release bool, to string) error {
+	// A bare run on a nightly build would go back to the release, which
+	// is older than the build. Only an explicit flag does that.
+	if strings.HasPrefix(opts.Version, nightlyTag) && !nightly && !release && to == "" {
+		return fmt.Errorf(
+			"oku %s is a nightly build. --nightly takes the newest nightly, "+
+				"and --release goes back to the newest release",
+			opts.Version,
+		)
+	}
+
 	key, repo := releaseKey, releaseRepo
 	if opts.ReleaseKey != "" {
 		key = opts.ReleaseKey
@@ -86,13 +112,14 @@ func runSelfUpdate(cmd *cobra.Command, opts Options, check, nightly bool) error 
 	out := cmd.OutOrStdout()
 
 	var (
-		release forge.Release
+		found   forge.Release
 		newest  string
 		current bool
 	)
 
-	if nightly {
-		if release, err = e.inferrer(opts).Tagged(cmd.Context(), repo, nightlyTag); err != nil {
+	switch {
+	case nightly:
+		if found, err = e.inferrer(opts).Tagged(cmd.Context(), repo, nightlyTag); err != nil {
 			return err
 		}
 
@@ -100,31 +127,39 @@ func runSelfUpdate(cmd *cobra.Command, opts Options, check, nightly bool) error 
 		// version of its binaries with the same seven characters. A release made
 		// from a branch has the branch name here, and oku cannot tell from it which
 		// commit the files are from.
-		if !commitRe.MatchString(release.Commit) {
+		if !commitRe.MatchString(found.Commit) {
 			return fmt.Errorf(
 				"release %s of %s was made from %q, which is no commit",
-				nightlyTag, repo, release.Commit,
+				nightlyTag, repo, found.Commit,
 			)
 		}
 
-		newest = nightlyTag + " " + release.Commit[:7]
-		current = strings.HasSuffix(opts.Version, "-"+release.Commit[:7])
-	} else {
-		if release, err = e.inferrer(opts).Latest(cmd.Context(), repo); err != nil {
+		newest = nightlyTag + " " + found.Commit[:7]
+		current = strings.HasSuffix(opts.Version, "-"+found.Commit[:7])
+	case to != "":
+		if found, err = e.inferrer(opts).Tagged(cmd.Context(), repo, to); err != nil {
 			return err
 		}
+	default:
+		if found, err = e.inferrer(opts).Latest(cmd.Context(), repo); err != nil {
+			return err
+		}
+	}
 
-		newest = strings.TrimPrefix(release.Tag, "v")
+	if !nightly {
+		newest = strings.TrimPrefix(found.Tag, "v")
 		current = newest == strings.TrimPrefix(opts.Version, "v")
 	}
 
 	if current {
-		kind := "release"
-		if nightly {
-			kind = "nightly build"
+		switch {
+		case nightly:
+			fmt.Fprintf(out, "oku %s is the newest nightly build\n", newest)
+		case to != "":
+			fmt.Fprintf(out, "oku %s is release %s already\n", newest, to)
+		default:
+			fmt.Fprintf(out, "oku %s is the newest release\n", newest)
 		}
-
-		fmt.Fprintf(out, "oku %s is the newest %s\n", newest, kind)
 
 		return nil
 	}
@@ -136,9 +171,9 @@ func runSelfUpdate(cmd *cobra.Command, opts Options, check, nightly bool) error 
 	}
 
 	urls := map[string]string{}
-	names := make([]string, 0, len(release.Assets))
+	names := make([]string, 0, len(found.Assets))
 
-	for _, asset := range release.Assets {
+	for _, asset := range found.Assets {
 		urls[asset.Name] = asset.URL
 		names = append(names, asset.Name)
 	}
@@ -147,7 +182,7 @@ func runSelfUpdate(cmd *cobra.Command, opts Options, check, nightly bool) error 
 	if urls[binary] == "" || urls[signature] == "" {
 		return fmt.Errorf(
 			"release %s of %s has no %s with a %s beside it. It has: %s",
-			release.Tag, repo, binary, signature, strings.Join(names, ", "),
+			found.Tag, repo, binary, signature, strings.Join(names, ", "),
 		)
 	}
 
@@ -167,11 +202,11 @@ func runSelfUpdate(cmd *cobra.Command, opts Options, check, nightly bool) error 
 			return fmt.Errorf(
 				"release %s: %w\nif oku's release key was rotated, run the install script again, "+
 					"see https://github.com/%s/blob/main/docs/releasing.md",
-				release.Tag, err, repo,
+				found.Tag, err, repo,
 			)
 		}
 
-		return fmt.Errorf("release %s: %w", release.Tag, err)
+		return fmt.Errorf("release %s: %w", found.Tag, err)
 	}
 
 	if err := swapBinary(downloaded, opts.Executable); err != nil {
@@ -179,6 +214,7 @@ func runSelfUpdate(cmd *cobra.Command, opts Options, check, nightly bool) error 
 	}
 
 	fmt.Fprintf(out, "updated oku from %s to %s\n", opts.Version, newest)
+	fmt.Fprintf(out, "what changed: https://github.com/%s/releases/tag/%s\n", repo, found.Tag)
 
 	return nil
 }

@@ -1969,6 +1969,8 @@ func inferServer(t *testing.T, m *machine, assets map[string]string) {
 			_, _ = w.Write([]byte(latest))
 		case "/api/repos/owner/tool/releases/tags/nightly":
 			_, _ = w.Write([]byte(nightly))
+		case "/api/repos/owner/tool/releases/tags/v1.3.0":
+			_, _ = w.Write([]byte(strings.Replace(latest, "v1.4.0", "v1.3.0", 1)))
 		case "/api/repos/owner/tool/releases":
 			_, _ = w.Write([]byte(`[{"tag_name": "v1.4.0"}]`))
 		default:
@@ -6224,6 +6226,64 @@ func TestB111SelfUpdateNightlyTakesTheNightlyBuildAfterTheSameCheck(t *testing.T
 	if data, _ := os.ReadFile(m.exe); string(data) != "binary" ||
 		!strings.Contains(out, "is the newest nightly build") {
 		t.Fatalf("self update --nightly replaced the build it already is:\n%s", out)
+	}
+}
+
+func TestB221SelfUpdateKeepsANightlyAndTakesANamedRelease(t *testing.T) {
+	public, secret, err := minisign.GenerateKey(rand.Reader)
+	must(t, err)
+
+	m := newMachine(t)
+	m.opts.ReleaseKey = public.String()
+	m.opts.Version = "nightly-20260921010203-1111111"
+	m.releaseWith(t, "the release oku", secret)
+
+	current := func() string {
+		data, err := os.ReadFile(m.exe)
+		must(t, err)
+
+		return string(data)
+	}
+
+	if _, err := m.run(t, "", "self", "update"); err == nil ||
+		!strings.Contains(err.Error(), "--release") || current() != "binary" {
+		t.Fatalf("a bare run on a nightly build should refuse and name --release, got %v", err)
+	}
+
+	if _, err := m.run(t, "", "self", "update", "--nightly", "--release"); err == nil {
+		t.Fatal("--nightly with --release was accepted")
+	}
+
+	out, err := m.run(t, "", "self", "update", "--release")
+	must(t, err)
+
+	if current() != "the release oku" || !strings.Contains(out, "to 1.4.0") ||
+		!strings.Contains(out, "releases/tag/v1.4.0") {
+		t.Fatalf("--release did not go to the newest release with its link:\n%s", out)
+	}
+
+	m.opts.Version = "1.4.0"
+	m.releaseWith(t, "the older oku", secret)
+
+	out, err = m.run(t, "", "self", "update", "--to", "v1.3.0")
+	must(t, err)
+
+	if current() != "the older oku" || !strings.Contains(out, "to 1.3.0") {
+		t.Fatalf("--to did not take the named release:\n%s", out)
+	}
+
+	m.opts.Version = "1.3.0"
+
+	out, err = m.run(t, "", "self", "update", "--to", "v1.3.0")
+	must(t, err)
+
+	if !strings.Contains(out, "is release v1.3.0 already") {
+		t.Fatalf("--to the running release should say so:\n%s", out)
+	}
+
+	if _, err := m.run(t, "", "self", "update", "--to", "v9.9.9"); err == nil ||
+		!strings.Contains(err.Error(), "v9.9.9") {
+		t.Fatalf("--to a release that does not exist should fail and name it, got %v", err)
 	}
 }
 
