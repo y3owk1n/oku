@@ -147,8 +147,11 @@ func (f *Fetcher) fetchForge(
 
 // paths lists where a Forge ref's file may be, in lookup order.
 func (t Target) paths(name string) []string {
-	if name == "" {
+	switch {
+	case name == "":
 		return []string{t.Default}
+	case isPath(name):
+		return []string{name}
 	}
 
 	return []string{name + ".toml", t.Dir + "/" + name + ".toml"}

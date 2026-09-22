@@ -10,6 +10,7 @@ one per package.
 | `https://host/tool-1.2.3-linux-amd64.tar.gz` | A URL of the download itself. oku [infers a manifest](manifest.md#a-url-of-the-download) for this machine from it. |
 | `github:owner/repo` | `oku.pkg.toml` at the root of the repo's default branch. Without one, oku [infers a manifest](manifest.md#inferred-manifests) from the newest release. |
 | `github:owner/repo#name` | `name.toml` at the root, else `packages/name.toml`. |
+| `github:owner/repo#dir/name.toml` | That file in the repo. A fragment with a `/` or ending in `.toml` is a path. This works on every forge. |
 | `github:host/owner/repo` | The same on a GitHub Enterprise Server at `host`. `#name` and `@version` work as above. |
 | `codeberg:owner/repo` | The same on codeberg.org. |
 | `gitea:host/owner/repo` | The same on any Gitea or Forgejo server. The host is required. |
@@ -25,6 +26,12 @@ one per package.
 
 The same forms point at a list in an `include`. Only the file names differ, see
 [Including other lists](list-and-lock.md#including-other-lists).
+
+In a list or a manifest that oku read from a repo or a URL, a relative path
+names a file beside it there. `./packages/fd.toml` in `lists/base.toml` of
+`github:you/machines` is `github:you/machines#lists/packages/fd.toml`, read at
+the same commit as the list. At a URL it is the URL beside the list. A path
+that leaves the repo, and an absolute path, are errors.
 
 ## Pinning a version
 

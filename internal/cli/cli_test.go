@@ -1234,7 +1234,7 @@ func TestB18SyncRefAdoptsListAndLockWithIdenticalStoreHashes(t *testing.T) {
 	}
 }
 
-func TestB19RelativeRefsStartAtTheListAndRemoteListsRejectLocalPaths(t *testing.T) {
+func TestB19RelativeRefsStartAtTheListAndRemoteListsRejectAbsolutePaths(t *testing.T) {
 	const commit = "4444444444444444444444444444444444444444"
 
 	m := newMachine(t)
@@ -1245,7 +1245,7 @@ func TestB19RelativeRefsStartAtTheListAndRemoteListsRejectLocalPaths(t *testing.
 		case "/api/repos/me/lists/commits/HEAD":
 			_, _ = w.Write([]byte(commit))
 		case "/raw/me/lists/" + commit + "/oku.toml":
-			_, _ = w.Write([]byte("[packages]\ntool = \"./tool.toml\"\n"))
+			_, _ = w.Write([]byte("[packages]\ntool = \"/etc/tool.toml\"\n"))
 		default:
 			http.NotFound(w, r)
 		}
