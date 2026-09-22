@@ -344,16 +344,18 @@ func TestB175AFontEntryMayBeAPattern(t *testing.T) {
 	fonts := filepath.Dir(font)
 
 	ref := m.manifest(t, "family", map[string]string{
-		"fonts/Family-Bold.ttf":    "bold",
-		"fonts/Family-Regular.ttf": "regular",
-		"fonts/OFL.txt":            "a licence, not a font",
-		"tool":                     script,
-	}, "bin = [\"tool\"]\nfont = [\"fonts/*.ttf\"]")
+		"fonts/ttf/Family-Bold.ttf":    "bold",
+		"fonts/ttf/Family-Regular.ttf": "regular",
+		"fonts/otf/Family-Italic.otf":  "italic",
+		"fonts/OFL.txt":                "a licence, not a font",
+		"doc/tool.1":                   "a man page",
+		"tool":                         script,
+	}, "bin = [\"tool\"]\nman = [\"doc/*.1\"]\nfont = [\"fonts/ttf/*.ttf\", \"**/Family-Itali?.otf\"]")
 
 	_, err := m.run(t, "", "add", ref)
 	must(t, err)
 
-	for _, name := range []string{"Family-Bold.ttf", "Family-Regular.ttf"} {
+	for _, name := range []string{"Family-Bold.ttf", "Family-Regular.ttf", "Family-Italic.otf"} {
 		if !exists(filepath.Join(fonts, name)) {
 			t.Fatalf("the pattern should install %s", name)
 		}
@@ -363,11 +365,16 @@ func TestB175AFontEntryMayBeAPattern(t *testing.T) {
 		t.Fatal("the pattern installed a file it does not match")
 	}
 
+	if !exists(m.profile("share", "man", "man1", "tool.1")) {
+		t.Fatal("a man pattern should install the page it matches")
+	}
+
 	none := m.manifest(t, "nofont", map[string]string{"tool": script},
 		"bin = [\"tool\"]\nfont = [\"fonts/*.otf\"]")
 
-	if _, err := m.run(t, "", "add", none); err == nil || !strings.Contains(err.Error(), "matches no file") {
-		t.Fatalf("a pattern that matches nothing should fail, got %v", err)
+	_, err = m.run(t, "", "add", none)
+	if err == nil || !strings.Contains(err.Error(), `font "fonts/*.otf" matches no file`) {
+		t.Fatalf("a pattern that matches nothing should fail and name the pattern, got %v", err)
 	}
 }
 

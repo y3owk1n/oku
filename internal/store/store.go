@@ -409,7 +409,12 @@ func linkOutputs(tmp string, a manifest.Artifact) error {
 		}
 	}
 
-	for _, entry := range a.Man {
+	mans, err := expandGlobs(filepath.Join(tmp, "pkg"), "man", a.Man)
+	if err != nil {
+		return err
+	}
+
+	for _, entry := range mans {
 		section := manSectionRe.FindStringSubmatch(entry)
 		if section == nil {
 			return fmt.Errorf("man %q: the file name has no section such as .1", entry)
@@ -439,7 +444,7 @@ func linkOutputs(tmp string, a manifest.Artifact) error {
 		}
 	}
 
-	fonts, err := expandGlobs(tmp, a.Font)
+	fonts, err := expandGlobs(filepath.Join(tmp, "pkg"), "font", a.Font)
 	if err != nil {
 		return err
 	}
@@ -459,26 +464,29 @@ func linkOutputs(tmp string, a manifest.Artifact) error {
 	return nil
 }
 
-// expandGlobs replaces each entry that holds "*", "?" or "[" with the files of
-// the package it matches, sorted. A font family ships dozens of files, and "*"
-// does not cross a "/".
-func expandGlobs(tmp string, entries []string) ([]string, error) {
+// expandGlobs replaces each entry that holds "*", "?" or "**" with the files
+// under root it matches, sorted, and keeps a literal entry as it is. "*" and "?"
+// match within one path segment, and "**" matches any number of segments, so a
+// font family that ships dozens of files needs one line. Field names the
+// manifest key for the error.
+func expandGlobs(root, field string, entries []string) ([]string, error) {
 	var out []string
 
 	for _, entry := range entries {
-		if !strings.ContainsAny(entry, "*?[") {
+		if !strings.ContainsAny(entry, "*?") {
 			out = append(out, entry)
 
 			continue
 		}
 
-		if _, err := path.Match(entry, ""); err != nil {
-			return nil, fmt.Errorf("font %q is not a valid pattern", entry)
+		pattern := strings.Split(entry, "/")
+		for _, segment := range pattern {
+			if _, err := path.Match(segment, ""); err != nil {
+				return nil, fmt.Errorf("%s %q is not a valid pattern", field, entry)
+			}
 		}
 
 		var matched []string
-
-		root := filepath.Join(tmp, "pkg")
 
 		err := filepath.WalkDir(root, func(file string, info fs.DirEntry, err error) error {
 			if err != nil || !info.Type().IsRegular() {
@@ -490,8 +498,9 @@ func expandGlobs(tmp string, entries []string) ([]string, error) {
 				return err
 			}
 
-			if ok, _ := path.Match(entry, filepath.ToSlash(rel)); ok {
-				matched = append(matched, filepath.ToSlash(rel))
+			rel = filepath.ToSlash(rel)
+			if matchSegments(pattern, strings.Split(rel, "/")) {
+				matched = append(matched, rel)
 			}
 
 			return nil
@@ -501,7 +510,7 @@ func expandGlobs(tmp string, entries []string) ([]string, error) {
 		}
 
 		if len(matched) == 0 {
-			return nil, fmt.Errorf("font %q matches no file in the package", entry)
+			return nil, fmt.Errorf("%s %q matches no file in the package", field, entry)
 		}
 
 		slices.Sort(matched)
@@ -510,6 +519,34 @@ func expandGlobs(tmp string, entries []string) ([]string, error) {
 	}
 
 	return out, nil
+}
+
+// matchSegments matches a validated pattern against a path, segment by segment.
+// "**" may stand for zero or more segments.
+func matchSegments(pattern, segments []string) bool {
+	for len(pattern) > 0 {
+		if pattern[0] == "**" {
+			for skip := 0; skip <= len(segments); skip++ {
+				if matchSegments(pattern[1:], segments[skip:]) {
+					return true
+				}
+			}
+
+			return false
+		}
+
+		if len(segments) == 0 {
+			return false
+		}
+
+		if ok, _ := path.Match(pattern[0], segments[0]); !ok {
+			return false
+		}
+
+		pattern, segments = pattern[1:], segments[1:]
+	}
+
+	return len(segments) == 0
 }
 
 // linkAny links a file or a whole directory, such as include/webp.

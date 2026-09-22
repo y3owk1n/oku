@@ -628,6 +628,16 @@ func runCommand(
 
 // installFiles copies the named files from src into the package layout.
 func installFiles(in manifest.Install, src, prefix string) error {
+	fonts, err := expandGlobs(src, "font", in.Font)
+	if err != nil {
+		return err
+	}
+
+	mans, err := expandGlobs(src, "man", in.Man)
+	if err != nil {
+		return err
+	}
+
 	groups := []struct {
 		files []string
 		dir   func(file string) (string, error)
@@ -637,8 +647,8 @@ func installFiles(in manifest.Install, src, prefix string) error {
 		{in.Lib, fixedDir("lib"), 0},
 		{in.Include, fixedDir("include"), 0},
 		{in.Share, fixedDir("share"), 0},
-		{in.Font, fixedDir("fonts"), 0},
-		{in.Man, func(file string) (string, error) {
+		{fonts, fixedDir("fonts"), 0},
+		{mans, func(file string) (string, error) {
 			section := manSectionRe.FindStringSubmatch(file)
 			if section == nil {
 				return "", fmt.Errorf("man %q: the file name has no section such as .1", file)
