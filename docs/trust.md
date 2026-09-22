@@ -79,7 +79,10 @@ run them? [y/N]
 ```
 
 - On a terminal the prompt goes once you answer, and one line stays in its
-  place: `✓ approved tree 2.3.2` or `✗ rejected tree 2.3.2`.
+  place: `✓ approved tree 2.3.2` or `✗ rejected tree 2.3.2`. The packages that
+  install in parallel do not write over the question. Their rows wait and
+  appear below your answer, and a second package that needs approval asks
+  after the first.
 - Your answer is recorded for that exact manifest, by its sha256, in
   `<data>/oku/trust/approvals.toml`. The same manifest never asks twice, and a
   manifest that changed asks again.
