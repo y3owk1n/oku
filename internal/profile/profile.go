@@ -284,20 +284,30 @@ func (p *Profile) Add(pkg Package, lockData []byte) (int, error) {
 	return p.stage(append(pkgs, pkg), files, settings, lockData)
 }
 
+// Has reports whether the active generation holds name.
+func (p *Profile) Has(name string) bool {
+	pkgs, err := p.Packages()
+
+	return err == nil && slices.ContainsFunc(pkgs, func(have Package) bool { return have.Name == name })
+}
+
 // Remove stages a new generation without the package called name.
-func (p *Profile) Remove(name string, lockData []byte) (int, error) {
+func (p *Profile) Remove(names []string, lockData []byte) (int, error) {
 	pkgs, err := p.Packages()
 	if err != nil {
 		return 0, err
 	}
 
+	for _, name := range names {
+		if !slices.ContainsFunc(pkgs, func(have Package) bool { return have.Name == name }) {
+			return 0, fmt.Errorf("%s: %w", name, ErrNotInstalled)
+		}
+	}
+
 	kept := slices.DeleteFunc(
 		slices.Clone(pkgs),
-		func(have Package) bool { return have.Name == name },
+		func(have Package) bool { return slices.Contains(names, have.Name) },
 	)
-	if len(kept) == len(pkgs) {
-		return 0, fmt.Errorf("%s: %w", name, ErrNotInstalled)
-	}
 
 	files, err := p.files()
 	if err != nil {

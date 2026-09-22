@@ -3,7 +3,7 @@
 | To | Use |
 |---|---|
 | Install and remove | [`add`](#oku-add) · [`remove`](#oku-remove) · [`shell`](#oku-shell) |
-| See what is installed | [`list`](#oku-list) · [`info`](#oku-info) · [`why`](#oku-why) |
+| See what is installed | [`list`](#oku-list) · [`info`](#oku-info) · [`why`](#oku-why) · [`which`](#oku-which) |
 | Follow the list and the lock | [`sync`](#oku-sync) · [`update`](#oku-update) |
 | Go back, and free space | [`generations`](#oku-generations) · [`rollback`](#oku-rollback) · [`gc`](#oku-gc) |
 | Find packages | [`source`](#oku-source) · [`search`](#oku-search) |
@@ -30,7 +30,8 @@ command.
 While oku waits, it says on stderr what it waits for: reading a manifest,
 looking up versions, downloading, unpacking, cloning, asking a cache, or running
 a build step, with the package's name in front. In a terminal that is one line
-with the bytes and the time so far, and it goes away when the wait ends. In a
+per package that is installing, with the bytes and the time so far. After eight
+lines the last one counts the rest. The lines go away when the waits end. In a
 pipe or a CI log, each wait is one plain line, as it is with `TERM=dumb`.
 
 ## Colour
@@ -52,6 +53,7 @@ place of text. Messages and errors still go to stderr as text.
 | `oku list` | a list of `name`, `version`, `ref`, `store_path`, `service`, `system` |
 | `oku info <name>` | one object: `name`, `version`, `ref`, `commit`, `installed`, `store_path`, `inferred`, `impure`, `vendor_sha256`, `signing_key` |
 | `oku why <name>` | `name`, `version` and `in_list` (the listed version and ref, or empty for a package that is only a dep), and `needed_by`, a list of `name`, `version`, `dep_versions` |
+| `oku which <program>` | `program`, `package`, `version`, `path`, `shadowed_by` |
 | `oku generations` | a list of `number`, `current`, `created`, `packages` |
 | `oku search <term>` | a list of `ref`, `description` |
 | `oku source list` | a list of `alias`, `ref` |
@@ -156,11 +158,12 @@ every app, font and service unchanged.
 ## oku remove
 
 ```
-oku remove <name>
+oku remove <name>...
 ```
 
-Drops the package from the profile, from `oku.toml` and from `oku.lock`. The
-package's files stay in the store, so adding it again needs no download.
+Drops the packages from the profile, from `oku.toml` and from `oku.lock`, in
+one generation. The packages' files stay in the store, so adding them again
+needs no download.
 
 It also works when only the list or the lock still names the package, which
 happens after the data directory was deleted. A name found nowhere fails with
@@ -226,6 +229,26 @@ openssl 1.1.1w is needed by legacy-tool 2.0
 
 For a package in your own list it prints the ref it came from. It fails for a
 name that nothing installed uses.
+
+## oku which
+
+```
+oku which <program>
+```
+
+Says which package provides a program and which file in the store it runs.
+
+```
+$ oku which rg
+program  rg
+package  ripgrep 15.2.0
+path     /home/you/.local/share/oku/store/ripgrep-15.2.0-baa319bce13bfc33/bin/rg
+```
+
+When a program of the same name earlier on `PATH` runs in place of oku's, it
+says so on stderr and points at `oku doctor`. For a program oku did not install
+it fails and names what `PATH` runs. With `--json` it prints `program`,
+`package`, `version`, `path` and `shadowed_by`.
 
 ## oku sync
 
@@ -305,7 +328,7 @@ store already at the version in the lock needs no request to its server, so a
 sync with nothing to do is fast and works offline.
 
 After the summary, output is either `already in sync` or a line such as
-`profile now holds 12 packages`. The summary has one line per package that
+`profile now holds 12 packages, generation 7, 12s`. The summary has one line per package that
 changed: a fresh install, `ripgrep 14.1.1 -> 15.2.0` for a new version, and a
 note for a rebuild, a manifest or checksum change, a pin for another platform,
 or a package that left the list. On a terminal each line starts with a glyph:

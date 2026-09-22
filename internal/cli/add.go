@@ -197,7 +197,11 @@ func runAdd(
 		cmd.OutOrStdout(), "%s %s %s\n", s.Good("added"), s.Bold(got.lock.Name), got.lock.Version,
 	)
 
+	programs, _ := filepath.Glob(filepath.Join(got.profile.StorePath, "bin", "*"))
+
 	switch {
+	case len(programs) == 0:
+		// An app, a font or a file has nothing to run, so PATH does not matter.
 	case slices.Contains(filepath.SplitList(os.Getenv("PATH")), prof.BinDir()):
 	case e.project != "":
 		fmt.Fprintf(cmd.ErrOrStderr(), "this project's programs are in %s\n", prof.BinDir())

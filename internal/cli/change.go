@@ -16,6 +16,7 @@ import (
 	"github.com/y3owk1n/oku/internal/list"
 	"github.com/y3owk1n/oku/internal/profile"
 	"github.com/y3owk1n/oku/internal/status"
+	"github.com/y3owk1n/oku/internal/ui"
 )
 
 // pendingFile exists only while oku applies a change. It holds what a revert
@@ -211,13 +212,14 @@ func (e env) plan(cmd *cobra.Command, opts Options, c change) (pending, exposePl
 // already run, so everything it checks is known to work.
 func (e env) describe(cmd *cobra.Command, c change, plan exposePlan) error {
 	out := cmd.OutOrStdout()
+	s := ui.For(out)
 	prof := e.profile()
 	lines := 0
 
 	say := func(format string, args ...any) {
 		lines++
 
-		fmt.Fprintf(out, format+"\n", args...)
+		fmt.Fprintln(out, s.Homes(fmt.Sprintf(format, args...)))
 	}
 
 	have, err := prof.PackagesOf(prof.Current())

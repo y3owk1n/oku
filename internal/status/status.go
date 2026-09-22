@@ -1,5 +1,6 @@
 // Package status tells the user what oku is waiting for. On a terminal it keeps
-// one line that it redraws. Anywhere else it prints a line when a wait starts.
+// one line per package that is installing, and redraws them. Anywhere else it prints a
+// line when a wait starts.
 package status
 
 import (
@@ -9,6 +10,7 @@ import (
 	"io"
 	"os"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 
@@ -22,6 +24,11 @@ const (
 	interval = 100 * time.Millisecond
 	// clearLine returns to the first column and erases the line.
 	clearLine = "\r\x1b[2K"
+	// upLine moves the cursor one line up and erases that line.
+	upLine = "\x1b[1A\x1b[2K"
+	// maxLines caps the redrawn lines, so a wide sync does not scroll the
+	// terminal. The last line then counts the rest.
+	maxLines = 8
 )
 
 // Reporter shows the waits of one command.
@@ -35,6 +42,8 @@ type Reporter struct {
 	stop  chan struct{}
 	done  chan struct{}
 	frame int
+	// drawn counts the lines on the terminal from the last draw.
+	drawn int
 	// paused stops the redraw while another program uses the terminal.
 	paused bool
 }
@@ -147,7 +156,7 @@ func Pause(ctx context.Context) func() {
 
 	r.mu.Lock()
 	r.paused = true
-	fmt.Fprint(r.out, clearLine)
+	r.clear()
 	r.mu.Unlock()
 
 	return func() {
@@ -201,8 +210,18 @@ func (r *Reporter) end(t *task) {
 	<-done
 
 	r.mu.Lock()
-	fmt.Fprint(r.out, clearLine)
+	r.clear()
 	r.mu.Unlock()
+}
+
+// clear erases the drawn lines. The caller holds mu.
+func (r *Reporter) clear() {
+	if r.drawn == 0 {
+		return
+	}
+
+	fmt.Fprint(r.out, clearLine+strings.Repeat(upLine, r.drawn-1))
+	r.drawn = 0
 }
 
 func (r *Reporter) spin(stop, done chan struct{}) {
@@ -224,14 +243,50 @@ func (r *Reporter) spin(stop, done chan struct{}) {
 	}
 }
 
-// draw writes the innermost wait. The caller holds mu.
+// draw writes one line per scope, each with the innermost wait of that scope,
+// and one for the waits with no scope. The caller holds mu.
 func (r *Reporter) draw() {
+	r.clear()
+
 	if len(r.tasks) == 0 || r.paused {
 		return
 	}
 
-	t := r.tasks[len(r.tasks)-1]
-	spinner := []rune(frames)
+	var (
+		shown []*task
+		seen  = map[string]int{}
+	)
+
+	for _, t := range r.tasks {
+		if i, ok := seen[t.scope]; ok {
+			shown[i] = t
+
+			continue
+		}
+
+		seen[t.scope] = len(shown)
+		shown = append(shown, t)
+	}
+
+	spinner := r.style.Accent(string([]rune(frames)[r.frame%len([]rune(frames))]))
+	lines := make([]string, 0, maxLines)
+
+	for i, t := range shown {
+		if i == maxLines-1 && len(shown) > maxLines {
+			lines = append(lines, spinner+" "+r.style.Dim(fmt.Sprintf("and %d more", len(shown)-i)))
+
+			break
+		}
+
+		lines = append(lines, spinner+" "+r.line(t))
+	}
+
+	fmt.Fprint(r.out, strings.Join(lines, "\n"))
+	r.drawn = len(lines)
+}
+
+// line renders one wait, cut to the terminal's width.
+func (r *Reporter) line(t *task) string {
 	tail := ""
 
 	switch {
@@ -246,23 +301,16 @@ func (r *Reporter) draw() {
 	}
 
 	// The spinner and its space take two columns, and a full line would wrap.
-	room := r.width() - 3 - len(tail)
+	room := max(r.width()-3-len(tail), 10)
 	text := []rune(t.text)
 
-	if room < 10 {
-		room = 10
-	}
-
-	// The end of a URL names the file, so draw cuts the middle.
+	// The end of a URL names the file, so the cut takes the middle.
 	if len(text) > room {
 		head := (room - 3) / 2
 		text = append(append(text[:head:head], []rune("...")...), text[len(text)-(room-3-head):]...)
 	}
 
-	fmt.Fprintf(
-		r.out, "%s%s %s%s",
-		clearLine, r.style.Accent(string(spinner[r.frame%len(spinner)])), string(text), r.style.Dim(tail),
-	)
+	return string(text) + r.style.Dim(tail)
 }
 
 type countingReader struct {
@@ -300,9 +348,7 @@ func (w *lineWriter) Write(p []byte) (int, error) {
 		return len(p), nil
 	}
 
-	if len(w.r.tasks) > 0 {
-		fmt.Fprint(w.r.out, clearLine)
-	}
+	w.r.clear()
 
 	_, err := w.out.Write(w.pending[:end])
 	w.pending = w.pending[end:]

@@ -6021,3 +6021,75 @@ func TestB176WaitsSayWhatTheyWaitFor(t *testing.T) {
 		}
 	}
 }
+
+func TestB195RemoveTakesSeveralNamesInOneGeneration(t *testing.T) {
+	m := newMachine(t)
+	first := m.manifest(t, "first", map[string]string{"first": script}, `bin = ["first"]`)
+	second := m.manifest(t, "second", map[string]string{"second": script}, `bin = ["second"]`)
+
+	for _, ref := range []string{first, second} {
+		_, err := m.run(t, "", "add", ref)
+		must(t, err)
+	}
+
+	if _, err := m.run(t, "", "remove", "first", "nothing"); err == nil ||
+		!strings.Contains(err.Error(), "nothing: not installed") {
+		t.Fatalf("remove with an unknown name: %v", err)
+	}
+
+	if !exists(m.profile("bin", "first")) {
+		t.Fatal("a failed remove dropped first")
+	}
+
+	out, err := m.run(t, "", "remove", "first", "second")
+	must(t, err)
+
+	if !strings.Contains(out, "removed first second") {
+		t.Fatalf("remove output:\n%s", out)
+	}
+
+	if exists(m.profile("bin", "first")) || exists(m.profile("bin", "second")) {
+		t.Fatal("a program is still in the profile")
+	}
+
+	gens, err := m.run(t, "", "generations")
+	must(t, err)
+
+	if strings.Count(gens, "\n") != 3 {
+		t.Fatalf("want three generations, add, add and one remove:\n%s", gens)
+	}
+}
+
+func TestB196WhichNamesThePackageOfAProgram(t *testing.T) {
+	m := newMachine(t)
+	ref := m.manifest(t, "tool", map[string]string{"tool": script}, `bin = ["tool"]`)
+
+	_, err := m.run(t, "", "add", ref)
+	must(t, err)
+
+	t.Setenv("PATH", filepath.Dir(m.profile("bin", "tool")))
+
+	out, err := m.run(t, "", "which", "tool")
+	must(t, err)
+
+	if !strings.Contains(out, "tool 1.2.3") || !strings.Contains(out, "/tool") {
+		t.Fatalf("which output:\n%s", out)
+	}
+
+	shadow := filepath.Join(t.TempDir(), "shadow")
+	must(t, os.MkdirAll(shadow, 0o755))
+	must(t, os.WriteFile(filepath.Join(shadow, "tool"), []byte(script), 0o755))
+	t.Setenv("PATH", shadow+string(os.PathListSeparator)+filepath.Dir(m.profile("bin", "tool")))
+
+	out, err = m.run(t, "", "which", "tool")
+	must(t, err)
+
+	if !strings.Contains(out, "PATH runs "+filepath.Join(shadow, "tool")+" instead") {
+		t.Fatalf("which does not report the shadow:\n%s", out)
+	}
+
+	if _, err := m.run(t, "", "which", "nothing"); err == nil ||
+		!strings.Contains(err.Error(), "no program named nothing") {
+		t.Fatalf("which for an unknown program: %v", err)
+	}
+}

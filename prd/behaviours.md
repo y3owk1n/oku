@@ -18,6 +18,12 @@ order step in `prd/product.md`.
   error naming the host platform.
 - B4 [1] `oku remove <name>` drops the package from the profile. Its store
   path stays until `gc`.
+- B195 [1] `oku remove` takes several names and drops them in one generation.
+  A name that is not installed stops the command before anything changes.
+- B196 [1] `oku which <program>` names the package and version that provide a
+  program in the profile and the file in the store it runs. It warns when
+  another program earlier on PATH runs in its place, and it fails for a program
+  oku did not install, saying what PATH runs.
 - B5 [1] `oku list` shows name, version and ref for the active list.
 - B6 [1] A failed install leaves the previous profile active and unchanged.
 - B7 [1] `man` and `completions` entries appear under the profile `share`.
