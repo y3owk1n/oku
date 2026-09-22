@@ -42,6 +42,15 @@ func profile(spec Spec) string {
 		b.WriteString("(deny network*)\n")
 	}
 
+	// A build that could ask LaunchServices, another app or launchd to start a
+	// program would run that program outside the sandbox. A program that talks to
+	// launchd over XPC itself still can, so the sandbox limits a malicious build
+	// and does not contain it.
+	b.WriteString(`(deny appleevent-send)
+(deny mach-lookup (global-name-prefix "com.apple.coreservices.") (global-name-prefix "com.apple.lsd."))
+(deny process-exec (literal "/bin/launchctl"))
+`)
+
 	if spec.Home != "" {
 		fmt.Fprintf(&b, "(deny file-read-data (require-all (subpath %q)", spec.Home)
 

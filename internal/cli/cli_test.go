@@ -3897,6 +3897,92 @@ func TestB50RunStepCannotReachTheNetworkOrReadHome(t *testing.T) {
 	}
 }
 
+func TestB248RunStepCannotWriteOutsideItsBuild(t *testing.T) {
+	m, _, _ := sandboxedMachine(t)
+
+	// The store holds another package, and the fixtures are a directory outside
+	// home that the user can write to.
+	_, err := m.run(t, "", "add", m.manifest(t, "other", map[string]string{"other": script}, `bin = ["other"]`))
+	must(t, err)
+
+	var other string
+
+	for _, entry := range m.storeEntries(t) {
+		if strings.HasPrefix(entry, "other-") {
+			other = filepath.Join(m.data, "store", entry, "pkg", "other")
+		}
+	}
+
+	path := filepath.Join(m.fixtures, "writer.toml")
+	must(t, os.WriteFile(path, []byte(fmt.Sprintf(`[package]
+name = "writer"
+[version]
+value = "1.0.0"
+[build]
+[[build.step]]
+run = """
+echo changed > %[1]s 2>/dev/null && echo store=written > probe.txt || echo store=kept > probe.txt
+touch %[2]s/planted 2>/dev/null && echo outside=written >> probe.txt || echo outside=kept >> probe.txt
+echo inside > $TMPDIR/scratch && echo tmp=written >> probe.txt
+"""
+shell = "sh"
+[[build.step]]
+install = { share = ["probe.txt"] }
+`, other, m.fixtures)), 0o644))
+
+	out, err := m.run(t, "", "add", path, "--yes")
+	if err != nil {
+		t.Fatalf("add: %v\n%s", err, out)
+	}
+
+	got := m.probeResult(t)
+	for _, want := range []string{"store=kept", "outside=kept", "tmp=written"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("the run step saw %q, want %s", got, want)
+		}
+	}
+
+	if exists(filepath.Join(m.fixtures, "planted")) {
+		t.Fatal("a run step created a file outside its build")
+	}
+}
+
+func TestB249RunStepCannotAskTheSessionToStartAProgram(t *testing.T) {
+	m, _, _ := sandboxedMachine(t)
+
+	// Each probe works outside the sandbox. On Linux /run/user holds the sockets
+	// of the user's D-Bus and systemd.
+	probe := `ls -A /run/user 2>/dev/null | grep -q . && echo session=visible > probe.txt || echo session=hidden > probe.txt`
+	if runtime.GOOS == "darwin" {
+		probe = `/bin/launchctl print-disabled gui/$(id -u) >/dev/null 2>&1 && echo launchctl=ran > probe.txt || echo launchctl=blocked > probe.txt
+/usr/bin/open -g -j -a Calculator >/dev/null 2>&1 && echo open=ran >> probe.txt || echo open=blocked >> probe.txt`
+	}
+
+	path := filepath.Join(m.fixtures, "asker.toml")
+	must(t, os.WriteFile(path, []byte(fmt.Sprintf(`[package]
+name = "asker"
+[version]
+value = "1.0.0"
+[build]
+[[build.step]]
+run = """
+%s
+"""
+shell = "sh"
+[[build.step]]
+install = { share = ["probe.txt"] }
+`, probe)), 0o644))
+
+	out, err := m.run(t, "", "add", path, "--yes")
+	if err != nil {
+		t.Fatalf("add: %v\n%s", err, out)
+	}
+
+	if got := m.probeResult(t); strings.Contains(got, "ran") || strings.Contains(got, "visible") {
+		t.Fatalf("the run step reached the session: %q", got)
+	}
+}
+
 func TestB53NetworkStepIsShownInThePromptAndMarksThePackageImpure(t *testing.T) {
 	m, url, secret := sandboxedMachine(t)
 	m.opts.Interactive = yes()

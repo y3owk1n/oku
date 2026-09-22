@@ -203,8 +203,10 @@ read the lock diff before you commit it.
 - The sources of a `[build]`. `signing_key` covers artifacts only, and `fetch`
   steps rely on their `sha256`.
 - A build command you approved, on a host where the sandbox is not available.
-- On Linux the sandbox hides your home directory and the network. It does not
-  stop writes to other places your user can already write to.
+- A build that reaches a service outside the sandbox, such as launchd over XPC
+  on macOS or the Docker socket on Linux, and asks it to start a program. The
+  sandbox blocks the ways that the [manifest reference](manifest.md#the-sandbox)
+  lists, not every way.
 
 ## Archives
 
