@@ -52,6 +52,20 @@ $ oku service logs postgres
 The commands work the same on macOS, Linux and Windows. An unknown name fails and lists
 the services you have.
 
+`start` and `restart` look at the service again one second after starting it,
+because a program that exits at once, such as one that finds a stale socket,
+still has a pid the moment it starts. When it has exited by then, the
+command fails and says where to look:
+
+```
+$ oku service start atuin
+oku: atuin started and then exited, look at ~/.local/share/oku/logs/atuin.log
+```
+
+On Linux the hint is a `journalctl` command. On Windows there is no log to point
+at, because Task Scheduler keeps none. `status` reports what the service
+manager says and never fails for a stopped service.
+
 `oku update` of a package with a running service stops the old program and
 starts the new one. On macOS oku waits up to 30 seconds for the old program to
 exit, because launchd does not load a service while its old program still runs.

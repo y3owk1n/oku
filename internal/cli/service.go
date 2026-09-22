@@ -9,6 +9,7 @@ import (
 	"runtime"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -447,6 +448,29 @@ func controlService(cmd *cobra.Command, opts Options, action, name string) error
 	status, err := manager.Status(ctx, d)
 	if err != nil {
 		return err
+	}
+
+	// A program that exits right after start, such as one that finds a stale
+	// socket, still has a pid when Start returns, so oku waits and looks again.
+	if (action == "start" || action == "restart") && status.Running {
+		sleep := opts.Sleep
+		if sleep == nil {
+			sleep = time.Sleep
+		}
+
+		sleep(service.StartWait)
+
+		if status, err = manager.Status(ctx, d); err != nil {
+			return err
+		}
+
+		if !status.Running {
+			if hint := manager.LogHint(d); hint != "" {
+				return fmt.Errorf("%s started and then exited, %s", name, hint)
+			}
+
+			return fmt.Errorf("%s started and then exited", name)
+		}
 	}
 
 	if wantJSON(cmd) {

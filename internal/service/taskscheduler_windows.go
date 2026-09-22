@@ -177,6 +177,9 @@ func (t *taskScheduler) Status(ctx context.Context, d Definition) (Status, error
 	return status, nil
 }
 
+// LogHint is empty, because Task Scheduler keeps no log of a task's output.
+func (t *taskScheduler) LogHint(Definition) string { return "" }
+
 func (t *taskScheduler) Logs(_ context.Context, d Definition, lines int) (string, error) {
 	data, err := os.ReadFile(d.LogFile)
 	if os.IsNotExist(err) {
