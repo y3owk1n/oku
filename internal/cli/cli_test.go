@@ -6481,7 +6481,7 @@ func TestB195RemoveTakesSeveralNamesInOneGeneration(t *testing.T) {
 	}
 
 	if _, err := m.run(t, "", "remove", "first", "nothing"); err == nil ||
-		!strings.Contains(err.Error(), "nothing: not installed") {
+		!strings.Contains(err.Error(), "nothing is not installed, so nothing was removed") {
 		t.Fatalf("remove with an unknown name: %v", err)
 	}
 

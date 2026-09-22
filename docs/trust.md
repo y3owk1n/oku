@@ -72,7 +72,7 @@ machine and asks:
 ```
 tree 2.3.2 builds from source and runs these commands on your machine:
 
-  step 0
+  step 1
     make -j{{jobs}}
 
 run them? [y/N]

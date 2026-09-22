@@ -1035,7 +1035,7 @@ func warn(w io.Writer, format string, args ...any) {
 	text := fmt.Sprintf(format, args...)
 
 	if s.On() {
-		text = s.Wrap(s.Note()+" "+strings.ReplaceAll(s.Homes(text), "\n", "\n  "), 2)
+		text = s.Wrap(s.Note()+" "+strings.ReplaceAll(s.Code(s.Homes(text)), "\n", "\n  "), 2)
 	}
 
 	fmt.Fprintln(w, text)
@@ -1078,16 +1078,7 @@ func reportInferred(w io.Writer, got installed, verbose bool) {
 		return
 	}
 
-	npm := strings.HasPrefix(got.lock.Ref, "npm:")
-
-	why := "has no manifest, so oku inferred one from its newest release"
-
-	switch {
-	case npm:
-		why = "is an npm package, so oku inferred a manifest from the registry"
-	case strings.HasPrefix(got.lock.Ref, "http"):
-		why = "is a download and no manifest, so oku inferred one from it"
-	}
+	why, _ := inferredWhy(got)
 
 	if verbose {
 		fmt.Fprintf(w, "%s %s:\n\n%s\n", got.lock.Ref, why, got.inferred)
@@ -1095,7 +1086,71 @@ func reportInferred(w io.Writer, got installed, verbose bool) {
 		warn(w, "%s %s, --verbose prints it", got.lock.Ref, why)
 	}
 
-	if npm && !strings.Contains(got.inferred, "[runtime]") {
+	reportNodeRuntime(w, got)
+}
+
+// inferredWhy says where oku took an inferred manifest from, for one package
+// and for several.
+func inferredWhy(got installed) (one, many string) {
+	switch {
+	case strings.HasPrefix(got.lock.Ref, "npm:"):
+		return "is an npm package, so oku inferred a manifest from the registry",
+			"are npm packages, so oku inferred their manifests from the registry"
+	case strings.HasPrefix(got.lock.Ref, "http"):
+		return "is a download and no manifest, so oku inferred one from it",
+			"are downloads and no manifests, so oku inferred one from each"
+	}
+
+	return "has no manifest, so oku inferred one from its newest release",
+		"have no manifest, so oku inferred one for each from its newest release"
+}
+
+// reportInferredTogether is reportInferred for the packages of one sync on a
+// terminal: one note for each source of manifests, which names the packages.
+func reportInferredTogether(w io.Writer, all []installed) {
+	var (
+		order  []string
+		groups = map[string][]installed{}
+	)
+
+	for _, got := range all {
+		if got.inferred == "" {
+			continue
+		}
+
+		one, _ := inferredWhy(got)
+		if _, ok := groups[one]; !ok {
+			order = append(order, one)
+		}
+
+		groups[one] = append(groups[one], got)
+	}
+
+	for _, one := range order {
+		group := groups[one]
+		if len(group) == 1 {
+			reportInferred(w, group[0], false)
+
+			continue
+		}
+
+		names := make([]string, len(group))
+		for i, got := range group {
+			names[i] = got.lock.Name
+		}
+
+		_, many := inferredWhy(group[0])
+		warn(w, "%d packages %s: %s, --verbose prints them", len(group), many, strings.Join(names, ", "))
+
+		for _, got := range group {
+			reportNodeRuntime(w, got)
+		}
+	}
+}
+
+// reportNodeRuntime warns that an npm package runs the node on PATH.
+func reportNodeRuntime(w io.Writer, got installed) {
+	if strings.HasPrefix(got.lock.Ref, "npm:") && !strings.Contains(got.inferred, "[runtime]") {
 		warn(
 			w, "its programs run the node on PATH. To pin one, set runtimes.node in config.toml "+
 				"to the ref of a package that provides node",
@@ -1119,10 +1174,16 @@ func (e env) reportFirstUse(w io.Writer, got installed) {
 		return
 	}
 
+	// A terminal gets the start of the checksum, which is enough to compare.
+	sum := got.lock.Platforms[platform.Host().String()].SHA256
+	if ui.For(w).On() && len(sum) > 12 {
+		sum = sum[:12]
+	}
+
 	warn(
 		w,
 		"%s publishes no checksum, so oku trusted this download and pinned sha256 %s in %s",
-		got.lock.Name, got.lock.Platforms[platform.Host().String()].SHA256, e.lockPath(),
+		got.lock.Name, sum, e.lockPath(),
 	)
 }
 

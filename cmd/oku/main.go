@@ -45,20 +45,20 @@ func main() {
 }
 
 // fail prints err as "oku: <reason>" and exits with 1. On a terminal the
-// prefix is red, and the lines after the first, which say what to do about
-// it, are indented and dim.
+// prefix is red, the lines after the first, which say what to do about it,
+// are indented, and each `command` to type is in colour.
 func fail(err error) {
 	s := ui.For(os.Stderr)
 	first, rest, more := strings.Cut(suggest(err.Error()), "\n")
 
-	fmt.Fprintln(os.Stderr, s.Wrap(s.Alert("oku:")+" "+s.Homes(first), 2))
+	fmt.Fprintln(os.Stderr, s.Wrap(s.Alert("oku:")+" "+s.Code(s.Homes(first)), 2))
 
 	if more {
 		if s.On() {
-			rest = s.Wrap("  "+strings.ReplaceAll(s.Homes(rest), "\n", "\n  "), 2)
+			rest = s.Wrap("  "+strings.ReplaceAll(s.Code(s.Homes(rest)), "\n", "\n  "), 2)
 		}
 
-		fmt.Fprintln(os.Stderr, s.Dim(rest))
+		fmt.Fprintln(os.Stderr, rest)
 	}
 
 	os.Exit(1)

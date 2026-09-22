@@ -15,7 +15,7 @@ func newRemoveCmd(opts Options) *cobra.Command {
 	return &cobra.Command{
 		Use:   "remove <name>...",
 		Short: "Remove packages from the profile",
-		Args:  cobra.MinimumNArgs(1),
+		Args:  minArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			e, err := scopedEnv(cmd, opts)
 			if err != nil {
@@ -66,7 +66,15 @@ func newRemoveCmd(opts Options) *cobra.Command {
 			}
 
 			if len(unknown) > 0 {
-				return fmt.Errorf("%s: not installed", strings.Join(unknown, ", "))
+				verb := "is"
+				if len(unknown) > 1 {
+					verb = "are"
+				}
+
+				return fmt.Errorf(
+					"%s %s not installed, so nothing was removed\n`oku list` shows what is",
+					strings.Join(unknown, ", "), verb,
+				)
 			}
 
 			lockData, err := locked.Bytes(e.lockPath())

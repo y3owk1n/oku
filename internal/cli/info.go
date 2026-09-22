@@ -70,12 +70,27 @@ func newInfoCmd(opts Options) *cobra.Command {
 
 			s := ui.For(out)
 
+			// A terminal gets the start of the commit and the strategy in words.
+			commit, strategy := entry.Commit, at.Strategy
+			if s.On() {
+				if len(commit) > 12 {
+					commit = commit[:12]
+				}
+
+				switch strategy {
+				case strategyArtifact:
+					strategy = "from a release download"
+				case strategyBuild:
+					strategy = "built from source"
+				}
+			}
+
 			pairs := [][2]string{
 				{"name", s.Bold(pkg.Name)},
 				{"version", pkg.Version},
 				{"ref", s.Home(pkg.Ref)},
-				{"commit", entry.Commit},
-				{"installed", at.Strategy},
+				{"commit", commit},
+				{"installed", strategy},
 				{"store", s.Home(pkg.StorePath)},
 			}
 

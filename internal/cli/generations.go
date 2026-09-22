@@ -85,10 +85,7 @@ func newGenerationsCmd(opts Options) *cobra.Command {
 			}
 
 			if len(gens) == 0 {
-				fmt.Fprintln(
-					cmd.OutOrStdout(),
-					"no generations yet, the first `oku add` or `oku sync` makes one",
-				)
+				hint(cmd.OutOrStdout(), "no generations yet, the first `oku add` or `oku sync` makes one")
 
 				return nil
 			}
@@ -188,7 +185,10 @@ func changes(s ui.Style, from, to profile.Generation) string {
 	parts = append(parts, fileChanges(s, from.Files, to.Files)...)
 	parts = append(parts, settingChanges(s, from.Settings, to.Settings)...)
 
-	if len(parts) == 0 {
+	switch {
+	case len(parts) == 0 && from.Number == 0:
+		return s.Dim("empty")
+	case len(parts) == 0:
 		return s.Dim("no change")
 	}
 
@@ -317,12 +317,29 @@ func runRollback(cmd *cobra.Command, opts Options, args []string) error {
 			target.Packages,
 			func(p profile.Package) bool { return p.Name == name },
 		) {
-			fmt.Fprintf(
+			warn(
 				cmd.ErrOrStderr(),
-				"%s still lists %s, so `oku sync` will install it again. Run `oku remove %s` to drop it.\n",
+				"%s still lists %s, so `oku sync` will install it again. Run `oku remove %s` to drop it.",
 				e.listPath(),
 				name,
 				name,
+			)
+		}
+	}
+
+	// An included list may name the package, and oku does not read it here.
+	if len(own.Include) > 0 {
+		return nil
+	}
+
+	for _, pkg := range target.Packages {
+		if _, ok := own.Packages[pkg.Name]; !ok {
+			warn(
+				cmd.ErrOrStderr(),
+				"%s does not list %s, so `oku sync` will remove it again. Run `oku add %s` to keep it.",
+				e.listPath(),
+				pkg.Name,
+				pkg.Ref,
 			)
 		}
 	}

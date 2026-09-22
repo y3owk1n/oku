@@ -103,7 +103,7 @@ func runDoctor(cmd *cobra.Command, opts Options) error {
 				glyph = s.Cross()
 			}
 
-			fmt.Fprintln(out, s.Wrap(glyph+" "+s.Homes(c.Message), 2))
+			fmt.Fprintln(out, s.Wrap(glyph+" "+s.Code(s.Homes(c.Message)), 2))
 		}
 	}
 
@@ -180,7 +180,7 @@ func checkStore(r *report, e env) {
 	if e.root == e.data {
 		r.ok("the store is %s, in your data directory", storeDir)
 	} else {
-		r.ok("the store is %s, the shared root from \"oku setup --system\"", storeDir)
+		r.ok("the store is %s, the shared root from `oku setup --system`", storeDir)
 	}
 
 	// A store that does not exist yet is a fresh install, not a problem.
@@ -216,7 +216,7 @@ func checkHook(r *report, opts Options) {
 
 	hint := setupHint(opts)
 	if hint == "" {
-		hint = "see \"oku hook --help\""
+		hint = "see `oku hook --help`"
 	}
 
 	r.note("no shell hook line found in a startup file. The line puts oku's programs on PATH "+
@@ -315,7 +315,7 @@ func checkProfiles(r *report, e env) error {
 				broken++
 
 				r.problem(
-					"profile %s has %s, but %s is missing. Run \"oku sync\" to install it again",
+					"profile %s has %s, but %s is missing. Run `oku sync` to install it again",
 					prof.Name(), pkg.Name, pkg.StorePath,
 				)
 			}

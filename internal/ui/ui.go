@@ -164,6 +164,26 @@ func (s Style) Alert(text string) string { return s.wrap(bold+red, text) }
 // Heading is a section title, such as "Commands" in the help.
 func (s Style) Heading(text string) string { return s.wrap(bold+blue, text) }
 
+// Code shows each `command` in text in the accent colour and drops its
+// backticks. Off a terminal the backticks stay.
+func (s Style) Code(text string) string {
+	if !s.on {
+		return text
+	}
+
+	// A backtick with no partner opens no command, so the text stays.
+	parts := strings.Split(text, "`")
+	if len(parts)%2 == 0 {
+		return text
+	}
+
+	for i := 1; i < len(parts); i += 2 {
+		parts[i] = s.Accent(parts[i])
+	}
+
+	return strings.Join(parts, "")
+}
+
 // Pick returns fancy on a styled terminal and plain anywhere else. Callers
 // pass a unicode glyph and its ASCII stand-in.
 func (s Style) Pick(fancy, plain string) string {

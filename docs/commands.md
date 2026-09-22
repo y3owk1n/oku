@@ -45,7 +45,9 @@ something that finished starts with a green `✓` and stays put while the next
 one prints, as in a package manager's install log, and a line for something
 removed starts with a red `-`. The last line of a command that changed the
 machine says what it did, such as `✓ done in 3s` or `✓ freed 1.2 GiB from 14
-store paths`. A table fits
+store paths`. A duration under a second reads in milliseconds, such as `done in
+120ms`. Each command to type in a hint or an error, such as `` `oku sync` ``,
+is in colour without its backticks. A table fits
 the terminal: its last column wraps under itself, oku cuts a column that must
 give room and ends it with `…`, no row ends in spaces, and under 60 columns a
 table that does not fit prints each row as a block of label and value lines.
@@ -91,10 +93,14 @@ On a command that prints no data, `--json` changes nothing.
 ## oku add
 
 ```
-oku add <ref>[@version] [--from-source] [--asset <glob>] [--bin <name>] [--yes] [--verbose]
+oku add <ref>[@version]... [--from-source] [--asset <glob>] [--bin <name>] [--yes] [--verbose]
 ```
 
-Installs the package a [ref](refs.md) points at.
+Installs the package a [ref](refs.md) points at. With several refs it installs
+them one after another, one generation each. A failure stops the command, and
+the packages added before it stay. `--asset` and `--bin` describe one download,
+so they take one ref. A bare word that is no file here fails with `there is no
+file named <word> here`, and says how to write a ref.
 
 1. Fetches the manifest. For a `github:owner/repo` ref whose repo has none, oku
    [infers one](manifest.md#inferred-manifests) and says so.
@@ -182,7 +188,7 @@ needs no download.
 
 It also works when only the list or the lock still names the package, which
 happens after the data directory was deleted. A name found nowhere fails with
-`<name>: not installed`.
+`<name> is not installed, so nothing was removed`.
 
 `remove` refuses a package that only an
 [included list](list-and-lock.md#including-other-lists) declares, because oku
@@ -225,7 +231,9 @@ vendored   sha256 9a7aaff0...
 programs   hey
 ```
 
-`installed` is `artifact` or `build`. oku leaves out a line that does not apply.
+`installed` is `artifact` or `build`. On a terminal it reads `from a release
+download` or `built from source`, and `commit` shows its first 12 characters.
+oku leaves out a line that does not apply.
 `manifest` appears for a package whose manifest oku inferred. `impure` appears
 for a build that used `network = true`, which means it is not reproducible.
 `deps` lists the packages in its closure.
@@ -349,6 +357,12 @@ number, such as `OKU_PARALLEL=1` for one after another. Builds from source still
 run one at a time, because each build uses every core. A package that is in the
 store already at the version in the lock needs no request to its server, so a
 sync with nothing to do is fast and works offline.
+
+On a terminal, packages whose manifests oku inferred share one note, such as
+`4 packages have no manifest, so oku inferred one for each from its newest
+release: fzf, gofumpt, jq, just`, and a note about a download with no published
+checksum shows the first 12 characters of the sha256 it pinned. A first sync of
+an empty list writes no generation and says `nothing to sync`.
 
 After the summary, output is either `already in sync` or a line such as
 `profile now holds 12 packages, 8 files, 20 settings, generation 7, 12s`. Files and
@@ -538,7 +552,8 @@ has the time, what the generation holds, and what changed from the one before:
 `+` for a package, file or setting that came, `-` for one that went, `->`
 between two versions, `rebuilt` for a new build of the same version, and `~`
 for a file with other bytes or a setting with another value. A change with
-more than six parts ends in `and N more`.
+more than six parts ends in `and N more`. A first generation that holds nothing
+says `empty`.
 
 ```
   1  2026-09-20 14:02  1 package                        + ripgrep 14.1.1
@@ -579,6 +594,13 @@ does not hold, rollback prints a notice:
 
 ```
 ~/.config/oku/oku.toml still lists hello, so `oku sync` will install it again. Run `oku remove hello` to drop it.
+```
+
+A package the generation holds and the list no longer names gets the other
+notice, unless the list includes other lists:
+
+```
+~/.config/oku/oku.toml does not list fzf, so `oku sync` will remove it again. Run `oku add github:junegunn/fzf` to keep it.
 ```
 
 Rollback does not write a new generation. After `oku rollback 1`, generation 1

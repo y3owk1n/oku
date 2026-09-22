@@ -126,7 +126,7 @@ an entry only when a key from "oku key trust" signed it.`,
 					})
 					if len(c.Caches) == before {
 						return fmt.Errorf(
-							"%s is not one of your caches, see \"oku cache list\"",
+							"%s is not one of your caches, see `oku cache list`",
 							args[0],
 						)
 					}
@@ -157,7 +157,7 @@ an entry only when a key from "oku key trust" signed it.`,
 				}
 
 				if len(config.Caches) == 0 {
-					fmt.Fprintln(cmd.OutOrStdout(), "no caches, add one with \"oku cache add\"")
+					hint(cmd.OutOrStdout(), "no caches, add one with `oku cache add`")
 				}
 
 				for _, location := range config.Caches {
@@ -208,7 +208,7 @@ func runPush(cmd *cobra.Command, dir string, names []string) error {
 
 	key, err := readSigningKey(keyPath)
 	if errors.Is(err, fs.ErrNotExist) {
-		return errors.New("there is no signing key yet, create one with \"oku key generate\"")
+		return errors.New("there is no signing key yet, create one with `oku key generate`")
 	}
 
 	if err != nil {
@@ -367,7 +367,7 @@ func newKeyCmd() *cobra.Command {
 						return have == args[0]
 					})
 					if len(c.TrustedKeys) == before {
-						return fmt.Errorf("%s is not a trusted key, see \"oku key list\"", args[0])
+						return fmt.Errorf("%s is not a trusted key, see `oku key list`", args[0])
 					}
 
 					fmt.Fprintf(cmd.OutOrStdout(), "revoked %s\n", args[0])
@@ -406,10 +406,7 @@ func newKeyCmd() *cobra.Command {
 				}
 
 				if yours == "" && len(config.TrustedKeys) == 0 {
-					fmt.Fprintln(
-						out,
-						"no keys yet, `oku key generate` makes yours and `oku key trust` adds another",
-					)
+					hint(out, "no keys yet, `oku key generate` makes yours and `oku key trust` adds another")
 
 					return nil
 				}

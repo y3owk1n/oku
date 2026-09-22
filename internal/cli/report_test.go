@@ -2,6 +2,8 @@ package cli_test
 
 import (
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -278,5 +280,138 @@ func TestB234HelpFitsANarrowTerminal(t *testing.T) {
 		if len([]rune(line)) > 50 {
 			t.Fatalf("a help line is wider than 50 columns: %q\n%s", line, out)
 		}
+	}
+}
+
+func TestB238ATerminalGetsOneNoteForTheManifestsOkuInferred(t *testing.T) {
+	t.Setenv("NO_COLOR", "")
+	t.Setenv("FORCE_COLOR", "1")
+
+	m := newMachine(t)
+	m.archive(t, "tool-1.2.3", map[string]string{"tool": script})
+	m.archive(t, "other-2.0.0", map[string]string{"other": script})
+
+	server := httptest.NewServer(http.FileServer(http.Dir(m.fixtures)))
+	t.Cleanup(server.Close)
+
+	m.writeFilesList(t, "[packages]\n"+
+		"tool = \""+server.URL+"/tool-1.2.3.tar.gz\"\n"+
+		"other = \""+server.URL+"/other-2.0.0.tar.gz\"\n")
+
+	out, err := m.run(t, "", "sync")
+	must(t, err)
+
+	// The notes wrap at the width, so the words are compared on one line.
+	text := strings.Join(strings.Fields(out), " ")
+
+	if !strings.Contains(text, "2 packages are downloads and no manifests, so oku inferred one from each: other, tool") ||
+		strings.Count(text, "inferred") != 1 {
+		t.Fatalf("sync should print one note for both inferred manifests:\n%s", out)
+	}
+
+	if !regexp.MustCompile(`pinned sha256 [0-9a-f]{12} in`).MatchString(text) {
+		t.Fatalf("a terminal should get the start of the pinned checksum:\n%s", out)
+	}
+}
+
+func TestB236AddTakesSeveralRefsOneGenerationEach(t *testing.T) {
+	m := newMachine(t)
+	first := m.manifest(t, "first", map[string]string{"first": script}, `bin = ["first"]`)
+	second := m.manifest(t, "second", map[string]string{"second": script}, `bin = ["second"]`)
+
+	if _, err := m.run(t, "", "add", "--asset", "*.tar.gz", first, second); err == nil ||
+		!strings.Contains(err.Error(), "add that ref on its own") {
+		t.Fatalf("--asset with two refs: %v", err)
+	}
+
+	out, err := m.run(t, "", "add", first, second)
+	must(t, err)
+
+	if !strings.Contains(out, "added first") || !strings.Contains(out, "added second") {
+		t.Fatalf("add should add both:\n%s", out)
+	}
+
+	if strings.Count(out, "to run it") > 1 {
+		t.Fatalf("add should say how to run the programs once:\n%s", out)
+	}
+
+	out, err = m.run(t, "", "generations", "--json")
+	must(t, err)
+
+	var gens []map[string]any
+	must(t, json.Unmarshal([]byte(out), &gens))
+
+	if len(gens) != 2 {
+		t.Fatalf("each ref should get its own generation, got %d:\n%s", len(gens), out)
+	}
+}
+
+func TestB237ACommandToTypeIsInColourWithoutBackticks(t *testing.T) {
+	t.Setenv("NO_COLOR", "")
+	t.Setenv("FORCE_COLOR", "1")
+
+	m := newMachine(t)
+
+	out, err := m.run(t, "", "list")
+	must(t, err)
+
+	if !strings.Contains(out, "\x1b[36moku add <ref>\x1b[0m installs one") || strings.Contains(out, "`") {
+		t.Fatalf("the hint should show the command in colour:\n%q", out)
+	}
+
+	t.Setenv("FORCE_COLOR", "")
+
+	out, err = m.run(t, "", "list")
+	must(t, err)
+
+	if !strings.Contains(out, "`oku add <ref>` installs one") {
+		t.Fatalf("a pipe should keep the backticks:\n%q", out)
+	}
+}
+
+func TestB239RollbackSaysWhenSyncWouldRemoveAPackageAgain(t *testing.T) {
+	m := newMachine(t)
+	first := m.manifest(t, "first", map[string]string{"first": script}, `bin = ["first"]`)
+
+	_, err := m.run(t, "", "add", first)
+	must(t, err)
+
+	_, err = m.run(t, "", "remove", "first")
+	must(t, err)
+
+	out, err := m.run(t, "", "rollback")
+	must(t, err)
+
+	if !strings.Contains(out, "does not list first, so `oku sync` will remove it again") {
+		t.Fatalf("rollback should say the next sync removes first:\n%s", out)
+	}
+}
+
+func TestB240AnEmptyListWritesNoGenerationAndQuickRunsReadInMilliseconds(t *testing.T) {
+	m := newMachine(t)
+	m.writeFilesList(t, "[packages]\n")
+
+	out, err := m.run(t, "", "sync")
+	must(t, err)
+
+	if !strings.Contains(out, "nothing to sync") {
+		t.Fatalf("an empty first sync should say there is nothing to do:\n%s", out)
+	}
+
+	out, err = m.run(t, "", "generations")
+	must(t, err)
+
+	if !strings.Contains(out, "no generations yet") {
+		t.Fatalf("an empty sync wrote a generation:\n%s", out)
+	}
+
+	ref := m.manifest(t, "tool", map[string]string{"tool": script}, `bin = ["tool"]`)
+	m.writeFilesList(t, "[packages]\ntool = \""+strings.ReplaceAll(ref, `\`, `\\`)+"\"\n")
+
+	out, err = m.run(t, "", "sync")
+	must(t, err)
+
+	if strings.Contains(out, ", 0s\n") {
+		t.Fatalf("a quick sync should not take 0s:\n%s", out)
 	}
 }
