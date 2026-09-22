@@ -177,9 +177,15 @@ order step in `prd/product.md`.
   with identical store hashes. On a machine that has a global list it refuses
   and changes nothing.
 - B19 [2] A relative file ref in a list resolves against that list's
-  directory. A list from a URL or a repo that names a local path is an error.
+  directory. A list from a URL or a repo that names an absolute path is an
+  error.
   `add` stores a file inside the list's directory relative to it, in the list
   and in the lock.
+- B252 [2] In a list or manifest read from a repo, a relative include, package
+  or dep names the file of the same repo, read at the commit of the list or
+  manifest, and `oku.lock` stores it as `<repo ref>#<path>`. In one read from a
+  URL it names the URL beside it. A relative path that leaves the repo is an
+  error.
 
 ## Versions and generations
 
