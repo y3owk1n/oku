@@ -72,7 +72,7 @@ type Options struct {
 func NewRootCmd(opts Options) *cobra.Command {
 	root := &cobra.Command{
 		Use:           "oku",
-		Short:         "A cross-platform package manager with no central registry",
+		Short:         "Set up your machine from one file: tools, dotfiles, secrets and settings",
 		Version:       opts.Version,
 		SilenceUsage:  true,
 		SilenceErrors: true,

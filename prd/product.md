@@ -1,7 +1,10 @@
 # oku
 
-A cross-platform package manager with no central registry. Like nix in what it
-guarantees, unlike nix in what it asks you to learn.
+One file that sets up a machine: its tools, dotfiles, secrets and per-user OS
+settings, on Linux, macOS and Windows. A lock pins every byte, and one command
+rolls the machine back. Like nix with home-manager and nix-darwin in what it
+guarantees, unlike them in what it asks you to learn. No registry, no
+language, no root.
 
 Repo: https://github.com/y3owk1n/oku. Language: Go, CLI built on cobra.
 
