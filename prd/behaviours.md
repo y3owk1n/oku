@@ -452,6 +452,10 @@ order step in `prd/product.md`.
   release. `--to <tag>` takes that release, older or newer, after the same
   signature check, and says so when the running binary is that release. After
   a replacement oku prints the link to the release's notes.
+- B232 [11] While oku asks the user something, such as a build approval or
+  the password for `sudo`, the rows and build logs of the packages that
+  install in parallel wait, and appear below the answer once the user gives it. Two
+  packages that need an approval ask one after the other.
 - B176 [11] While oku waits for a download, a lookup, a clone, an unpack, a
   cache or a build step, stderr says what it waits for and for which package.
   A terminal shows one line with the time and the bytes so far, which goes
