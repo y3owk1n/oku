@@ -100,7 +100,7 @@ func (s *Store) Build(
 		}, nil
 	}
 
-	toolDirs, err := findNeeds(build.Needs)
+	tools, err := findNeeds(build.Needs)
 	if err != nil {
 		return Realized{}, err
 	}
@@ -132,6 +132,11 @@ func (s *Store) Build(
 		if err := os.Mkdir(dir, 0o755); err != nil {
 			return Realized{}, err
 		}
+	}
+
+	toolDirs, toolBin, err := linkNeeds(filepath.Join(work, "needs"), tools)
+	if err != nil {
+		return Realized{}, err
 	}
 
 	vars := map[string]string{
@@ -198,7 +203,7 @@ func (s *Store) Build(
 	systemPC := writeSystemPkgConfig(filepath.Join(work, "pkgconfig"))
 
 	env := append(append(linkEnv(deps, systemPC), hostVars...), []string{
-		"PATH=" + joinPaths(append(append(depDirs(deps, "bin"), toolDirs...), systemDirs...)),
+		"PATH=" + joinPaths(append(append(depDirs(deps, "bin"), toolBin...), systemDirs...)),
 		"OKU_PREFIX=" + prefix, "OKU_SRC=" + src, "OKU_JOBS=" + vars["jobs"],
 	}...)
 
@@ -365,10 +370,15 @@ func removeTree(dir string) {
 	os.RemoveAll(dir)
 }
 
-// findNeeds returns the directories of the needed tools, and fails on the first
+// needTool is a needed tool and where the user's PATH has it.
+type needTool struct {
+	name, path string
+}
+
+// findNeeds looks the needed tools up on the user's PATH, and fails on the first
 // tool that is missing.
-func findNeeds(needs []string) ([]string, error) {
-	var dirs []string
+func findNeeds(needs []string) ([]needTool, error) {
+	tools := make([]needTool, 0, len(needs))
 
 	for _, tool := range needs {
 		found, err := exec.LookPath(tool)
@@ -376,12 +386,40 @@ func findNeeds(needs []string) ([]string, error) {
 			return nil, fmt.Errorf("the build needs %q, which is not on PATH", tool)
 		}
 
-		if dir := filepath.Dir(found); !slices.Contains(dirs, dir) {
-			dirs = append(dirs, dir)
+		tools = append(tools, needTool{name: tool, path: found})
+	}
+
+	return tools, nil
+}
+
+// linkNeeds fills dir with one entry per needed tool, so that a build sees the
+// tools it named and nothing else from their directories. It returns the
+// directories the tools really live in, which the sandbox keeps readable, and
+// the directories to put on PATH.
+//
+// A link keeps the tool in its own directory, so a compiler driver still finds
+// its assembler and linker beside itself. Windows has no symlinks for a plain
+// user, so there a tool is a shim, as in a profile.
+func linkNeeds(dir string, tools []needTool) (real, bin []string, err error) {
+	if len(tools) == 0 {
+		return nil, nil, nil
+	}
+
+	if err := os.Mkdir(dir, 0o755); err != nil {
+		return nil, nil, err
+	}
+
+	for _, tool := range tools {
+		if home := filepath.Dir(tool.path); !slices.Contains(real, home) {
+			real = append(real, home)
+		}
+
+		if err := linkNeed(filepath.Join(dir, tool.name), tool.path); err != nil {
+			return nil, nil, fmt.Errorf("link the build tool %s: %w", tool.name, err)
 		}
 	}
 
-	return dirs, nil
+	return real, []string{dir}, nil
 }
 
 // checkTagCommit fails when the source was cloned from a moving tag that no
@@ -685,6 +723,17 @@ func installFiles(in manifest.Install, src, prefix string) error {
 			); err != nil {
 				return err
 			}
+		}
+	}
+
+	// A table with a path installs the file under the table's name.
+	for _, w := range in.Wrap {
+		if w.Path == "" {
+			continue
+		}
+
+		if err := copyInto(src, w.Path, prefix, path.Join("bin", w.Name), 0o755); err != nil {
+			return err
 		}
 	}
 

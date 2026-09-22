@@ -51,6 +51,12 @@ func writeWraps(bin string, wraps []manifest.Wrapper, vars map[string]string, go
 	}
 
 	for _, w := range wraps {
+		// A table with a path is a file of the package, which linkOutputs and
+		// installFiles expose.
+		if w.Path != "" {
+			continue
+		}
+
 		words := make([]string, 0, len(w.Args)+1)
 
 		for _, text := range append([]string{w.Run}, w.Args...) {

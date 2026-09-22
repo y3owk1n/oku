@@ -10,6 +10,9 @@ order step in `prd/product.md`.
 - B122 [1] A `bin` entry that is a table makes oku write a program that runs
   `run` with `args` before the user's arguments. `run` may name a runtime dep,
   and that dep stays out of the user's profile.
+- B209 [1] A `bin` table with `name` and `path` exposes the file at `path`
+  inside the package under `name`, in an artifact and in an `install` step.
+  A table with both `path` and `run` fails `oku manifest lint` and `add`.
 - B128 [1] In `[env]`, `{{pkg}}` is the directory that holds the package's
   files, which for an artifact is the unpacked download.
 - B2 [1] An artifact whose download does not match its sha256 is rejected and
@@ -27,6 +30,8 @@ order step in `prd/product.md`.
 - B5 [1] `oku list` shows name, version and ref for the active list.
 - B6 [1] A failed install leaves the previous profile active and unchanged.
 - B7 [1] `man` and `completions` entries appear under the profile `share`.
+- B206 [1] A man page that a build installs under `{{prefix}}/man` appears
+  under the profile `share/man`, the same as one under `{{prefix}}/share/man`.
 - B8 [1] oku never requires root outside system scope, and writes only under
   its config, data and cache directories, `oku.toml`, `oku.lock`, the per-user
   exposure locations in `prd/architecture.md`, and the targets and settings
@@ -240,6 +245,9 @@ order step in `prd/product.md`.
   `[build]` steps in order and installs what `install` steps name. The lock
   records the strategy, so `sync` builds on that platform too.
 - B36 [5] A missing `needs` tool fails before any step runs, naming the tool.
+- B208 [5] A `needs` tool is on the build's `PATH` as a link under its own
+  name in a directory oku makes for the build. The other programs of the
+  tool's directory are not on `PATH`.
 - B37 [5] Deps are realized first. The build finds their headers, libraries
   and pkg-config files with no manifest-side flags, and the built binary finds
   their shared libraries at runtime from any working directory.
@@ -273,8 +281,10 @@ order step in `prd/product.md`.
 - B53 [6] `network = true` on a `run` step is shown in the approval prompt and
   marks the package impure in `oku info`.
 - B54 [6] Build env contains only oku's variables, the link environment, step
-  `env`, and a PATH of `deps`, `needs`, `/usr/bin` and `/bin`. A rustup-managed
-  toolchain adds `RUSTUP_HOME`.
+  `env`, and a PATH of `deps`, `needs` and the system directories of B207. A
+  rustup-managed toolchain adds `RUSTUP_HOME`.
+- B207 [6] The build `PATH` ends in `/usr/bin`, `/bin`, `/usr/sbin` and
+  `/sbin`, in that order, so `sysctl` is found.
 - B55 [6] `oku manifest test` builds into a throwaway store and reports
   success or the failing step. It leaves the user's store, profile, list and
   lock untouched, and it leaves no build directory behind.

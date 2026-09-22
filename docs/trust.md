@@ -96,6 +96,12 @@ On macOS and Linux, build commands run in a
 directory, and with a scrubbed environment. A step marked `(wants network)` in
 the prompt gets the network and still cannot read your home directory.
 
+On macOS the developer tools in `/usr/bin` ask `xcrun` where the real tool
+is, and `xcrun` caches the answer in your temporary directory, which the
+sandbox does not let it write. oku points that cache at the build's own
+temporary directory with `xcrun_db`, so `ar`, `install_name_tool` and the
+others run without an "Operation not permitted" warning.
+
 The sandbox is not available everywhere. On Windows, and on a Linux host that
 forbids unprivileged user namespaces, oku builds without it and says so:
 

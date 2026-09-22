@@ -512,14 +512,19 @@ func (p *Profile) nextGeneration() (int, error) {
 	return highest + 1, nil
 }
 
-// build links every file under each package's bin and share into gen, writes the
-// content of files, saves the lock snapshot and writes the state file.
+// build links every file under each package's bin, share and man into gen,
+// writes the content of files, saves the lock snapshot and writes the state
+// file. A build that installed its manuals under {{prefix}}/man, as `make
+// install` with a bare prefix does, gets them under share/man like every other
+// package.
 func build(gen string, pkgs []Package, files []File, settings []Setting, lockData []byte) error {
 	owners := map[string]string{}
 
 	for _, pkg := range pkgs {
-		for _, sub := range []string{"bin", "share"} {
-			if err := linkTree(gen, pkg, sub, owners); err != nil {
+		for _, tree := range [][2]string{
+			{"bin", "bin"}, {"share", "share"}, {"man", filepath.Join("share", "man")},
+		} {
+			if err := linkTree(gen, pkg, tree[0], tree[1], owners); err != nil {
 				return err
 			}
 		}
@@ -583,7 +588,9 @@ func build(gen string, pkgs []Package, files []File, settings []Setting, lockDat
 	return nil
 }
 
-func linkTree(gen string, pkg Package, sub string, owners map[string]string) error {
+// linkTree links every file under sub of the package into the directory into
+// of gen.
+func linkTree(gen string, pkg Package, sub, into string, owners map[string]string) error {
 	root := filepath.Join(pkg.StorePath, sub)
 
 	err := filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
@@ -591,10 +598,12 @@ func linkTree(gen string, pkg Package, sub string, owners map[string]string) err
 			return err
 		}
 
-		rel, err := filepath.Rel(pkg.StorePath, path)
+		rel, err := filepath.Rel(root, path)
 		if err != nil {
 			return err
 		}
+
+		rel = filepath.Join(into, rel)
 
 		if owner, taken := owners[rel]; taken {
 			return fmt.Errorf("%s and %s both provide %s", owner, pkg.Name, filepath.ToSlash(rel))

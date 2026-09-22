@@ -3799,6 +3799,8 @@ func TestB54BuildEnvironmentHoldsOnlyOkuVariables(t *testing.T) {
 		// The link environment. On macOS it holds the pkg-config files of the OS
 		// even for a build with no deps.
 		"PKG_CONFIG_PATH",
+		// On macOS xcrun keeps its cache where the sandbox lets it write.
+		"xcrun_db",
 	}
 
 	for _, name := range names {
