@@ -383,7 +383,9 @@ url = "https://github.com/artempyanykh/marksman/releases/download/{{tag}}/marksm
 bin = [{ name = "marksman", run = "/usr/bin/env", args = ["DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1", "{{pkg}}/marksman-linux-arm64"] }]
 ```
 
-`strip` applies to tar, zip, 7z, deb and rpm. oku copies a `.dmg`, a `.pkg` and an
+`strip` applies to tar, zip, 7z, deb and rpm. In a `.deb` or an `.rpm` a symlink
+to an absolute path, such as `usr/bin/fdfind -> /usr/bin/fd`, names a file of
+the package and becomes a relative link. oku copies a `.dmg`, a `.pkg` and an
 `.msi` whole. From a `.dmg` it leaves out the hidden Finder files and any link that
 points out of the image, such as the shortcut to `/Applications`.
 
@@ -694,16 +696,25 @@ How inference reads a release:
 - On Linux it writes the glibc build first and the musl build second with no
   `libc` in its `match`, so glibc machines with no build of their own use the
   musl build.
-- It takes tar archives in any compression oku knows, zip and 7z archives, and
-  single binaries, compressed or not. It skips editor extensions (`.vsix`) and
-  installers such as `.deb`, `.rpm`, `.msi`, `.dmg` and
-  `.pkg`, because the paths inside them cannot be guessed. With several
+- It takes tar archives in any compression oku knows, zip and 7z archives,
+  single binaries, compressed or not, and the installers oku
+  [unpacks](#downloads-oku-can-unpack): `.deb`, `.rpm`, `.msi`, `.dmg`, `.pkg`
+  and AppImage. It skips editor extensions (`.vsix`). With several
   candidates it prefers a command line build over a desktop app, which is an
-  asset with `desktop`, `app`, `gui`, `dmg`, `installer`, `setup` or `.app.` in
-  its name. Then it prefers a tar archive over a zip, then the smaller asset
-  when the host reports sizes, then the shortest name. When other assets fit
-  your machine as well, a comment in the manifest lists them, and so does the
-  error when oku cannot find the program in the asset it chose.
+  asset with `desktop`, `app`, `gui`, `installer`, `setup` or `.app.` in
+  its name. Then it prefers a tar archive over a zip, both over a single
+  binary, that over an installer, and a `.dmg` over a `.pkg`. Then it takes
+  the smaller asset when the host reports sizes, then the shortest name. When
+  other assets fit your machine as well, a comment in the manifest lists them,
+  and so does the error when oku cannot find the program in the asset it chose.
+- An installer's format names its OS, so `Tool1.2.dmg` is a macOS asset with
+  no OS word. One that names no arch fits amd64 and arm64 of that OS. oku can
+  open a `.dmg` or `.pkg` on macOS and an `.msi` on Windows only, so run
+  inference for those on that OS. oku cannot unpack a Windows `-setup.exe`
+  without running it, so it takes none.
+- An asset that holds a macOS app bundle, `Name.app/Contents/...`, gives
+  `app = ["Name.app"]` and treats nothing inside the bundle as a program. A
+  program beside the bundle still becomes `bin`.
 - It uses `<asset>.sha256` as `sha256_url` when that exists, else a release file
   with `checksum` or `sha256sum` in its name that is not a signature. When a
   release has one such file for each OS or platform, such as

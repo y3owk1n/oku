@@ -11,6 +11,7 @@ import (
 	"io/fs"
 	"os"
 	"path"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -92,6 +93,12 @@ func extract(src, dest string, strip int) error {
 }
 
 func untar(r io.Reader, root *os.Root, strip int) error {
+	return untarLinks(r, root, strip, false)
+}
+
+// untarLinks is untar. With rooted, an absolute symlink target names a file of
+// the package, as it does in a .deb or an .rpm, and becomes a relative link.
+func untarLinks(r io.Reader, root *os.Root, strip int, rooted bool) error {
 	tr := tar.NewReader(r)
 
 	for {
@@ -119,7 +126,14 @@ func untar(r io.Reader, root *os.Root, strip int) error {
 		case tar.TypeReg:
 			err = writeFile(root, name, hdr.FileInfo().Mode(), hdr.ModTime, tr)
 		case tar.TypeSymlink:
-			err = writeSymlink(root, name, hdr.Linkname)
+			target := hdr.Linkname
+			if rooted {
+				target, err = rootedLink(name, target, strip)
+			}
+
+			if err == nil {
+				err = writeSymlink(root, name, target)
+			}
 		case tar.TypeLink:
 			target, ok, linkErr := stripPath(hdr.Linkname, strip)
 			if linkErr != nil {
@@ -198,6 +212,31 @@ func unpackEntry(root *os.Root, name string, entry archiveEntry) error {
 	}
 
 	return writeFile(root, name, mode, entry.FileInfo().ModTime(), rc)
+}
+
+// rootedLink returns target as a link relative to the directory of name, when
+// target is an absolute path in the package such as "/usr/bin/fd". Any other
+// target comes back as it is.
+func rootedLink(name, target string, strip int) (string, error) {
+	if !path.IsAbs(target) {
+		return target, nil
+	}
+
+	stripped, ok, err := stripPath(strings.TrimLeft(target, "/"), strip)
+	if err != nil {
+		return "", err
+	}
+
+	if !ok {
+		return "", fmt.Errorf("symlink target %q points at a stripped path", target)
+	}
+
+	rel, err := filepath.Rel(path.Dir(name), stripped)
+	if err != nil {
+		return "", err
+	}
+
+	return filepath.ToSlash(rel), nil
 }
 
 // stripPath drops the first n components of an archive path. It reports false

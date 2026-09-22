@@ -94,19 +94,7 @@ func (inf *Inferrer) FromURL(
 		selectorTOML(platform.Selector{OS: host.OS, Arch: host.Arch}), at,
 	)
 
-	if l.strip > 0 {
-		fmt.Fprintf(&b, "strip = %d\n", l.strip)
-	}
-
-	if host.OS == "windows" {
-		l.bin += ".exe"
-	}
-
-	fmt.Fprintf(&b, "bin = [%q]\n", l.bin)
-
-	if len(l.man) > 0 {
-		fmt.Fprintf(&b, "man = [%s]\n", quoteAll(l.man))
-	}
+	b.WriteString(l.toml(host.OS))
 
 	return b.String(), nil
 }
