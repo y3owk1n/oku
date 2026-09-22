@@ -757,6 +757,12 @@ func (s *Store) Unreferenced(keep map[string]bool) (map[string]int64, error) {
 			continue
 		}
 
+		// A rebuild that a crash interrupted moved the old build to <path>.old. The
+		// next install of the package moves it back.
+		if keep[strings.TrimSuffix(path, ".old")] {
+			continue
+		}
+
 		var size int64
 
 		err := filepath.WalkDir(path, func(_ string, item fs.DirEntry, err error) error {
