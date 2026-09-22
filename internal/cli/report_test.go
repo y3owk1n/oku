@@ -451,3 +451,52 @@ func TestB241AGenerationShowsWhatChangedFromTheOneItReplaced(t *testing.T) {
 		t.Fatalf("generations --json should name the generation each replaced:\n%s", out)
 	}
 }
+
+func TestB242AnUpdateNamesEveryPackageThatDriftedFromTheLock(t *testing.T) {
+	m := newMachine(t)
+	first := m.manifest(t, "first", map[string]string{"first": script}, `bin = ["first"]`)
+	second := m.manifest(t, "second", map[string]string{"second": script}, `bin = ["second"]`)
+
+	m.writeFilesList(t, "[packages]\n"+
+		"first = \""+strings.ReplaceAll(first, `\`, `\\`)+"\"\n"+
+		"second = \""+strings.ReplaceAll(second, `\`, `\\`)+"\"\n")
+
+	_, err := m.run(t, "", "sync")
+	must(t, err)
+
+	// Both manifests change after oku.lock pinned them.
+	for _, path := range []string{first, second} {
+		data, err := os.ReadFile(path)
+		must(t, err)
+		must(t, os.WriteFile(path, append(data, []byte("\n# changed upstream\n")...), 0o644))
+	}
+
+	_, err = m.run(t, "", "sync")
+	if err == nil || !strings.Contains(err.Error(), "run `oku update first second` to accept these changes") {
+		t.Fatalf("sync should name both packages in one update: %v", err)
+	}
+
+	// An update of one name still names the other, and keeps the first. On a
+	// terminal first gets a checked row, so the error says it was not installed.
+	t.Setenv("NO_COLOR", "")
+	t.Setenv("FORCE_COLOR", "1")
+
+	out, err := m.run(t, "", "update", "first")
+	if err == nil || !strings.Contains(err.Error(), "second: the manifest changed") ||
+		!strings.Contains(err.Error(), "run `oku update first second`") {
+		t.Fatalf("update first should point at an update of both: %v", err)
+	}
+
+	if !strings.Contains(out, "\x1b[1mfirst\x1b[0m") ||
+		!strings.Contains(err.Error(), "nothing was installed") {
+		t.Fatalf("after a checked row the error should say nothing was installed: %v\n%s", err, out)
+	}
+
+	t.Setenv("FORCE_COLOR", "")
+
+	_, err = m.run(t, "", "update", "first", "second")
+	must(t, err)
+
+	_, err = m.run(t, "", "sync")
+	must(t, err)
+}

@@ -316,6 +316,14 @@ oku: ripgrep: the manifest changed since oku.lock was written
 run `oku update ripgrep` to accept it
 ```
 
+When several packages drifted, the error lists each one and ends with one
+`oku update` that names them all. An `oku update` of some names that finds
+another package drifted writes nothing, so its error names the packages you
+gave too. After `oku update neru` it says to run `oku update mimi neru`. When a
+terminal already got a checked row for a package, a failed `sync` or `update`
+ends with `nothing was installed, and the next run reuses the downloads above`,
+because the profile stays as it was.
+
 `--locked` makes `sync` fail when it would change `oku.lock`. Use it in CI,
 which cannot commit the lock back:
 
