@@ -37,7 +37,9 @@ finally {
     Remove-Item -Recurse -Force $tmp
 }
 
-Write-Host "installed $(Join-Path $dir 'oku.exe') after checking its sha256"
+$version = (& (Join-Path $dir 'oku.exe') --version 2>$null | Select-Object -First 1)
+if (-not $version) { $version = 'oku' }
+Write-Host "installed $version at $(Join-Path $dir 'oku.exe') after checking its sha256"
 
 # The line uses $HOME when the binary is under it, so it also works in a profile
 # that several machines share.
@@ -45,13 +47,30 @@ $oku = Join-Path $dir 'oku.exe'
 if ($oku.StartsWith($HOME, [StringComparison]::OrdinalIgnoreCase)) { $oku = '$HOME' + $oku.Substring($HOME.Length) }
 $line = "if (Test-Path `"$oku`") { Invoke-Expression ((& `"$oku`" hook pwsh) -join [Environment]::NewLine) }"
 
+# What to do once oku is on PATH.
+function Write-NextSteps {
+    Write-Host ''
+    Write-Host 'then:'
+    Write-Host '  oku doctor                  checks the setup'
+    Write-Host '  oku add github:sharkdp/fd   installs a first program, try: fd --version'
+    Write-Host '  oku self update             replaces oku with the newest release later'
+}
+
 Write-Host ''
+
+# A profile that loads the hook already, from an earlier install, needs no
+# second line. The pattern is the one "oku doctor" uses.
+if ((Test-Path $PROFILE) -and (Select-String -Path $PROFILE -Pattern 'oku(\.exe)?" hook|oku hook' -Quiet)) {
+    Write-Host "$PROFILE already loads oku. Open a new terminal, or run:  . `$PROFILE"
+    Write-NextSteps
+    return
+}
+
 Write-Host 'There is one step left. Add this line to the file that $PROFILE names:'
 Write-Host ''
 Write-Host "  $line"
 Write-Host ''
-Write-Host 'It puts oku and the programs it installs on PATH. This command adds it for you:'
+Write-Host 'It puts oku and the programs it installs on PATH, and loads its completions. This command adds it for you:'
 Write-Host ''
 Write-Host "  if (-not (Test-Path `$PROFILE)) { New-Item -Force -ItemType File `$PROFILE | Out-Null }; Add-Content `$PROFILE '$line'; . `$PROFILE"
-Write-Host ''
-Write-Host 'then try:  oku add github:sharkdp/fd; fd --version'
+Write-NextSteps
