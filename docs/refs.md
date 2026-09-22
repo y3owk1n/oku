@@ -53,6 +53,12 @@ reads that same commit again.
 GitHub allows 60 unauthenticated API requests per hour. Set `GITHUB_TOKEN` to
 raise the limit. oku sends the token to the GitHub API only.
 
+oku keeps each API answer in its cache, and the next time asks GitHub only
+whether it changed. With `GITHUB_TOKEN` set, GitHub does not count an
+unchanged answer against the limit. Without a token every request counts. oku
+reads a repo's releases 100 at a time, up to 1000. When GitHub says that oku sent
+too many requests too fast, oku stops and says how many seconds to wait.
+
 A `github:host/owner/repo` ref reads a GitHub Enterprise Server. A first part
 with a dot is the host, because no owner name has one. oku reads everything
 from `https://host/api/v3`, the manifest included. Set `GH_ENTERPRISE_TOKEN`
