@@ -87,8 +87,10 @@ func (s *Store) Download(ctx context.Context, url string) (string, error) {
 }
 
 // VerifyDetached checks the file at path against the minisign signature in the
-// file at signaturePath, made by the public key keyText.
-func VerifyDetached(keyText, path, signaturePath string) error {
+// file at signaturePath, made by the public key keyText. The signed comment of
+// the signature must be trusted, so a file that the key signed for another
+// release fails.
+func VerifyDetached(keyText, path, signaturePath, trusted string) error {
 	var key minisign.PublicKey
 	if err := key.UnmarshalText([]byte(keyText)); err != nil {
 		return fmt.Errorf("public key %s: %w", keyText, err)
@@ -106,6 +108,15 @@ func VerifyDetached(keyText, path, signaturePath string) error {
 
 	if !signed {
 		return fmt.Errorf("%w: %s is not signed by %s", ErrSignature, path, keyText)
+	}
+
+	var parsed minisign.Signature
+	if err := parsed.UnmarshalText(signature); err != nil {
+		return err
+	}
+
+	if parsed.TrustedComment != trusted {
+		return fmt.Errorf("the signature is for %q, not %q", parsed.TrustedComment, trusted)
 	}
 
 	return nil

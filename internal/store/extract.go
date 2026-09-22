@@ -23,8 +23,17 @@ var errNotArchive = errors.New("not an archive")
 // is not an archive oku knows: tar (plain, gz, bz2, xz, zst), zip, deb, rpm,
 // and on macOS dmg and pkg. A compressed file that holds no tar archive is not
 // an archive either. Every write goes through an
-// os.Root, so extract cannot write outside dest.
+// os.Root, so extract cannot write outside dest, and no symlink it leaves in
+// dest leads outside dest.
 func extract(src, dest string, strip int) error {
+	if err := unpackArchive(src, dest, strip); err != nil {
+		return err
+	}
+
+	return linksInside(dest)
+}
+
+func unpackArchive(src, dest string, strip int) error {
 	f, err := os.Open(src)
 	if err != nil {
 		return err
@@ -304,4 +313,93 @@ func writeSymlink(root *os.Root, name, target string) error {
 	}
 
 	return root.Symlink(target, name)
+}
+
+// linksInside fails when a symlink under dest leads outside it. writeSymlink
+// checks each link as it is written, but a later entry can turn a directory on
+// the way into a link, which moves where the earlier link leads. So the check
+// runs again on the finished tree.
+func linksInside(dest string) error {
+	root, err := os.OpenRoot(dest)
+	if err != nil {
+		return err
+	}
+	defer root.Close()
+
+	return filepath.WalkDir(dest, func(file string, entry fs.DirEntry, err error) error {
+		if err != nil || entry.Type()&fs.ModeSymlink == 0 {
+			return err
+		}
+
+		rel, err := filepath.Rel(dest, file)
+		if err != nil {
+			return err
+		}
+
+		name := filepath.ToSlash(rel)
+
+		target, err := root.Readlink(name)
+		if err != nil {
+			return err
+		}
+
+		if !resolvesInside(root, path.Dir(name)+"/"+filepath.ToSlash(target)) {
+			return fmt.Errorf("symlink %s -> %s leads outside the package", name, target)
+		}
+
+		return nil
+	})
+}
+
+// maxLinks is how many symlinks resolvesInside follows before it gives up. An OS
+// has the same kind of limit.
+const maxLinks = 255
+
+// resolvesInside follows every symlink on name the way the OS does and reports
+// whether it stays inside root. A component that does not exist counts as a
+// directory.
+func resolvesInside(root *os.Root, name string) bool {
+	var at []string
+
+	rest := strings.Split(name, "/")
+
+	for hops := 0; len(rest) > 0; {
+		part := rest[0]
+		rest = rest[1:]
+
+		switch part {
+		case "", ".":
+			continue
+		case "..":
+			if len(at) == 0 {
+				return false
+			}
+
+			at = at[:len(at)-1]
+
+			continue
+		}
+
+		next := append(at, part)
+
+		info, err := root.Lstat(path.Join(next...))
+		if err != nil || info.Mode()&fs.ModeSymlink == 0 {
+			at = next
+
+			continue
+		}
+
+		if hops++; hops > maxLinks {
+			return false
+		}
+
+		target, err := root.Readlink(path.Join(next...))
+		if err != nil || path.IsAbs(target) || filepath.IsAbs(target) {
+			return false
+		}
+
+		rest = append(strings.Split(filepath.ToSlash(target), "/"), rest...)
+	}
+
+	return true
 }

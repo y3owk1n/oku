@@ -210,8 +210,12 @@ read the lock diff before you commit it.
 
 oku unpacks archives and installers itself and never runs anything a package
 ships during install. That includes the maintainer scripts of a `.deb`, the
-scriptlets of an `.rpm`, and the install scripts of a macOS `.pkg`. It refuses entries that are absolute or contain `..`, and symlinks
-that resolve outside the package.
+scriptlets of an `.rpm`, and the install scripts of a macOS `.pkg`. It refuses
+entries that are absolute or contain `..`, and symlinks that resolve outside
+the package. After unpacking, oku follows every symlink in the package the way
+the OS would, including through other links. It refuses the package when a link
+leads outside it. So `x -> .` followed by `x/l -> ../outside` fails, although
+each entry looks safe alone.
 
 ## Packages from a cache
 
