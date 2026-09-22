@@ -303,8 +303,10 @@ func reconcile(
 				return
 			}
 
+			// When a package drifted from oku.lock, the others still finish, so
+			// the error names every package to update.
 			j.got, j.err = e.install(status.Scope(ctx, j.name), opts, j.req)
-			if j.err != nil && failed.CompareAndSwap(nil, j) {
+			if _, drift := j.drift(); j.err != nil && drift == nil && failed.CompareAndSwap(nil, j) {
 				cancel()
 			}
 
@@ -337,6 +339,10 @@ func reconcile(
 		jobs = []*job{j}
 	}
 
+	if err := driftError(jobs, names); err != nil {
+		return err
+	}
+
 	have, err := e.profile().Packages()
 	if err != nil {
 		return err
@@ -351,16 +357,9 @@ func reconcile(
 
 	for _, j := range jobs {
 		name, r := j.name, j.req.ref
-		fresh := j.fresh
 		got, err := j.got, j.err
 
 		switch {
-		case errors.Is(err, errManifestChanged):
-			return fmt.Errorf("%s: %w\nrun `oku update %s` to accept it", name, err, name)
-		case errors.Is(err, store.ErrVendorChanged):
-			return fmt.Errorf("%w\nrun `oku update %s` to accept what it downloads now", err, name)
-		case errors.Is(err, store.ErrPinConflict) && !fresh:
-			return fmt.Errorf("%w\nrun `oku update %s` to accept the new checksum", err, name)
 		case err != nil:
 			return fmt.Errorf("%s: %w", name, err)
 		case got.lock.Name != name:
@@ -548,6 +547,57 @@ type job struct {
 	locksManifest bool
 	got           installed
 	err           error
+}
+
+// drift says what `oku update` would accept when the package no longer
+// matches oku.lock, and returns the job's error. It returns a nil error for
+// any other result.
+func (j *job) drift() (accepts string, err error) {
+	switch {
+	case errors.Is(j.err, errManifestChanged):
+		return "it", fmt.Errorf("%s: %w", j.name, j.err)
+	case errors.Is(j.err, store.ErrVendorChanged):
+		return "what it downloads now", j.err
+	case errors.Is(j.err, store.ErrPinConflict) && !j.fresh:
+		return "the new checksum", j.err
+	}
+
+	return "", nil
+}
+
+// driftError reports every package that drifted from oku.lock, with one
+// `oku update` that accepts them all. The command also names the packages the
+// user asked to update. An update that fails writes nothing, so an update of
+// the drifted names alone would find the first ones drifted again.
+func driftError(jobs []*job, updating []string) error {
+	var (
+		errs    []error
+		drifted []string
+		accepts string
+	)
+
+	for _, j := range jobs {
+		if what, err := j.drift(); err != nil {
+			errs = append(errs, err)
+			drifted = append(drifted, j.name)
+			accepts = what
+		}
+	}
+
+	if len(errs) == 0 {
+		return nil
+	}
+
+	update := slices.Compact(slices.Sorted(slices.Values(slices.Concat(updating, drifted))))
+
+	if len(errs) > 1 || len(update) > 1 {
+		accepts = "these changes"
+	}
+
+	return fmt.Errorf(
+		"%w\nrun `oku update %s` to accept %s",
+		errors.Join(errs...), strings.Join(update, " "), accepts,
+	)
 }
 
 // row says what sync did with the package: the kind of change, the version
