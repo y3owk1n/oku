@@ -705,8 +705,9 @@ How inference reads a release:
   its name. Then it prefers a tar archive over a zip, both over a single
   binary, that over an installer, and a `.dmg` over a `.pkg`. Then it takes
   the smaller asset when the host reports sizes, then the shortest name. When
-  other assets fit your machine as well, a comment in the manifest lists them,
-  and so does the error when oku cannot find the program in the asset it chose.
+  other assets fit your machine as well, in any format, a comment in the
+  manifest lists them, and so does the error when oku cannot find the program
+  in the asset it chose.
 - An installer's format names its OS, so `Tool1.2.dmg` is a macOS asset with
   no OS word. One that names no arch fits amd64 and arm64 of that OS. oku can
   open a `.dmg` or `.pkg` on macOS and an `.msi` on Windows only, so run

@@ -342,9 +342,10 @@ func choose(
 
 		written[t.Selector] = true
 
-		// An asset of another rank is the same build in another archive format.
+		// A universal build beside one for the arch is the same program, so it is
+		// no alternative. Another format is, such as a .pkg beside a .dmg.
 		others := slices.DeleteFunc(slices.Clone(fits[1:]), func(other string) bool {
-			return rank(other) != rank(fits[0]) || t.fat(other) != t.fat(fits[0])
+			return t.fat(other) != t.fat(fits[0])
 		})
 
 		chosen = append(chosen, choice{Selector: t.Selector, asset: fits[0], others: others})
