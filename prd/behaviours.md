@@ -34,6 +34,12 @@ order step in `prd/product.md`.
 - B229 [1] Once the user answers a build approval, the prompt goes and one
   line stays: a check with `approved <name> <version>`, or an x with
   `rejected <name> <version>`.
+- B231 [1] On a terminal every line for something that finished starts with
+  a green check, and a line for something removed with a red minus: the
+  files, settings, apps and services a change placed, the store paths `gc`
+  deleted, the packages `cache push` packed, and the closing line of `add`,
+  `remove`, `rollback`, `gc`, `sync` and `update`, which says `done in <time>`
+  with what the profile holds. In a pipe the lines are unchanged.
 - B196 [1] `oku which <program>` names the package and version that provide a
   program in the profile and the file in the store it runs. Inside a project
   it looks in the project's profile, then in the global one. It warns when
