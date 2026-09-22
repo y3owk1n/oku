@@ -50,6 +50,9 @@ type installed struct {
 	// lists the cache entries oku ignored. Both cover the deps too.
 	substituted []string
 	cacheNotes  []string
+	// linkNotes warns for each store package that a build loads without naming
+	// it in runtime.deps, for the deps too.
+	linkNotes []string
 }
 
 // request says what install should fetch and what it must match.
@@ -389,9 +392,17 @@ func (e env) installFrom(
 		realized, err = e.store().Build(ctx, m, host, store.BuildOptions{
 			Deps: deps.prefixes, Log: req.log, PinnedVendor: pinnedVendor, Progress: req.progress,
 			NPMRegistry: opts.NPMRegistry, PinnedSource: pinnedSource, Rebuild: req.rebuild,
+			RuntimeDeps: deps.prefixes[len(m.Build.Deps):],
 		})
 		if err != nil {
 			return installed{}, fmt.Errorf("%s: %w", m.Package.Name, err)
+		}
+
+		for _, missing := range realized.MissingDeps {
+			deps.linkNotes = append(deps.linkNotes, fmt.Sprintf(
+				"%s: %s loads %s, which is not in runtime.deps, so it breaks after `oku gc` or on another machine",
+				m.Package.Name, missing.File, missing.Package,
+			))
 		}
 
 		entry = keepPins(lock.Platform{
@@ -514,6 +525,7 @@ func (e env) installFrom(
 		unsandboxed:    realized.Unsandboxed,
 		substituted:    deps.substituted,
 		cacheNotes:     deps.cacheNotes,
+		linkNotes:      deps.linkNotes,
 	}, nil
 }
 
@@ -929,6 +941,14 @@ func reportUnsandboxed(w io.Writer, got installed) {
 	}
 }
 
+// reportLinks warns for each store package that a build loads and that its
+// manifest does not name in runtime.deps.
+func reportLinks(w io.Writer, got installed) {
+	for _, note := range got.linkNotes {
+		warn(w, "%s", note)
+	}
+}
+
 // reportCache says which packages came from a cache and which entries oku ignored.
 func reportCache(w io.Writer, got installed) {
 	for _, note := range got.cacheNotes {
@@ -1006,9 +1026,11 @@ type depSet struct {
 	prefixes []store.Dep
 	locks    []lock.Package
 	closure  []string
-	// substituted and cacheNotes collect what the deps report, see installed.
+	// substituted, cacheNotes and linkNotes collect what the deps report, see
+	// installed.
 	substituted []string
 	cacheNotes  []string
+	linkNotes   []string
 }
 
 // installDeps installs the deps of the package in parent, each through the same
@@ -1098,6 +1120,7 @@ func (e env) installDeps(
 		set.locks = append(set.locks, got.lock)
 		set.substituted = append(set.substituted, got.substituted...)
 		set.cacheNotes = append(set.cacheNotes, got.cacheNotes...)
+		set.linkNotes = append(set.linkNotes, got.linkNotes...)
 
 		for _, path := range got.closure {
 			if !slices.Contains(set.closure, path) {

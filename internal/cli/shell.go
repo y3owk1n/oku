@@ -91,6 +91,7 @@ func runShell(
 		}
 
 		reportUnsandboxed(cmd.ErrOrStderr(), got)
+		reportLinks(cmd.ErrOrStderr(), got)
 		reportCache(cmd.ErrOrStderr(), got)
 
 		bins = append(bins, filepath.Join(got.profile.StorePath, "bin"))

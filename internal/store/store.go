@@ -98,6 +98,8 @@ type Realized struct {
 	Impure bool
 	// VendorSHA256 is the digest of what the vendor steps downloaded, or empty.
 	VendorSHA256 string
+	// MissingDeps are the store packages a build loads that are not runtime deps.
+	MissingDeps []MissingDep
 }
 
 // Has reports whether artifact a of m with that digest is in the store.

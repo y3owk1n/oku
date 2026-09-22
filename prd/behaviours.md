@@ -243,6 +243,10 @@ order step in `prd/product.md`.
 - B37 [5] Deps are realized first. The build finds their headers, libraries
   and pkg-config files with no manifest-side flags, and the built binary finds
   their shared libraries at runtime from any working directory.
+- B202 [5] After a build, a file in `bin` or `lib` that loads a shared library
+  of another store package prints one warning per package on stderr, naming
+  the file and the package, unless `runtime.deps` names that package. The
+  install succeeds. A download is never checked, and Windows never warns.
 - B38 [5] Deps are absent from the profile. `oku why <name>` names the
   packages that pull a dep in. `gc` keeps a dep while a generation uses it.
 - B39 [5] Two packages depending on different versions of one dep both install

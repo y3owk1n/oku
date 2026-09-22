@@ -318,6 +318,8 @@ func (s *Store) Build(
 		return Realized{}, fmt.Errorf("write %s: %w", metaFile, err)
 	}
 
+	result.MissingDeps = s.missingDeps(prefix, opts.RuntimeDeps)
+
 	return result, nil
 }
 
@@ -743,6 +745,9 @@ func copyInto(fromDir, from, toDir, to string, mode os.FileMode) error {
 type BuildOptions struct {
 	// Deps are the realized build deps.
 	Deps []Dep
+	// RuntimeDeps are the realized runtime deps. A built file that loads another
+	// store package is reported in Realized.MissingDeps.
+	RuntimeDeps []Dep
 	// Log receives the output of commands as they run, and may be nil.
 	Log io.Writer
 	// PinnedVendor is the vendor digest oku.lock recorded, or empty.

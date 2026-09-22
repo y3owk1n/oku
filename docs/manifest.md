@@ -904,6 +904,21 @@ absolute install name, which cmake and autotools do when they are given
 A package's store path depends on the deps it was built against, so a new dep
 version leads to a new build instead of changing an installed package.
 
+A build dep is only there for the build. A program that loads a build dep's
+shared library at runtime needs that dep in `runtime.deps` too. Otherwise
+`oku gc` removes the library and the program stops working, and on another
+machine it never works. After a build, oku reads each Mach-O or ELF file in `bin` and
+`lib` of the result and warns once per store package that a file loads without
+`runtime.deps` naming it:
+
+```
+app: bin/app loads greet, which is not in runtime.deps, so it breaks after `oku gc` or on another machine
+```
+
+The install still succeeds. The check reads the linked paths from the files
+themselves, so it needs no `otool` or `ldd`. It runs for builds only, never
+for a download, and not on Windows.
+
 ### Vendoring
 
 `run` steps have no network, so `go build` or `cargo build` cannot download
