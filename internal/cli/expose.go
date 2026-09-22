@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -129,6 +130,9 @@ type exposePlan struct {
 	secrets map[string]sealed
 	// elevated reports that the user agreed to change system scope.
 	elevated bool
+	// rewritten are the targets whose content the change gives other bytes. Such
+	// a file changes through "current" and not through the ledger.
+	rewritten []string
 }
 
 // planExposed decides which apps, fonts and services the global profile exposes
@@ -231,18 +235,65 @@ func (e env) placeExposed(cmd *cobra.Command, opts Options, plan exposePlan) err
 	}
 
 	tellSettings(opts, before, ledger.Items)
+	tellExposed(notice, before, ledger.Items, plan.rewritten)
 
-	for _, item := range ledger.Items {
-		// An item that changed, such as a service that was just enabled, is new too.
-		if slices.Contains(before, item) {
+	return nil
+}
+
+// tellExposed prints one line for each item that the change placed, changed
+// or removed. An item of the same kind and target on both sides with another
+// source, such as a setting with a new value, is a change.
+func tellExposed(notice io.Writer, before, after []expose.Item, rewritten []string) {
+	same := func(items []expose.Item, item expose.Item) bool {
+		return slices.ContainsFunc(items, func(other expose.Item) bool {
+			return other.Kind == item.Kind && other.Target == item.Target
+		})
+	}
+
+	for _, item := range before {
+		if slices.Contains(after, item) || same(after, item) {
 			continue
 		}
 
 		switch {
 		case item.Kind == "secret":
+			fmt.Fprintf(notice, "removed the secret %s\n", item.Target)
+		case item.Kind == "setting" && item.HadPrior:
+			fmt.Fprintf(notice, "restored %s\n", item.Target)
+		case item.Kind == "setting":
+			fmt.Fprintf(notice, "unset %s\n", item.Target)
+		case item.Kind == "file":
+			fmt.Fprintf(notice, "removed %s\n", item.Target)
+		case item.Kind != "service":
+			fmt.Fprintf(notice, "removed the %s %s\n", item.Kind, item.Target)
+		default:
+			fmt.Fprintf(notice, "service %s is removed\n", item.Name)
+		}
+	}
+
+	for _, target := range rewritten {
+		fmt.Fprintf(notice, "changed %s\n", target)
+	}
+
+	for _, item := range after {
+		// An item that changed, such as a service that was just enabled, is new too.
+		if slices.Contains(before, item) {
+			continue
+		}
+
+		changed := same(before, item)
+
+		switch {
+		case item.Kind == "secret" && changed:
+			fmt.Fprintf(notice, "changed the secret %s\n", item.Target)
+		case item.Kind == "secret":
 			fmt.Fprintf(notice, "wrote the secret %s\n", item.Target)
+		case item.Kind == "setting" && changed:
+			fmt.Fprintf(notice, "changed %s\n", item.Target)
 		case item.Kind == "setting":
 			fmt.Fprintf(notice, "set %s\n", item.Target)
+		case item.Kind == "file" && changed:
+			fmt.Fprintf(notice, "changed %s\n", item.Target)
 		case item.Kind == "file":
 			fmt.Fprintf(notice, "wrote %s\n", item.Target)
 		case item.Kind != "service":
@@ -255,8 +306,6 @@ func (e env) placeExposed(cmd *cobra.Command, opts Options, plan exposePlan) err
 			fmt.Fprintf(notice, "service %s is installed and stopped\n", item.Name)
 		}
 	}
-
-	return nil
 }
 
 // pendingSystem describes the system-scope items that differ between have and

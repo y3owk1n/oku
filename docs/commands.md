@@ -184,6 +184,12 @@ last column says `service` or `system` for a package that has one, and a footer
 counts the packages and names the list. With nothing installed it says so and
 points at `oku add`.
 
+| Flag | Effect |
+|---|---|
+| `--files` | Lists the [file entries](list-and-lock.md#files-in-your-home-directory) that apply to this machine instead: the target as the list writes it, the kind (`link`, `text`, `render` or `secret`), the source, and the directory of the list that declares it. |
+| `--settings` | Lists the [settings](list-and-lock.md#settings-of-the-os) of this OS instead: domain, key, the value the list wants, and the value the key had before oku wrote it, or `not set`. |
+| `--json` | Prints the rows as JSON, with either flag or with neither. |
+
 ## oku info
 
 ```
@@ -330,11 +336,18 @@ store already at the version in the lock needs no request to its server, so a
 sync with nothing to do is fast and works offline.
 
 After the summary, output is either `already in sync` or a line such as
-`profile now holds 12 packages, generation 7, 12s`. The summary has one line per package that
+`profile now holds 12 packages, 8 files, 20 settings, generation 7, 12s`. Files and
+settings appear in it when the list has any. The summary has one line per package that
 changed: a fresh install, `ripgrep 14.1.1 -> 15.2.0` for a new version, and a
 note for a rebuild, a manifest or checksum change, a pin for another platform,
 or a package that left the list. On a terminal each line starts with a glyph:
 `+` new, `↑` new version, `~` rebuilt or changed, `·` pinned only, `-` removed.
+
+Before the summary, one line reports each file, secret, setting, app, font or
+service the sync placed, changed or removed, such as `wrote ~/.config/nvim`,
+`changed ~/.ssh/config`, `set com.apple.dock tilesize`, `restored
+com.apple.dock autohide` for a setting that left the list, or `removed the app
+~/Applications/Foo.app`.
 
 ### A dry run
 
@@ -502,18 +515,21 @@ oku generations
 
 Every command that changes the installed packages writes a new generation.
 `generations` lists them, oldest first, with `*` on the active one. Each line
-has the time, how many packages the generation holds, and what changed from the
-one before: `+` for a package that came, `-` for one that went, `->` between
-two versions, and `rebuilt` for a new build of the same version. A change with
+has the time, what the generation holds, and what changed from the one before:
+`+` for a package, file or setting that came, `-` for one that went, `->`
+between two versions, `rebuilt` for a new build of the same version, and `~`
+for a file with other bytes or a setting with another value. A change with
 more than six parts ends in `and N more`.
 
 ```
-  1  2026-09-20 14:02  1 package   + ripgrep 14.1.1
-  2  2026-09-20 14:10  1 package   ripgrep 14.1.1 -> 15.2.0
-* 3  2026-09-20 14:31  2 packages  + hello 1.0.0
+  1  2026-09-20 14:02  1 package                        + ripgrep 14.1.1
+  2  2026-09-20 14:10  1 package                        ripgrep 14.1.1 -> 15.2.0
+  3  2026-09-20 14:31  2 packages                       + hello 1.0.0
+* 4  2026-09-20 14:40  2 packages, 3 files, 1 setting   + ~/.config/nvim, + ~/.gitconfig, + ~/.ssh/config, + com.apple.dock tilesize
 ```
 
-`oku generations --json` lists every package of every generation.
+`oku generations --json` lists every package, file and setting of every
+generation.
 
 ## oku rollback
 
@@ -526,8 +542,11 @@ number it goes to the generation before the active one.
 
 ```
 $ oku rollback
-generation 2 is active: ripgrep 15.2.0
+generation 2 is active, 1 package: ripgrep 15.2.0 -> 14.1.1
 ```
+
+The line counts the files and settings too when the list has any, and names
+each one the rollback changed, as `oku generations` does.
 
 Rollback downloads nothing, because the packages of every generation are still
 in the store. It changes two things:

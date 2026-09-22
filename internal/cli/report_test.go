@@ -1,0 +1,133 @@
+package cli_test
+
+import (
+	"encoding/json"
+	"strings"
+	"testing"
+)
+
+// managedList writes a list with one text file and one setting.
+func managedList(t *testing.T, m machine, text string, tilesize string) {
+	t.Helper()
+	m.writeFilesList(t, "[files]\n\"{{home}}/.config/tool/config\" = { text = \""+text+"\" }\n"+
+		"[defaults.\"com.apple.dock\"]\ntilesize = "+tilesize+"\n")
+}
+
+func TestB224EveryChangeToAFileOrASettingIsReported(t *testing.T) {
+	m, store := settingsMachine(t)
+	store.values["com.apple.dock tilesize"] = "<integer>64</integer>"
+	target := home(".config", "tool", "config")
+
+	managedList(t, m, "one", "48")
+	out, err := m.run(t, "", "sync")
+	must(t, err)
+
+	for _, want := range []string{"wrote " + target, "set com.apple.dock tilesize", "0 packages, 1 file, 1 setting"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("the first sync should say %q:\n%s", want, out)
+		}
+	}
+
+	managedList(t, m, "two", "32")
+	out, err = m.run(t, "", "sync")
+	must(t, err)
+
+	for _, want := range []string{"changed " + target, "changed com.apple.dock tilesize"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("the second sync should say %q:\n%s", want, out)
+		}
+	}
+
+	m.writeFilesList(t, "")
+	out, err = m.run(t, "", "sync")
+	must(t, err)
+
+	for _, want := range []string{"removed " + target, "restored com.apple.dock tilesize"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("the third sync should say %q:\n%s", want, out)
+		}
+	}
+}
+
+func TestB225GenerationsAndRollbackCountFilesAndSettings(t *testing.T) {
+	m, _ := settingsMachine(t)
+	target := home(".config", "tool", "config")
+
+	managedList(t, m, "one", "48")
+	_, err := m.run(t, "", "sync")
+	must(t, err)
+
+	managedList(t, m, "two", "32")
+	_, err = m.run(t, "", "sync")
+	must(t, err)
+
+	out, err := m.run(t, "", "generations")
+	must(t, err)
+
+	for _, want := range []string{
+		"1 file, 1 setting", "+ " + target, "+ com.apple.dock tilesize",
+		"~ " + target, "~ com.apple.dock tilesize",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("generations should say %q:\n%s", want, out)
+		}
+	}
+
+	out, err = m.run(t, "", "generations", "--json")
+	must(t, err)
+
+	var gens []struct {
+		Files    []struct{ Target string }      `json:"files"`
+		Settings []struct{ Domain, Key string } `json:"settings"`
+	}
+	must(t, json.Unmarshal([]byte(out), &gens))
+
+	if len(gens) != 2 || gens[1].Files[0].Target != target || gens[1].Settings[0].Key != "tilesize" {
+		t.Fatalf("generations --json should list files and settings:\n%s", out)
+	}
+
+	out, err = m.run(t, "", "rollback")
+	must(t, err)
+
+	if !strings.Contains(out, "1 file, 1 setting: ~ "+target+", ~ com.apple.dock tilesize") {
+		t.Fatalf("rollback should say what it changed:\n%s", out)
+	}
+}
+
+func TestB226ListShowsTheFilesAndTheSettingsOfTheList(t *testing.T) {
+	m, store := settingsMachine(t)
+	store.values["com.apple.dock tilesize"] = "<integer>64</integer>"
+
+	managedList(t, m, "one", "48")
+	_, err := m.run(t, "", "sync")
+	must(t, err)
+
+	out, err := m.run(t, "", "list", "--files")
+	must(t, err)
+
+	if !strings.Contains(out, "{{home}}/.config/tool/config") || !strings.Contains(out, "text") ||
+		!strings.Contains(out, m.config) {
+		t.Fatalf("list --files should show the target, the kind and the list:\n%s", out)
+	}
+
+	out, err = m.run(t, "", "list", "--settings")
+	must(t, err)
+
+	if !strings.Contains(out, "com.apple.dock") || !strings.Contains(out, "tilesize") ||
+		!strings.Contains(out, "48") || !strings.Contains(out, "<integer>64</integer>") {
+		t.Fatalf("list --settings should show the value and the one before oku:\n%s", out)
+	}
+
+	out, err = m.run(t, "", "list", "--settings", "--json")
+	must(t, err)
+
+	var rows []struct {
+		Key      string `json:"key"`
+		HadPrior bool   `json:"had_prior"`
+	}
+	must(t, json.Unmarshal([]byte(out), &rows))
+
+	if len(rows) != 1 || rows[0].Key != "tilesize" || !rows[0].HadPrior {
+		t.Fatalf("list --settings --json: %s", out)
+	}
+}

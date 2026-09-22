@@ -102,6 +102,8 @@ type Generation struct {
 	Number   int
 	Created  time.Time
 	Packages []Package
+	Files    []File
+	Settings []Setting
 	// Current marks the generation that "current" points at.
 	Current bool
 }
@@ -472,6 +474,8 @@ func (p *Profile) Generations() ([]Generation, error) {
 			Number:   n,
 			Created:  s.Created,
 			Packages: s.Packages,
+			Files:    s.Files,
+			Settings: s.Settings,
 			// A Windows junction reads back as an absolute path.
 			Current: entry.Name() == filepath.Base(active),
 		})

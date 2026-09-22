@@ -38,11 +38,24 @@ func newGenerationsCmd(opts Options) *cobra.Command {
 					Version string `json:"version"`
 				}
 
+				type fileRow struct {
+					Target string `json:"target"`
+					Link   string `json:"link,omitempty"`
+				}
+
+				type settingRow struct {
+					Domain string `json:"domain"`
+					Key    string `json:"key"`
+					Value  string `json:"value"`
+				}
+
 				type row struct {
-					Number   int       `json:"number"`
-					Current  bool      `json:"current"`
-					Created  time.Time `json:"created"`
-					Packages []pkgRow  `json:"packages"`
+					Number   int          `json:"number"`
+					Current  bool         `json:"current"`
+					Created  time.Time    `json:"created"`
+					Packages []pkgRow     `json:"packages"`
+					Files    []fileRow    `json:"files"`
+					Settings []settingRow `json:"settings"`
 				}
 
 				rows := []row{}
@@ -53,7 +66,19 @@ func newGenerationsCmd(opts Options) *cobra.Command {
 						held = append(held, pkgRow{pkg.Name, pkg.Version})
 					}
 
-					rows = append(rows, row{gen.Number, gen.Current, gen.Created, held})
+					files := []fileRow{}
+					for _, f := range gen.Files {
+						files = append(files, fileRow{f.Target, f.Link})
+					}
+
+					settings := []settingRow{}
+					for _, s := range gen.Settings {
+						settings = append(settings, settingRow{s.Domain, s.Key, s.Value})
+					}
+
+					rows = append(rows, row{
+						gen.Number, gen.Current, gen.Created, held, files, settings,
+					})
 				}
 
 				return printJSON(cmd, rows)
@@ -70,9 +95,9 @@ func newGenerationsCmd(opts Options) *cobra.Command {
 
 			out := cmd.OutOrStdout()
 			s := ui.For(out)
-			tab := s.Table("", "created", "packages", "changes")
+			tab := s.Table("", "created", "holds", "changes")
 
-			var previous []profile.Package
+			var previous profile.Generation
 
 			for _, gen := range gens {
 				marker, mark := " ", s.Dim
@@ -83,8 +108,8 @@ func newGenerationsCmd(opts Options) *cobra.Command {
 				cells := []string{
 					marker + " " + strconv.Itoa(gen.Number),
 					gen.Created.Local().Format("2006-01-02 15:04"),
-					count(len(gen.Packages), "package"),
-					changes(s, previous, gen.Packages),
+					holds(gen),
+					changes(s, previous, gen),
 				}
 
 				if gen.Current {
@@ -93,7 +118,7 @@ func newGenerationsCmd(opts Options) *cobra.Command {
 					tab.Styled(cells, nil, s.Dim, s.Dim, nil)
 				}
 
-				previous = gen.Packages
+				previous = gen
 			}
 
 			return tab.Write(out)
@@ -110,10 +135,27 @@ func count(n int, noun string) string {
 	return strconv.Itoa(n) + " " + noun
 }
 
-// changes says what differs between two generations' packages: what came, what
-// went, and what changed version. A long list ends in "and N more", because
-// the reader wants the shape of a change, not every name.
-func changes(s ui.Style, from, to []profile.Package) string {
+// holds counts what a generation holds: "3 packages, 2 files, 1 setting". Files
+// and settings appear when there are any.
+func holds(gen profile.Generation) string {
+	parts := []string{count(len(gen.Packages), "package")}
+
+	if len(gen.Files) > 0 {
+		parts = append(parts, count(len(gen.Files), "file"))
+	}
+
+	if len(gen.Settings) > 0 {
+		parts = append(parts, count(len(gen.Settings), "setting"))
+	}
+
+	return strings.Join(parts, ", ")
+}
+
+// changes says what differs between two generations: which packages came,
+// went, or changed version, and the same for files and settings. A long list
+// ends in "and N more", because the reader wants the shape of a change, not
+// every name.
+func changes(s ui.Style, from, to profile.Generation) string {
 	const show = 6
 
 	find := func(pkgs []profile.Package, name string) int {
@@ -122,27 +164,32 @@ func changes(s ui.Style, from, to []profile.Package) string {
 
 	var parts []string
 
-	for _, pkg := range from {
-		if find(to, pkg.Name) < 0 {
+	for _, pkg := range from.Packages {
+		if find(to.Packages, pkg.Name) < 0 {
 			parts = append(parts, s.Bad("-")+" "+pkg.Name)
 		}
 	}
 
-	for _, pkg := range to {
-		i := find(from, pkg.Name)
+	for _, pkg := range to.Packages {
+		i := find(from.Packages, pkg.Name)
 
 		switch {
 		case i < 0:
 			parts = append(parts, s.Good("+")+" "+pkg.Name+" "+pkg.Version)
-		case from[i].Version != pkg.Version:
-			parts = append(parts, pkg.Name+" "+from[i].Version+" "+s.Arrow()+" "+pkg.Version)
-		case from[i].StorePath != pkg.StorePath:
+		case from.Packages[i].Version != pkg.Version:
+			parts = append(
+				parts, pkg.Name+" "+from.Packages[i].Version+" "+s.Arrow()+" "+pkg.Version,
+			)
+		case from.Packages[i].StorePath != pkg.StorePath:
 			parts = append(parts, pkg.Name+" rebuilt")
 		}
 	}
 
+	parts = append(parts, fileChanges(s, from.Files, to.Files)...)
+	parts = append(parts, settingChanges(s, from.Settings, to.Settings)...)
+
 	if len(parts) == 0 {
-		return s.Dim("no package change")
+		return s.Dim("no change")
 	}
 
 	if len(parts) > show {
@@ -245,8 +292,7 @@ func runRollback(cmd *cobra.Command, opts Options, args []string) error {
 	s := ui.For(out)
 	fmt.Fprintf(
 		out, "generation %d is active, %s: %s\n",
-		target.Number, count(len(target.Packages), "package"),
-		changes(s, gens[at].Packages, target.Packages),
+		target.Number, holds(target), changes(s, gens[at], target),
 	)
 
 	if snapshot == nil {
