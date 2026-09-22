@@ -86,6 +86,7 @@ func (e env) wantedItems(
 		if len(f.Secrets) > 0 {
 			wanted = append(wanted, expose.Item{
 				Kind: "secret", Source: e.secretPath(f), Target: f.Target, Hash: f.Hash,
+				Dir: parentMode(f),
 			})
 
 			continue
@@ -96,7 +97,7 @@ func (e env) wantedItems(
 			source = e.globalProfile().ContentPath(f)
 		}
 
-		item := expose.Item{Kind: "file", Source: source, Target: f.Target}
+		item := expose.Item{Kind: "file", Source: source, Target: f.Target, Dir: parentMode(f)}
 
 		// Windows gets a copy of a file, which oku recognizes by its hash, and a
 		// junction for a directory.

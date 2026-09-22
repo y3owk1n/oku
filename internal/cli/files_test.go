@@ -2,6 +2,7 @@ package cli_test
 
 import (
 	"fmt"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -472,5 +473,78 @@ func TestB192AnEntryOverridesVarsForItsOwnTemplate(t *testing.T) {
 	_, err = m.run(t, "", "sync")
 	if err == nil || !strings.Contains(err.Error(), "vars applies to text and render") {
 		t.Fatalf("want an error for vars on a link, got %v", err)
+	}
+}
+
+func TestB204AMissingParentOfAPrivateFileIsForTheUserAlone(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("modes do not apply on Windows")
+	}
+
+	m := newMachine(t)
+	m.encrypt(t, "secrets/id.age", "key", m.ageKey(t, ""))
+
+	must(t, os.MkdirAll(home("kept"), 0o755))
+
+	m.writeFilesList(t, "[files]\n"+
+		"\"{{home}}/.ssh/config\" = { text = \"Host x\\n\", mode = \"0600\" }\n"+
+		"\"{{home}}/.keys/id\" = { secret = \"./secrets/id.age\" }\n"+
+		"\"{{home}}/.config/tool/rc\" = { text = \"\" }\n"+
+		"\"{{home}}/.shared/rc\" = { text = \"\", mode = \"0644\" }\n"+
+		"\"{{home}}/kept/id\" = { text = \"\", mode = \"0600\" }\n")
+
+	_, err := m.run(t, "", "sync")
+	must(t, err)
+
+	for dir, want := range map[string]fs.FileMode{
+		".ssh": 0o700, ".keys": 0o700, ".config/tool": 0o755, ".shared": 0o755, "kept": 0o755,
+	} {
+		info, err := os.Stat(home(dir))
+		must(t, err)
+
+		if info.Mode().Perm() != want {
+			t.Errorf("%s has mode %o, want %o", dir, info.Mode().Perm(), want)
+		}
+	}
+}
+
+func TestB205ATextARenderOrASecretMayBeExecutable(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("modes do not apply on Windows")
+	}
+
+	m := newMachine(t)
+	m.encrypt(t, "secrets/id.age", "#!/bin/sh\necho secret\n", m.ageKey(t, ""))
+	m.writeTemplate(t, "run.tmpl", "#!/bin/sh\necho render\n")
+
+	entries := func(mode string) string {
+		return "[files]\n" +
+			"\"{{home}}/bin/text\" = { text = \"#!/bin/sh\\necho text\\n\", mode = \"" + mode + "\" }\n" +
+			"\"{{home}}/bin/render\" = { render = \"./run.tmpl\", mode = \"" + mode + "\" }\n" +
+			"\"{{home}}/bin/secret\" = { secret = \"./secrets/id.age\", mode = \"" + mode + "\" }\n"
+	}
+
+	m.writeFilesList(t, entries("0755"))
+	_, err := m.run(t, "", "sync")
+	must(t, err)
+
+	for _, name := range []string{"text", "render", "secret"} {
+		out, err := exec.Command(home("bin", name)).Output()
+		if err != nil || strings.TrimSpace(string(out)) != name {
+			t.Errorf("running %s gave %q, %v", name, out, err)
+		}
+	}
+
+	m.writeFilesList(t, entries("0600"))
+	_, err = m.run(t, "", "sync")
+	must(t, err)
+
+	for _, name := range []string{"text", "render", "secret"} {
+		info, err := os.Stat(home("bin", name))
+		must(t, err)
+
+		if info.Mode().Perm() != 0o600 {
+			t.Errorf("after a sync that changed only the mode, %s has %o", name, info.Mode().Perm())
+		}
 	}
 }

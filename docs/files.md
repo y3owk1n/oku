@@ -164,6 +164,17 @@ symlinks. A `link` points at your source. A `text` points at
 `<data>/oku/profiles/global/current/files/`, so moving `current` changes the
 content of every such file in the same step.
 
+A `text`, `render` or `secret` file gets the `mode` of its entry, and any mode
+up to `"0777"` works. So `mode = "0755"` gives a script you can run, and a sync
+that changes only the mode applies it.
+
+When the directory above such a path is missing, oku creates it. An entry with
+a `mode` that gives group and others nothing, such as `"0600"` or `"0400"`, or
+a `secret`, gets a directory of mode `0700`, and any other entry gets `0755`.
+So `"{{home}}/.ssh/config" = { text = "...", mode = "0600" }` creates `~/.ssh`
+in the form ssh accepts. A directory that already exists keeps its mode, and
+on Windows modes do not apply.
+
 On Windows they go to the Start Menu and the user's font folder, see
 [Windows](windows.md#apps-and-fonts).
 

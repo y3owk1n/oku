@@ -417,6 +417,12 @@ order step in `prd/product.md`.
   that overrides `[vars]` for that entry. Two entries may share a target when
   their `when` clauses differ. `vars` on a `link` or a `secret` entry is an
   error.
+- B204 [13] A directory that oku creates above a `text`, `render` or `secret`
+  target is `0700` when the entry is a `secret` or has a `mode` that gives
+  group and others nothing, and `0755` otherwise. An existing directory keeps
+  its mode. Modes do not apply on Windows.
+- B205 [13] A `text`, `render` or `secret` entry with `mode = "0755"` is a file
+  the user can run, and a sync that changes only the mode applies it.
 - B171 [5] An artifact's `lib`, `include` and `share` entries, files or
   directories, fill those directories of the package, and a build that depends
   on the package finds its headers and libraries there.

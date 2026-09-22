@@ -48,6 +48,9 @@ type Item struct {
 	// puts that back.
 	Prior    string `toml:"prior,omitempty"`
 	HadPrior bool   `toml:"had_prior,omitempty"`
+	// Dir is the mode of a directory that placing a file or a secret has to
+	// create. It follows from the entry, so the ledger does not hold it.
+	Dir fs.FileMode `toml:"-"`
 }
 
 // Holds reports whether items holds item, apart from the value a setting had
@@ -55,12 +58,12 @@ type Item struct {
 func Holds(items []Item, item Item) bool { return wants(items, item) }
 
 // wants reports whether items holds item, apart from what a Handler's Before
-// added to the one in the ledger.
+// added to the one in the ledger and the mode of a directory to create.
 func wants(items []Item, item Item) bool {
-	item.Prior, item.HadPrior = "", false
+	item.Prior, item.HadPrior, item.Dir = "", false, 0
 
 	return slices.ContainsFunc(items, func(have Item) bool {
-		have.Prior, have.HadPrior = "", false
+		have.Prior, have.HadPrior, have.Dir = "", false, 0
 
 		return have == item
 	})
@@ -353,10 +356,21 @@ func (l *Ledger) remove(item Item, handler Handler) error {
 	return l.write()
 }
 
+// MkdirParent creates the missing directories above item.Target with item.Dir,
+// or 0755 when the item gives none. An existing directory keeps its mode.
+func MkdirParent(item Item) error {
+	mode := item.Dir
+	if mode == 0 {
+		mode = 0o755
+	}
+
+	return os.MkdirAll(filepath.Dir(item.Target), mode)
+}
+
 // PlaceFile puts a file of the list at its target. An item with a hash is a
 // copy, and any other is a link.
 func PlaceFile(item Item) error {
-	if err := os.MkdirAll(filepath.Dir(item.Target), 0o755); err != nil {
+	if err := MkdirParent(item); err != nil {
 		return err
 	}
 

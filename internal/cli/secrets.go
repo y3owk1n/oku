@@ -63,13 +63,19 @@ func secretRef(name string, s listedSecret) (profile.SecretRef, error) {
 }
 
 // sealedHash identifies a file that uses secrets by the content the generation
-// holds and the encrypted files behind it, so a changed secret writes it again.
-func sealedHash(text string, refs []profile.SecretRef) string {
+// holds, the encrypted files behind it and its mode, so a changed secret or
+// mode writes it again. A file without secrets hashes its bytes alone, which is
+// what Windows compares with the copy.
+func sealedHash(text string, refs []profile.SecretRef, mode fs.FileMode) string {
 	sum := sha256.New()
 	sum.Write([]byte(text))
 
 	for _, ref := range refs {
 		fmt.Fprintf(sum, "\x00%s\x00%s\x00%s", ref.Name, ref.Key, ref.Cipher)
+	}
+
+	if len(refs) > 0 {
+		fmt.Fprintf(sum, "\x00%o", mode)
 	}
 
 	return hex.EncodeToString(sum.Sum(nil))
@@ -158,7 +164,7 @@ func secretHandler(contents map[string]sealed) expose.Handler {
 				return err
 			}
 
-			if err := os.MkdirAll(filepath.Dir(item.Target), 0o755); err != nil {
+			if err := expose.MkdirParent(item); err != nil {
 				return err
 			}
 
