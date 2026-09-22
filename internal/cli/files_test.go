@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -428,5 +429,37 @@ func TestB186ADownloadThatIsTheProgramItselfMayHaveAWrapper(t *testing.T) {
 	out, err := exec.Command(m.profile("bin", "tool"), "you").CombinedOutput()
 	if err != nil || strings.TrimSpace(string(out)) != "hello you" {
 		t.Fatalf("the wrapper did not run the download with the variable: %v\n%s", err, out)
+	}
+}
+
+func TestB192AnEntryOverridesVarsForItsOwnTemplate(t *testing.T) {
+	m := newMachine(t)
+
+	m.writeTemplate(t, "files/tool.tmpl", "size = {{size}}\nfont = {{font}}\n")
+
+	// TOML allows a key once per table, so the second entry for the target
+	// comes from an included list.
+	other := m.writeTemplate(t, "other.toml", "[files]\n"+
+		"\"{{home}}/.tool\" = { render = \"./files/tool.tmpl\", "+
+		"when = { os = \"nowhere\" }, vars = { size = \"9\" } }\n")
+	m.writeFilesList(t, "include = [\""+filepath.ToSlash(other)+"\"]\n"+
+		"[vars]\nfont = \"Mono\"\nsize = \"11\"\n"+
+		"[files]\n"+
+		"\"{{home}}/.tool\" = { render = \"./files/tool.tmpl\", "+
+		"when = { os = \""+runtime.GOOS+"\" }, vars = { size = \"13\" } }\n")
+
+	_, err := m.run(t, "", "sync")
+	must(t, err)
+
+	if body, _ := os.ReadFile(home(".tool")); string(body) != "size = 13\nfont = Mono\n" {
+		t.Fatalf("the target holds %q", body)
+	}
+
+	m.writeFilesList(t, "[files]\n"+
+		"\"{{home}}/.tool\" = { link = \"./files/tool.tmpl\", vars = { size = \"13\" } }\n")
+
+	_, err = m.run(t, "", "sync")
+	if err == nil || !strings.Contains(err.Error(), "vars applies to text and render") {
+		t.Fatalf("want an error for vars on a link, got %v", err)
 	}
 }

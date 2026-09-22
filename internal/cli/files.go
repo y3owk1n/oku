@@ -234,7 +234,24 @@ func (e env) resolveFiles(
 		owners[path] = f.file.Target
 
 		if f.file.Link == "" {
-			text, refs, err := content(f, vars, secrets)
+			entryVars := vars
+
+			if len(f.file.Vars) > 0 {
+				entryVars = maps.Clone(vars)
+
+				for name, value := range f.file.Vars {
+					if _, taken := locations[name]; taken {
+						return nil, fmt.Errorf(
+							"files.%q: vars.%s has the name of a location, pick another name",
+							f.file.Target, name,
+						)
+					}
+
+					entryVars[name] = value
+				}
+			}
+
+			text, refs, err := content(f, entryVars, secrets)
 			if err != nil {
 				return nil, err
 			}

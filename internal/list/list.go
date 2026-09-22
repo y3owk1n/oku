@@ -55,6 +55,8 @@ type File struct {
 	Mode fs.FileMode
 	// When limits the entry to matching platforms. The zero value matches all.
 	When platform.Selector
+	// Vars overrides [vars] for a text or a render entry.
+	Vars map[string]string
 }
 
 // Secret is one entry of [secrets]: a name for one encrypted value.
@@ -324,9 +326,28 @@ func toFile(value any) (File, error) {
 			f.Mode = fs.FileMode(mode)
 		case "when":
 			continue
+		case "vars":
+			f.Vars = map[string]string{}
+
+			table, isTable := v.(map[string]any)
+			if !isTable {
+				return f, errors.New("vars wants a table of strings")
+			}
+
+			for name, value := range table {
+				text, isText := value.(string)
+				if !isText {
+					return f, fmt.Errorf("vars.%s must be a string", name)
+				}
+
+				f.Vars[name] = text
+			}
+
+			continue
 		default:
 			return f, fmt.Errorf(
-				"%s is not a key of a file, use link, text, render, secret, key, mode or when", key,
+				"%s is not a key of a file, use link, text, render, secret, key, mode, when or vars",
+				key,
 			)
 		}
 
@@ -352,6 +373,8 @@ func toFile(value any) (File, error) {
 		return f, errors.New(
 			"mode does not apply to a link, which has the permissions of its source",
 		)
+	case f.Vars != nil && (f.Link != "" || f.Secret != ""):
+		return f, errors.New("vars applies to text and render, which fill in variables")
 	}
 
 	var err error
