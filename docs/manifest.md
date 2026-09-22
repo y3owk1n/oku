@@ -999,10 +999,29 @@ install = { bin = [{ name = "tsc", run = "{{dep.node.prefix}}/bin/node", args = 
 oku runs `npm install --ignore-scripts --omit=dev --before=<time>`, where the
 time is when the registry says that version was published. npm then picks each
 dependency as it was at that time, so a later install gets the same packages,
-and the digest in `oku.lock` still fits. No package's install script runs. A
-package whose install script builds something does not work this way.
+and the digest in `oku.lock` still fits. No package's install script runs.
 `oku add npm:<name>` writes this build for a package that lists dependencies,
 see [npm packages](refs.md#npm-packages).
+
+Some packages have a dependency whose install script downloads or builds a
+native binary, and without it the program fails when run. Name those
+dependencies in `scripts`:
+
+```toml
+[[build.step]]
+vendor = "npm"
+package = "opencode-ai"
+scripts = ["opencode-darwin-arm64"]
+```
+
+oku hashes the install, then runs `npm rebuild <names>` in the same sandbox
+with the network on, which runs the install scripts of the named packages
+alone. A name must be the package itself or one of its dependencies as the
+registry lists them, and the build fails on any other. The approval prompt
+names the packages whose scripts run. The digest in `oku.lock` covers the
+install and not what a script downloads, so the build is marked impure, the
+way a `run` step with `network = true` is, and never goes to a cache. Without
+`scripts` no install script runs.
 
 The user's `oku.lock` pins one digest for what the vendor steps downloaded.
 `oku sync` runs them again and fails if the digest differs, so a locked build

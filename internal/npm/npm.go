@@ -7,7 +7,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
+	"slices"
 	"time"
 )
 
@@ -113,56 +115,78 @@ func Read(ctx context.Context, client *http.Client, registry, name string) (Pack
 	return pkg, nil
 }
 
-// Published returns when a version of the package called name was published.
-// Only the registry's full answer holds that, so this reads more than Read
-// does.
+// Publication is what the registry's full answer says about one version.
+type Publication struct {
+	// At is when the version was published.
+	At time.Time
+	// Dependencies are the packages the version needs at run time, optional ones
+	// included, sorted.
+	Dependencies []string
+}
+
+// Published returns when a version of the package called name was published
+// and what it depends on. Only the registry's full answer holds the time, so
+// this reads more than Read does.
 func Published(
 	ctx context.Context,
 	client *http.Client,
 	registry, name, version string,
-) (time.Time, error) {
+) (Publication, error) {
 	if registry == "" {
 		registry = Registry
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, registry+"/"+name, nil)
 	if err != nil {
-		return time.Time{}, err
+		return Publication{}, err
 	}
 
 	req.Header.Set("User-Agent", "oku")
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return time.Time{}, err
+		return Publication{}, err
 	}
 	defer resp.Body.Close()
 
 	switch {
 	case resp.StatusCode == http.StatusNotFound:
-		return time.Time{}, ErrNotFound
+		return Publication{}, ErrNotFound
 	case resp.StatusCode != http.StatusOK:
-		return time.Time{}, fmt.Errorf("the registry returned %s", resp.Status)
+		return Publication{}, fmt.Errorf("the registry returned %s", resp.Status)
 	}
 
 	var found struct {
-		Time map[string]time.Time `json:"time"`
+		Time     map[string]time.Time `json:"time"`
+		Versions map[string]struct {
+			Dependencies map[string]string `json:"dependencies"`
+			Optional     map[string]string `json:"optionalDependencies"`
+		} `json:"versions"`
 	}
 
 	if err := json.NewDecoder(io.LimitReader(resp.Body, maxBody)).Decode(&found); err != nil {
-		return time.Time{}, err
+		return Publication{}, err
 	}
 
 	at, ok := found.Time[version]
 	if !ok {
-		return time.Time{}, fmt.Errorf(
+		return Publication{}, fmt.Errorf(
 			"the registry does not say when %s %s was published",
 			name,
 			version,
 		)
 	}
 
-	return at, nil
+	published := Publication{At: at}
+	for _, deps := range []map[string]string{
+		found.Versions[version].Dependencies, found.Versions[version].Optional,
+	} {
+		published.Dependencies = slices.AppendSeq(published.Dependencies, maps.Keys(deps))
+	}
+
+	slices.Sort(published.Dependencies)
+
+	return published, nil
 }
 
 // BaseName returns "name" for "@scope/name".

@@ -26,6 +26,9 @@ type vendorKind struct {
 	script string
 	// output is the directory the script fills. oku hashes it.
 	output string
+	// after runs in the same way once output is hashed, so what it adds is not
+	// in the digest. Empty for most kinds.
+	after string
 	// env is added to the step's environment.
 	env []string
 	// portable reports that the script fills output with the same files on every
@@ -59,13 +62,18 @@ printf '\n[source.crates-io]\nreplace-with = "vendored-sources"\n\n[source.vendo
 		output: "node_modules",
 	},
 	// npmPackageKind is an npm step with "package". It installs one package with
-	// its dependencies and runs none of their scripts.
+	// its dependencies and runs none of their scripts. Once the install is
+	// hashed it runs the install scripts of the packages OKU_NPM_SCRIPTS names,
+	// if any. npm rebuild runs the lifecycle scripts of the named packages alone.
 	npmPackageKind: {
 		tools: []string{"npm"},
 		script: `"$tool" install --ignore-scripts --omit=dev --no-audit --no-fund --no-package-lock \
   --before="$OKU_NPM_BEFORE" --prefix "$OKU_PREFIX/lib" "$OKU_NPM_PACKAGE"`,
 		output: "lib/node_modules",
-		env:    []string{"npm_config_update_notifier=false"},
+		after: `if [ -n "$OKU_NPM_SCRIPTS" ]; then
+  "$tool" rebuild --no-audit --no-fund --prefix "$OKU_PREFIX/lib" $OKU_NPM_SCRIPTS
+fi`,
+		env: []string{"npm_config_update_notifier=false"},
 	},
 	"pip": {
 		tools:  []string{"pip", "pip3"},
@@ -165,7 +173,7 @@ func (s *Store) PinBuild(
 	var pin BuildPin
 
 	for _, step := range m.Build.Steps {
-		pin.Impure = pin.Impure || step.Run != nil && step.Network && step.When.Matches(p)
+		pin.Impure = pin.Impure || step.Impure() && step.When.Matches(p)
 	}
 
 	source := m.Build.Source

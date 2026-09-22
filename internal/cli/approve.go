@@ -78,10 +78,19 @@ func (e env) approver(
 				switch {
 				case steps[i].Vendor != nil:
 					text = "vendor " + *steps[i].Vendor
-					if steps[i].Package != "" {
-						text += ", which installs " + steps[i].Package + " and its dependencies and runs none of their scripts"
-					}
 					note = "  (downloads packages, checked against oku.lock)"
+
+					switch {
+					case steps[i].Package == "":
+					case len(steps[i].Scripts) > 0:
+						text += ", which installs " + steps[i].Package +
+							" and its dependencies and runs the install scripts of " +
+							strings.Join(steps[i].Scripts, ", ")
+						note = "  (runs install scripts with network, not checked against oku.lock)"
+					default:
+						text += ", which installs " + steps[i].Package +
+							" and its dependencies and runs none of their scripts"
+					}
 				case steps[i].Network:
 					text, note = *steps[i].Run, "  (wants network)"
 				default:

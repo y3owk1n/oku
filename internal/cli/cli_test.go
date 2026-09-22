@@ -1785,6 +1785,48 @@ func TestB110LintAndBumpRefuseAMisplacedTag(t *testing.T) {
 	}
 }
 
+func TestB213LintWarnsAboutEveryArtifactWithoutAChecksum(t *testing.T) {
+	m := newMachine(t)
+
+	path := filepath.Join(m.fixtures, "tool.toml")
+	must(t, os.WriteFile(path, []byte(`[package]
+name = "tool"
+description = "a tool"
+[version]
+value = "1.0.0"
+[[artifact]]
+match = { os = "linux" }
+url = "https://example.com/tool-linux.tar.gz"
+bin = ["tool"]
+[[artifact]]
+match = { os = "darwin" }
+url = "https://example.com/tool-darwin.tar.gz"
+bin = ["tool"]
+[[artifact]]
+match = { os = "windows" }
+url = "https://example.com/tool-windows.zip"
+sha256 = "`+strings.Repeat("a", 64)+`"
+bin = ["tool.exe"]
+`), 0o644))
+
+	out, err := m.run(t, "", "manifest", "lint", path)
+	if err != nil {
+		t.Fatalf("lint: %v\n%s", err, out)
+	}
+
+	for _, want := range []string{
+		"artifact[0]: no sha256 or sha256_url", "artifact[1]: no sha256 or sha256_url",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("lint did not warn %q:\n%s", want, out)
+		}
+	}
+
+	if strings.Contains(out, "artifact[2]") {
+		t.Errorf("lint warned about an artifact with sha256:\n%s", out)
+	}
+}
+
 func TestB22EveryChangeIsAGenerationAndRollbackRestoresOne(t *testing.T) {
 	m := newMachine(t)
 	server := newReleaseServer(t, "v1.0.0")
@@ -2662,11 +2704,24 @@ func TestB125ManifestHashPrintsTheChecksumsOfADownload(t *testing.T) {
 // fakeNode writes a package called "interp" and returns its manifest. Its
 // program "node" runs a script with sh. Its program "npm" stands in for "npm
 // install": it writes the package as a script that prints what npm was asked
-// for, so a test can see the version and the date.
+// for, so a test can see the version and the date. As "npm rebuild" it stands
+// in for the postinstall of each named package, which writes a marker file.
 func (m machine) fakeNode(t *testing.T) string {
 	t.Helper()
 
 	npm := `#!/bin/sh
+if [ "$1" = rebuild ]; then
+  shift
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --prefix) prefix="$2"; shift ;;
+      -*) ;;
+      *) echo ran > "$prefix/node_modules/$1/postinstall-ran" ;;
+    esac
+    shift
+  done
+  exit 0
+fi
 while [ $# -gt 0 ]; do
   case "$1" in
     --prefix) prefix="$2"; shift ;;
@@ -2784,6 +2839,91 @@ func TestB129AnNPMPackageThatListsDependenciesIsInstalledWithThem(t *testing.T) 
 
 	if out, err = m.run(t, "", "sync", "--yes"); err != nil {
 		t.Fatalf("sync: %v\n%s", err, out)
+	}
+}
+
+func TestB212ScriptsRunTheInstallScriptsOfNamedDependenciesAndMarkTheBuildImpure(
+	t *testing.T,
+) {
+	m := newMachine(t)
+	npmServerWith(t, &m, "", true, "1.2.3")
+	node := m.fakeNode(t)
+
+	write := func(scripts string) string {
+		return m.rawManifest(t, "scripted", fmt.Sprintf(`[build]
+deps = [%q]
+
+[[build.step]]
+vendor = "npm"
+package = "@scope/tool"
+%s
+
+[[build.step]]
+install = { bin = [{ name = "scripted", run = "{{dep.interp.prefix}}/bin/node", args = ["{{prefix}}/lib/node_modules/@scope/tool/tool"] }] }
+`, node, scripts))
+	}
+
+	marker := func() bool {
+		found, err := filepath.Glob(
+			filepath.Join(m.data, "store", "*", "lib", "node_modules", "left-pad", "postinstall-ran"),
+		)
+		must(t, err)
+
+		return len(found) > 0
+	}
+
+	lock := func() string {
+		locked, err := os.ReadFile(filepath.Join(m.config, "oku.lock"))
+		must(t, err)
+
+		return string(locked)
+	}
+
+	// Without scripts no install script runs, and the build is pure.
+	out, err := m.run(t, "", "add", write(""), "--yes")
+	if err != nil {
+		t.Fatalf("add without scripts: %v\n%s", err, out)
+	}
+
+	if marker() {
+		t.Fatal("an install script ran although scripts names none")
+	}
+
+	if strings.Contains(lock(), "impure") {
+		t.Fatalf("oku.lock marks a build without scripts impure:\n%s", lock())
+	}
+
+	_, err = m.run(t, "", "remove", "scripted")
+	must(t, err)
+
+	// A dependency that scripts names gets its install script run, and the
+	// prompt says so.
+	m.opts.Interactive = yes()
+
+	out, err = m.run(t, "y\n", "add", write(`scripts = ["left-pad"]`))
+	if err != nil {
+		t.Fatalf("add with scripts: %v\n%s", err, out)
+	}
+
+	if !strings.Contains(out, "runs the install scripts of left-pad") {
+		t.Fatalf("the approval prompt does not name the scripts:\n%s", out)
+	}
+
+	if !marker() {
+		t.Fatal("the install script of left-pad did not run")
+	}
+
+	if !strings.Contains(lock(), "impure = true") {
+		t.Fatalf("oku.lock does not mark the build impure:\n%s", lock())
+	}
+
+	must(t, os.RemoveAll(m.data))
+
+	// A name that is not a dependency of the package stops the build.
+	out, err = m.run(t, "", "add", write(`scripts = ["right-pad"]`), "--yes")
+	if err == nil ||
+		!strings.Contains(err.Error(), "right-pad, which is not a dependency of @scope/tool") {
+		t.Fatalf("add accepted a script that is no dependency: %v\n%s", err, out)
 	}
 }
 

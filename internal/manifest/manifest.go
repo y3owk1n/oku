@@ -230,12 +230,26 @@ func (m *Manifest) validate() error {
 
 			switch {
 			case step.Package == "":
+				if len(step.Scripts) > 0 {
+					errs = append(errs, fmt.Errorf(
+						`build.step[%d]: scripts needs vendor = "npm" with package`, i,
+					))
+				}
 			case step.Vendor == nil || *step.Vendor != "npm":
 				errs = append(errs, fmt.Errorf(`build.step[%d]: package needs vendor = "npm"`, i))
 			case !npmNameRe.MatchString(step.Package):
 				errs = append(errs, fmt.Errorf(
 					`build.step[%d]: package must be an npm package name such as "@scope/name"`, i,
 				))
+			}
+
+			for _, name := range step.Scripts {
+				if !npmNameRe.MatchString(name) {
+					errs = append(errs, fmt.Errorf(
+						`build.step[%d]: scripts must name npm packages such as "@scope/name", not %q`,
+						i, name,
+					))
+				}
 			}
 		}
 

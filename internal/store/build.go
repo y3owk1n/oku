@@ -241,7 +241,7 @@ func (s *Store) Build(
 
 		switch {
 		case step.Run != nil:
-			result.Impure = result.Impure || step.Network
+			result.Impure = result.Impure || step.Impure()
 			result.Unsandboxed, err = runCommand(ctx, step, src, vars, env, box, log)
 		case step.Vendor != nil:
 			var digest string
@@ -249,12 +249,22 @@ func (s *Store) Build(
 			vendorEnv := env
 
 			if step.Package != "" {
+				result.Impure = result.Impure || step.Impure()
+
+				// A pin for another platform hashes the install alone, so the
+				// scripts, which run the host's code, stay out of it.
+				scripts := step.Scripts
+				if opts.VendorOnly {
+					scripts = nil
+				}
+
 				vendorEnv, err = s.npmPackageEnv(
 					ctx,
 					env,
 					step.Package,
 					m.Version.Value,
 					opts.NPMRegistry,
+					scripts,
 				)
 			}
 
@@ -863,19 +873,19 @@ func runVendor(
 		return "", "", fmt.Errorf("vendor %q %w", kind, err)
 	}
 
-	script := "tool=" + strconv.Quote(tool) + "\n" + vendor.script
-	step := manifest.Step{Run: &script, Shell: "sh", Network: true}
+	env = append(slices.Clone(env), vendor.env...)
 
-	unsandboxed, err = runCommand(
-		ctx,
-		step,
-		src,
-		nil,
-		append(slices.Clone(env), vendor.env...),
-		box,
-		log,
-	)
-	if err != nil {
+	run := func(script string) error {
+		script = "tool=" + strconv.Quote(tool) + "\n" + script
+		step := manifest.Step{Run: &script, Shell: "sh", Network: true}
+
+		var err error
+		unsandboxed, err = runCommand(ctx, step, src, nil, env, box, log)
+
+		return err
+	}
+
+	if err = run(vendor.script); err != nil {
 		return "", unsandboxed, err
 	}
 
@@ -884,28 +894,42 @@ func runVendor(
 		output = filepath.Join(prefix, filepath.FromSlash(vendor.output))
 	}
 
-	digest, err = hashTree(output)
+	if digest, err = hashTree(output); err != nil || vendor.after == "" {
+		return digest, unsandboxed, err
+	}
 
-	return digest, unsandboxed, err
+	return digest, unsandboxed, run(vendor.after)
 }
 
 // npmPackageEnv returns env with what an npm step needs to install one package:
-// its name, its version and the time that version was published. npm resolves
-// dependencies as of that time, so a later install gets the same packages.
+// its name, its version, the time that version was published, and the packages
+// in scripts whose install scripts then run. npm resolves dependencies as of
+// that time, so a later install gets the same packages. A name in scripts must
+// be the package or one of its dependencies.
 func (s *Store) npmPackageEnv(
 	ctx context.Context,
 	env []string,
 	name, version, registry string,
+	scripts []string,
 ) ([]string, error) {
 	published, err := npm.Published(ctx, s.http, registry, name, version)
 	if err != nil {
 		return nil, fmt.Errorf("read when %s %s was published: %w", name, version, err)
 	}
 
+	for _, script := range scripts {
+		if script != name && !slices.Contains(published.Dependencies, script) {
+			return nil, fmt.Errorf(
+				"scripts names %s, which is not a dependency of %s %s", script, name, version,
+			)
+		}
+	}
+
 	env = append(
 		slices.Clone(env),
 		"OKU_NPM_PACKAGE="+name+"@"+version,
-		"OKU_NPM_BEFORE="+published.UTC().Format(time.RFC3339Nano),
+		"OKU_NPM_BEFORE="+published.At.UTC().Format(time.RFC3339Nano),
+		"OKU_NPM_SCRIPTS="+strings.Join(scripts, " "),
 	)
 
 	if registry != "" {
