@@ -94,8 +94,11 @@ Rules:
 - A package in your own `[packages]` overrides the same name from any include.
 - An included list may include others, up to 8 levels deep. A list that is
   included twice, or that includes itself, is an error.
-- A list from a URL or a repo can only point at URLs and repos. A local path
-  inside it is an error, because the path refers to the list author's machine.
+- In a list from a URL or a repo, a relative path names a file in the same repo
+  at the same commit, or the URL beside the list. So a repo laid out as
+  `oku.toml`, `lists/` and `packages/` works with `oku sync github:you/machines`.
+  An absolute path is an error, because it names a file on the author's
+  machine, and so is a path that leaves the repo.
 - oku never edits an included list. `oku remove` refuses a package that only
   an include declares. Remove it there, or take the include out.
 - oku uses only the `oku.lock` beside your own `oku.toml`. It ignores a lock

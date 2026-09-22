@@ -959,8 +959,10 @@ hold. A part is `>=`, `>`, `<=`, `<` or `=` followed by a version, and a bare
 version means `=`. oku picks the newest version that satisfies it. When none
 does, the error names the constraint and the versions it found.
 
-A relative file ref starts at the directory of the manifest that names it. A
-manifest that came from a URL or a repo cannot depend on a local path. A
+A relative file ref starts at the directory of the manifest that names it. In a
+manifest that came from a repo it names a file of the same repo, read at the
+same commit, and in one from a URL the URL beside it. Such a manifest cannot
+depend on an absolute path. A
 dependency cycle is an error.
 
 Deps are not linked into the user's profile, so their programs are not added

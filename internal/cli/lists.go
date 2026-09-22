@@ -26,6 +26,9 @@ type listed struct {
 	// from is the ref of the included list that declares the package, or empty
 	// for the user's own list.
 	from string
+	// commit is the commit of the remote list that names the package by a
+	// relative path, where oku reads the manifest when the lock pins none.
+	commit string
 }
 
 // merger resolves includes into one package set.
@@ -122,7 +125,7 @@ func (e env) loadList(
 		seen:     map[string]bool{},
 	}
 
-	if err := m.merge(own, e.listPath(), filepath.Dir(e.listPath()), "", 0); err != nil {
+	if err := m.merge(own, e.listPath(), filepath.Dir(e.listPath()), nil, "", 0); err != nil {
 		return merged{}, err
 	}
 
@@ -153,21 +156,39 @@ func (e env) loadList(
 	}, nil
 }
 
+// remoteList is where a list that came from a URL or a repo was read.
+type remoteList struct {
+	ref ref.Ref
+	got ref.Fetched
+}
+
 // merge adds l's includes and then l's own packages, so a package in l overrides
 // the same name from anything l includes. dir is where l's relative paths start,
-// and it is empty for a list that came from a URL or a repo.
-func (m *merger) merge(l *list.List, origin, dir, from string, depth int) error {
+// and it is empty for a list that came from a URL or a repo. For such a list,
+// remote says where oku read it, and a relative path in it names a file beside
+// it there.
+func (m *merger) merge(
+	l *list.List,
+	origin, dir string,
+	remote *remoteList,
+	from string,
+	depth int,
+) error {
 	if depth > maxIncludeDepth {
 		return fmt.Errorf("%s: includes are nested more than %d deep", origin, maxIncludeDepth)
 	}
 
 	parse := func(s string) (ref.Ref, error) {
+		if remote != nil && ref.IsRelative(s) {
+			return ref.Beside(remote.ref, remote.got, s)
+		}
+
 		r, err := ref.ParseIn(dir, s)
 		if err != nil {
 			return r, err
 		}
 
-		if dir == "" && r.Kind == ref.File {
+		if remote != nil && r.Kind == ref.File {
 			return r, fmt.Errorf("a remote list cannot point at the local path %s", s)
 		}
 
@@ -189,6 +210,11 @@ func (m *merger) merge(l *list.List, origin, dir, from string, depth int) error 
 		pin, _ := m.locked.FindInclude(r.String())
 		if m.refresh {
 			pin = lock.Include{}
+		}
+
+		// A list beside a remote one is read at the same commit.
+		if remote != nil && ref.IsRelative(include) {
+			pin.Commit = remote.got.Commit
 		}
 
 		fetched, err := m.fetcher.Fetch(m.ctx, r, pin.Commit, ref.List)
@@ -226,12 +252,12 @@ func (m *merger) merge(l *list.List, origin, dir, from string, depth int) error 
 			return err
 		}
 
-		subDir := ""
+		subDir, subRemote := "", &remoteList{ref: r, got: fetched}
 		if r.Kind == ref.File {
-			subDir = filepath.Dir(r.Location)
+			subDir, subRemote = filepath.Dir(r.Location), nil
 		}
 
-		if err := m.merge(sub, r.String(), subDir, r.String(), depth+1); err != nil {
+		if err := m.merge(sub, r.String(), subDir, subRemote, r.String(), depth+1); err != nil {
 			return err
 		}
 	}
@@ -243,7 +269,13 @@ func (m *merger) merge(l *list.List, origin, dir, from string, depth int) error 
 		}
 
 		r.Version = entry.Version
-		m.packages[name] = listed{entry: entry, ref: r, from: from}
+
+		commit := ""
+		if remote != nil && ref.IsRelative(entry.Ref) {
+			commit = remote.got.Commit
+		}
+
+		m.packages[name] = listed{entry: entry, ref: r, from: from, commit: commit}
 	}
 
 	if dir == "" && len(l.Files) > 0 {

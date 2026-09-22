@@ -4,7 +4,9 @@ package ref
 import (
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -48,8 +50,8 @@ type Ref struct {
 	Location string
 	// Scheme is "github", "gitea", "codeberg" or "gitlab" for a Forge ref, else "".
 	Scheme string
-	// Fragment is the text after "#". For a Forge ref it is a manifest name, for
-	// Git a path inside the repository.
+	// Fragment is the text after "#". For a Forge ref it is a manifest name or a
+	// path inside the repository, for Git a path.
 	Fragment string
 	// Version is the text after "@", empty when the ref does not pin one.
 	Version string
@@ -128,7 +130,10 @@ func ParseIn(dir, s string) (Ref, error) {
 			return Ref{}, fmt.Errorf("%s: want codeberg:owner/repo or codeberg:owner/repo#name", s)
 		}
 
-		if r.Fragment != "" && !nameRe.MatchString(r.Fragment) {
+		switch {
+		case isPath(r.Fragment) && !filepath.IsLocal(filepath.FromSlash(r.Fragment)):
+			return Ref{}, fmt.Errorf("%s: %q is outside the repository", s, r.Fragment)
+		case r.Fragment != "" && !isPath(r.Fragment) && !nameRe.MatchString(r.Fragment):
 			return Ref{}, fmt.Errorf("%s: %q is not a manifest name", s, r.Fragment)
 		}
 	case strings.HasPrefix(body, "npm:"):
@@ -211,6 +216,50 @@ func FromDir(dir, s string) string {
 	}
 
 	return filepath.Join(dir, filepath.FromSlash(s))
+}
+
+// isPath reports whether a fragment is a path in the repository, such as
+// "packages/fd.toml", and not a manifest name, such as "fd".
+func isPath(fragment string) bool {
+	return strings.Contains(fragment, "/") || strings.HasSuffix(fragment, ".toml")
+}
+
+// IsRelative reports whether s is a relative file path, such as
+// "./packages/fd.toml" or "../base.toml", and no other kind of ref.
+func IsRelative(s string) bool {
+	return !strings.Contains(s, ":") && !filepath.IsAbs(s) && !strings.HasPrefix(s, "/")
+}
+
+// Beside returns the ref of the file at rel, a relative path, beside the file
+// that got read from r. In a repo it is the file of the same repo, and for a URL
+// the URL beside it. A path that leaves the repo fails. To read the file at the
+// same commit, the caller passes got.Commit to Fetch.
+func Beside(r Ref, got Fetched, rel string) (Ref, error) {
+	rel = filepath.ToSlash(rel)
+
+	switch r.Kind {
+	case HTTP:
+		base, err := url.Parse(got.Path)
+		if err != nil {
+			return Ref{}, err
+		}
+
+		at, err := url.Parse(rel)
+		if err != nil {
+			return Ref{}, err
+		}
+
+		return Ref{Kind: HTTP, Location: base.ResolveReference(at).String()}, nil
+	case Forge, Git:
+		at := path.Join(path.Dir(got.Path), rel)
+		if !filepath.IsLocal(filepath.FromSlash(at)) {
+			return Ref{}, fmt.Errorf("%s: %s is outside the repository", r, rel)
+		}
+
+		return Ref{Kind: r.Kind, Scheme: r.Scheme, Location: r.Location, Fragment: at}, nil
+	default:
+		return Ref{}, fmt.Errorf("%s: %s is not beside a file in a repo or at a URL", r, rel)
+	}
 }
 
 // splitVersion cuts "@version" off the end of s. A version holds no "/" or ":",

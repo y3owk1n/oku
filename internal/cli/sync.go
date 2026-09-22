@@ -224,7 +224,7 @@ func reconcile(
 
 		commit := previous.Commit
 		if fresh || previous.Ref != r.String() {
-			commit = ""
+			commit = wanted[name].commit
 		}
 
 		locksManifest := previous.Ref == r.String() && previous.ManifestSHA256 != ""

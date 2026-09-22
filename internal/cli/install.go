@@ -404,7 +404,7 @@ func (e env) installFrom(
 		wanted = append(slices.Clone(m.Build.Deps), wanted...)
 	}
 
-	deps, err := e.installDeps(ctx, opts, req, wanted)
+	deps, err := e.installDeps(ctx, opts, req, fetched, wanted)
 	if err != nil {
 		return installed{}, err
 	}
@@ -725,7 +725,7 @@ func (e env) resolveOnly(
 		}
 	}
 
-	deps, err := e.installDeps(ctx, opts, req, wanted)
+	deps, err := e.installDeps(ctx, opts, req, fetched, wanted)
 	if err != nil {
 		return installed{}, err
 	}
@@ -1210,10 +1210,13 @@ type depSet struct {
 
 // installDeps installs the deps of the package in parent, each through the same
 // pipeline, so a dep may be an artifact or a build and may have deps of its own.
+// at is where the parent's manifest was read. A relative dep of a manifest in a
+// repo or at a URL is the file beside it there, read at the same commit.
 func (e env) installDeps(
 	ctx context.Context,
 	opts Options,
 	parent request,
+	at ref.Fetched,
 	wanted []manifest.Dep,
 ) (depSet, error) {
 	var set depSet
@@ -1228,8 +1231,23 @@ func (e env) installDeps(
 		base = filepath.Dir(e.configPath())
 	}
 
+	remote := parent.ref.Kind == ref.Forge || parent.ref.Kind == ref.Git ||
+		parent.ref.Kind == ref.HTTP
+
 	for _, dep := range wanted {
-		r, err := ref.ParseIn(base, dep.Ref)
+		beside := remote && ref.IsRelative(dep.Ref)
+
+		var (
+			r   ref.Ref
+			err error
+		)
+
+		if beside {
+			r, err = ref.Beside(parent.ref, at, dep.Ref)
+		} else {
+			r, err = ref.ParseIn(base, dep.Ref)
+		}
+
 		if err != nil {
 			return set, fmt.Errorf("dep %s: %w", dep.Ref, err)
 		}
@@ -1253,8 +1271,12 @@ func (e env) installDeps(
 		keep := parent.keepVersion && previous.Ref != ""
 
 		commit, wantManifest := "", ""
-		if keep {
+
+		switch {
+		case keep:
 			commit, wantManifest = previous.Commit, previous.ManifestSHA256
+		case beside:
+			commit = at.Commit
 		}
 
 		// Each package pins its own deps, so install reuses a dep only when the

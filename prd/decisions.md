@@ -1081,3 +1081,20 @@ while it installs, and `oku self uninstall` releases it before it deletes the
 data directory, which Windows refuses while the file is open. With the lock
 held, a `.tmp-` directory in the store can only be left by a killed install,
 so `gc` deletes it.
+
+## D74. A relative path in a remote list names a file of the same repo
+
+In a list or manifest that oku read from a repo, a relative path names the file
+at that path beside it in the same repo, and oku reads it at the same commit.
+From a URL it names the URL beside it. The lock stores such a ref as
+`<repo ref>#<path>`, and a forge fragment with a `/` or ending in `.toml` is a
+path, not a manifest name. An absolute path, and a relative one that leaves the
+repo, stay errors. Why: a machine repo is laid out as a list, its includes and
+its manifests, with relative paths between them, and before this `oku sync
+<repo>` refused every such repo. The commit is the
+list's, so one lock pin covers files that were written together. A package
+keeps its own commit in the lock after that, so `oku update <name>` can move it
+alone.
+
+`[files]` and `[secrets]` in a remote list are still refused. They need the
+repo's files on this machine, which oku does not fetch yet.
