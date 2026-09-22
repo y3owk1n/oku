@@ -23,15 +23,18 @@ number of arguments prints its usage line.
 or not at all, see [a change that fails](files.md#a-change-that-fails).
 
 Inside a directory tree that has an `oku.toml`, the commands that read or change
-a list act on that [project](projects.md) and print `project <dir>` on stderr.
+a list act on that [project](projects.md) and print `project <dir>` on stderr,
+once per command.
 `--global`, or `-g`, makes them use the global list instead. It works on every
 command.
 
 While oku waits, it says on stderr what it waits for: reading a manifest,
 looking up versions, downloading, unpacking, cloning, asking a cache, or running
 a build step, with the package's name in front. In a terminal that is one line
-per package that is installing, with the bytes and the time so far. After eight
-lines the last one counts the rest. The lines go away when the waits end. In a
+per package that is installing, from its first wait to its last. A URL shows as
+the file it names, and a download says how far it got, such as `1.4 MiB of 2.0
+MiB, 70%`, with the time so far. After eight lines the last one counts the
+rest. The lines go away when the waits end. In a
 pipe or a CI log, each wait is one plain line, as it is with `TERM=dumb`.
 
 ## Colour
@@ -44,8 +47,11 @@ removed starts with a red `-`. The last line of a command that changed the
 machine says what it did, such as `✓ done in 3s` or `✓ freed 1.2 GiB from 14
 store paths`. A table fits
 the terminal: its last column wraps under itself, oku cuts a column that must
-give room and ends it with `…`, and under 60 columns each row prints as a block
-of label and value lines. `--json` always has the full values. In a pipe, a CI log or with
+give room and ends it with `…`, no row ends in spaces, and under 60 columns a
+table that does not fit prints each row as a block of label and value lines.
+Label and value lists, such as `oku info`, wrap a long value under itself. A
+long note, error or `oku doctor` line wraps under its text, and the help fits
+its text and flags to the width. `--json` always has the full values. In a pipe, a CI log or with
 `TERM=dumb` the same commands print plain text with no header and no cut, so
 what a script reads never depends on where it runs. `NO_COLOR=1` turns colour
 off on a terminal too, and `FORCE_COLOR=1` turns it on for a pipe, such as a
@@ -352,6 +358,7 @@ note for a rebuild, a manifest or checksum change, a pin for another platform,
 or a package that left the list. On a terminal each package prints its line
 the moment it finishes, above the waits still running, with a green `✓`, a
 dim `·` for a pin on another platform, and a red `-` for a package that left.
+A dry run marks what it would change with a yellow `~` instead of a check.
 
 Before the summary, one line reports each file, secret, setting, app, font or
 service the sync placed, changed or removed, such as `wrote ~/.config/nvim`,

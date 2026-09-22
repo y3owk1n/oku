@@ -8,9 +8,12 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 
 	"github.com/y3owk1n/oku/internal/dirs"
 	"github.com/y3owk1n/oku/internal/expose"
@@ -133,6 +136,9 @@ func NewRootCmd(opts Options) *cobra.Command {
 
 const globalFlag = "global"
 
+// projectShown is the annotation a command gets once it printed its project.
+const projectShown = "oku-project-shown"
+
 // groupCommands sorts the help into sections, so that a reader finds the
 // command for a job without reading all of them. Colour and headings come from
 // the Style of the writer the help goes to.
@@ -182,13 +188,129 @@ func groupCommands(root *cobra.Command) {
 	})
 	cobra.AddTemplateFunc("dim", func(text string) string { return style().Dim(text) })
 	cobra.AddTemplateFunc("name", func(text string) string { return style().Accent(text) })
+	cobra.AddTemplateFunc("flags", func(flags *pflag.FlagSet) string {
+		return flagUsages(style(), flags)
+	})
+	cobra.AddTemplateFunc("fit", func(text string) string { return fit(style(), text) })
 
 	// The commands stay in the order AddCommand gave them, which puts the daily
 	// ones first in each section.
 	cobra.EnableCommandSorting = false
 
 	root.SetUsageTemplate(usageTemplate)
+	root.SetHelpTemplate(helpTemplate)
 }
+
+// flagUsages lists the flags of a help page. A pipe, and a terminal wide
+// enough, get pflag's list. A narrower terminal gets each description wrapped
+// beside its flag, or under it when two columns do not fit.
+func flagUsages(s ui.Style, flags *pflag.FlagSet) string {
+	usages := flags.FlagUsages()
+	if s.Width() <= 0 || !slices.ContainsFunc(strings.Split(usages, "\n"), func(line string) bool {
+		return len([]rune(line)) > s.Width()
+	}) {
+		return usages
+	}
+
+	type entry struct{ name, usage string }
+
+	var (
+		entries []entry
+		width   int
+	)
+
+	flags.VisitAll(func(f *pflag.Flag) {
+		if f.Hidden {
+			return
+		}
+
+		name := "      --" + f.Name
+		if f.Shorthand != "" && f.ShorthandDeprecated == "" {
+			name = "  -" + f.Shorthand + ", --" + f.Name
+		}
+
+		kind, usage := pflag.UnquoteUsage(f)
+		if kind != "" {
+			name += " " + kind
+		}
+
+		if !slices.Contains([]string{"", "false", "0", "[]"}, f.DefValue) {
+			usage += " (default " + f.DefValue + ")"
+		}
+
+		entries = append(entries, entry{name, usage})
+		width = max(width, len(name))
+	})
+
+	// A description narrower than this reads better under its flag.
+	const minUsage = 24
+
+	var b strings.Builder
+
+	for _, e := range entries {
+		if width+gapColumns+minUsage <= s.Width() {
+			pad := strings.Repeat(" ", width+gapColumns)
+			fmt.Fprintf(&b, "%-*s%s\n", width+gapColumns, e.name,
+				strings.TrimPrefix(s.Wrap(pad+e.usage, width+gapColumns), pad))
+
+			continue
+		}
+
+		fmt.Fprintf(&b, "%s\n%s\n", e.name, s.Wrap(strings.Repeat(" ", usageIndent)+e.usage, usageIndent))
+	}
+
+	return b.String()
+}
+
+const (
+	// gapColumns is the space between a flag and its description.
+	gapColumns = 3
+	// usageIndent is where a description under its flag starts.
+	usageIndent = 10
+)
+
+// helpWidth is the width the long help is written at.
+const helpWidth = 80
+
+// fit reflows the long help of a command for a terminal narrower than the
+// width it is written at. A paragraph joins into one line and wraps again. An
+// indented line, such as an example, and a list item keep their own line.
+func fit(s ui.Style, text string) string {
+	if s.Width() <= 0 || s.Width() >= helpWidth {
+		return text
+	}
+
+	paragraphs := strings.Split(text, "\n\n")
+
+	for i, p := range paragraphs {
+		var lines []string
+
+		for _, line := range strings.Split(p, "\n") {
+			if n := len(lines); n > 0 && !ownLine(line) && !strings.HasPrefix(lines[n-1], " ") {
+				lines[n-1] += " " + line
+
+				continue
+			}
+
+			lines = append(lines, line)
+		}
+
+		paragraphs[i] = s.Wrap(strings.Join(lines, "\n"), 0)
+	}
+
+	return strings.Join(paragraphs, "\n\n")
+}
+
+// ownLine reports whether a line of help stays on a line of its own: an
+// indented one, or an item of a list.
+func ownLine(line string) bool {
+	return strings.HasPrefix(line, " ") || strings.HasPrefix(line, "- ")
+}
+
+// helpTemplate is cobra's default, with the long help fitted to the terminal.
+const helpTemplate = `{{with (or .Long .Short)}}{{fit . | trimTrailingWhitespaces}}
+
+{{end}}{{if or .Runnable .HasSubCommands}}{{.UsageString}}{{end}}`
 
 // usageTemplate is cobra's default with styled headings, coloured command
 // names and grouped commands.
@@ -212,10 +334,10 @@ const usageTemplate = `{{heading "Usage"}}{{if .Runnable}}
   {{name (rpad .Name .NamePadding)}} {{.Short}}{{end}}{{end}}{{end}}{{end}}{{end}}{{if .HasAvailableLocalFlags}}
 
 {{heading "Flags"}}
-{{.LocalFlags.FlagUsages | trimTrailingWhitespaces}}{{end}}{{if .HasAvailableInheritedFlags}}
+{{flags .LocalFlags | trimTrailingWhitespaces}}{{end}}{{if .HasAvailableInheritedFlags}}
 
 {{heading "Global flags"}}
-{{.InheritedFlags.FlagUsages | trimTrailingWhitespaces}}{{end}}{{if .HasHelpSubCommands}}
+{{flags .InheritedFlags | trimTrailingWhitespaces}}{{end}}{{if .HasHelpSubCommands}}
 
 {{heading "Additional help topics"}}{{range .Commands}}{{if .IsAdditionalHelpTopicCommand}}
   {{rpad .CommandPath .CommandPathPadding}} {{.Short}}{{end}}{{end}}{{end}}{{if .HasAvailableSubCommands}}
@@ -287,8 +409,16 @@ func scopedEnv(cmd *cobra.Command, opts Options) (env, error) {
 	}
 
 	e.project = findProject(dir, e.config)
-	if e.project != "" {
-		fmt.Fprintln(cmd.ErrOrStderr(), ui.For(cmd.ErrOrStderr()).Dim("project "+e.project))
+
+	// A command can load its env more than once, and says which project once.
+	if e.project != "" && cmd.Annotations[projectShown] == "" {
+		if cmd.Annotations == nil {
+			cmd.Annotations = map[string]string{}
+		}
+
+		cmd.Annotations[projectShown] = "yes"
+		s := ui.For(cmd.ErrOrStderr())
+		fmt.Fprintln(cmd.ErrOrStderr(), s.Dim("project "+s.Home(e.project)))
 	}
 
 	return e, nil

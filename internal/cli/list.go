@@ -100,6 +100,10 @@ func newListCmd(opts Options) *cobra.Command {
 
 			// A terminal gets a footer with the count and which list this is.
 			if s.On() {
+				if tab.Stacked() {
+					fmt.Fprintln(out)
+				}
+
 				where := "the global list"
 				if e.project != "" {
 					where = "the project " + s.Home(e.project)

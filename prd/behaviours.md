@@ -25,8 +25,9 @@ order step in `prd/product.md`.
   A name that is not installed stops the command before anything changes.
 - B227 [1] On a terminal a table fits the width: the last column wraps under
   itself, oku cuts another column that must give room and ends it with an
-  ellipsis, and under 60 columns each row prints as a block of label and
-  value lines. A pipe gets the same text as before.
+  ellipsis, and under 60 columns a table whose rows do not fit side by side
+  prints each row as a block of label and value lines. A pipe gets the same
+  text as before.
 - B228 [1] On a terminal `sync` and `update` print a row for each package as
   it finishes, above the waits still running: a green check with the name,
   version and note, a dim dot for a pin on another platform, a red minus for a
@@ -40,6 +41,15 @@ order step in `prd/product.md`.
   deleted, the packages `cache push` packed, and the closing line of `add`,
   `remove`, `rollback`, `gc`, `sync` and `update`, which says `done in <time>`
   with what the profile holds. In a pipe the lines are unchanged.
+- B233 [1] On a terminal no row of a table ends in spaces, and a first
+  column with no header, such as a generation's number, titles its block when
+  the table stacks.
+- B234 [1] On a terminal a label and value list wraps a long value under
+  itself, a note, an error or a `doctor` line wraps under its text, and the
+  help reflows its text and lists each flag's description beside it, or under
+  it when two columns do not fit. A pipe gets the text unchanged.
+- B235 [1] A command names its project on stderr once. On a terminal the
+  rows of `sync --dry-run` start with a yellow tilde, not a check.
 - B196 [1] `oku which <program>` names the package and version that provide a
   program in the profile and the file in the store it runs. Inside a project
   it looks in the project's profile, then in the global one. It warns when
@@ -458,8 +468,10 @@ order step in `prd/product.md`.
   packages that need an approval ask one after the other.
 - B176 [11] While oku waits for a download, a lookup, a clone, an unpack, a
   cache or a build step, stderr says what it waits for and for which package.
-  A terminal shows one line with the time and the bytes so far, which goes
-  away when the wait ends. Anything else gets one line for each wait.
+  A terminal shows one line per package, from its first wait to its last, with
+  the time and the bytes so far, which goes away when the wait ends. A URL shows
+  as the file it names, and a download of known size gives a percentage.
+  Anything else gets one line for each wait.
 - B93 [11] The install script puts one static binary in place and prints the
   hook line for the user's shell. It needs no root and edits no existing file.
 - B220 [11] The install script prints the installed version, and ends with the

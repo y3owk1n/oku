@@ -1035,7 +1035,7 @@ func warn(w io.Writer, format string, args ...any) {
 	text := fmt.Sprintf(format, args...)
 
 	if s.On() {
-		text = s.Note() + " " + strings.ReplaceAll(text, "\n", "\n  ")
+		text = s.Wrap(s.Note()+" "+strings.ReplaceAll(s.Homes(text), "\n", "\n  "), 2)
 	}
 
 	fmt.Fprintln(w, text)

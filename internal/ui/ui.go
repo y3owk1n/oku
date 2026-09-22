@@ -63,7 +63,8 @@ func (s Style) On() bool { return s.on }
 func (s Style) Width() int { return s.width }
 
 // Lines counts the rows text takes on the terminal, where a line longer than
-// the width wraps. Off a terminal it counts the newlines.
+// the width wraps. Escape codes take no room. Off a terminal it counts the
+// newlines.
 func (s Style) Lines(text string) int {
 	n := 0
 
@@ -71,11 +72,43 @@ func (s Style) Lines(text string) int {
 		n++
 
 		if s.width > 0 {
-			n += (utf8.RuneCountInString(line) - 1) / s.width
+			n += (visible(line) - 1) / s.width
 		}
 	}
 
 	return n
+}
+
+// Wrap fits each line of text to the terminal's width. Rows after the first
+// start indent columns in, so they line up under the text after a glyph or a
+// prefix. Off a terminal it returns text unchanged.
+func (s Style) Wrap(text string, indent int) string {
+	if s.width <= 0 {
+		return text
+	}
+
+	var b strings.Builder
+
+	for i, line := range strings.Split(text, "\n") {
+		if i > 0 {
+			b.WriteByte('\n')
+		}
+
+		lead := len(line) - len(strings.TrimLeft(line, " "))
+		pad := strings.Repeat(" ", max(lead, indent))
+
+		rows := wrapAt(line[lead:], max(s.width-lead, minLast), max(s.width-len(pad), minLast))
+
+		for j, row := range rows {
+			if j == 0 {
+				b.WriteString(line[:lead] + row)
+			} else {
+				b.WriteString("\n" + pad + row)
+			}
+		}
+	}
+
+	return b.String()
 }
 
 // Erase moves the cursor up n lines and clears them, so that a prompt the user
@@ -256,19 +289,22 @@ const (
 // Write prints the table. A table with no rows prints nothing, not even the
 // header, because a header over nothing reads as a bug. On a terminal the
 // table fits its width: the last column wraps, the others are cut with an
-// ellipsis when they must give room, and under stackBelow columns each row
-// prints as a block of label and value lines.
+// ellipsis when they must give room, and a table that does not fit under
+// stackBelow columns prints each row as a block of label and value lines.
 func (t *Table) Write(w io.Writer) error {
 	if len(t.rows) == 0 {
 		return nil
 	}
 
-	widths := t.widths()
-	columns := len(widths)
+	if t.style.on {
+		t.dropEmpty()
+	}
 
-	if t.style.width > 0 && t.style.width < stackBelow && columns > 2 {
+	if t.Stacked() {
 		return t.writeStacked(w)
 	}
+
+	widths := t.widths()
 
 	if t.style.width > 0 {
 		t.fit(widths)
@@ -292,6 +328,41 @@ func (t *Table) Write(w io.Writer) error {
 	_, err := io.WriteString(w, b.String())
 
 	return err
+}
+
+// Stacked reports whether Write prints each row as a block, so that a caller
+// can set a footer apart from the last block.
+func (t *Table) Stacked() bool {
+	widths := t.widths()
+	if t.style.width <= 0 || t.style.width >= stackBelow || len(widths) <= 2 {
+		return false
+	}
+
+	total := gap * (len(widths) - 1)
+	for _, w := range widths {
+		total += w
+	}
+
+	return total > t.style.width
+}
+
+// dropEmpty takes away the columns at the end that are empty in every row,
+// so that no row ends in padding.
+func (t *Table) dropEmpty() {
+	keep := 0
+
+	for _, row := range t.rows {
+		for i, c := range row {
+			if c.text != "" {
+				keep = max(keep, i+1)
+			}
+		}
+	}
+
+	t.header = t.header[:min(keep, len(t.header))]
+	for i, row := range t.rows {
+		t.rows[i] = row[:min(keep, len(row))]
+	}
 }
 
 // widths returns the natural width of each column, from the widest cell and
@@ -491,16 +562,25 @@ func (t *Table) render(row []cell, widths []int) string {
 		b.WriteByte('\n')
 	}
 
+	// A row with an empty last cell would end in the padding of the cell
+	// before it.
+	if t.style.on && last >= 0 && row[last].text == "" {
+		return strings.TrimRight(b.String(), " \n") + "\n"
+	}
+
 	return b.String()
 }
 
 // writeStacked prints each row as a block of "label  value" lines, one per
-// column with a value, and a blank line between rows.
+// column with a value, and a blank line between rows. A first column with no
+// header, such as the number of a generation, is the title of its block.
 func (t *Table) writeStacked(w io.Writer) error {
 	width := 0
 	for _, h := range t.header {
 		width = max(width, utf8.RuneCountInString(h))
 	}
+
+	titled := len(t.header) > 0 && t.header[0] == ""
 
 	var b strings.Builder
 
@@ -511,6 +591,12 @@ func (t *Table) writeStacked(w io.Writer) error {
 
 		for i, c := range row {
 			if c.text == "" {
+				continue
+			}
+
+			if i == 0 && titled {
+				b.WriteString(styled(c.style, c.text) + "\n")
+
 				continue
 			}
 
@@ -562,8 +648,12 @@ func cut(text string, width int) string {
 
 // wrap breaks text into lines of at most width columns, at spaces, and breaks
 // a word longer than the width.
-func wrap(text string, width int) []string {
-	if width <= 0 || visible(text) <= width {
+func wrap(text string, width int) []string { return wrapAt(text, width, width) }
+
+// wrapAt is wrap with first columns for the first line and rest for the
+// others, for a line whose continuation rows are indented.
+func wrapAt(text string, first, rest int) []string {
+	if first <= 0 || visible(text) <= first {
 		return []string{text}
 	}
 
@@ -572,23 +662,41 @@ func wrap(text string, width int) []string {
 		line  string
 	)
 
+	width := func() int {
+		if len(lines) == 0 {
+			return first
+		}
+
+		return rest
+	}
+
 	for _, word := range strings.Fields(text) {
-		for visible(word) > width {
+		// A word too long for any line, such as a path, fills the rest of
+		// the line it starts on.
+		for visible(word) > width() {
+			var head string
+
+			if room := width() - visible(line) - 1; line != "" && room >= minColumn {
+				head, word = take(word, room)
+				lines = append(lines, line+" "+head)
+				line = ""
+
+				continue
+			}
+
 			if line != "" {
 				lines = append(lines, line)
 				line = ""
 			}
 
-			var head string
-
-			head, word = take(word, width)
+			head, word = take(word, width())
 			lines = append(lines, head)
 		}
 
 		switch {
 		case line == "":
 			line = word
-		case visible(line)+1+visible(word) <= width:
+		case visible(line)+1+visible(word) <= width():
 			line += " " + word
 		default:
 			lines = append(lines, line)
@@ -604,7 +712,7 @@ func wrap(text string, width int) []string {
 }
 
 // KV prints label and value pairs, the labels aligned and dim. A pair with an
-// empty value is left out.
+// empty value is left out. On a terminal a long value wraps under itself.
 func (s Style) KV(w io.Writer, pairs ...[2]string) error {
 	width := 0
 
@@ -621,7 +729,16 @@ func (s Style) KV(w io.Writer, pairs ...[2]string) error {
 			continue
 		}
 
-		fmt.Fprintf(&b, "%s  %s\n", s.Dim(fmt.Sprintf("%-*s", width, p[0])), p[1])
+		lines := []string{p[1]}
+		if s.width > 0 {
+			lines = wrap(p[1], max(s.width-width-gap, minLast))
+		}
+
+		fmt.Fprintf(&b, "%s  %s\n", s.Dim(fmt.Sprintf("%-*s", width, p[0])), lines[0])
+
+		for _, line := range lines[1:] {
+			fmt.Fprintf(&b, "%s%s\n", strings.Repeat(" ", width+gap), line)
+		}
 	}
 
 	_, err := io.WriteString(w, b.String())
