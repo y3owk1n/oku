@@ -46,7 +46,10 @@ func newListCmd(opts Options) *cobra.Command {
 			}
 
 			if len(pkgs) == 0 {
-				fmt.Fprintln(cmd.OutOrStdout(), "no packages installed, `oku add <ref>` installs one")
+				fmt.Fprintln(
+					cmd.OutOrStdout(),
+					"no packages installed, `oku add <ref>` installs one",
+				)
 
 				return nil
 			}

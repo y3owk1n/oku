@@ -212,7 +212,10 @@ func (e env) install(ctx context.Context, opts Options, req request) (installed,
 	// tried.
 	if err != nil && inferred != "" {
 		return installed{}, fmt.Errorf(
-			"%w\n\noku inferred this manifest for %s:\n\n%s", err, req.ref, strings.TrimSpace(inferred),
+			"%w\n\noku inferred this manifest for %s:\n\n%s",
+			err,
+			req.ref,
+			strings.TrimSpace(inferred),
 		)
 	}
 
@@ -382,7 +385,10 @@ func (e env) installFrom(
 		}
 
 		entry = keepPins(lock.Platform{
-			Strategy: strategyBuild, VendorSHA256: meta.VendorSHA256, URL: meta.URL, SHA256: meta.SHA256,
+			Strategy:     strategyBuild,
+			VendorSHA256: meta.VendorSHA256,
+			URL:          meta.URL,
+			SHA256:       meta.SHA256,
 		}, previous, m, host)
 	case build:
 		if err := req.approve(m, host); err != nil {
@@ -401,7 +407,9 @@ func (e env) installFrom(
 		for _, missing := range realized.MissingDeps {
 			deps.linkNotes = append(deps.linkNotes, fmt.Sprintf(
 				"%s: %s loads %s, which is not in runtime.deps, so it breaks after `oku gc` or on another machine",
-				m.Package.Name, missing.File, missing.Package,
+				m.Package.Name,
+				missing.File,
+				missing.Package,
 			))
 		}
 
@@ -554,7 +562,11 @@ func keepPins(
 }
 
 // keptPlatforms returns the platform entries of previous that still describe m.
-func keptPlatforms(previous lock.Package, m *manifest.Manifest, r ref.Ref) map[string]lock.Platform {
+func keptPlatforms(
+	previous lock.Package,
+	m *manifest.Manifest,
+	r ref.Ref,
+) map[string]lock.Platform {
 	platforms := map[string]lock.Platform{}
 
 	if previous.ManifestSHA256 == m.SHA256 && previous.Ref == r.String() &&
@@ -815,7 +827,8 @@ func (e env) manifestData(
 			Version: req.ref.Version,
 			Asset:   req.asset,
 			Bin:     req.bin,
-		})
+		},
+	)
 	if err != nil {
 		return ref.Fetched{}, "", err
 	}
@@ -996,8 +1009,11 @@ func reportInferred(w io.Writer, got installed, verbose bool) {
 func (e env) reportFirstUse(w io.Writer, got installed) {
 	if len(got.firstUseOthers) > 0 {
 		warn(
-			w, "%s publishes no checksum for %s, so oku trusted those downloads and pinned them in %s",
-			got.lock.Name, strings.Join(got.firstUseOthers, ", "), e.lockPath(),
+			w,
+			"%s publishes no checksum for %s, so oku trusted those downloads and pinned them in %s",
+			got.lock.Name,
+			strings.Join(got.firstUseOthers, ", "),
+			e.lockPath(),
 		)
 	}
 

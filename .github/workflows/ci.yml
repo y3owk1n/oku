@@ -42,6 +42,12 @@ jobs:
         run: .github/scripts/live-windows.ps1
 
   lint:
+    # Files with a build tag for another OS are only linted under that GOOS, so
+    # one run per OS, all on the Linux runner.
+    strategy:
+      fail-fast: false
+      matrix:
+        goos: [darwin, linux, windows]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -49,5 +55,7 @@ jobs:
         with:
           go-version-file: go.mod
       - uses: golangci/golangci-lint-action@v9
+        env:
+          GOOS: ${{ matrix.goos }}
         with:
           version: v2.12.2

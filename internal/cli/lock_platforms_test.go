@@ -42,7 +42,14 @@ func (m machine) twoPlatformManifest(t *testing.T, other platform.Platform) (str
 		"[[artifact]]\nmatch = { os = %q, arch = %q, libc = %q }\nurl = \"file://%s\"\nsha256 = %q\n"+
 			"bin = [\"tool\"]\n"+
 			"[[artifact]]\nmatch = { os = %q, arch = %q }\nurl = \"file://%s\"\nbin = [\"tool\"]\n",
-		host.OS, host.Arch, host.Libc, archive, sum, other.OS, other.Arch, foreign,
+		host.OS,
+		host.Arch,
+		host.Libc,
+		archive,
+		sum,
+		other.OS,
+		other.Arch,
+		foreign,
 	))
 
 	return ref, hex.EncodeToString(foreignSum[:])
@@ -148,7 +155,8 @@ func TestB181LockedSyncFailsWhenTheLockWouldChange(t *testing.T) {
 	must(t, os.RemoveAll(m.data))
 
 	_, err = m.run(t, "", "sync", "--locked")
-	if err == nil || !strings.Contains(err.Error(), "does not pin tool for "+platform.Host().String()) {
+	if err == nil ||
+		!strings.Contains(err.Error(), "does not pin tool for "+platform.Host().String()) {
 		t.Fatalf("want an error that names tool and the host, got %v", err)
 	}
 
@@ -178,7 +186,9 @@ func TestB182SyncPinsAPackageWhoseWhenLeavesOutTheHost(t *testing.T) {
 	must(t, os.WriteFile(download, []byte("not an archive"), 0o644))
 
 	artifact := fmt.Sprintf(
-		"[[artifact]]\nmatch = { os = %q }\nurl = \"file://%s\"\nbin = [\"x\"]\n", other.OS, download,
+		"[[artifact]]\nmatch = { os = %q }\nurl = \"file://%s\"\nbin = [\"x\"]\n",
+		other.OS,
+		download,
 	)
 	m.rawManifest(t, "interp", artifact)
 	tool := m.rawManifest(t, "tool", "[runtime]\ndeps = [\"./interp.toml\"]\n"+artifact)

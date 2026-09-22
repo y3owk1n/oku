@@ -23,7 +23,13 @@ func run(verb, domain string, rest ...string) ([]byte, error) {
 
 	out, err := exec.Command("/usr/bin/defaults", append(args, rest...)...).CombinedOutput()
 	if err != nil {
-		return nil, fmt.Errorf("defaults %s %s: %w: %s", verb, domain, err, strings.TrimSpace(string(out)))
+		return nil, fmt.Errorf(
+			"defaults %s %s: %w: %s",
+			verb,
+			domain,
+			err,
+			strings.TrimSpace(string(out)),
+		)
 	}
 
 	return out, nil

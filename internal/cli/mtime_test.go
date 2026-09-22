@@ -55,7 +55,11 @@ func TestB169AnUnpackedSourceKeepsTheFileTimesOfTheArchive(t *testing.T) {
 	m.opts.Interactive = yes()
 
 	if out, err := m.run(t, "y\n", "add", ref); err != nil {
-		t.Fatalf("the generated file should still be newer than its input after unpacking: %v\n%s", err, out)
+		t.Fatalf(
+			"the generated file should still be newer than its input after unpacking: %v\n%s",
+			err,
+			out,
+		)
 	}
 }
 
@@ -89,8 +93,13 @@ func TestB172ASourceArchiveWithoutAChecksumIsPinnedOnFirstDownload(t *testing.T)
 
 	sum := sha256.Sum256(data)
 
-	if !strings.Contains(string(locked), hex.EncodeToString(sum[:])) || !strings.Contains(out, "trusted") {
-		t.Fatalf("oku.lock should pin the digest of the source, and add should say so:\n%s\n%s", out, locked)
+	if !strings.Contains(string(locked), hex.EncodeToString(sum[:])) ||
+		!strings.Contains(out, "trusted") {
+		t.Fatalf(
+			"oku.lock should pin the digest of the source, and add should say so:\n%s\n%s",
+			out,
+			locked,
+		)
 	}
 
 	// The archive changes under the same version, on a machine with an empty store.
@@ -100,7 +109,10 @@ func TestB172ASourceArchiveWithoutAChecksumIsPinnedOnFirstDownload(t *testing.T)
 
 	_, err = m.run(t, "y\n", "sync")
 	if err == nil || !strings.Contains(err.Error(), "checksum mismatch") {
-		t.Fatalf("sync should refuse a source archive that no longer has the pinned digest, got %v", err)
+		t.Fatalf(
+			"sync should refuse a source archive that no longer has the pinned digest, got %v",
+			err,
+		)
 	}
 }
 
@@ -119,6 +131,10 @@ func TestB173AMacOSBuildFindsThePkgConfigFilesOfSystemLibraries(t *testing.T) {
 			"grep -q 'libxml2' $dir/libxml-2.0.pc\n\"\"\"\n"+writeTool+installTool)
 
 	if out, err := m.run(t, "y\n", "add", ref); err != nil {
-		t.Fatalf("a build on macOS should find zlib.pc with a version on PKG_CONFIG_PATH: %v\n%s", err, out)
+		t.Fatalf(
+			"a build on macOS should find zlib.pc with a version on PKG_CONFIG_PATH: %v\n%s",
+			err,
+			out,
+		)
 	}
 }

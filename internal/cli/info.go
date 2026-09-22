@@ -80,12 +80,16 @@ func newInfoCmd(opts Options) *cobra.Command {
 			}
 
 			if entry.Inferred {
-				pairs = append(pairs, [2]string{"manifest", "inferred by oku from the repo's releases"})
+				pairs = append(
+					pairs,
+					[2]string{"manifest", "inferred by oku from the repo's releases"},
+				)
 			}
 
 			if at.Impure {
 				pairs = append(pairs, [2]string{
-					"impure", s.Warn("a build step used the network, so this build is not reproducible"),
+					"impure",
+					s.Warn("a build step used the network, so this build is not reproducible"),
 				})
 			}
 

@@ -105,7 +105,13 @@ func (g *gitlab) Head(ctx context.Context, repo string) (string, error) {
 func (g *gitlab) File(ctx context.Context, repo, commit, path string) ([]byte, error) {
 	body, _, err := g.get(
 		ctx,
-		g.project(repo)+"/repository/files/"+url.PathEscape(path)+"/raw?ref="+url.QueryEscape(commit),
+		g.project(
+			repo,
+		)+"/repository/files/"+url.PathEscape(
+			path,
+		)+"/raw?ref="+url.QueryEscape(
+			commit,
+		),
 	)
 
 	return body, err
@@ -116,8 +122,12 @@ func (g *gitlab) File(ctx context.Context, repo, commit, path string) ([]byte, e
 func (g *gitlab) Files(ctx context.Context, repo, commit string) ([]string, error) {
 	var paths []string
 
-	next := g.project(repo) + "/repository/tree?recursive=true&per_page=100&pagination=keyset&ref=" +
-		url.QueryEscape(commit)
+	next := g.project(
+		repo,
+	) + "/repository/tree?recursive=true&per_page=100&pagination=keyset&ref=" +
+		url.QueryEscape(
+			commit,
+		)
 
 	for next != "" {
 		var tree []struct {

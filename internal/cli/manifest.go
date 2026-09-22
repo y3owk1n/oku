@@ -93,7 +93,8 @@ this machine to find the executable, so run it where a release asset exists.`,
 		},
 	}
 
-	init.Flags().StringVar(&from, "from", "", "the repo to read, as owner/repo on GitHub or as a ref such as codeberg:owner/repo")
+	init.Flags().
+		StringVar(&from, "from", "", "the repo to read, as owner/repo on GitHub or as a ref such as codeberg:owner/repo")
 	init.Flags().
 		StringVarP(&output, "output", "o", ref.Manifest.Default, `the file to write, or "-" for stdout`)
 	init.Flags().BoolVar(&force, "force", false, "replace the output file when it exists")
@@ -278,7 +279,8 @@ codeberg.org or gitlab.com, or from --repo, which any other host needs. A manife
 		},
 	}
 
-	cmd.Flags().StringVar(&repo, "repo", "", "the repo to read releases from, as owner/repo on GitHub or a ref such as gitlab:group/project")
+	cmd.Flags().
+		StringVar(&repo, "repo", "", "the repo to read releases from, as owner/repo on GitHub or a ref such as gitlab:group/project")
 	cmd.Flags().
 		StringVar(&prefix, "strip-prefix", "", `text before the version in a tag, such as "v"`)
 	cmd.Flags().StringVar(&to, "to", "", "the version to move to, instead of the newest")

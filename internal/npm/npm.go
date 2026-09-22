@@ -155,7 +155,11 @@ func Published(
 
 	at, ok := found.Time[version]
 	if !ok {
-		return time.Time{}, fmt.Errorf("the registry does not say when %s %s was published", name, version)
+		return time.Time{}, fmt.Errorf(
+			"the registry does not say when %s %s was published",
+			name,
+			version,
+		)
 	}
 
 	return at, nil

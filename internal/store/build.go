@@ -244,7 +244,13 @@ func (s *Store) Build(
 			vendorEnv := env
 
 			if step.Package != "" {
-				vendorEnv, err = s.npmPackageEnv(ctx, env, step.Package, m.Version.Value, opts.NPMRegistry)
+				vendorEnv, err = s.npmPackageEnv(
+					ctx,
+					env,
+					step.Package,
+					m.Version.Value,
+					opts.NPMRegistry,
+				)
 			}
 
 			if opts.VendorOnly {
@@ -488,7 +494,10 @@ func (s *Store) fetchSource(
 
 		if want != "" && pinned != "" && want != pinned {
 			return fetchedSource{}, fmt.Errorf(
-				"%w: upstream publishes sha256 %s, oku.lock pinned %s", ErrPinConflict, want, pinned,
+				"%w: upstream publishes sha256 %s, oku.lock pinned %s",
+				ErrPinConflict,
+				want,
+				pinned,
 			)
 		}
 
@@ -844,7 +853,8 @@ func (s *Store) npmPackageEnv(
 		return nil, fmt.Errorf("read when %s %s was published: %w", name, version, err)
 	}
 
-	env = append(slices.Clone(env),
+	env = append(
+		slices.Clone(env),
 		"OKU_NPM_PACKAGE="+name+"@"+version,
 		"OKU_NPM_BEFORE="+published.UTC().Format(time.RFC3339Nano),
 	)

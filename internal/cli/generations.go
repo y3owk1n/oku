@@ -61,7 +61,8 @@ func newGenerationsCmd(opts Options) *cobra.Command {
 
 			if len(gens) == 0 {
 				fmt.Fprintln(
-					cmd.OutOrStdout(), "no generations yet, the first `oku add` or `oku sync` makes one",
+					cmd.OutOrStdout(),
+					"no generations yet, the first `oku add` or `oku sync` makes one",
 				)
 
 				return nil

@@ -225,7 +225,8 @@ func reconcile(
 			continue
 		}
 
-		pinned := previous.Ref == r.String() && previous.Platforms[host.String()] != (lock.Platform{})
+		pinned := previous.Ref == r.String() &&
+			previous.Platforms[host.String()] != (lock.Platform{})
 		if !lockOnly && !pinned {
 			unpinned = append(unpinned, name)
 		}
@@ -354,7 +355,14 @@ func reconcile(
 		case j.req.rebuild:
 			syncRow(style, summary, "~", name, version, "built again")
 		case j.req.lockOnly:
-			syncRow(style, summary, "·", name, version, "pinned and not installed on "+host.String())
+			syncRow(
+				style,
+				summary,
+				"·",
+				name,
+				version,
+				"pinned and not installed on "+host.String(),
+			)
 		case !locksManifest:
 			syncRow(style, summary, "+", name, version, "")
 		case previous.Version != version:

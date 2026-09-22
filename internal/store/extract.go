@@ -222,7 +222,13 @@ func stripPath(name string, n int) (string, bool, error) {
 // of a source tree, and a release tarball relies on its generated files, such as
 // aclocal.m4, being newer than their inputs. With the time of the unpacking,
 // make sees them as stale and runs autotools, which the machine may not have.
-func writeFile(root *os.Root, name string, mode fs.FileMode, modified time.Time, r io.Reader) error {
+func writeFile(
+	root *os.Root,
+	name string,
+	mode fs.FileMode,
+	modified time.Time,
+	r io.Reader,
+) error {
 	if err := root.MkdirAll(path.Dir(name), 0o755); err != nil {
 		return err
 	}

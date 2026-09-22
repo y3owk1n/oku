@@ -198,8 +198,11 @@ func TestB168ASettingOfThisMacGoesToItsOwnDomain(t *testing.T) {
 	m, store := settingsMachine(t)
 	store.values["currentHost:com.apple.controlcenter BatteryShowPercentage"] = "<false/>"
 
-	m.writeFilesList(t, "[defaults-currenthost.\"com.apple.controlcenter\"]\nBatteryShowPercentage = true\n"+
-		"[defaults.\"com.apple.controlcenter\"]\nOther = 1\n")
+	m.writeFilesList(
+		t,
+		"[defaults-currenthost.\"com.apple.controlcenter\"]\nBatteryShowPercentage = true\n"+
+			"[defaults.\"com.apple.controlcenter\"]\nOther = 1\n",
+	)
 
 	_, err := m.run(t, "", "sync")
 	must(t, err)

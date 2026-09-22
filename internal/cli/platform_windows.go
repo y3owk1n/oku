@@ -105,8 +105,8 @@ func killWithParent(pid int) error {
 	if err != nil {
 		return err
 	}
-	defer windows.CloseHandle(process)
-
 	// The job handle stays open while oku runs, because closing it ends the program.
-	return windows.AssignProcessToJobObject(job, process)
+	err = windows.AssignProcessToJobObject(job, process)
+
+	return errors.Join(err, windows.CloseHandle(process))
 }

@@ -44,7 +44,8 @@ func newWhichCmd(opts Options) *cobra.Command {
 			out := cmd.OutOrStdout()
 			s := ui.For(out)
 
-			if err := s.KV(out,
+			if err := s.KV(
+				out,
 				[2]string{"program", s.Bold(answer.Program)},
 				[2]string{"package", answer.Package + " " + answer.Version},
 				[2]string{"path", s.Home(answer.Path)},
@@ -87,13 +88,16 @@ func which(prof *profile.Profile, pkgs []profile.Package, program string) (which
 		if found, err := exec.LookPath(program); err == nil {
 			return whichAnswer{}, fmt.Errorf(
 				"%s is not from oku, PATH runs %s\n`oku search %s` looks for a package that provides it",
-				program, found, program,
+				program,
+				found,
+				program,
 			)
 		}
 
 		return whichAnswer{}, fmt.Errorf(
 			"no program named %s is installed\n`oku search %s` looks for a package that provides it",
-			program, program,
+			program,
+			program,
 		)
 	}
 
@@ -114,7 +118,9 @@ func which(prof *profile.Profile, pkgs []profile.Package, program string) (which
 	}
 
 	if answer.Package == "" {
-		return whichAnswer{}, errors.New(program + " is in the profile, but no installed package holds it")
+		return whichAnswer{}, errors.New(
+			program + " is in the profile, but no installed package holds it",
+		)
 	}
 
 	// A shim on Windows is a copy, so the comparison is by path.
