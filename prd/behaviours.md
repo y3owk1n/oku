@@ -58,6 +58,9 @@ order step in `prd/product.md`.
   shows what changed from that one, and starts the line with `from <n>,`
   when it is not the one numbered before, as after a rollback. `--json`
   gives it as `from`.
+- B242 [1] When several packages no longer match `oku.lock`, `sync` and
+  `update` finish the others, list every drifted package, and end with one
+  `oku update` that names them all, with the names the command was given.
 - B237 [1] On a terminal each `command` in a hint, a note, an error or a
   `doctor` line is in colour without its backticks, and the lines of an
   error after the first are not dimmed. A pipe keeps the backticks.
