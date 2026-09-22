@@ -31,6 +31,17 @@ order step in `prd/product.md`.
 - B5 [1] `oku list` shows name, version and ref for the active list.
 - B6 [1] A failed install leaves the previous profile active and unchanged.
 - B7 [1] `man` and `completions` entries appear under the profile `share`.
+- B214 [1] `completions = { generate = "..." }` on an artifact runs the command
+  once per shell in fish, zsh, bash with `{{shell}}` substituted, after
+  unpacking and before linking, with the package's `bin` first on PATH, and
+  writes each stdout under the profile `share/completions` as `<bin>.fish`,
+  `_<bin>` and `<bin>.bash`. It needs the same approval as a build, and
+  `oku.lock` records `commands = true` for the platform.
+- B215 [1] A generate command that exits non-zero or prints nothing fails the
+  install, and the error holds the expanded command and its stderr. Nothing
+  enters the store.
+- B216 [1] `completions = "<dir>/"` names the three conventional files under
+  that directory, links the ones that exist, and fails when none do.
 - B206 [1] A man page that a build installs under `{{prefix}}/man` appears
   under the profile `share/man`, the same as one under `{{prefix}}/share/man`.
 - B8 [1] oku never requires root outside system scope, and writes only under
@@ -236,6 +247,8 @@ order step in `prd/product.md`.
   template variables, an artifact with no output keys, a `fetch` step without
   sha256. A missing checksum source and an empty description are warnings and
   do not fail it.
+- B218 [4] `manifest lint` rejects shell paths together with `generate`, `name`
+  without `generate`, and an unknown template variable in `generate`.
 - B29 [4] `oku manifest bump` rewrites a static version and its checksums to
   the newest upstream release, or to `--to <version>`. It keeps the file's
   comments, and it refuses a manifest that discovers its versions.
@@ -274,6 +287,10 @@ order step in `prd/product.md`.
   asks for approval. The same manifest hash is never asked twice. A changed
   manifest asks again. A dep that builds asks for itself.
 - B42 [5] Non-interactive runs refuse unapproved `run` steps unless `--yes`.
+- B217 [5] A build `install` step accepts the same `completions` forms. With
+  `generate`, the command runs in the source directory after the files are
+  copied, with the package's `bin` first on PATH, and the step appears in the
+  approval prompt.
 - B43 [5] A step with a non-matching `when` is skipped.
 - B44 [5] A failing step aborts the build, reports the step index and its
   output, and leaves store and profile unchanged.
