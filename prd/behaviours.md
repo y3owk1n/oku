@@ -413,6 +413,10 @@ order step in `prd/product.md`.
   away when the wait ends. Anything else gets one line for each wait.
 - B93 [11] The install script puts one static binary in place and prints the
   hook line for the user's shell. It needs no root and edits no existing file.
+- B220 [11] The install script prints the installed version, and ends with the
+  next commands: `oku doctor`, a first `oku add`, `oku self update`. When the
+  startup file loads the hook already, it says so instead of printing the line
+  again.
 
 ## Transactions
 
