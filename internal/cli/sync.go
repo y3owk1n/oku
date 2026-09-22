@@ -369,6 +369,7 @@ func reconcile(
 		reportInferred(out, got, flags.verbose)
 		e.reportFirstUse(cmd.ErrOrStderr(), got)
 		reportUnsandboxed(cmd.ErrOrStderr(), got)
+		reportLinks(cmd.ErrOrStderr(), got)
 		reportCache(cmd.ErrOrStderr(), got)
 
 		next.Set(got.lock)

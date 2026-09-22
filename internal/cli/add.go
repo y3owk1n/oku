@@ -191,6 +191,7 @@ func runAdd(
 	reportInferred(cmd.OutOrStdout(), got, flags.verbose)
 	e.reportFirstUse(cmd.ErrOrStderr(), got)
 	reportUnsandboxed(cmd.ErrOrStderr(), got)
+	reportLinks(cmd.ErrOrStderr(), got)
 	reportCache(cmd.ErrOrStderr(), got)
 	s := ui.For(cmd.OutOrStdout())
 	fmt.Fprintf(
