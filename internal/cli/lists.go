@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"cmp"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -28,6 +29,12 @@ type listed struct {
 }
 
 // merger resolves includes into one package set.
+// fileKey names one [files] entry across the merged lists.
+type fileKey struct {
+	target string
+	when   platform.Selector
+}
+
 type merger struct {
 	ctx     context.Context
 	fetcher *ref.Fetcher
@@ -39,7 +46,10 @@ type merger struct {
 	project  string
 	packages map[string]listed
 	// files is keyed by the target as the list has it.
-	files map[string]listedFile
+	// files is keyed by target and when, so a later list overrides an entry
+	// only when both agree, and two lists may write one target on other
+	// platforms.
+	files map[fileKey]listedFile
 	vars  map[string]string
 	// secrets is keyed by the name in [secrets].
 	secrets map[string]listedSecret
@@ -109,7 +119,7 @@ func (e env) loadList(
 		refresh:  refresh,
 		project:  e.project,
 		packages: map[string]listed{},
-		files:    map[string]listedFile{},
+		files:    map[fileKey]listedFile{},
 		vars:     map[string]string{},
 		secrets:  map[string]listedSecret{},
 		settings: map[[3]string]list.Setting{},
@@ -121,8 +131,15 @@ func (e env) loadList(
 	}
 
 	files := make([]listedFile, 0, len(m.files))
-	for _, target := range slices.Sorted(maps.Keys(m.files)) {
-		files = append(files, m.files[target])
+	for _, key := range slices.SortedFunc(maps.Keys(m.files), func(a, b fileKey) int {
+		return cmp.Or(
+			cmp.Compare(a.target, b.target),
+			cmp.Compare(a.when.OS, b.when.OS),
+			cmp.Compare(a.when.Arch, b.when.Arch),
+			cmp.Compare(a.when.Libc, b.when.Libc),
+		)
+	}) {
+		files = append(files, m.files[key])
 	}
 
 	keys := slices.SortedFunc(maps.Keys(m.settings), func(a, b [3]string) int {
@@ -275,7 +292,7 @@ func (m *merger) merge(l *list.List, origin, dir, from string, depth int) error 
 	}
 
 	for _, file := range l.Files {
-		m.files[file.Target] = listedFile{file: file, dir: dir}
+		m.files[fileKey{file.Target, file.When}] = listedFile{file: file, dir: dir}
 	}
 
 	return nil
