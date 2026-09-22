@@ -37,11 +37,14 @@ pipe or a CI log, each wait is one plain line, as it is with `TERM=dumb`.
 ## Colour
 
 On a terminal oku uses colour, a few glyphs, column headers and `~` for your
-home directory, and the help sorts the commands into sections. In a pipe, a CI
-log or with `TERM=dumb` the same commands print plain text with no header, so
+home directory, and the help sorts the commands into sections. A table fits
+the terminal: its last column wraps under itself, oku cuts a column that must
+give room and ends it with `…`, and under 60 columns each row prints as a block
+of label and value lines. `--json` always has the full values. In a pipe, a CI log or with
+`TERM=dumb` the same commands print plain text with no header and no cut, so
 what a script reads never depends on where it runs. `NO_COLOR=1` turns colour
 off on a terminal too, and `FORCE_COLOR=1` turns it on for a pipe, such as a
-pager.
+pager, where `COLUMNS` sets the width.
 
 ## JSON output
 
@@ -340,8 +343,9 @@ After the summary, output is either `already in sync` or a line such as
 settings appear in it when the list has any. The summary has one line per package that
 changed: a fresh install, `ripgrep 14.1.1 -> 15.2.0` for a new version, and a
 note for a rebuild, a manifest or checksum change, a pin for another platform,
-or a package that left the list. On a terminal each line starts with a glyph:
-`+` new, `↑` new version, `~` rebuilt or changed, `·` pinned only, `-` removed.
+or a package that left the list. On a terminal each package prints its line
+the moment it finishes, above the waits still running, with a green `✓`, a
+dim `·` for a pin on another platform, and a red `-` for a package that left.
 
 Before the summary, one line reports each file, secret, setting, app, font or
 service the sync placed, changed or removed, such as `wrote ~/.config/nvim`,

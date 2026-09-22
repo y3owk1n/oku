@@ -2,6 +2,7 @@ package ui_test
 
 import (
 	"bytes"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -78,4 +79,57 @@ func TestNoColorWins(t *testing.T) {
 	if ui.For(&bytes.Buffer{}).On() {
 		t.Fatal("NO_COLOR should turn styling off")
 	}
+}
+
+func TestB227ATableFitsTheTerminalWidth(t *testing.T) {
+	t.Setenv("NO_COLOR", "")
+	t.Setenv("FORCE_COLOR", "1")
+
+	t.Run("the last column wraps and a wide one is cut", func(t *testing.T) {
+		t.Setenv("COLUMNS", "60")
+
+		var out bytes.Buffer
+
+		s := ui.For(&out)
+		tab := s.Table("name", "path", "changes")
+		tab.Row("fd", strings.Repeat("p", 40), "one two three four five six seven eight nine ten eleven twelve")
+
+		if err := tab.Write(&out); err != nil {
+			t.Fatal(err)
+		}
+
+		plain := regexp.MustCompile("\x1b\\[[0-9]+m").ReplaceAllString(out.String(), "")
+
+		for _, line := range strings.Split(strings.TrimRight(plain, "\n"), "\n") {
+			if n := len([]rune(line)); n > 60 {
+				t.Fatalf("a line is %d columns wide:\n%s", n, out.String())
+			}
+		}
+
+		if !strings.Contains(out.String(), "…") || strings.Count(out.String(), "\n") < 3 {
+			t.Fatalf("the wide column should be cut and the last one wrapped:\n%s", out.String())
+		}
+	})
+
+	t.Run("a narrow terminal stacks each row", func(t *testing.T) {
+		t.Setenv("COLUMNS", "40")
+
+		var out bytes.Buffer
+
+		s := ui.For(&out)
+		tab := s.Table("name", "version", "ref")
+		tab.Row("fd", "10.5.0", "github:sharkdp/fd")
+		tab.Row("rg", "15.2.0", "github:BurntSushi/ripgrep")
+
+		if err := tab.Write(&out); err != nil {
+			t.Fatal(err)
+		}
+
+		plain := regexp.MustCompile("\x1b\\[[0-9]+m").ReplaceAllString(out.String(), "")
+		want := "name     fd\nversion  10.5.0\nref      github:sharkdp/fd\n\nname     rg\n"
+
+		if !strings.HasPrefix(plain, want) {
+			t.Fatalf("stacked table:\n%s", plain)
+		}
+	})
 }

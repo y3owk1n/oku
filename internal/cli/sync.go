@@ -20,6 +20,7 @@ import (
 	"github.com/y3owk1n/oku/internal/lock"
 	"github.com/y3owk1n/oku/internal/platform"
 	"github.com/y3owk1n/oku/internal/profile"
+	"github.com/y3owk1n/oku/internal/status"
 	"github.com/y3owk1n/oku/internal/store"
 	"github.com/y3owk1n/oku/internal/ui"
 )
@@ -189,16 +190,6 @@ func reconcile(
 		return err
 	}
 
-	// job is one package to install, and what install gave for it.
-	type job struct {
-		name          string
-		req           request
-		fresh         bool
-		locksManifest bool
-		got           installed
-		err           error
-	}
-
 	var (
 		jobs []*job
 		deps = newDepCache()
@@ -283,7 +274,19 @@ func reconcile(
 		wg     sync.WaitGroup
 		failed atomic.Pointer[job]
 		slots  = make(chan struct{}, limit)
+		style  = ui.For(out)
+		// A terminal gets each package's row as it finishes, above the waits
+		// that are still running, with the names aligned. A pipe gets the
+		// table at the end, as before.
+		live      = style.On()
+		liveOut   = status.Writer(ctx, out)
+		liveMu    sync.Mutex
+		nameWidth = 0
 	)
+
+	for _, j := range jobs {
+		nameWidth = max(nameWidth, len(j.name))
+	}
 
 	for _, j := range jobs {
 		wg.Add(1)
@@ -301,6 +304,16 @@ func reconcile(
 			j.got, j.err = e.install(ctx, opts, j.req)
 			if j.err != nil && failed.CompareAndSwap(nil, j) {
 				cancel()
+			}
+
+			if j.err != nil || !live {
+				return
+			}
+
+			if kind, version, note := j.row(style, host); kind != "" {
+				liveMu.Lock()
+				fmt.Fprintln(liveOut, liveRow(style, nameWidth, kind, j.name, version, note))
+				liveMu.Unlock()
 			}
 		}()
 	}
@@ -324,13 +337,12 @@ func reconcile(
 
 	var (
 		pkgs    []profile.Package
-		style   = ui.For(out)
 		summary = style.Table("", "package", "version", "")
 	)
 
 	for _, j := range jobs {
-		name, r, previous := j.name, j.req.ref, j.req.previous
-		fresh, locksManifest := j.fresh, j.locksManifest
+		name, r := j.name, j.req.ref
+		fresh := j.fresh
 		got, err := j.got, j.err
 
 		switch {
@@ -349,29 +361,8 @@ func reconcile(
 			)
 		}
 
-		version := got.lock.Version
-
-		switch {
-		case j.req.rebuild:
-			syncRow(style, summary, "~", name, version, "built again")
-		case j.req.lockOnly:
-			syncRow(
-				style,
-				summary,
-				"·",
-				name,
-				version,
-				"pinned and not installed on "+host.String(),
-			)
-		case !locksManifest:
-			syncRow(style, summary, "+", name, version, "")
-		case previous.Version != version:
-			syncRow(style, summary, "^", name, previous.Version+" "+style.Arrow()+" "+version, "")
-		case previous.ManifestSHA256 != got.lock.ManifestSHA256:
-			syncRow(style, summary, "~", name, version, "manifest changed")
-		case previous.Platforms[host.String()] != (lock.Platform{}) &&
-			previous.Platforms[host.String()].SHA256 != got.lock.Platforms[host.String()].SHA256:
-			syncRow(style, summary, "~", name, version, "checksum changed")
+		if kind, version, note := j.row(style, host); kind != "" && !live {
+			syncRow(style, summary, kind, name, version, note)
 		}
 
 		reportInferred(out, got, flags.verbose)
@@ -390,7 +381,13 @@ func reconcile(
 	// A dry run says "would remove" further down, so it needs no row here.
 	if dryRun, _ := cmd.Flags().GetBool(dryRunFlag); !dryRun {
 		for _, pkg := range have {
-			if _, ok := wanted[pkg.Name]; !ok {
+			if _, ok := wanted[pkg.Name]; ok {
+				continue
+			}
+
+			if live {
+				fmt.Fprintln(out, liveRow(style, nameWidth, "-", pkg.Name, pkg.Version, "removed"))
+			} else {
 				syncRow(style, summary, "-", pkg.Name, pkg.Version, "removed")
 			}
 		}
@@ -506,26 +503,72 @@ func buildLog(cmd *cobra.Command, flags *buildFlags) io.Writer {
 	return nil
 }
 
-// syncRow adds one changed package to the summary. On a terminal the row
-// starts with a glyph for the kind of change: "+" for a fresh resolve, "^" for
-// a version change, "~" for a rebuild, "·" for a pin on another platform, "-"
-// for a package the list no longer names. In a pipe the row is the one line
-// sync always printed, "name version, note".
-func syncRow(s ui.Style, tab *ui.Table, kind, name, version, note string) {
-	if !s.On() {
-		line := name + " " + version
-		if note != "" {
-			line += ", " + note
-		}
+// job is one package to install, and what install gave for it.
+type job struct {
+	name          string
+	req           request
+	fresh         bool
+	locksManifest bool
+	got           installed
+	err           error
+}
 
-		tab.Row(line)
+// row says what sync did with the package: the kind of change, the version
+// and a note. The kind is "+" for a fresh resolve, "^" for a version change,
+// "~" for a rebuild, "·" for a pin on another platform, and "" when nothing
+// changed.
+func (j *job) row(s ui.Style, host platform.Platform) (kind, version, note string) {
+	previous, got := j.req.previous, j.got
+	version = got.lock.Version
 
-		return
+	switch {
+	case j.req.rebuild:
+		return "~", version, "built again"
+	case j.req.lockOnly:
+		return "·", version, "pinned and not installed on " + host.String()
+	case !j.locksManifest:
+		return "+", version, ""
+	case previous.Version != version:
+		return "^", previous.Version + " " + s.Arrow() + " " + version, ""
+	case previous.ManifestSHA256 != got.lock.ManifestSHA256:
+		return "~", version, "manifest changed"
+	case previous.Platforms[host.String()] != (lock.Platform{}) &&
+		previous.Platforms[host.String()].SHA256 != got.lock.Platforms[host.String()].SHA256:
+		return "~", version, "checksum changed"
 	}
 
-	glyph := map[string]string{
-		"+": s.Good("+"), "^": s.Accent("↑"), "~": s.Warn("~"), "·": s.Dim("·"), "-": s.Bad("-"),
-	}[kind]
+	return "", "", ""
+}
 
-	tab.Styled([]string{glyph, name, version, note}, nil, s.Bold, nil, s.Dim)
+// syncRow adds one changed package to the summary that a pipe gets at the end:
+// "name version, note", the one line sync always printed.
+func syncRow(_ ui.Style, tab *ui.Table, _, name, version, note string) {
+	line := name + " " + version
+	if note != "" {
+		line += ", " + note
+	}
+
+	tab.Row(line)
+}
+
+// liveRow is the line a terminal gets when a package finishes, in the style
+// of a package manager's install log: a green check for a package that is
+// installed, a dim dot for one pinned for another platform, a red minus for
+// one that left. The name is padded to the longest one, so the rows align.
+func liveRow(s ui.Style, nameWidth int, kind, name, version, note string) string {
+	glyph := s.Good(s.Pick("✓", "ok"))
+
+	switch kind {
+	case "·":
+		glyph = s.Dim("·")
+	case "-":
+		glyph = s.Bad("-")
+	}
+
+	line := glyph + " " + s.Bold(name) + strings.Repeat(" ", max(nameWidth-len(name), 0)) + "  " + version
+	if note != "" {
+		line += "  " + s.Dim(note)
+	}
+
+	return line
 }

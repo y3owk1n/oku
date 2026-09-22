@@ -23,6 +23,17 @@ order step in `prd/product.md`.
   path stays until `gc`.
 - B195 [1] `oku remove` takes several names and drops them in one generation.
   A name that is not installed stops the command before anything changes.
+- B227 [1] On a terminal a table fits the width: the last column wraps under
+  itself, oku cuts another column that must give room and ends it with an
+  ellipsis, and under 60 columns each row prints as a block of label and
+  value lines. A pipe gets the same text as before.
+- B228 [1] On a terminal `sync` and `update` print a row for each package as
+  it finishes, above the waits still running: a green check with the name,
+  version and note, a dim dot for a pin on another platform, a red minus for a
+  package that left. In a pipe the summary table at the end is unchanged.
+- B229 [1] Once the user answers a build approval, the prompt goes and one
+  line stays: a check with `approved <name> <version>`, or an x with
+  `rejected <name> <version>`.
 - B196 [1] `oku which <program>` names the package and version that provide a
   program in the profile and the file in the store it runs. Inside a project
   it looks in the project's profile, then in the global one. It warns when

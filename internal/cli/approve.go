@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
+	"io"
 	"maps"
 	"os"
 	"slices"
@@ -66,8 +67,14 @@ func (e env) approver(
 			// question.
 			defer status.Pause(cmd.Context())()
 
-			out := cmd.OutOrStdout()
-			s := ui.For(out)
+			// The block goes to a buffer first, so that oku knows how many lines to
+			// erase once the user answered.
+			terminal := cmd.OutOrStdout()
+			s := ui.For(terminal)
+
+			var block strings.Builder
+
+			out := io.Writer(&block)
 
 			if a != nil {
 				fmt.Fprintf(
@@ -130,6 +137,8 @@ func (e env) approver(
 			}
 
 			if !interactive(cmd, opts) {
+				fmt.Fprint(terminal, block.String())
+
 				return fmt.Errorf(
 					"%s needs approval to run %s, and this is not a terminal\npass --yes to approve",
 					m.Package.Name,
@@ -138,11 +147,30 @@ func (e env) approver(
 			}
 
 			fmt.Fprint(out, "\n"+s.Bold(question)+" [y/N] ")
+			fmt.Fprint(terminal, block.String())
 
 			answer, _ := bufio.NewReader(cmd.InOrStdin()).ReadString('\n')
-			if a := strings.ToLower(strings.TrimSpace(answer)); a != "y" && a != "yes" {
+			approved := slices.Contains(
+				[]string{"y", "yes"}, strings.ToLower(strings.TrimSpace(answer)),
+			)
+
+			// The answer took its own line. The block stays only while it is
+			// asked, and one line records what the user decided.
+			s.Erase(terminal, s.Lines(block.String()+answer))
+
+			if !approved {
+				fmt.Fprintf(
+					terminal, "%s rejected %s %s\n",
+					s.Bad(s.Pick("✗", "x")), m.Package.Name, m.Version.Value,
+				)
+
 				return errors.New("not approved, nothing was built")
 			}
+
+			fmt.Fprintf(
+				terminal, "%s approved %s %s\n",
+				s.Good(s.Pick("✓", "ok")), m.Package.Name, m.Version.Value,
+			)
 		}
 
 		return approvals.Add(m.Package.Name, m.SHA256)
