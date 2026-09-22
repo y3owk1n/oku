@@ -2050,7 +2050,7 @@ func TestB26InferenceWithoutAHostAssetListsWhatItSaw(t *testing.T) {
 
 	inferServer(t, &m, map[string]string{
 		"tool-v1.4.0-riscv64-plan9.tar.gz": archive,
-		"tool-v1.4.0.deb":                  archive,
+		"tool-v1.4.0.vsix":                 archive,
 	})
 
 	_, err := m.run(t, "", "add", "github:owner/tool", "--verbose")
@@ -2058,7 +2058,7 @@ func TestB26InferenceWithoutAHostAssetListsWhatItSaw(t *testing.T) {
 		t.Fatal("add succeeded without an asset for this machine")
 	}
 
-	for _, want := range []string{platform.Host().String(), "tool-v1.4.0-riscv64-plan9.tar.gz", "tool-v1.4.0.deb"} {
+	for _, want := range []string{platform.Host().String(), "tool-v1.4.0-riscv64-plan9.tar.gz", "tool-v1.4.0.vsix"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Fatalf("error lacks %q: %v", want, err)
 		}
