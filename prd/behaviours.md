@@ -61,6 +61,8 @@ order step in `prd/product.md`.
 - B242 [1] When several packages no longer match `oku.lock`, `sync` and
   `update` finish the others, list every drifted package, and end with one
   `oku update` that names them all, with the names the command was given.
+  When a terminal already got a checked row, the error says that nothing was
+  installed.
 - B237 [1] On a terminal each `command` in a hint, a note, an error or a
   `doctor` line is in colour without its backticks, and the lines of an
   error after the first are not dimmed. A pipe keeps the backticks.
