@@ -373,6 +373,11 @@ order step in `prd/product.md`.
 - B50 [6] On Linux and macOS a `run` step cannot reach the network and cannot
   read the user's home directory. On a host with no sandbox oku builds and
   prints a warning that names the reason.
+- B248 [6] On Linux and macOS a `run` step cannot write outside its source
+  directory, its temporary `HOME` and `TMPDIR` and `{{prefix}}`: not to
+  another package in the store, and not to a directory the user can write to.
+- B249 [6] On Linux a `run` step sees no `/run/user`. On macOS it cannot run
+  `launchctl` or open an app.
 - B51 [6] A `fetch` step without sha256 fails lint. With one, it may download.
 - B52 [6] A `vendor` step's output hash is pinned in the lock. A later
   mismatch fails the build and keeps nothing in the store. `update` accepts
