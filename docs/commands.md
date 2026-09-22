@@ -100,7 +100,7 @@ Adding a package that is already installed replaces it.
 | `--from-source` | Builds from source even when a prebuilt download fits. `oku.lock` records the choice, so `oku sync` builds too. |
 | `--asset <glob>` | For a repo with no manifest, the release asset to use on this machine. The glob must name exactly one asset. See [Inferred manifests](manifest.md#inferred-manifests). |
 | `--bin <name>` | For a repo with no manifest, or a URL of the download itself, the file name of the program inside it. |
-| `--yes`, `-y` | Approves the manifest's build commands without asking, see [Build commands](trust.md#build-commands). |
+| `--yes`, `-y` | Approves the manifest's build commands, or the command that generates an artifact's completions, without asking, see [Build commands](trust.md#build-commands). |
 | `--accept-key` | Accepts a manifest whose `signing_key` differs from the one in `oku.lock`, see [Signing keys](trust.md#signing-keys). |
 | `--verbose`, `-v` | Shows the output of build commands as they run, and prints a manifest that oku inferred. |
 

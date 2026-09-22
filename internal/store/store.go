@@ -25,6 +25,7 @@ import (
 	"github.com/y3owk1n/oku/internal/infer"
 	"github.com/y3owk1n/oku/internal/manifest"
 	"github.com/y3owk1n/oku/internal/platform"
+	"github.com/y3owk1n/oku/internal/sandbox"
 	"github.com/y3owk1n/oku/internal/status"
 )
 
@@ -237,6 +238,12 @@ func (s *Store) Realize(
 		return Realized{}, err
 	}
 
+	if a.Completions.Generate != "" {
+		if realized.Unsandboxed, err = s.generateArtifactCompletions(ctx, a, tmp); err != nil {
+			return Realized{}, fmt.Errorf("%s: %w", m.Package.Name, err)
+		}
+	}
+
 	meta, err := toml.Marshal(Meta{
 		Name:      m.Package.Name,
 		Version:   m.Version.Value,
@@ -260,6 +267,38 @@ func (s *Store) Realize(
 	}
 
 	return realized, nil
+}
+
+// generateArtifactCompletions runs the artifact's completions command in the
+// unpacked package under tmp, with the package's own bin first on PATH, and
+// writes the files under tmp/share/completions.
+func (s *Store) generateArtifactCompletions(
+	ctx context.Context,
+	a manifest.Artifact,
+	tmp string,
+) (string, error) {
+	work, err := os.MkdirTemp("", "oku-completions-")
+	if err != nil {
+		return "", err
+	}
+	defer os.RemoveAll(work)
+
+	for _, dir := range []string{filepath.Join(work, "home"), filepath.Join(work, "tmp")} {
+		if err := os.Mkdir(dir, 0o755); err != nil {
+			return "", err
+		}
+	}
+
+	systemDirs, env := hostEnv(filepath.Join(work, "home"), filepath.Join(work, "tmp"))
+	env = append(env, "PATH="+joinPaths(append([]string{filepath.Join(tmp, "bin")}, systemDirs...)))
+
+	home, _ := os.UserHomeDir()
+	box := sandbox.Spec{Home: home, Readable: []string{s.dir}, Writable: []string{tmp, work}}
+
+	done := status.Start(ctx, "generating completions")
+	defer done()
+
+	return generateCompletions(ctx, a.Completions, filepath.Join(tmp, "pkg"), tmp, env, box, nil)
 }
 
 // vouched checks download against the integrity value of a and the signing key
@@ -351,7 +390,7 @@ func unpack(download, tmp string, a manifest.Artifact) error {
 		return err
 	}
 
-	if len(a.Bin)+len(a.Wrap) != 1 || len(a.Man)+len(a.Completions) > 0 {
+	if len(a.Bin)+len(a.Wrap) != 1 || len(a.Man) > 0 || len(a.Completions.Paths) > 0 {
 		return errors.New(
 			"the download is a single file, so the artifact must list exactly one bin and nothing else",
 		)
@@ -441,9 +480,13 @@ func linkOutputs(tmp string, a manifest.Artifact) error {
 		}
 	}
 
-	for shell, entry := range a.Completions {
-		dest := path.Join("share", "completions", shell, path.Base(entry))
-		if err := link(tmp, entry, dest); err != nil {
+	completions, err := completionPaths(a.Completions, filepath.Join(tmp, "pkg"))
+	if err != nil {
+		return err
+	}
+
+	for shell, entry := range completions {
+		if err := link(tmp, entry, completionDest(shell, entry)); err != nil {
 			return fmt.Errorf("completions.%s %q: %w", shell, entry, err)
 		}
 	}

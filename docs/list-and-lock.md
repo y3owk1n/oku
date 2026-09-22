@@ -386,7 +386,8 @@ Keys of a `[[package]]` entry:
 | `dep` | The packages this one depends on, pinned the same way. |
 
 A platform entry has `strategy`, which is `artifact` or `build`. An artifact
-also has `url` and `sha256`. A build has `vendor_sha256` when it has vendor
+also has `url` and `sha256`, and `commands = true` when the manifest runs the
+download to [generate its completions](manifest.md#completions). A build has `vendor_sha256` when it has vendor
 steps, and `impure = true` when one of its steps used `network = true`. oku keeps
 these beside the build in the store, so `oku update` of a build that did not
 change writes the same lock.

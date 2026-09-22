@@ -2865,7 +2865,15 @@ install = { bin = [{ name = "scripted", run = "{{dep.interp.prefix}}/bin/node", 
 
 	marker := func() bool {
 		found, err := filepath.Glob(
-			filepath.Join(m.data, "store", "*", "lib", "node_modules", "left-pad", "postinstall-ran"),
+			filepath.Join(
+				m.data,
+				"store",
+				"*",
+				"lib",
+				"node_modules",
+				"left-pad",
+				"postinstall-ran",
+			),
 		)
 		must(t, err)
 
@@ -6387,5 +6395,150 @@ func TestB196WhichNamesThePackageOfAProgram(t *testing.T) {
 
 	if !strings.Contains(out, "tool 1.2.3") {
 		t.Fatalf("which inside a project:\n%s", out)
+	}
+}
+
+// completer is a program that prints completions for the shell it is given, and
+// fails on any other subcommand.
+const completer = "#!/bin/sh\n" +
+	"[ \"$1\" = completions ] || { echo \"no such subcommand: $1\" >&2; exit 3; }\n" +
+	"echo \"complete $2\"\n"
+
+func TestB214ArtifactCompletionsAreGeneratedByRunningTheDownload(t *testing.T) {
+	m := newMachine(t)
+	ref := m.manifest(
+		t, "tool", map[string]string{"tool": completer},
+		"bin = [\"tool\"]\ncompletions = { generate = \"tool completions {{shell}}\" }",
+	)
+
+	out, err := m.run(t, "", "add", ref)
+	if err == nil || !strings.Contains(err.Error(), "--yes") ||
+		!strings.Contains(out, "tool completions {{shell}}") {
+		t.Fatalf("want the command shown and a refusal that names --yes, got %v\n%s", err, out)
+	}
+
+	if len(m.storeEntries(t)) != 0 {
+		t.Fatal("the download ran without approval")
+	}
+
+	if out, err := m.run(t, "", "add", ref, "--yes"); err != nil {
+		t.Fatalf("add --yes: %v\n%s", err, out)
+	}
+
+	for shell, file := range map[string]string{
+		"fish": "tool.fish", "zsh": "_tool", "bash": "tool.bash",
+	} {
+		body, err := os.ReadFile(m.profile("share", "completions", shell, file))
+		if err != nil || string(body) != "complete "+shell+"\n" {
+			t.Fatalf("%s completions: %v %q", shell, err, body)
+		}
+	}
+
+	locked, err := os.ReadFile(filepath.Join(m.config, "oku.lock"))
+	must(t, err)
+
+	if !strings.Contains(string(locked), "commands = true") {
+		t.Fatalf("the lock does not say the manifest ran a command:\n%s", locked)
+	}
+}
+
+func TestB215FailedCompletionsCommandFailsTheInstallWithItsOutput(t *testing.T) {
+	m := newMachine(t)
+
+	for _, tc := range []struct{ generate, want string }{
+		{"tool broken {{shell}}", "no such subcommand: broken"},
+		{"true", "printed nothing"},
+	} {
+		ref := m.manifest(
+			t, "tool", map[string]string{"tool": completer},
+			"bin = [\"tool\"]\ncompletions = { generate = \""+tc.generate+"\" }",
+		)
+
+		_, err := m.run(t, "", "add", ref, "--yes")
+		if err == nil || !strings.Contains(err.Error(), tc.want) ||
+			!strings.Contains(err.Error(), strings.ReplaceAll(tc.generate, "{{shell}}", "fish")) {
+			t.Fatalf("generate = %q: want the command and %q, got %v", tc.generate, tc.want, err)
+		}
+
+		if len(m.storeEntries(t)) != 0 {
+			t.Fatal("a package whose completions failed entered the store")
+		}
+	}
+}
+
+func TestB216CompletionsDirectoryNamesTheConventionalFiles(t *testing.T) {
+	m := newMachine(t)
+	ref := m.manifest(
+		t, "tool",
+		map[string]string{"dir/tool": script, "c/tool.fish": "fish", "c/_tool": "zsh"},
+		"bin = [\"dir/tool\"]\ncompletions = \"c/\"",
+	)
+
+	out, err := m.run(t, "", "add", ref)
+	if err != nil || strings.Contains(out, "[y/N]") {
+		t.Fatalf("add: %v\n%s", err, out)
+	}
+
+	if !exists(m.profile("share", "completions", "fish", "tool.fish")) ||
+		!exists(m.profile("share", "completions", "zsh", "_tool")) ||
+		exists(m.profile("share", "completions", "bash")) {
+		t.Fatal("want fish and zsh linked and bash skipped")
+	}
+
+	none := m.manifest(
+		t, "none", map[string]string{"none": script}, "bin = [\"none\"]\ncompletions = \"c/\"",
+	)
+	if _, err := m.run(t, "", "add", none); err == nil ||
+		!strings.Contains(err.Error(), "no none.fish, _none or none.bash") {
+		t.Fatalf("a directory with none of the files was accepted: %v", err)
+	}
+}
+
+func TestB217InstallStepGeneratesCompletionsFromTheBuiltProgram(t *testing.T) {
+	m := newMachine(t)
+	source := filepath.Join(m.fixtures, "completer")
+	must(t, os.WriteFile(source, []byte(completer), 0o755))
+
+	ref := m.buildManifest(
+		t, false, "",
+		fmt.Sprintf("[[build.step]]\nrun = \"cp %s tool\"\nshell = \"sh\"\n", source)+
+			"[[build.step]]\ninstall = { bin = [\"tool\"], "+
+			"completions = { generate = \"tool completions {{shell}}\" } }\n",
+	)
+
+	out, err := m.run(t, "", "add", ref)
+	if err == nil || !strings.Contains(out, "generates completions") {
+		t.Fatalf("want the install step in the approval prompt, got %v\n%s", err, out)
+	}
+
+	if out, err := m.run(t, "", "add", ref, "--yes"); err != nil {
+		t.Fatalf("add --yes: %v\n%s", err, out)
+	}
+
+	body, err := os.ReadFile(m.profile("share", "completions", "zsh", "_tool"))
+	if err != nil || string(body) != "complete zsh\n" {
+		t.Fatalf("zsh completions: %v %q", err, body)
+	}
+}
+
+func TestB218LintRejectsCompletionPathsTogetherWithGenerate(t *testing.T) {
+	m := newMachine(t)
+	path := filepath.Join(m.fixtures, "tool.toml")
+
+	for artifact, want := range map[string]string{
+		"completions = { fish = \"c/tool.fish\", generate = \"tool completions {{shell}}\" }": "takes no shell paths",
+		"completions = { name = \"tool\", fish = \"c/tool.fish\" }":                           "name goes with generate",
+		"completions = { generate = \"tool completions {{sh}}\" }":                            "{{sh}}",
+	} {
+		must(t, os.WriteFile(path, []byte(
+			"[package]\nname = \"tool\"\ndescription = \"a tool\"\n[version]\nvalue = \"1.0.0\"\n"+
+				"[[artifact]]\nurl = \"https://example.com/tool.tar.gz\"\nsha256 = \""+
+				strings.Repeat("a", 64)+"\"\nbin = [\"tool\"]\n"+artifact+"\n",
+		), 0o644))
+
+		out, err := m.run(t, "", "manifest", "lint", path)
+		if err == nil || !strings.Contains(out, want) {
+			t.Errorf("lint accepted %s, or did not say %q: %v\n%s", artifact, want, err, out)
+		}
 	}
 }
