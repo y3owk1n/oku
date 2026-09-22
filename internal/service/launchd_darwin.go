@@ -160,6 +160,8 @@ func (l *launchd) Status(ctx context.Context, d Definition) (Status, error) {
 	return status, nil
 }
 
+func (l *launchd) LogHint(d Definition) string { return "look at " + d.LogFile }
+
 func (l *launchd) Logs(_ context.Context, d Definition, lines int) (string, error) {
 	data, err := os.ReadFile(d.LogFile)
 	if os.IsNotExist(err) {

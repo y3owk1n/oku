@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -41,6 +42,9 @@ type Options struct {
 	// Services replaces the OS's service manager. Tests set it, because a real
 	// one changes the user's login session.
 	Services service.Manager
+	// Sleep replaces time.Sleep where a command waits, such as the check after
+	// "service start". Tests set it to a no-op.
+	Sleep func(time.Duration)
 	// ReleaseRepo and ReleaseKey replace the GitHub repo that "oku self update"
 	// reads and the minisign key it trusts. Tests set them.
 	ReleaseRepo string

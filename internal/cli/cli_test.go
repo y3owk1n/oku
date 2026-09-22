@@ -25,6 +25,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/klauspost/compress/zstd"
 	"github.com/ulikunitz/xz"
@@ -56,6 +57,9 @@ type fakeServices struct {
 	dieInInstall bool
 	// unavailable is why the machine runs no services, or empty.
 	unavailable string
+	// exitAfterStart names the services that stop again on the status call
+	// after Start, like a program that finds a stale socket.
+	exitAfterStart map[string]bool
 }
 
 func (f *fakeServices) Unavailable() string { return f.unavailable }
@@ -103,7 +107,12 @@ func (f *fakeServices) Status(_ context.Context, d service.Definition) (service.
 		return service.Status{}, nil
 	}
 
-	return service.Status{Installed: true, Enabled: s.enabled, Running: s.running}, nil
+	status := service.Status{Installed: true, Enabled: s.enabled, Running: s.running}
+	if f.exitAfterStart[d.Name] {
+		s.running = false
+	}
+
+	return status, nil
 }
 
 func (f *fakeServices) Logs(context.Context, service.Definition, int) (string, error) {
@@ -112,6 +121,10 @@ func (f *fakeServices) Logs(context.Context, service.Definition, int) (string, e
 
 func (f *fakeServices) File(d service.Definition) string {
 	return "/fake/services/" + d.Name
+}
+
+func (f *fakeServices) LogHint(d service.Definition) string {
+	return "look at /fake/logs/" + d.Name + ".log"
 }
 
 // TestMain makes the test binary run as oku when the build sandbox starts it. On
@@ -157,6 +170,7 @@ func newMachine(t *testing.T) machine {
 	// runs the tests.
 	m.services = &fakeServices{state: map[string]*fakeService{}}
 	m.opts.Services = m.services
+	m.opts.Sleep = func(time.Duration) {}
 
 	// oku places apps and fonts under HOME, so tests get their own.
 	t.Setenv("HOME", filepath.Join(root, "home"))
@@ -4877,6 +4891,39 @@ func TestB74ServiceCommandsControlTheService(t *testing.T) {
 	_, err = m.run(t, "", "service", "start", "nope")
 	if err == nil || !strings.Contains(err.Error(), "food") {
 		t.Fatalf("want an unknown service to fail and name the known ones, got %v", err)
+	}
+}
+
+func TestB203StartReportsAServiceThatExitsRightAway(t *testing.T) {
+	m := newMachine(t)
+
+	_, err := m.run(t, "", "add", m.serviceManifest(t))
+	must(t, err)
+
+	// The first status call after Start reports running, the next one stopped,
+	// which is what a real manager shows for a program that exits at once.
+	m.services.exitAfterStart = map[string]bool{"food": true}
+
+	for _, action := range []string{"start", "restart"} {
+		m.services.state["food"].running = false
+
+		out, err := m.run(t, "", "service", action, "food")
+		if err == nil || strings.Contains(out, "running") {
+			t.Fatalf("service %s: want an error for a service that exited, got %v\n%s", action, err, out)
+		}
+
+		want := "food started and then exited, look at /fake/logs/food.log"
+		if err.Error() != want {
+			t.Fatalf("service %s: want %q, got %q", action, want, err.Error())
+		}
+	}
+
+	// status keeps reporting what the manager says, with no error.
+	m.services.state["food"].running = false
+
+	out, err := m.run(t, "", "service", "status", "food")
+	if err != nil || !strings.Contains(out, "food: stopped") {
+		t.Fatalf("service status: %v\n%s", err, out)
 	}
 }
 

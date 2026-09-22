@@ -6,7 +6,13 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 )
+
+// StartWait is how long "oku service start" and "restart" wait before they
+// check that the program still runs, so a program that exits right after start
+// is reported as exited and not as running.
+const StartWait = time.Second
 
 // Definition is one service of an installed package.
 type Definition struct {
@@ -56,6 +62,9 @@ type Manager interface {
 	Logs(ctx context.Context, d Definition, lines int) (string, error)
 	// File returns the definition file the manager writes for d.
 	File(d Definition) string
+	// LogHint says where to look when d exits right after start, such as its
+	// log file or a journalctl command. It is empty when the OS keeps no log.
+	LogHint(d Definition) string
 }
 
 func commandError(name string, args []string, out []byte, err error) error {

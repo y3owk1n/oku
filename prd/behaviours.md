@@ -328,6 +328,10 @@ order step in `prd/product.md`.
   the global profile on its `PATH`, unless its `env` sets `PATH`.
 - B74 [8] `oku service start|stop|restart|status|logs` behave the same on all
   three OSes.
+- B203 [8] `oku service start` and `restart` look at the service again one
+  second after starting it. A program that has exited by then is reported as
+  `<name> started and then exited` with where its log is, and the command
+  fails. `status` reports what the manager says and never fails for that.
 - B75 [8] System scope needs `--system`. oku names what it will write and
   prompts before elevating. Without the flag oku never elevates. It leaves
   system scope unchanged and lists what is pending.

@@ -115,6 +115,10 @@ func (s *systemd) Status(ctx context.Context, d Definition) (Status, error) {
 	return status, nil
 }
 
+func (s *systemd) LogHint(d Definition) string {
+	return "run \"journalctl " + s.scope + " -u " + s.unit(d) + "\""
+}
+
 func (s *systemd) Logs(ctx context.Context, d Definition, lines int) (string, error) {
 	args := []string{
 		s.scope,
