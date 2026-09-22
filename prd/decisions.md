@@ -1045,3 +1045,16 @@ build on a machine with a Nix profile or a Homebrew `bin` saw that directory's
 `python`, `make` and everything else, and built differently from one without.
 A link keeps the tool in its own directory, so a compiler driver still finds
 its assembler and linker beside itself, which is why the link is not a copy.
+
+## D72. An artifact may run its download to generate completions
+
+`completions = { generate = "..." }` runs the command once per shell after
+unpacking, under the build approval, and `oku.lock` records `commands = true`
+for the platform. Why: many releases ship a bare binary that prints its own
+completions and no files. The approval is the same prompt as a build because
+both execute what oku downloaded. The lock flag is a record, not a check: a
+changed template is a changed manifest hash, which already stops `oku sync`.
+
+`completions = "dir/"` links the conventional files that exist and fails only
+when none do. Why: lint cannot see the archive, and releases ship two of the
+three often enough that a missing one must not fail the install.
