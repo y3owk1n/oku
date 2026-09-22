@@ -1342,12 +1342,15 @@ func TestB19AddStoresAFileInsideTheProjectRelativeToIt(t *testing.T) {
 }
 
 // releaseServer fakes the GitHub releases API for owner/tool. The test changes
-// tags between calls, and hits counts the requests.
+// tags between calls, and hits counts the requests. Like GitHub it sends an
+// ETag and answers 304 to a request whose If-None-Match holds it, and
+// unchanged counts those answers.
 type releaseServer struct {
 	*httptest.Server
 
-	tags []string
-	hits int
+	tags      []string
+	hits      int
+	unchanged int
 }
 
 func newReleaseServer(t *testing.T, tags ...string) *releaseServer {
@@ -1388,7 +1391,21 @@ func newReleaseServer(t *testing.T, tags ...string) *releaseServer {
 			))
 		}
 
-		_, _ = w.Write([]byte("[" + strings.Join(items, ",") + "]"))
+		body := "[" + strings.Join(items, ",") + "]"
+		sum := sha256.Sum256([]byte(body))
+		etag := `"` + hex.EncodeToString(sum[:8]) + `"`
+
+		w.Header().Set("ETag", etag)
+
+		if r.Header.Get("If-None-Match") == etag {
+			rs.unchanged++
+
+			w.WriteHeader(http.StatusNotModified)
+
+			return
+		}
+
+		_, _ = w.Write([]byte(body))
 	}))
 	t.Cleanup(rs.Close)
 
@@ -1476,6 +1493,56 @@ func TestB200AddFindsAVersionPastTheFirstHundredReleases(t *testing.T) {
 
 	if got := m.toolOutput(t); got != "2.0.1" {
 		t.Fatalf("add installed %s, want 2.0.1 from past the first 100 releases", got)
+	}
+}
+
+func TestB250UpdateAsksGitHubWhetherReleasesChangedAndUsesTheAnswerItHas(t *testing.T) {
+	m := newMachine(t)
+	server := newReleaseServer(t, "v1.0.0")
+	m.opts.GitHubAPI = server.URL + "/api"
+
+	ref := m.discoveredManifest(t, "1.0.0", "1.1.0")
+
+	_, err := m.run(t, "", "add", ref)
+	must(t, err)
+
+	// Nothing changed, so GitHub answers 304 and oku uses the list it kept.
+	_, err = m.run(t, "", "update")
+	must(t, err)
+
+	if server.unchanged == 0 {
+		t.Fatal("update asked for the whole release list again")
+	}
+
+	if got := m.toolOutput(t); got != "1.0.0" {
+		t.Fatalf("update after a 304 installed %s, want 1.0.0", got)
+	}
+
+	// A new release changes the answer, and update takes it.
+	server.tags = []string{"v1.1.0", "v1.0.0"}
+
+	_, err = m.run(t, "", "update")
+	must(t, err)
+
+	if got := m.toolOutput(t); got != "1.1.0" {
+		t.Fatalf("update installed %s, want the new release 1.1.0", got)
+	}
+}
+
+func TestB251AddSaysHowLongToWaitWhenGitHubAsksOkuToSlowDown(t *testing.T) {
+	m := newMachine(t)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Retry-After", "42")
+		w.WriteHeader(http.StatusTooManyRequests)
+	}))
+	t.Cleanup(server.Close)
+
+	m.opts.GitHubAPI = server.URL + "/api"
+
+	_, err := m.run(t, "", "add", m.discoveredManifest(t, "1.0.0"))
+	if err == nil || !strings.Contains(err.Error(), "try again in 42 seconds") {
+		t.Fatalf("want an error that says to wait 42 seconds, got %v", err)
 	}
 }
 

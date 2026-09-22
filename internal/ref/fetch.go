@@ -45,11 +45,12 @@ type Fetched struct {
 // ErrNotFound reports that the file a ref or path names does not exist.
 var ErrNotFound = errors.New("not found")
 
-// NewFetcher returns a Fetcher that clones under cacheDir.
+// NewFetcher returns a Fetcher that clones under cacheDir and keeps the answers
+// of forge APIs there.
 func NewFetcher(cacheDir string) *Fetcher {
 	return &Fetcher{
 		HTTP:     http.DefaultClient,
-		Hosts:    forge.Hosts{HTTP: http.DefaultClient},
+		Hosts:    forge.Hosts{HTTP: forge.Revalidating(filepath.Join(cacheDir, "api"))},
 		GitCache: filepath.Join(cacheDir, "git"),
 	}
 }

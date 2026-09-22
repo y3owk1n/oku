@@ -10,8 +10,9 @@ import (
 	"time"
 )
 
-// maxBody is the most bytes a forge reads from one answer.
-const maxBody = 8 << 20
+// maxBody is the most bytes a forge reads from one answer. 100 releases of
+// astral-sh/uv, each with all its assets, were 8 MB in September 2026.
+const maxBody = 32 << 20
 
 // github is github.com or a GitHub Enterprise Server.
 type github struct {
@@ -119,9 +120,9 @@ func (g *github) Release(ctx context.Context, repo, tag string) (Release, error)
 	return found.release(), err
 }
 
-// releasePage is the releases oku asks for in one answer. A page of 100 can be
-// larger than maxBody, because every release lists all of its assets.
-const releasePage = 25
+// releasePage is the releases oku asks for in one answer, the most GitHub
+// gives. Each page is one request of the rate limit.
+const releasePage = 100
 
 // Releases reads the newest maxReleases releases, following the "next" link of
 // each page.
@@ -211,6 +212,12 @@ func (g *github) page(ctx context.Context, url, accept string) ([]byte, string, 
 		return nil, "", ErrNotFound
 	case resp.StatusCode == http.StatusForbidden && resp.Header.Get("X-RateLimit-Remaining") == "0":
 		return nil, "", fmt.Errorf("GitHub rate limit reached, set %s to raise it", g.env)
+	case resp.StatusCode == http.StatusTooManyRequests ||
+		resp.StatusCode == http.StatusForbidden && resp.Header.Get("Retry-After") != "":
+		// GitHub's secondary limit, for too many requests in a short time.
+		return nil, "", fmt.Errorf(
+			"GitHub asked oku to slow down, try again in %s seconds", resp.Header.Get("Retry-After"),
+		)
 	case resp.StatusCode != http.StatusOK:
 		return nil, "", fmt.Errorf("server returned %s", resp.Status)
 	}
