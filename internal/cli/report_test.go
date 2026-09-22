@@ -331,8 +331,8 @@ func TestB236AddTakesSeveralRefsOneGenerationEach(t *testing.T) {
 		t.Fatalf("add should add both:\n%s", out)
 	}
 
-	if strings.Count(out, "to run it") > 1 {
-		t.Fatalf("add should say how to run the programs once:\n%s", out)
+	if strings.Count(out, "to run") != 1 || !strings.Contains(out, "to run them") {
+		t.Fatalf("add should say once how to run both packages' programs:\n%s", out)
 	}
 
 	out, err = m.run(t, "", "generations", "--json")
@@ -413,5 +413,41 @@ func TestB240AnEmptyListWritesNoGenerationAndQuickRunsReadInMilliseconds(t *test
 
 	if strings.Contains(out, ", 0s\n") {
 		t.Fatalf("a quick sync should not take 0s:\n%s", out)
+	}
+}
+
+func TestB241AGenerationShowsWhatChangedFromTheOneItReplaced(t *testing.T) {
+	m := newMachine(t)
+
+	for _, name := range []string{"first", "second"} {
+		_, err := m.run(t, "", "add", m.manifest(t, name, map[string]string{name: script}, `bin = ["`+name+`"]`))
+		must(t, err)
+	}
+
+	_, err := m.run(t, "", "rollback")
+	must(t, err)
+
+	_, err = m.run(t, "", "add", m.manifest(t, "third", map[string]string{"third": script}, `bin = ["third"]`))
+	must(t, err)
+
+	out, err := m.run(t, "", "generations")
+	must(t, err)
+
+	lines := strings.Split(strings.TrimRight(out, "\n"), "\n")
+	if last := lines[len(lines)-1]; !strings.HasSuffix(last, "from 1, + third 1.2.3") {
+		t.Fatalf("generation 3 should compare with generation 1, which it replaced:\n%s", out)
+	}
+
+	out, err = m.run(t, "", "generations", "--json")
+	must(t, err)
+
+	var gens []struct {
+		Number int `json:"number"`
+		From   int `json:"from"`
+	}
+	must(t, json.Unmarshal([]byte(out), &gens))
+
+	if len(gens) != 3 || gens[1].From != 1 || gens[2].From != 1 {
+		t.Fatalf("generations --json should name the generation each replaced:\n%s", out)
 	}
 }

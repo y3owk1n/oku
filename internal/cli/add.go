@@ -52,7 +52,7 @@ one of:
 				return errors.New("--asset and --bin describe one download, so add that ref on its own")
 			}
 
-			programs := false
+			programs := 0
 
 			for _, arg := range args {
 				ran, err := runAdd(cmd, opts, arg, &flags, fromSource, enable, system, asset, bin)
@@ -60,10 +60,12 @@ one of:
 					return err
 				}
 
-				programs = programs || ran
+				if ran {
+					programs++
+				}
 			}
 
-			if !programs {
+			if programs == 0 {
 				// An app, a font or a file has nothing to run, so PATH does not matter.
 				return nil
 			}
@@ -73,7 +75,7 @@ one of:
 				return err
 			}
 
-			reportPath(cmd, opts, e)
+			reportPath(cmd, opts, e, programs)
 
 			return nil
 		},
@@ -241,10 +243,16 @@ func runAdd(
 	return len(programs) > 0, nil
 }
 
-// reportPath says how to run the programs oku added, when PATH does not have
-// the profile yet.
-func reportPath(cmd *cobra.Command, opts Options, e env) {
+// reportPath says how to run the programs of the packages oku added, when
+// PATH does not have the profile yet. packages counts the packages that have
+// programs, so that the hint says "it" or "them".
+func reportPath(cmd *cobra.Command, opts Options, e env, packages int) {
 	prof := e.profile()
+
+	them := "it"
+	if packages > 1 {
+		them = "them"
+	}
 
 	switch {
 	case slices.Contains(filepath.SplitList(os.Getenv("PATH")), prof.BinDir()):
@@ -253,9 +261,9 @@ func reportPath(cmd *cobra.Command, opts Options, e env) {
 	default:
 		// One hook line puts oku and its programs on PATH, see "oku hook --help".
 		if hint := setupHint(opts); hint != "" {
-			fmt.Fprintf(cmd.ErrOrStderr(), "to run it, %s\n", hint)
+			fmt.Fprintf(cmd.ErrOrStderr(), "to run %s, %s\n", them, hint)
 		} else {
-			fmt.Fprintf(cmd.ErrOrStderr(), "add %s to PATH to run it\n", prof.BinDir())
+			fmt.Fprintf(cmd.ErrOrStderr(), "add %s to PATH to run %s\n", prof.BinDir(), them)
 		}
 	}
 }
