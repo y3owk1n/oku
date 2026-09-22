@@ -105,8 +105,10 @@ func TestB198InferencePrefersTheSmallerAssetAndNoneNamedAsAnApp(t *testing.T) {
 	name := hostAssetName()
 	slim := strings.TrimSuffix(name, ".tar.gz") + "-slim.tar.gz"
 	appName := strings.Replace(name, "tool-", "tool-app-", 1)
+	// The same build in another format is an alternative too.
+	sevenZip := strings.TrimSuffix(name, ".tar.gz") + ".7z"
 
-	inferServer(t, &m, map[string]string{name: bundle, slim: cli, appName: app})
+	inferServer(t, &m, map[string]string{name: bundle, slim: cli, appName: app, sevenZip: cli})
 
 	out, err := m.run(t, "", "manifest", "init", "--from", "owner/tool", "-o", "-")
 	must(t, err)
@@ -116,8 +118,8 @@ func TestB198InferencePrefersTheSmallerAssetAndNoneNamedAsAnApp(t *testing.T) {
 		t.Fatalf("the %s artifact should be the smaller asset:\n%s", arch, out)
 	}
 
-	if !strings.Contains(out, "fit this machine too: "+name+", "+appName) {
-		t.Fatalf("the manifest should list the larger asset and the app after it:\n%s", out)
+	if !strings.Contains(out, "fit this machine too: "+name+", "+sevenZip+", "+appName) {
+		t.Fatalf("the manifest should list the larger asset, the 7z and the app:\n%s", out)
 	}
 }
 
