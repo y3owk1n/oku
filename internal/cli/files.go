@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io/fs"
 	"maps"
 	"os"
 	"path/filepath"
@@ -187,6 +188,18 @@ func content(
 	return text, refs, err
 }
 
+// parentMode is the mode of a directory that placing f has to create. A file
+// that only the user may read, or that holds a secret, gets a directory that
+// only the user may open, because ssh and other programs refuse a key in a directory
+// that others can read.
+func parentMode(f profile.File) fs.FileMode {
+	if len(f.Secrets) > 0 || (f.Mode != 0 && f.Mode&0o077 == 0) {
+		return 0o700
+	}
+
+	return 0o755
+}
+
 // resolveFiles turns the [files] of the merged list into the files of a
 // generation that holds pkgs. It changes nothing.
 func (e env) resolveFiles(
@@ -256,24 +269,23 @@ func (e env) resolveFiles(
 				return nil, err
 			}
 
-			sum := sha256.Sum256([]byte(path))
-
-			file := profile.File{
-				Target:  path,
-				Content: hex.EncodeToString(sum[:])[:12] + "-" + filepath.Base(path),
-				Mode:    f.file.Mode,
-				Hash:    sealedHash(text, refs),
-				Text:    []byte(text),
-				Secrets: refs,
-			}
-
 			// A file that holds a secret is for the user alone unless the list says
 			// otherwise.
-			if len(refs) > 0 && file.Mode == 0 {
-				file.Mode = 0o600
+			mode := f.file.Mode
+			if len(refs) > 0 && mode == 0 {
+				mode = 0o600
 			}
 
-			files = append(files, file)
+			sum := sha256.Sum256([]byte(path))
+
+			files = append(files, profile.File{
+				Target:  path,
+				Content: hex.EncodeToString(sum[:])[:12] + "-" + filepath.Base(path),
+				Mode:    mode,
+				Hash:    sealedHash(text, refs, mode),
+				Text:    []byte(text),
+				Secrets: refs,
+			})
 
 			continue
 		}

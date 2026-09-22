@@ -148,7 +148,7 @@ An entry holds one of `link`, `text`, `render` and `secret`, and may hold
 | `text` | The path gets this content. oku keeps the content in the generation, read-only, and the path is a symlink to it. `oku rollback` brings back the bytes of that generation. |
 | `render` | Like `text`, with the content read from a template beside the list, see [Variables and templates](#variables-and-templates). |
 | `secret` | The path gets a value that oku decrypts from a sops or an age file, see [Secrets](secrets.md). |
-| `mode` | The permission of a `text`, `render` or `secret` file, such as `"0600"`. Without it the file is read-only, and a file that holds a secret is `0600`. |
+| `mode` | The permission of a `text`, `render` or `secret` file, such as `"0600"`, or `"0755"` for a script. Without it the file is read-only, and a file that holds a secret is `0600`. A mode of `"0600"` or tighter, or a secret, makes a directory that oku has to create `0700`, see [Files and directories](files.md#outside-okus-directories). |
 | `vars` | A table of strings that overrides `[vars]` for this `text` or `render` entry, such as `vars = { font-size = "13" }`. |
 
 oku refuses a path that exists and that it did not write. It names the path and
