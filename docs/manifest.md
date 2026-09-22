@@ -724,9 +724,14 @@ How inference reads a release:
   alone, then a generic file such as `checksums.txt` or `SHA256SUMS`. It never
   takes a file that names another OS or arch. With none, the package is
   [trusted on first use](trust.md#trust-on-first-use).
-- When the install from an inferred manifest fails, the error ends with the
-  manifest oku inferred, so you can see what it tried and change the pick
-  with `--asset` or `--bin`, or write a manifest for it.
+- When the install from an inferred manifest fails, the error says which
+  asset oku chose for your machine, which other assets fit, and the
+  `oku add --asset` command that picks one. `--verbose` adds the manifest oku
+  inferred, so you can see what it tried or write a manifest of your own.
+- A release for one OS, such as a macOS app shipped as a `.dmg`, cannot pin
+  the other platforms in `[lock]`. `add` pins that OS alone and writes
+  `when = { os = "darwin" }` on the package's entry in `oku.toml`, as you
+  would for a hand-written manifest.
 - The version starts at the first digit of the tag, and everything before it
   becomes `strip_prefix`. `v1.2.0` gives `"v"` and `jq-1.8.1` gives `"jq-"`.
 - It downloads the asset for your machine and looks inside. It opens one asset

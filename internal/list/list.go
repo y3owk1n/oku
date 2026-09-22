@@ -445,7 +445,7 @@ func Delete(path, name string) error {
 func formatLine(name string, entry Entry) string {
 	value := fmt.Sprintf("%q", entry.Ref)
 
-	if entry.Version != "" || entry.Service || entry.System {
+	if entry.Version != "" || entry.Service || entry.System || entry.When != (platform.Selector{}) {
 		fields := []string{fmt.Sprintf("ref = %q", entry.Ref)}
 
 		if entry.Version != "" {
@@ -458,6 +458,10 @@ func formatLine(name string, entry Entry) string {
 
 		if entry.System {
 			fields = append(fields, "system = true")
+		}
+
+		if entry.When != (platform.Selector{}) {
+			fields = append(fields, "when = "+entry.When.TOML())
 		}
 
 		value = "{ " + strings.Join(fields, ", ") + " }"

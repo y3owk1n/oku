@@ -135,6 +135,7 @@ func runAdd(
 		service:         enable,
 		acceptKey:       flags.acceptKey,
 		system:          system,
+		verbose:         flags.verbose,
 		approve:         e.approver(cmd, opts, flags),
 		log:             buildLog(cmd, flags),
 	})
@@ -175,6 +176,7 @@ func runAdd(
 					Version: r.Version,
 					Service: enable,
 					System:  system,
+					When:    got.when,
 				},
 			)
 			if err != nil {
@@ -189,6 +191,15 @@ func runAdd(
 	}
 
 	reportInferred(cmd.OutOrStdout(), got, flags.verbose)
+
+	if got.when.OS != "" {
+		warn(
+			cmd.ErrOrStderr(),
+			"%s has a release for %s only, so its entry in %s says when = %s",
+			got.lock.Name, got.when.OS, e.listPath(), got.when.TOML(),
+		)
+	}
+
 	e.reportFirstUse(cmd.ErrOrStderr(), got)
 	reportUnsandboxed(cmd.ErrOrStderr(), got)
 	reportLinks(cmd.ErrOrStderr(), got)

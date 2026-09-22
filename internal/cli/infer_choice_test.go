@@ -123,23 +123,75 @@ func TestB198InferencePrefersTheSmallerAssetAndNoneNamedAsAnApp(t *testing.T) {
 	}
 }
 
-func TestB199AFailedInstallFromAnInferredManifestShowsTheManifest(t *testing.T) {
+func TestB199AFailedInstallFromAnInferredManifestSaysWhatToTypeInstead(t *testing.T) {
 	m := newMachine(t)
 	archive, _ := m.archive(t, "release", map[string]string{"tool": script})
 	sums := filepath.Join(m.fixtures, "checksums.txt")
 	must(t, os.WriteFile(sums, []byte(strings.Repeat("1", 64)+"  "+hostAssetName()+"\n"), 0o644))
 
-	inferServer(t, &m, map[string]string{hostAssetName(): archive, "checksums.txt": sums})
+	// The same build in another format is the alternative --asset may pick.
+	other := strings.TrimSuffix(hostAssetName(), ".tar.gz") + ".7z"
+
+	inferServer(t, &m, map[string]string{hostAssetName(): archive, other: archive, "checksums.txt": sums})
 
 	_, err := m.run(t, "", "add", "github:owner/tool")
 	if err == nil {
 		t.Fatal("add installed a download that does not match the published checksum")
 	}
 
-	for _, want := range []string{"oku inferred this manifest", "[[artifact]]", "sha256_url"} {
+	for _, want := range []string{
+		"oku inferred a manifest for github:owner/tool", "--verbose prints it",
+		"it chose the asset " + hostAssetName(), "these fit too: " + other,
+		"pick one with: oku add github:owner/tool --asset " + other,
+	} {
 		if !strings.Contains(err.Error(), want) {
-			t.Fatalf("the error does not show the inferred manifest, missing %q:\n%v", want, err)
+			t.Fatalf("the error should say %q:\n%v", want, err)
 		}
+	}
+
+	if strings.Contains(err.Error(), "[[artifact]]") {
+		t.Fatalf("without --verbose the error should not print the manifest:\n%v", err)
+	}
+
+	_, err = m.run(t, "", "add", "github:owner/tool", "--verbose")
+	if err == nil || !strings.Contains(err.Error(), "[[artifact]]") ||
+		!strings.Contains(err.Error(), "sha256_url") {
+		t.Fatalf("with --verbose the error should end with the manifest:\n%v", err)
+	}
+}
+
+func TestB230AnInferredManifestForOneOSLimitsItsEntryWithWhen(t *testing.T) {
+	m := newMachine(t)
+	archive, _ := m.archive(t, "release", map[string]string{"tool": script})
+	other := otherPlatform()
+
+	inferServer(t, &m, map[string]string{hostAssetName(): archive})
+
+	must(t, os.MkdirAll(m.config, 0o755))
+	must(t, os.WriteFile(
+		filepath.Join(m.config, "oku.toml"),
+		[]byte("[lock]\nplatforms = [\""+other.String()+"\"]\n\n[packages]\n"), 0o644,
+	))
+
+	out, err := m.run(t, "", "add", "github:owner/tool")
+	if err != nil {
+		t.Fatalf("add should limit the entry instead of failing: %v\n%s", err, out)
+	}
+
+	hostOS := platform.Host().OS
+	if !strings.Contains(out, "has a release for "+hostOS+" only") {
+		t.Fatalf("add should say why the entry got a when:\n%s", out)
+	}
+
+	own, err := os.ReadFile(filepath.Join(m.config, "oku.toml"))
+	must(t, err)
+
+	if !strings.Contains(string(own), `when = { os = "`+hostOS+`" }`) {
+		t.Fatalf("oku.toml should limit the package to %s:\n%s", hostOS, own)
+	}
+
+	if _, err := m.run(t, "", "sync"); err != nil {
+		t.Fatalf("a sync after the add should pass: %v", err)
 	}
 }
 
