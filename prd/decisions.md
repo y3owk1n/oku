@@ -1017,3 +1017,15 @@ build beside the old one and swap. The flag names packages, and not
 everything, because a rebuild of all thirty builds of a list takes about an
 hour. The flag belongs to `sync` and not to `update`, because it keeps the
 locked version.
+
+## D71. A `needs` tool reaches a build as a link, not as its directory
+
+For each `needs` tool oku puts one link under the tool's name into a directory
+of the build's temporary directory, and that directory goes on `PATH` after the
+deps. The directory the tool really lives in stays readable in the sandbox and
+stays off `PATH`. On Windows the link is a shim, as in a profile. Why: `needs
+= ["cc"]` used to put the whole directory of the found `cc` on `PATH`, so a
+build on a machine with a Nix profile or a Homebrew `bin` saw that directory's
+`python`, `make` and everything else, and built differently from one without.
+A link keeps the tool in its own directory, so a compiler driver still finds
+its assembler and linker beside itself, which is why the link is not a copy.

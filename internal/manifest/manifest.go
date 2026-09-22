@@ -147,6 +147,10 @@ type Wrapper struct {
 	// variables.
 	Run  string
 	Args []string
+	// Path names a file inside the package that becomes the program instead,
+	// under Name, which lets one package expose ffmpeg and ffprobe by their own
+	// names. A wrapper has Run or Path, never both.
+	Path string
 }
 
 var (
@@ -489,8 +493,9 @@ func (a *Artifact) splitBin() error {
 	return err
 }
 
-// splitBin reads a "bin" list. An entry is a path, or a table with name, run
-// and args, which is a program that oku writes.
+// splitBin reads a "bin" list. An entry is a path, or a table with name and
+// run and args, which is a program that oku writes, or with name and path,
+// which is a file of the package under another name.
 func splitBin(raw []any) ([]string, []Wrapper, error) {
 	var (
 		paths []string
@@ -506,6 +511,7 @@ func splitBin(raw []any) ([]string, []Wrapper, error) {
 
 			w.Name, _ = v["name"].(string)
 			w.Run, _ = v["run"].(string)
+			w.Path, _ = v["path"].(string)
 
 			rawArgs, _ := v["args"].([]any)
 			for _, arg := range rawArgs {
@@ -518,9 +524,9 @@ func splitBin(raw []any) ([]string, []Wrapper, error) {
 			}
 
 			for key := range v {
-				if key != "name" && key != "run" && key != "args" {
+				if key != "name" && key != "run" && key != "args" && key != "path" {
 					return nil, nil, fmt.Errorf(
-						"bin[%d]: unknown key %q, use name, run and args",
+						"bin[%d]: unknown key %q, use name, run and args, or name and path",
 						i,
 						key,
 					)
@@ -531,17 +537,24 @@ func splitBin(raw []any) ([]string, []Wrapper, error) {
 				return nil, nil, fmt.Errorf("bin[%d]: run and args must not hold a line break", i)
 			}
 
-			if !nameRe.MatchString(w.Name) || w.Run == "" {
+			if !nameRe.MatchString(w.Name) || w.Run == "" && w.Path == "" {
 				return nil, nil, fmt.Errorf(
-					"bin[%d]: a table needs a name of lowercase letters, digits, '.', '_' or '-', and run",
+					"bin[%d]: a table needs a name of lowercase letters, digits, '.', '_' or '-', "+
+						"and run or path",
 					i,
+				)
+			}
+
+			if w.Path != "" && (w.Run != "" || len(w.Args) > 0) {
+				return nil, nil, fmt.Errorf(
+					"bin[%d]: path names a file of the package, so it takes no run or args", i,
 				)
 			}
 
 			wraps = append(wraps, w)
 		default:
 			return nil, nil, fmt.Errorf(
-				"bin[%d]: want a path, or a table with name, run and args",
+				"bin[%d]: want a path, or a table with name, run and args, or name and path",
 				i,
 			)
 		}

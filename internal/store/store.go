@@ -398,8 +398,21 @@ var manSectionRe = regexp.MustCompile(`\.([1-9])[a-z]*(\.gz)?$`)
 // <tmp>/share. Links are relative so they still resolve after the move into the
 // store.
 func linkOutputs(tmp string, a manifest.Artifact) error {
+	bins := make([][2]string, 0, len(a.Bin)+len(a.Wrap))
 	for _, entry := range a.Bin {
-		if err := link(tmp, entry, path.Join("bin", path.Base(entry))); err != nil {
+		bins = append(bins, [2]string{entry, path.Base(entry)})
+	}
+
+	// A table with a path exposes the file under the table's name.
+	for _, w := range a.Wrap {
+		if w.Path != "" {
+			bins = append(bins, [2]string{w.Path, w.Name})
+		}
+	}
+
+	for _, bin := range bins {
+		entry, name := bin[0], bin[1]
+		if err := link(tmp, entry, path.Join("bin", name)); err != nil {
 			return fmt.Errorf("bin %q: %w", entry, err)
 		}
 

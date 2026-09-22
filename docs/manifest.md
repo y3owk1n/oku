@@ -191,7 +191,7 @@ machine, so put specific entries before general ones.
 | `sha256_url` | no | A URL of a checksum file. Not together with `sha256`. |
 | `integrity` | no | A sha512 digest the way npm publishes it, `sha512-` and the digest in base64. oku checks the download against it. |
 | `strip` | no | How many leading path components to drop when unpacking. Default 0. |
-| `bin` | see below | Paths of executables inside the package. An entry may also be a table that makes oku write the program, see [A program that needs an interpreter](#a-program-that-needs-an-interpreter). |
+| `bin` | see below | Paths of executables inside the package. An entry may also be a table that makes oku write the program, see [A program that needs an interpreter](#a-program-that-needs-an-interpreter), or that exposes a file [under another name](#a-program-under-another-name). |
 | `lib`, `include`, `share` | see below | Files and directories for the package's `lib`, `include` and `share`, see [A prebuilt library](#a-prebuilt-library). |
 | `man` | see below | Paths of man pages. The file name needs a section, such as `rg.1` or `rg.1.gz`. An entry may be a [pattern](#patterns-in-font-and-man). |
 | `completions` | see below | Shell name to path, such as `{ fish = "complete/rg.fish" }`. |
@@ -297,6 +297,23 @@ bin = [{ name = "gh-actions-language-server", run = "{{dep.node.prefix}}/bin/nod
 The interpreter is a runtime dep, so the user does not need it on `PATH`, and it
 does not appear there either. The package stays a plain download. oku runs no
 build and asks for no approval.
+
+### A program under another name
+
+A plain `bin` entry keeps the file's own name. A table with `path` instead of
+`run` links the file at `path` inside the package under `name`:
+
+```toml
+bin = ["bin/ffmpeg", { name = "ffprobe", path = "bin/ffprobe" }]
+```
+
+| Key | Meaning |
+|---|---|
+| `name` | The program's name in the user's profile. |
+| `path` | The file inside the package. Relative to the unpacked download for an artifact, and to the source directory in an `install` step. |
+
+`path` and `run` do not go together, and `oku manifest lint` rejects a table
+that has both. `path` takes no `args` either.
 
 On macOS and Linux the program is a shell script that ends in `exec`. On Windows
 it is a [shim](windows.md#shims) that holds the arguments, so `run` names an
@@ -444,8 +461,13 @@ linked into the user's profile:
 | Key | Linked at |
 |---|---|
 | `bin = ["dir/tool"]` | `bin/tool` |
+| `bin = [{ name = "probe", path = "dir/ffprobe" }]` | `bin/probe` |
 | `man = ["doc/tool.1"]` | `share/man/man1/tool.1` |
 | `completions = { fish = "c/tool.fish" }` | `share/completions/fish/tool.fish` |
+
+A build that installs its own files, such as `make install`, may put man pages
+under `{{prefix}}/share/man` or under `{{prefix}}/man`. Both reach the
+profile's `share/man`.
 
 ## Archive safety
 
@@ -756,7 +778,7 @@ install = { bin = ["tree"], man = ["doc/tree.1"] }
 
 | Key | Meaning |
 |---|---|
-| `needs` | Tools that must be on the user's `PATH`, such as `cc` or `cargo`. oku checks them before any step runs and never installs them. |
+| `needs` | Tools that must be on the user's `PATH`, such as `cc` or `cargo`. oku checks them before any step runs and never installs them. A build sees each tool by its name and nothing else from the tool's directory, see [The build environment](#the-build-environment). |
 | `source` | `{ git, tag }` clones that tag at depth 1 and needs `git`. `{ url, sha256, strip }` downloads and unpacks an archive. `sha256_url` names a checksum file that upstream publishes, in place of `sha256`. With neither, oku trusts the first download and pins its sha256 in `oku.lock`, as it does for an [artifact](#checksums), and `oku manifest lint` warns. Without `source` the build starts in an empty directory. |
 | `deps` | Other oku packages the build uses, see [Dependencies](#dependencies). |
 
@@ -880,7 +902,7 @@ pkg-config and cmake find it with no flags in your manifest:
 
 | Variable | Holds, for each dep |
 |---|---|
-| `PATH` | `<dep>/bin`, ahead of the `needs` tools |
+| `PATH` | `<dep>/bin`, ahead of the [`needs` tools](#the-build-environment) |
 | `CPATH` | `<dep>/include` |
 | `LIBRARY_PATH` | `<dep>/lib` |
 | `LD_RUN_PATH` | `<dep>/lib`. The GNU linker records it, so the result finds the dep's shared libraries at runtime. |
@@ -900,6 +922,11 @@ On macOS the linker has no `LD_RUN_PATH`. A shared library must record its own
 absolute install name, which cmake and autotools do when they are given
 `{{prefix}}`. With a bare compiler call it is
 `cc -dynamiclib -install_name {{prefix}}/lib/libfoo.dylib ...`.
+
+The GNU linker ignores `LD_RUN_PATH` once the link passes its own `-rpath`,
+and cmake and libtool both do. Such a build must name the dep's `lib` itself,
+for example with `-DCMAKE_INSTALL_RPATH={{dep.foo.prefix}}/lib` for cmake, or
+`LDFLAGS="-Wl,-rpath,{{dep.foo.prefix}}/lib"` for a libtool configure.
 
 A package's store path depends on the deps it was built against, so a new dep
 version leads to a new build instead of changing an installed package.
@@ -993,13 +1020,18 @@ through and lets the build read that directory.
 
 A `run` step does not see the user's environment. It gets:
 
-- `PATH` with each dep's `bin`, the directories of the `needs` tools, then
-  `/usr/bin` and `/bin`
+- `PATH` with each dep's `bin`, then a directory that holds one link per
+  `needs` tool, then `/usr/bin`, `/bin`, `/usr/sbin` and `/sbin`
 - the [dependency variables](#dependencies) above
 - `HOME` and `TMPDIR` pointing at empty temporary directories
 - `OKU_PREFIX`, `OKU_SRC`, `OKU_JOBS`, and the step's `env`
 
-A tool the build uses must therefore be in `needs`.
+A tool the build uses must therefore be in `needs`. A `needs` tool is on
+`PATH` as a link under its own name, not with its directory, so a `cc` from a
+Nix profile or a Homebrew `bin` does not put that directory's `python` or
+`make` on `PATH` too. The link keeps the tool in its real directory, so a compiler
+driver still finds the assembler and linker beside itself. On Windows the
+link is a shim, as in a profile.
 
 ### The sandbox
 
