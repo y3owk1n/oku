@@ -1129,8 +1129,12 @@ On macOS and Linux a `run` step runs in a sandbox:
 - It has no network.
 - It cannot read the user's home directory. The store and the directories of
   the `needs` tools stay readable, even when they are inside it.
-- On macOS it can only write to the source directory, its temporary `HOME` and
-  `TMPDIR`, and `{{prefix}}`.
+- It can only write to the source directory, its temporary `HOME` and
+  `TMPDIR`, and `{{prefix}}`. On Linux everything else is mounted read-only,
+  and `/dev/shm` is the build's own.
+- It cannot ask the user's session to start a program. On macOS Apple Events,
+  LaunchServices and `launchctl` are denied. On Linux `/run/user`, which holds
+  the user's D-Bus and systemd sockets, and the X server's sockets are hidden.
 
 So a build must get everything it downloads through `source`, a `fetch` step, or
 a [`vendor` step](#vendoring). oku checks all three against a digest.

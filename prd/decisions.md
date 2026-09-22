@@ -324,9 +324,19 @@ containers and on Windows. The warning tells the user that the build had fewer
 protections. This completes D11 and replaces the interim state in D32, except
 that `/usr/bin` and `/bin` stay on `PATH`.
 
-Known limit: the Linux sandbox hides the home directory and the network. It
-does not make the rest of the filesystem read-only, which the macOS profile
-does.
+The Linux sandbox makes every mount read-only, then binds the build's own
+directories back writable, with `mount_setattr` or, before Linux 5.12, one
+remount per mount. It mounts empty tmpfs over `/run/user` and `/tmp/.X11-unix`
+and gives the build its own `/dev/shm`. The macOS profile denies Apple Events,
+LaunchServices and running `launchctl`. Why: a build that can write to the
+store can change the programs of other packages, and a build that can reach
+the user's D-Bus, X server or LaunchServices can start a program outside the
+sandbox.
+
+Known limit: the sandbox limits a malicious build and does not contain it. A
+program that talks to launchd over XPC on macOS, or to a socket outside the
+hidden directories on Linux, such as Docker's, can still start a program
+outside it.
 
 ## D34. Vendor output is pinned per platform and checked after the build
 
