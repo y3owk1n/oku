@@ -43,6 +43,9 @@ type Options struct {
 	Asset string
 	// Bin is the file name of the program inside the assets.
 	Bin string
+	// Platforms are the ones the lock pins besides host. Manifest opens an asset
+	// for those and for host, and for no other platform.
+	Platforms []platform.Platform
 }
 
 // target is one platform the inferred manifest may cover. A linux target with an
@@ -102,6 +105,11 @@ type choice struct {
 	asset string
 	// others are the assets that fit as well as asset does.
 	others []string
+}
+
+// pinned reports whether one of platforms takes c's artifact.
+func (c choice) pinned(platforms []platform.Platform) bool {
+	return slices.ContainsFunc(platforms, c.Matches)
 }
 
 // Manifest returns manifest TOML for the repo that a forge ref's scheme and
@@ -172,7 +180,9 @@ func (inf *Inferrer) Manifest(
 
 	// Assets with the same ending come from the same packaging step, so oku opens
 	// one of them for all. A zip for Windows is often laid out unlike the tar
-	// archives next to it.
+	// archives next to it. oku opens an asset for the host and the lock platforms
+	// only, and a platform outside the lock gets an artifact when its asset has
+	// the ending of one it opened anyway.
 	layouts := map[string]layout{}
 	hostDone := false
 
@@ -180,25 +190,41 @@ func (inf *Inferrer) Manifest(
 		isHost := c.Matches(host) && !hostDone
 		kind := ending(c.asset)
 
-		l, known := layouts[kind]
+		if _, known := layouts[kind]; known || !isHost && !c.pinned(opts.Platforms) {
+			continue
+		}
+
+		l, err := inf.layoutOf(ctx, server.Auth(), urls[c.asset], c.asset, name, opts.Bin)
+
+		switch {
+		case err != nil && isHost && len(c.others) > 0:
+			return "", fmt.Errorf(
+				"%s: %w\nthese assets fit this machine too: %s\nchoose one with --asset",
+				c.asset, err, strings.Join(c.others, ", "),
+			)
+		case err != nil && isHost:
+			return "", fmt.Errorf("%s: %w", c.asset, err)
+		case err != nil:
+			// oku leaves out a platform whose asset it cannot read. A wrong
+			// artifact would fail on that platform at install.
+			continue
+		}
+
+		layouts[kind] = l
+
+		if isHost {
+			hostDone = true
+		}
+	}
+
+	hostDone = false
+
+	for _, c := range chosen {
+		isHost := c.Matches(host) && !hostDone
+
+		l, known := layouts[ending(c.asset)]
 		if !known {
-			l, err = inf.layoutOf(ctx, server.Auth(), urls[c.asset], c.asset, name, opts.Bin)
-
-			switch {
-			case err != nil && isHost && len(c.others) > 0:
-				return "", fmt.Errorf(
-					"%s: %w\nthese assets fit this machine too: %s\nchoose one with --asset",
-					c.asset, err, strings.Join(c.others, ", "),
-				)
-			case err != nil && isHost:
-				return "", fmt.Errorf("%s: %w", c.asset, err)
-			case err != nil:
-				// oku leaves out a platform whose asset it cannot read. A wrong
-				// artifact would fail on that platform at install.
-				continue
-			}
-
-			layouts[kind] = l
+			continue
 		}
 
 		b.WriteString("\n")

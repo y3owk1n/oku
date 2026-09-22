@@ -730,7 +730,12 @@ How inference reads a release:
   becomes `strip_prefix`. `v1.2.0` gives `"v"` and `jq-1.8.1` gives `"jq-"`.
 - It downloads the asset for your machine and looks inside. It opens one asset
   per archive ending, so a Windows zip gets its own layout and the tar archives
-  share one. It leaves out a platform whose asset it cannot read. The program is
+  share one. `oku add` opens assets for your machine and for the
+  [`[lock]` platforms](list-and-lock.md#one-lock-for-several-machines) only.
+  Another platform gets an artifact when its asset has the ending of one oku
+  opened anyway. Otherwise oku leaves it out, as it leaves out a platform
+  whose asset it cannot read. `oku manifest init` opens one for every platform, because a
+  published manifest serves them all. The program is
   the executable named after the repo, else the only executable. In an archive
   with no executable files, which is what a zip made on Windows is, it is the
   file named after the repo. A single top-level
