@@ -17,6 +17,9 @@ order step in `prd/product.md`.
   files, which for an artifact is the unpacked download.
 - B2 [1] An artifact whose download does not match its sha256 is rejected and
   nothing enters the store or profile.
+- B247 [1] An archive with a symlink that leads outside the package, when
+  followed through the other links of the package, is refused and nothing
+  enters the store.
 - B3 [1] A manifest with no matching artifact and no `[build]` fails with an
   error naming the host platform.
 - B4 [1] `oku remove <name>` drops the package from the profile. Its store
@@ -481,6 +484,8 @@ order step in `prd/product.md`.
   PATH order problems and broken profile links.
 - B92 [11] `oku self update` replaces the oku binary after verifying its
   signature.
+- B246 [11] `oku self update` refuses a binary whose signature the release key
+  made for another release, and names both releases.
 - B111 [11] `oku self update --nightly` replaces the oku binary with the build
   of the `nightly` release after the same signature check, and changes nothing
   when the running binary is that build.
