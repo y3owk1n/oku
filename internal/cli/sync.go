@@ -443,14 +443,18 @@ func reconcile(
 		return err
 	}
 
-	if staged != 0 {
-		fmt.Fprintf(
-			out, "profile now holds %s, generation %d, %s\n",
-			holds(profile.Generation{Packages: pkgs, Files: files, Settings: wantedSettings}),
-			staged, time.Since(started).Round(time.Second),
-		)
-	} else {
-		fmt.Fprintln(out, "already in sync")
+	held := holds(profile.Generation{Packages: pkgs, Files: files, Settings: wantedSettings})
+	took := time.Since(started).Round(time.Second)
+
+	switch {
+	case staged != 0 && style.On():
+		fmt.Fprintln(out, style.Done(fmt.Sprintf(
+			"done in %s, profile holds %s, generation %d", took, held, staged,
+		)))
+	case staged != 0:
+		fmt.Fprintf(out, "profile now holds %s, generation %d, %s\n", held, staged, took)
+	default:
+		fmt.Fprintln(out, style.Done("already in sync"))
 	}
 
 	return nil

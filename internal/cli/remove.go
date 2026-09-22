@@ -101,7 +101,7 @@ func newRemoveCmd(opts Options) *cobra.Command {
 			}
 
 			s := ui.For(cmd.OutOrStdout())
-			fmt.Fprintf(cmd.OutOrStdout(), "removed %s\n", s.Bold(strings.Join(args, " ")))
+			fmt.Fprintln(cmd.OutOrStdout(), s.Done("removed "+s.Bold(strings.Join(args, " "))))
 
 			return nil
 		},

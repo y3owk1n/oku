@@ -18,6 +18,7 @@ import (
 	"github.com/y3owk1n/oku/internal/profile"
 	"github.com/y3owk1n/oku/internal/service"
 	"github.com/y3owk1n/oku/internal/store"
+	"github.com/y3owk1n/oku/internal/ui"
 )
 
 const (
@@ -244,6 +245,14 @@ func (e env) placeExposed(cmd *cobra.Command, opts Options, plan exposePlan) err
 // or removed. An item of the same kind and target on both sides with another
 // source, such as a setting with a new value, is a change.
 func tellExposed(notice io.Writer, before, after []expose.Item, rewritten []string) {
+	s := ui.For(notice)
+	done := func(format string, args ...any) {
+		fmt.Fprintln(notice, s.Done(fmt.Sprintf(format, args...)))
+	}
+	gone := func(format string, args ...any) {
+		fmt.Fprintln(notice, s.Gone(fmt.Sprintf(format, args...)))
+	}
+
 	same := func(items []expose.Item, item expose.Item) bool {
 		return slices.ContainsFunc(items, func(other expose.Item) bool {
 			return other.Kind == item.Kind && other.Target == item.Target
@@ -257,22 +266,22 @@ func tellExposed(notice io.Writer, before, after []expose.Item, rewritten []stri
 
 		switch {
 		case item.Kind == "secret":
-			fmt.Fprintf(notice, "removed the secret %s\n", item.Target)
+			gone("removed the secret %s", item.Target)
 		case item.Kind == "setting" && item.HadPrior:
-			fmt.Fprintf(notice, "restored %s\n", item.Target)
+			done("restored %s", item.Target)
 		case item.Kind == "setting":
-			fmt.Fprintf(notice, "unset %s\n", item.Target)
+			gone("unset %s", item.Target)
 		case item.Kind == "file":
-			fmt.Fprintf(notice, "removed %s\n", item.Target)
+			gone("removed %s", item.Target)
 		case item.Kind != "service":
-			fmt.Fprintf(notice, "removed the %s %s\n", item.Kind, item.Target)
+			gone("removed the %s %s", item.Kind, item.Target)
 		default:
-			fmt.Fprintf(notice, "service %s is removed\n", item.Name)
+			gone("service %s is removed", item.Name)
 		}
 	}
 
 	for _, target := range rewritten {
-		fmt.Fprintf(notice, "changed %s\n", target)
+		done("changed %s", target)
 	}
 
 	for _, item := range after {
@@ -285,25 +294,25 @@ func tellExposed(notice io.Writer, before, after []expose.Item, rewritten []stri
 
 		switch {
 		case item.Kind == "secret" && changed:
-			fmt.Fprintf(notice, "changed the secret %s\n", item.Target)
+			done("changed the secret %s", item.Target)
 		case item.Kind == "secret":
-			fmt.Fprintf(notice, "wrote the secret %s\n", item.Target)
+			done("wrote the secret %s", item.Target)
 		case item.Kind == "setting" && changed:
-			fmt.Fprintf(notice, "changed %s\n", item.Target)
+			done("changed %s", item.Target)
 		case item.Kind == "setting":
-			fmt.Fprintf(notice, "set %s\n", item.Target)
+			done("set %s", item.Target)
 		case item.Kind == "file" && changed:
-			fmt.Fprintf(notice, "changed %s\n", item.Target)
+			done("changed %s", item.Target)
 		case item.Kind == "file":
-			fmt.Fprintf(notice, "wrote %s\n", item.Target)
+			done("wrote %s", item.Target)
 		case item.Kind != "service":
-			fmt.Fprintf(notice, "exposed %s %s\n", item.Kind, item.Target)
+			done("exposed %s %s", item.Kind, item.Target)
 		case item.Enabled && item.System:
-			fmt.Fprintf(notice, "service %s is running and starts at boot\n", item.Name)
+			done("service %s is running and starts at boot", item.Name)
 		case item.Enabled:
-			fmt.Fprintf(notice, "service %s is running and starts at login\n", item.Name)
+			done("service %s is running and starts at login", item.Name)
 		default:
-			fmt.Fprintf(notice, "service %s is installed and stopped\n", item.Name)
+			done("service %s is installed and stopped", item.Name)
 		}
 	}
 }

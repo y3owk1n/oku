@@ -11,6 +11,7 @@ import (
 
 	"github.com/y3owk1n/oku/internal/profile"
 	"github.com/y3owk1n/oku/internal/status"
+	"github.com/y3owk1n/oku/internal/ui"
 )
 
 func newGCCmd() *cobra.Command {
@@ -62,10 +63,13 @@ func runGC(cmd *cobra.Command, keep int, dryRun bool) error {
 	}
 
 	out := cmd.OutOrStdout()
+	s := ui.For(out)
 	verb := "removed"
 
+	// A dry run removes nothing, so its lines carry no check.
+	mark := s.Done
 	if dryRun {
-		verb = "would remove"
+		verb, mark = "would remove", func(text string) string { return text }
 	}
 
 	pruned := map[*profile.Profile][]int{}
@@ -77,7 +81,7 @@ func runGC(cmd *cobra.Command, keep int, dryRun bool) error {
 			}
 
 			for _, n := range pruned[prof] {
-				fmt.Fprintf(out, "%s generation %d\n", verb, n)
+				fmt.Fprintln(out, mark(fmt.Sprintf("%s generation %d", verb, n)))
 			}
 		}
 	}
@@ -129,12 +133,14 @@ func runGC(cmd *cobra.Command, keep int, dryRun bool) error {
 
 			unused[path] = found[path]
 			freed += found[path]
-			fmt.Fprintf(out, "%s %s (%s)\n", verb, filepath.Base(path), status.Size(found[path]))
+			fmt.Fprintln(out, mark(fmt.Sprintf(
+				"%s %s (%s)", verb, filepath.Base(path), status.Size(found[path]),
+			)))
 		}
 	}
 
 	if len(unused) == 0 {
-		fmt.Fprintln(out, "nothing to delete, every store path is used by a generation")
+		fmt.Fprintln(out, mark("nothing to delete, every store path is used by a generation"))
 
 		return nil
 	}
@@ -149,7 +155,7 @@ func runGC(cmd *cobra.Command, keep int, dryRun bool) error {
 		summary = "would free"
 	}
 
-	fmt.Fprintf(out, "%s %s from %d %s\n", summary, status.Size(freed), len(unused), noun)
+	fmt.Fprintln(out, mark(fmt.Sprintf("%s %s from %d %s", summary, status.Size(freed), len(unused), noun)))
 
 	return nil
 }

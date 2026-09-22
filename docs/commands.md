@@ -37,7 +37,12 @@ pipe or a CI log, each wait is one plain line, as it is with `TERM=dumb`.
 ## Colour
 
 On a terminal oku uses colour, a few glyphs, column headers and `~` for your
-home directory, and the help sorts the commands into sections. A table fits
+home directory, and the help sorts the commands into sections. A line for
+something that finished starts with a green `✓` and stays put while the next
+one prints, as in a package manager's install log, and a line for something
+removed starts with a red `-`. The last line of a command that changed the
+machine says what it did, such as `✓ done in 3s` or `✓ freed 1.2 GiB from 14
+store paths`. A table fits
 the terminal: its last column wraps under itself, oku cuts a column that must
 give room and ends it with `…`, and under 60 columns each row prints as a block
 of label and value lines. `--json` always has the full values. In a pipe, a CI log or with
@@ -352,7 +357,9 @@ Before the summary, one line reports each file, secret, setting, app, font or
 service the sync placed, changed or removed, such as `wrote ~/.config/nvim`,
 `changed ~/.ssh/config`, `set com.apple.dock tilesize`, `restored
 com.apple.dock autohide` for a setting that left the list, or `removed the app
-~/Applications/Foo.app`.
+~/Applications/Foo.app`. On a terminal each line starts with a green `✓`, or
+a red `-` for a removal, and the sync closes with `✓ done in 3s, profile holds
+12 packages, 8 files, 20 settings, generation 7`.
 
 ### A dry run
 

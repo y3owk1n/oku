@@ -290,10 +290,10 @@ func runRollback(cmd *cobra.Command, opts Options, args []string) error {
 
 	out := cmd.OutOrStdout()
 	s := ui.For(out)
-	fmt.Fprintf(
-		out, "generation %d is active, %s: %s\n",
+	fmt.Fprintln(out, s.Done(fmt.Sprintf(
+		"generation %d is active, %s: %s",
 		target.Number, holds(target), changes(s, gens[at], target),
-	)
+	)))
 
 	if snapshot == nil {
 		fmt.Fprintf(

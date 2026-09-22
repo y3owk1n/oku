@@ -205,9 +205,7 @@ func runAdd(
 	reportLinks(cmd.ErrOrStderr(), got)
 	reportCache(cmd.ErrOrStderr(), got)
 	s := ui.For(cmd.OutOrStdout())
-	fmt.Fprintf(
-		cmd.OutOrStdout(), "%s %s %s\n", s.Good("added"), s.Bold(got.lock.Name), got.lock.Version,
-	)
+	fmt.Fprintln(cmd.OutOrStdout(), s.Done("added "+s.Bold(got.lock.Name)+" "+got.lock.Version))
 
 	programs, _ := filepath.Glob(filepath.Join(got.profile.StorePath, "bin", "*"))
 
