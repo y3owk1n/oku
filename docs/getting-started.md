@@ -16,8 +16,9 @@ The script downloads the binary for your OS and CPU from the newest GitHub
 release, checks its sha256 against the release's `checksums.txt`, and puts it in
 `~/.local/bin`, or `%LOCALAPPDATA%\oku\bin` on Windows. On unix it also checks
 the minisign signature when `minisign` is installed. It edits no file of yours.
-It ends by printing the one line your shell needs, see
-[Set up your shell](#set-up-your-shell).
+It ends by printing the installed version, the one line your shell needs, see
+[Set up your shell](#set-up-your-shell), and the commands to run next. When
+your startup file has that line from an earlier install, it says so instead.
 
 | Variable | Effect |
 |---|---|

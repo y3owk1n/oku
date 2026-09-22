@@ -477,7 +477,8 @@ try {
     $said = (& (Join-Path $repoRoot 'install.ps1') 6>&1) -join "`n"
     $installedVersion = & (Join-Path $env:OKU_INSTALL_DIR 'oku.exe') --version
     Check 'install.ps1 puts a working oku.exe in place and prints the hook line' {
-        ($installedVersion -match '0\.0\.1') -and ($said -match 'hook pwsh') -and ($said -match 'PROFILE')
+        ($installedVersion -match '0\.0\.1') -and ($said -match 'hook pwsh') -and ($said -match 'PROFILE') -and
+        ($said -match 'installed oku version 0\.0\.1') -and ($said -match 'oku doctor')
     }
 
     Add-Content (Join-Path $download 'oku-windows-amd64.exe') 'x'

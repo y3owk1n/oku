@@ -6281,6 +6281,23 @@ func TestB93InstallScriptPutsOneBinaryInPlaceAndEditsNothing(t *testing.T) {
 		t.Fatalf("install.sh edited the shell startup file: %q", rc)
 	}
 
+	if !strings.Contains(out, "installed oku at") || !strings.Contains(out, "oku doctor") {
+		t.Fatalf("install.sh did not print the version and the next steps:\n%s", out)
+	}
+
+	// A second install finds the hook line and does not ask for it again.
+	must(t, os.WriteFile(filepath.Join(home, ".zshrc"),
+		[]byte("# mine\n"+shellhook.Line("zsh", "$HOME/.local/bin/oku")+"\n"), 0o644))
+
+	out, err = install(home)
+	if err != nil {
+		t.Fatalf("second install.sh: %v\n%s", err, out)
+	}
+
+	if !strings.Contains(out, "already loads oku") || strings.Contains(out, "one step left") {
+		t.Fatalf("install.sh asked for the hook line that ~/.zshrc has:\n%s", out)
+	}
+
 	must(t, os.WriteFile(filepath.Join(download, name), append(body, 'x'), 0o644))
 
 	other := filepath.Join(root, "other")

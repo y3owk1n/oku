@@ -65,14 +65,15 @@ if [ -n "$release_key" ] && command -v minisign >/dev/null 2>&1; then
 	minisign -Vm "$tmp/$name" -P "$release_key" -q || fail "the signature of $name is not from oku's release key"
 	echo "checked the minisign signature of $name"
 else
-	echo "checked the sha256 of $name. Install minisign to check its signature too."
+	echo "checked the sha256 of $name. Install minisign to check its signature too, see https://jedisct1.github.io/minisign/"
 fi
 
 mkdir -p "$dir"
 chmod +x "$tmp/$name"
 mv "$tmp/$name" "$dir/oku"
 
-echo "installed $dir/oku"
+version="$("$dir/oku" --version 2>/dev/null | head -n 1)"
+echo "installed ${version:-oku} at $dir/oku"
 
 # The line uses $HOME when the binary is under it, so it also works in a
 # dotfiles repo that several machines share.
@@ -101,19 +102,37 @@ fish)
 	;;
 esac
 
+# What to do once oku is on PATH.
+next_steps() {
+	echo
+	echo "then:"
+	echo "  oku doctor                  checks the setup"
+	echo "  oku add github:sharkdp/fd   installs a first program, try: fd --version"
+	echo "  oku self update             replaces oku with the newest release later"
+}
+
 echo
 if [ -z "$line" ]; then
 	echo "next: put $dir on PATH, then run \"oku hook --help\" for the line your shell needs"
+	next_steps
 	exit 0
 fi
 
 pretty="~${rc#"$HOME"}"
+
+# A startup file that loads the hook already, from an earlier install, needs no
+# second line. The pattern is the one "oku doctor" uses.
+if [ -r "$rc" ] && grep -v '^[[:space:]]*#' "$rc" | grep -Eq 'oku" hook|oku hook'; then
+	echo "$pretty already loads oku. Open a new terminal, or run:  exec $shell"
+	next_steps
+	exit 0
+fi
+
 echo "There is one step left. Add this line to $pretty:"
 echo
 echo "  $line"
 echo
-echo "It puts oku and the programs it installs on PATH. This command adds it for you:"
+echo "It puts oku and the programs it installs on PATH, and loads their completions. This command adds it for you:"
 echo
 echo "  echo '$line' >> $pretty && exec $shell"
-echo
-echo "then try:  oku add github:sharkdp/fd && fd --version"
+next_steps
