@@ -281,6 +281,7 @@ func reconcile(
 		// table at the end, as before.
 		live      = style.On()
 		liveOut   = status.Writer(ctx, out)
+		dryRun, _ = cmd.Flags().GetBool(dryRunFlag)
 		liveMu    sync.Mutex
 		nameWidth = 0
 	)
@@ -302,7 +303,7 @@ func reconcile(
 				return
 			}
 
-			j.got, j.err = e.install(ctx, opts, j.req)
+			j.got, j.err = e.install(status.Scope(ctx, j.name), opts, j.req)
 			if j.err != nil && failed.CompareAndSwap(nil, j) {
 				cancel()
 			}
@@ -312,6 +313,11 @@ func reconcile(
 			}
 
 			if kind, version, note := j.row(style, host); kind != "" {
+				// A dry run installs nothing, so its rows say what would change.
+				if dryRun {
+					kind = "?"
+				}
+
 				liveMu.Lock()
 				fmt.Fprintln(liveOut, liveRow(style, nameWidth, kind, j.name, version, note))
 				liveMu.Unlock()
@@ -380,7 +386,7 @@ func reconcile(
 	}
 
 	// A dry run says "would remove" further down, so it needs no row here.
-	if dryRun, _ := cmd.Flags().GetBool(dryRunFlag); !dryRun {
+	if !dryRun {
 		for _, pkg := range have {
 			if _, ok := wanted[pkg.Name]; ok {
 				continue
@@ -429,7 +435,6 @@ func reconcile(
 	}
 
 	system, _ := cmd.Flags().GetBool(systemFlag)
-	dryRun, _ := cmd.Flags().GetBool(dryRunFlag)
 
 	c := change{
 		to: staged, staged: true, system: system, before: before, dryRun: dryRun,
@@ -559,7 +564,8 @@ func syncRow(_ ui.Style, tab *ui.Table, _, name, version, note string) {
 // liveRow is the line a terminal gets when a package finishes, in the style
 // of a package manager's install log: a green check for a package that is
 // installed, a dim dot for one pinned for another platform, a red minus for
-// one that left. The name is padded to the longest one, so the rows align.
+// one that left, and a yellow tilde for one a dry run would change. The name
+// is padded to the longest one, so the rows align.
 func liveRow(s ui.Style, nameWidth int, kind, name, version, note string) string {
 	glyph := s.Good(s.Pick("✓", "ok"))
 
@@ -568,6 +574,8 @@ func liveRow(s ui.Style, nameWidth int, kind, name, version, note string) string
 		glyph = s.Dim("·")
 	case "-":
 		glyph = s.Bad("-")
+	case "?":
+		glyph = s.Warn("~")
 	}
 
 	line := glyph + " " + s.Bold(name) + strings.Repeat(" ", max(nameWidth-len(name), 0)) + "  " + version

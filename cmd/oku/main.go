@@ -49,17 +49,28 @@ func main() {
 // it, are indented and dim.
 func fail(err error) {
 	s := ui.For(os.Stderr)
-	first, rest, more := strings.Cut(err.Error(), "\n")
+	first, rest, more := strings.Cut(suggest(err.Error()), "\n")
 
-	fmt.Fprintln(os.Stderr, s.Alert("oku:"), first)
+	fmt.Fprintln(os.Stderr, s.Wrap(s.Alert("oku:")+" "+s.Homes(first), 2))
 
 	if more {
 		if s.On() {
-			rest = "  " + strings.ReplaceAll(rest, "\n", "\n  ")
+			rest = s.Wrap("  "+strings.ReplaceAll(s.Homes(rest), "\n", "\n  "), 2)
 		}
 
 		fmt.Fprintln(os.Stderr, s.Dim(rest))
 	}
 
 	os.Exit(1)
+}
+
+// suggest puts cobra's "Did you mean this?" list for a mistyped command on the
+// line of the error: unknown command "lsit" for "oku", did you mean list?
+func suggest(message string) string {
+	first, list, ok := strings.Cut(message, "\n\nDid you mean this?\n")
+	if !ok {
+		return message
+	}
+
+	return first + ", did you mean " + strings.Join(strings.Fields(list), " or ") + "?"
 }

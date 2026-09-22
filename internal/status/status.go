@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path"
 	"slices"
 	"strings"
 	"sync"
@@ -56,7 +57,7 @@ type Reporter struct {
 
 type task struct {
 	text string
-	// scope is the Scope of the context that started the wait.
+	// scope is the key of the Scope of the context that started the wait.
 	scope   string
 	started time.Time
 	// read and total count the bytes of a download. total is -1 when unknown.
@@ -88,14 +89,25 @@ type reporterKey struct{}
 
 type scopeKey struct{}
 
+// scope names the package a wait belongs to. key stays the same once set, so
+// the package's waits share one line while label changes, such as from "jq"
+// to "jq 1.8.2".
+type scope struct{ key, label string }
+
 // With returns a context that carries r.
 func With(ctx context.Context, r *Reporter) context.Context {
 	return context.WithValue(ctx, reporterKey{}, r)
 }
 
-// Scope returns a context whose waits Start shows as "name: wait".
+// Scope returns a context whose waits Start shows as "name: wait". Inside
+// another scope the waits keep the line of the outer one.
 func Scope(ctx context.Context, name string) context.Context {
-	return context.WithValue(ctx, scopeKey{}, name)
+	key := name
+	if outer, ok := ctx.Value(scopeKey{}).(scope); ok {
+		key = outer.key
+	}
+
+	return context.WithValue(ctx, scopeKey{}, scope{key: key, label: name})
 }
 
 // Start shows a wait until the caller calls the returned function. A wait that
@@ -108,12 +120,12 @@ func Start(ctx context.Context, format string, args ...any) func() {
 
 	text := fmt.Sprintf(format, args...)
 
-	scope, _ := ctx.Value(scopeKey{}).(string)
-	if scope != "" {
-		text = scope + ": " + text
+	own, _ := ctx.Value(scopeKey{}).(scope)
+	if own.label != "" {
+		text = own.label + ": " + text
 	}
 
-	return r.start(text, scope)
+	return r.start(text, own.key)
 }
 
 // Reader adds the bytes read from in to the innermost wait of ctx. total is the
@@ -128,10 +140,10 @@ func Reader(ctx context.Context, in io.Reader, total int64) io.Reader {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	scope, _ := ctx.Value(scopeKey{}).(string)
+	own, _ := ctx.Value(scopeKey{}).(scope)
 
 	for _, t := range slices.Backward(r.tasks) {
-		if t.scope == scope {
+		if t.scope == own.key {
 			t.total = total
 
 			return &countingReader{in: in, r: r, t: t}
@@ -311,13 +323,16 @@ func (r *Reporter) draw() {
 	r.drawn = len(lines)
 }
 
-// line renders one wait, cut to the terminal's width.
+// line renders one wait, cut to the terminal's width. A URL shows as the file
+// it names, and a download with a known size says how far it got.
 func (r *Reporter) line(t *task) string {
 	tail := ""
 
 	switch {
 	case t.total > 0:
-		tail = fmt.Sprintf(" %s of %s", Size(t.read), Size(t.total))
+		tail = fmt.Sprintf(
+			" %s of %s, %d%%", Size(t.read), Size(t.total), min(100, t.read*100/t.total),
+		)
 	case t.read > 0:
 		tail = " " + Size(t.read)
 	}
@@ -326,14 +341,21 @@ func (r *Reporter) line(t *task) string {
 		tail += " " + elapsed.Truncate(time.Second).String()
 	}
 
+	words := strings.Fields(t.text)
+	for i, word := range words {
+		if strings.Contains(word, "://") {
+			words[i] = path.Base(word)
+		}
+	}
+
 	// The spinner and its space take two columns, and a full line would wrap.
 	room := max(r.width()-3-len(tail), 10)
-	text := []rune(t.text)
+	text := []rune(strings.Join(words, " "))
 
-	// The end of a URL names the file, so the cut takes the middle.
+	// The end of a file name tells packages apart, so the cut takes the middle.
 	if len(text) > room {
-		head := (room - 3) / 2
-		text = append(append(text[:head:head], []rune("...")...), text[len(text)-(room-3-head):]...)
+		head := (room - 1) / 2
+		text = append(append(text[:head:head], '…'), text[len(text)-(room-1-head):]...)
 	}
 
 	return string(text) + r.style.Dim(tail)

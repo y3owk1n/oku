@@ -2,6 +2,9 @@ package cli_test
 
 import (
 	"encoding/json"
+	"os"
+	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -222,5 +225,58 @@ func TestB231EveryFinishedItemAndTheClosingLineCarryACheck(t *testing.T) {
 
 	if !strings.Contains(out, "✓\x1b[0m already in sync") && !strings.Contains(out, "✓\x1b[0m done in ") {
 		t.Fatalf("update should close with a check:\n%s", out)
+	}
+}
+
+func TestB235ADryRunRowSaysWhatWouldChange(t *testing.T) {
+	t.Setenv("NO_COLOR", "")
+	t.Setenv("FORCE_COLOR", "1")
+
+	m := newMachine(t)
+	ref := m.manifest(t, "tool", map[string]string{"tool": script}, `bin = ["tool"]`)
+
+	m.writeFilesList(t, "[packages]\ntool = \""+strings.ReplaceAll(ref, `\`, `\\`)+"\"\n")
+
+	out, err := m.run(t, "", "sync", "--dry-run")
+	must(t, err)
+
+	if !strings.Contains(out, "~\x1b[0m \x1b[1mtool\x1b[0m  1.2.3") || strings.Contains(out, "✓") {
+		t.Fatalf("a dry run row should carry a tilde and no check:\n%s", out)
+	}
+}
+
+func TestB235ACommandNamesItsProjectOnce(t *testing.T) {
+	m := newMachine(t)
+
+	project := filepath.Join(m.fixtures, "work", "api")
+	must(t, os.MkdirAll(project, 0o755))
+	must(t, os.WriteFile(filepath.Join(project, "oku.toml"), nil, 0o644))
+
+	m.opts.WorkDir = project
+
+	out, err := m.run(t, "", "sync")
+	must(t, err)
+
+	if n := strings.Count(out, "project "+project); n != 1 {
+		t.Fatalf("sync named the project %d times:\n%s", n, out)
+	}
+}
+
+func TestB234HelpFitsANarrowTerminal(t *testing.T) {
+	t.Setenv("NO_COLOR", "")
+	t.Setenv("FORCE_COLOR", "1")
+	t.Setenv("COLUMNS", "50")
+
+	m := newMachine(t)
+
+	out, err := m.run(t, "", "sync", "--help")
+	must(t, err)
+
+	escape := regexp.MustCompile("\x1b\\[[0-9;]*m")
+
+	for _, line := range strings.Split(escape.ReplaceAllString(out, ""), "\n") {
+		if len([]rune(line)) > 50 {
+			t.Fatalf("a help line is wider than 50 columns: %q\n%s", line, out)
+		}
 	}
 }
