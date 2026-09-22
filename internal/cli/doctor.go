@@ -14,6 +14,7 @@ import (
 	"github.com/y3owk1n/oku/internal/sandbox"
 	"github.com/y3owk1n/oku/internal/secret"
 	"github.com/y3owk1n/oku/internal/store"
+	"github.com/y3owk1n/oku/internal/ui"
 )
 
 func newDoctorCmd(opts Options) *cobra.Command {
@@ -83,18 +84,35 @@ func runDoctor(cmd *cobra.Command, opts Options) error {
 			return err
 		}
 	} else {
+		out := cmd.OutOrStdout()
+		s := ui.For(out)
+
 		for _, c := range r.checks {
-			fmt.Fprintf(cmd.OutOrStdout(), "%-8s %s\n", c.Status, c.Message)
+			if !s.On() {
+				fmt.Fprintf(out, "%-8s %s\n", c.Status, c.Message)
+
+				continue
+			}
+
+			glyph := s.Check()
+
+			switch c.Status {
+			case "note":
+				glyph = s.Note()
+			case "problem":
+				glyph = s.Cross()
+			}
+
+			fmt.Fprintf(out, "%s %s\n", glyph, c.Message)
 		}
 	}
 
 	if r.problems > 0 {
-		noun := "problems"
-		if r.problems == 1 {
-			noun = "problem"
-		}
+		return fmt.Errorf("doctor found %s", count(r.problems, "problem"))
+	}
 
-		return fmt.Errorf("doctor found %d %s", r.problems, noun)
+	if !wantJSON(cmd) {
+		fmt.Fprintln(cmd.OutOrStdout(), "no problems found")
 	}
 
 	return nil
@@ -228,6 +246,12 @@ func checkPath(r *report, e env) {
 		return
 	}
 
+	// One line names every program that a directory earlier on PATH also has,
+	// because the fix is one change to PATH.
+	type shadow struct{ name, dir string }
+
+	var shadowed []shadow
+
 	for _, entry := range entries {
 		if strings.HasSuffix(entry.Name(), ".shim") {
 			continue
@@ -235,14 +259,32 @@ func checkPath(r *report, e env) {
 
 		for _, dir := range dirs[:at] {
 			if info, err := os.Stat(filepath.Join(dir, entry.Name())); err == nil && !info.IsDir() {
-				r.problem(
-					"%s runs in place of oku's %s, because %s is earlier on PATH",
-					filepath.Join(dir, entry.Name()), entry.Name(), dir,
-				)
+				shadowed = append(shadowed, shadow{entry.Name(), dir})
 
 				break
 			}
 		}
+	}
+
+	switch len(shadowed) {
+	case 0:
+	case 1:
+		r.problem(
+			"%s runs in place of oku's %s, because %s is earlier on PATH. "+
+				"Put %s before it, or remove the other copy",
+			filepath.Join(shadowed[0].dir, shadowed[0].name), shadowed[0].name, shadowed[0].dir, bin,
+		)
+	default:
+		names := make([]string, len(shadowed))
+		for i, s := range shadowed {
+			names[i] = s.name + " (" + s.dir + ")"
+		}
+
+		r.problem(
+			"%d programs earlier on PATH run in place of oku's: %s. "+
+				"Put %s before those directories, or remove the other copies",
+			len(shadowed), strings.Join(names, ", "), bin,
+		)
 	}
 }
 

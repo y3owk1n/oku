@@ -1708,7 +1708,7 @@ func TestB22EveryChangeIsAGenerationAndRollbackRestoresOne(t *testing.T) {
 	must(t, err)
 
 	if !strings.Contains(out, "  1") || !strings.Contains(out, "* 2") ||
-		!strings.Contains(out, "tool 1.0.0") || !strings.Contains(out, "tool 1.1.0") {
+		!strings.Contains(out, "+ tool 1.0.0") || !strings.Contains(out, "tool 1.0.0 -> 1.1.0") {
 		t.Fatalf("generations after add and update:\n%s", out)
 	}
 

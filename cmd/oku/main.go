@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/y3owk1n/oku/internal/cli"
 	"github.com/y3owk1n/oku/internal/shim"
+	"github.com/y3owk1n/oku/internal/ui"
 )
 
 // The build sets version through -ldflags "-X main.version=...".
@@ -38,7 +40,26 @@ func main() {
 			os.Exit(exit.Code)
 		}
 
-		fmt.Fprintln(os.Stderr, "oku:", err)
-		os.Exit(1)
+		fail(err)
 	}
+}
+
+// fail prints err as "oku: <reason>" and exits with 1. On a terminal the
+// prefix is red, and the lines after the first, which say what to do about
+// it, are indented and dim.
+func fail(err error) {
+	s := ui.For(os.Stderr)
+	first, rest, more := strings.Cut(err.Error(), "\n")
+
+	fmt.Fprintln(os.Stderr, s.Alert("oku:"), first)
+
+	if more {
+		if s.On() {
+			rest = "  " + strings.ReplaceAll(rest, "\n", "\n  ")
+		}
+
+		fmt.Fprintln(os.Stderr, s.Dim(rest))
+	}
+
+	os.Exit(1)
 }

@@ -36,7 +36,7 @@ func newHookCmd(opts Options) *cobra.Command {
 		Use:   "hook <bash|zsh|fish|pwsh>",
 		Short: "Print the shell code that sets oku up in a shell",
 		Long:  long,
-		Args:  cobra.ExactArgs(1),
+		Args:  exactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			e, err := loadEnv()
 			if err != nil {

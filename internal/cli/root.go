@@ -26,6 +26,7 @@ import (
 	"github.com/y3owk1n/oku/internal/source"
 	"github.com/y3owk1n/oku/internal/status"
 	"github.com/y3owk1n/oku/internal/store"
+	"github.com/y3owk1n/oku/internal/ui"
 )
 
 // Options are the values main and the tests pass to the command tree.
@@ -112,6 +113,7 @@ func NewRootCmd(opts Options) *cobra.Command {
 	)
 
 	root.AddCommand(platformCommands()...)
+	groupCommands(root)
 
 	// The Linux sandbox re-runs oku inside new namespaces to finish the setup.
 	root.AddCommand(&cobra.Command{
@@ -125,6 +127,93 @@ func NewRootCmd(opts Options) *cobra.Command {
 }
 
 const globalFlag = "global"
+
+// groupCommands sorts the help into sections, so that a reader finds the
+// command for a job without reading all of them. Colour and headings come from
+// the Style of the writer the help goes to.
+func groupCommands(root *cobra.Command) {
+	groups := []struct {
+		title    string
+		commands []string
+	}{
+		{"Packages", []string{"add", "remove", "sync", "update", "list", "info", "why", "shell"}},
+		{"Finding packages", []string{"search", "source"}},
+		{"Generations", []string{"generations", "rollback", "gc"}},
+		{"Projects and shells", []string{"hook", "env", "allow", "deny"}},
+		{"Services and caches", []string{"service", "cache", "key"}},
+		{"Publishing", []string{"manifest"}},
+		{"oku itself", []string{"doctor", "setup", "self", "completion", "help"}},
+	}
+
+	groupOf := map[string]string{}
+
+	for _, g := range groups {
+		root.AddGroup(&cobra.Group{ID: g.title, Title: g.title})
+
+		for _, name := range g.commands {
+			groupOf[name] = g.title
+		}
+	}
+
+	for _, c := range root.Commands() {
+		c.GroupID = groupOf[c.Name()]
+	}
+
+	root.SetHelpCommandGroupID(groupOf["help"])
+	root.SetCompletionCommandGroupID(groupOf["completion"])
+
+	style := func() ui.Style { return ui.For(root.OutOrStdout()) }
+
+	cobra.AddTemplateFunc("heading", func(text string) string {
+		s := style()
+		if s.On() {
+			return s.Heading(text)
+		}
+
+		return text + ":"
+	})
+	cobra.AddTemplateFunc("dim", func(text string) string { return style().Dim(text) })
+	cobra.AddTemplateFunc("name", func(text string) string { return style().Accent(text) })
+
+	// The commands stay in the order AddCommand gave them, which puts the daily
+	// ones first in each section.
+	cobra.EnableCommandSorting = false
+
+	root.SetUsageTemplate(usageTemplate)
+}
+
+// usageTemplate is cobra's default with styled headings, coloured command
+// names and grouped commands.
+const usageTemplate = `{{heading "Usage"}}{{if .Runnable}}
+  {{.UseLine}}{{end}}{{if .HasAvailableSubCommands}}
+  {{.CommandPath}} [command]{{end}}{{if gt (len .Aliases) 0}}
+
+{{heading "Aliases"}}
+  {{.NameAndAliases}}{{end}}{{if .HasExample}}
+
+{{heading "Examples"}}
+{{.Example}}{{end}}{{if .HasAvailableSubCommands}}{{$cmds := .Commands}}{{if eq (len .Groups) 0}}
+
+{{heading "Commands"}}{{range $cmds}}{{if (or .IsAvailableCommand (eq .Name "help"))}}
+  {{name (rpad .Name .NamePadding)}} {{.Short}}{{end}}{{end}}{{else}}{{range $group := .Groups}}
+
+{{heading $group.Title}}{{range $cmds}}{{if (and (eq .GroupID $group.ID) (or .IsAvailableCommand (eq .Name "help")))}}
+  {{name (rpad .Name .NamePadding)}} {{.Short}}{{end}}{{end}}{{end}}{{if not .AllChildCommandsHaveGroup}}
+
+{{heading "Other"}}{{range $cmds}}{{if (and (eq .GroupID "") (or .IsAvailableCommand (eq .Name "help")))}}
+  {{name (rpad .Name .NamePadding)}} {{.Short}}{{end}}{{end}}{{end}}{{end}}{{end}}{{if .HasAvailableLocalFlags}}
+
+{{heading "Flags"}}
+{{.LocalFlags.FlagUsages | trimTrailingWhitespaces}}{{end}}{{if .HasAvailableInheritedFlags}}
+
+{{heading "Global flags"}}
+{{.InheritedFlags.FlagUsages | trimTrailingWhitespaces}}{{end}}{{if .HasHelpSubCommands}}
+
+{{heading "Additional help topics"}}{{range .Commands}}{{if .IsAdditionalHelpTopicCommand}}
+  {{rpad .CommandPath .CommandPathPadding}} {{.Short}}{{end}}{{end}}{{end}}{{if .HasAvailableSubCommands}}
+
+{{dim (printf "Use \"%s [command] --help\" for more information about a command." .CommandPath)}}{{end}}
+`
 
 // env is where oku keeps its files on this machine, and which list it acts on.
 type env struct {
@@ -191,7 +280,7 @@ func scopedEnv(cmd *cobra.Command, opts Options) (env, error) {
 
 	e.project = findProject(dir, e.config)
 	if e.project != "" {
-		fmt.Fprintf(cmd.ErrOrStderr(), "project %s\n", e.project)
+		fmt.Fprintln(cmd.ErrOrStderr(), ui.For(cmd.ErrOrStderr()).Dim("project "+e.project))
 	}
 
 	return e, nil

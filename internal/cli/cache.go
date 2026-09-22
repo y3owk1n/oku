@@ -18,6 +18,7 @@ import (
 	"github.com/y3owk1n/oku/internal/source"
 	"github.com/y3owk1n/oku/internal/status"
 	"github.com/y3owk1n/oku/internal/store"
+	"github.com/y3owk1n/oku/internal/ui"
 )
 
 // signingKeyFile holds the secret key that "oku cache push" signs with.
@@ -83,7 +84,7 @@ an entry only when a key from "oku key trust" signed it.`,
 		&cobra.Command{
 			Use:   "add <directory-or-url>",
 			Short: "Look in this cache before building",
-			Args:  cobra.ExactArgs(1),
+			Args:  exactArgs(1),
 			RunE: func(cmd *cobra.Command, args []string) error {
 				location := args[0]
 				if !strings.Contains(location, "://") {
@@ -114,7 +115,7 @@ an entry only when a key from "oku key trust" signed it.`,
 		&cobra.Command{
 			Use:   "remove <directory-or-url>",
 			Short: "Stop looking in this cache",
-			Args:  cobra.ExactArgs(1),
+			Args:  exactArgs(1),
 			RunE: func(cmd *cobra.Command, args []string) error {
 				return editConfig(func(c *source.Config) error {
 					abs, _ := filepath.Abs(args[0])
@@ -329,7 +330,7 @@ func newKeyCmd() *cobra.Command {
 		&cobra.Command{
 			Use:   "trust <public-key>",
 			Short: "Accept cache entries that this key signed",
-			Args:  cobra.ExactArgs(1),
+			Args:  exactArgs(1),
 			RunE: func(cmd *cobra.Command, args []string) error {
 				var key minisign.PublicKey
 				if err := key.UnmarshalText([]byte(args[0])); err != nil {
@@ -350,7 +351,7 @@ func newKeyCmd() *cobra.Command {
 		&cobra.Command{
 			Use:   "revoke <public-key>",
 			Short: "Stop accepting cache entries that this key signed",
-			Args:  cobra.ExactArgs(1),
+			Args:  exactArgs(1),
 			RunE: func(cmd *cobra.Command, args []string) error {
 				return editConfig(func(c *source.Config) error {
 					before := len(c.TrustedKeys)
@@ -397,15 +398,20 @@ func newKeyCmd() *cobra.Command {
 					}{yours, append([]string{}, config.TrustedKeys...)})
 				}
 
-				if yours != "" {
-					fmt.Fprintf(out, "yours    %s\n", yours)
+				if yours == "" && len(config.TrustedKeys) == 0 {
+					fmt.Fprintln(
+						out, "no keys yet, `oku key generate` makes yours and `oku key trust` adds another",
+					)
+
+					return nil
 				}
 
+				pairs := [][2]string{{"yours", yours}}
 				for _, key := range config.TrustedKeys {
-					fmt.Fprintf(out, "trusted  %s\n", key)
+					pairs = append(pairs, [2]string{"trusted", key})
 				}
 
-				return nil
+				return ui.For(out).KV(out, pairs...)
 			},
 		},
 	)

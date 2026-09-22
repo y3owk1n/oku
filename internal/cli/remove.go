@@ -9,13 +9,14 @@ import (
 	"github.com/y3owk1n/oku/internal/list"
 	"github.com/y3owk1n/oku/internal/lock"
 	"github.com/y3owk1n/oku/internal/profile"
+	"github.com/y3owk1n/oku/internal/ui"
 )
 
 func newRemoveCmd(opts Options) *cobra.Command {
 	return &cobra.Command{
 		Use:   "remove <name>",
 		Short: "Remove a package from the profile",
-		Args:  cobra.ExactArgs(1),
+		Args:  exactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			e, err := scopedEnv(cmd, opts)
 			if err != nil {
@@ -82,7 +83,8 @@ func newRemoveCmd(opts Options) *cobra.Command {
 				return err
 			}
 
-			fmt.Fprintf(cmd.OutOrStdout(), "removed %s\n", args[0])
+			s := ui.For(cmd.OutOrStdout())
+			fmt.Fprintf(cmd.OutOrStdout(), "removed %s\n", s.Bold(args[0]))
 
 			return nil
 		},

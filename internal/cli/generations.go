@@ -7,13 +7,13 @@ import (
 	"slices"
 	"strconv"
 	"strings"
-	"text/tabwriter"
 	"time"
 
 	"github.com/spf13/cobra"
 
 	"github.com/y3owk1n/oku/internal/list"
 	"github.com/y3owk1n/oku/internal/profile"
+	"github.com/y3owk1n/oku/internal/ui"
 )
 
 func newGenerationsCmd(opts Options) *cobra.Command {
@@ -60,45 +60,95 @@ func newGenerationsCmd(opts Options) *cobra.Command {
 			}
 
 			if len(gens) == 0 {
-				fmt.Fprintln(cmd.OutOrStdout(), "no generations yet")
+				fmt.Fprintln(
+					cmd.OutOrStdout(), "no generations yet, the first `oku add` or `oku sync` makes one",
+				)
 
 				return nil
 			}
 
-			w := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 0, 2, ' ', 0)
+			out := cmd.OutOrStdout()
+			s := ui.For(out)
+			tab := s.Table("", "created", "packages", "changes")
+
+			var previous []profile.Package
 
 			for _, gen := range gens {
-				marker := " "
+				marker, mark := " ", s.Dim
 				if gen.Current {
-					marker = "*"
+					marker, mark = s.Pick("●", "*"), s.Bold
 				}
 
-				fmt.Fprintf(
-					w,
-					"%s %d\t%s\t%s\n",
-					marker,
-					gen.Number,
+				cells := []string{
+					marker + " " + strconv.Itoa(gen.Number),
 					gen.Created.Local().Format("2006-01-02 15:04"),
-					describe(gen.Packages),
-				)
+					count(len(gen.Packages), "package"),
+					changes(s, previous, gen.Packages),
+				}
+
+				if gen.Current {
+					tab.Styled(cells, mark, nil, nil, nil)
+				} else {
+					tab.Styled(cells, nil, s.Dim, s.Dim, nil)
+				}
+
+				previous = gen.Packages
 			}
 
-			return w.Flush()
+			return tab.Write(out)
 		},
 	}
 }
 
-func describe(pkgs []profile.Package) string {
-	if len(pkgs) == 0 {
-		return "(empty)"
+// count returns "3 packages", or "1 package".
+func count(n int, noun string) string {
+	if n != 1 {
+		noun += "s"
 	}
 
-	names := make([]string, len(pkgs))
-	for i, pkg := range pkgs {
-		names[i] = pkg.Name + " " + pkg.Version
+	return strconv.Itoa(n) + " " + noun
+}
+
+// changes says what differs between two generations' packages: what came, what
+// went, and what changed version. A long list ends in "and N more", because
+// the reader wants the shape of a change, not every name.
+func changes(s ui.Style, from, to []profile.Package) string {
+	const show = 6
+
+	find := func(pkgs []profile.Package, name string) int {
+		return slices.IndexFunc(pkgs, func(p profile.Package) bool { return p.Name == name })
 	}
 
-	return strings.Join(names, ", ")
+	var parts []string
+
+	for _, pkg := range from {
+		if find(to, pkg.Name) < 0 {
+			parts = append(parts, s.Bad("-")+" "+pkg.Name)
+		}
+	}
+
+	for _, pkg := range to {
+		i := find(from, pkg.Name)
+
+		switch {
+		case i < 0:
+			parts = append(parts, s.Good("+")+" "+pkg.Name+" "+pkg.Version)
+		case from[i].Version != pkg.Version:
+			parts = append(parts, pkg.Name+" "+from[i].Version+" "+s.Arrow()+" "+pkg.Version)
+		case from[i].StorePath != pkg.StorePath:
+			parts = append(parts, pkg.Name+" rebuilt")
+		}
+	}
+
+	if len(parts) == 0 {
+		return s.Dim("no package change")
+	}
+
+	if len(parts) > show {
+		parts = append(parts[:show], fmt.Sprintf("and %d more", len(parts)-show))
+	}
+
+	return strings.Join(parts, ", ")
 }
 
 func newRollbackCmd(opts Options) *cobra.Command {
@@ -191,7 +241,12 @@ func runRollback(cmd *cobra.Command, opts Options, args []string) error {
 	}
 
 	out := cmd.OutOrStdout()
-	fmt.Fprintf(out, "generation %d is active: %s\n", target.Number, describe(target.Packages))
+	s := ui.For(out)
+	fmt.Fprintf(
+		out, "generation %d is active, %s: %s\n",
+		target.Number, count(len(target.Packages), "package"),
+		changes(s, gens[at].Packages, target.Packages),
+	)
 
 	if snapshot == nil {
 		fmt.Fprintf(

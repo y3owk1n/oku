@@ -225,7 +225,7 @@ func newHashCmd() *cobra.Command {
 
 An artifact needs one of the two lines. Most projects publish a sha256, and npm
 publishes an integrity.`,
-		Args: cobra.ExactArgs(1),
+		Args: exactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			at := args[0]
 

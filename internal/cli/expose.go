@@ -405,7 +405,7 @@ func newSystemApplyCmd(opts Options) *cobra.Command {
 	return &cobra.Command{
 		Use:    systemApply + " <place|remove|start|stop|logs> <change>",
 		Hidden: true,
-		Args:   cobra.ExactArgs(2),
+		Args:   exactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			payload := []byte(args[1])
 
