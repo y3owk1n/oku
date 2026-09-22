@@ -85,8 +85,9 @@ order step in `prd/product.md`.
   never unpacks and reports as a first use. For a platform with no artifact
   oku pins a build when the manifest has one, and stops with an error
   otherwise.
-- B180 [2] Without `[lock]`, `add` and `update` in a project pin every platform
-  they can and skip the others, and the global list pins the host alone.
+- B180 [2] Without `[lock]`, `add` and `update` pin the host alone, in the
+  global list and in a project. Another platform gets its entry when a machine
+  of that platform syncs (B15).
 - B182 [2] oku pins a package whose `when` leaves out the host, with its deps,
   for the lock platforms that `when` matches, and installs nothing of it.
   `sync` does that when the lock has no entry for its ref, or with `[lock]`

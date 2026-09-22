@@ -889,9 +889,9 @@ commit, so `sync` can fetch the locked commit of a branch at any time.
 
 `[lock] platforms` names the platforms besides the host that `oku.lock` pins
 every package for. `add`, `update` and `sync` write those entries from any
-host, and a platform that oku cannot pin is an error. Without the table a
-project pins every platform it can on `add` and `update`, and the global list
-pins the host alone. The digest comes from the manifest, else from
+host, and a platform that oku cannot pin is an error. Without the table oku
+pins the host alone, in a project as in the global list. The digest comes
+from the manifest, else from
 `sha256_url`, else from a download that oku hashes and never unpacks. Only the
 user's own list may hold the table (D19).
 
@@ -900,13 +900,14 @@ entry appeared only when a machine of that platform synced (B15). So the
 person who wrote the lock never pinned the other platforms' digests, every new
 platform changed a committed file, and CI, which commits nothing, trusted its
 download on every run. Writing the entries with the lock moves the first use
-to the author's machine, where someone reads the notice. Several machines
-share a project, so it pins all it can without a `[lock]` table. It skips a
-platform that fails, because an artifact without `match` fits platforms the
-upstream never published for. Go's `{{os}}-{{arch}}.tar.gz` fits Windows, and
-Go has no such file. A global list mostly serves one person's machines, and
-there oku would hash up to eight downloads per package that no other machine
-uses.
+to the author's machine, where someone reads the notice. Without the table oku
+pins the host alone. A project used to pin every platform it could, which
+hashed up to seven downloads per package and ran the npm vendor step once per
+platform (D68) for machines that may never exist, and skipped a platform that
+failed without saying so. The author knows which machines share the lock, so
+the author names them once. Every command then does the work for those
+platforms and no more. A missing platform still gets its entry the first time
+a machine of that platform syncs (B15).
 
 Known limits: oku pins the build deps of a platform that builds only when the
 host builds too. For the `vendor_sha256` of another platform see D68.
