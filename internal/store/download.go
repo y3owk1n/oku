@@ -6,10 +6,12 @@ import (
 	"crypto/sha512"
 	"encoding/base64"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -167,7 +169,8 @@ func fileIntegrity(path string) (string, error) {
 var hexDigestRe = regexp.MustCompile(`\b[0-9a-fA-F]{64}\b`)
 
 // publishedSHA256 reads the digest of fileName from a checksum file at url. The
-// file holds either one digest or "digest  name" lines such as sha256sum writes.
+// file holds one digest, "digest  name" lines such as sha256sum writes, or a JSON
+// document that maps file names to digests.
 func (s *Store) publishedSHA256(ctx context.Context, url, fileName string) (string, error) {
 	defer status.Start(ctx, "reading the checksums at %s", url)()
 
@@ -180,6 +183,10 @@ func (s *Store) publishedSHA256(ctx context.Context, url, fileName string) (stri
 	data, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	if err != nil {
 		return "", fmt.Errorf("download %s: %w", url, err)
+	}
+
+	if digest := jsonSHA256(data, fileName); digest != "" {
+		return digest, nil
 	}
 
 	lines := strings.Split(string(data), "\n")
@@ -196,6 +203,44 @@ func (s *Store) publishedSHA256(ctx context.Context, url, fileName string) (stri
 	}
 
 	return "", fmt.Errorf("%s holds no sha256 for %s", url, fileName)
+}
+
+// jsonSHA256 reads the digest of fileName from a JSON checksum manifest, or
+// returns "". The document is an object whose keys are file names and whose
+// values are digests, or an array of objects with "name" and "sha256" fields.
+// A key or a name may hold a path, and its base name is what counts.
+func jsonSHA256(data []byte, fileName string) string {
+	var digest string
+
+	switch trimmed := strings.TrimSpace(string(data)); {
+	case strings.HasPrefix(trimmed, "{"):
+		var byName map[string]string
+		if json.Unmarshal(data, &byName) != nil {
+			return ""
+		}
+
+		for name, sum := range byName {
+			if path.Base(name) == fileName {
+				digest = sum
+			}
+		}
+	case strings.HasPrefix(trimmed, "["):
+		var entries []struct {
+			Name   string `json:"name"`
+			SHA256 string `json:"sha256"`
+		}
+		if json.Unmarshal(data, &entries) != nil {
+			return ""
+		}
+
+		for _, entry := range entries {
+			if path.Base(entry.Name) == fileName {
+				digest = entry.SHA256
+			}
+		}
+	}
+
+	return strings.ToLower(hexDigestRe.FindString(digest))
 }
 
 func fileSHA256(path string) (string, error) {

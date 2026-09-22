@@ -121,13 +121,15 @@ func (inf *Inferrer) Manifest(
 
 	names := make([]string, len(rel.Assets))
 	urls := map[string]string{}
+	sizes := map[string]int64{}
 
 	for i, asset := range rel.Assets {
 		names[i] = asset.Name
 		urls[asset.Name] = asset.URL
+		sizes[asset.Name] = asset.Size
 	}
 
-	chosen, err := choose(names, host, opts.Asset)
+	chosen, err := choose(names, sizes, host, opts.Asset)
 	if err != nil {
 		return "", err
 	}
@@ -247,9 +249,15 @@ func (inf *Inferrer) layoutOf(
 	return findLayout(files, name, bin, isArchive(asset))
 }
 
-// choose lists the artifacts to write, in the order of targets. A glob puts the
-// asset it names first, for the host alone.
-func choose(names []string, host platform.Platform, glob string) ([]choice, error) {
+// choose lists the artifacts to write, in the order of targets. sizes holds the
+// bytes of each asset, or 0 when the host does not say. A glob puts the asset it
+// names first, for the host alone.
+func choose(
+	names []string,
+	sizes map[string]int64,
+	host platform.Platform,
+	glob string,
+) ([]choice, error) {
 	var chosen []choice
 
 	if glob != "" {
@@ -282,7 +290,7 @@ func choose(names []string, host platform.Platform, glob string) ([]choice, erro
 	written := map[platform.Selector]bool{}
 
 	for _, t := range targets() {
-		fits := pick(names, t)
+		fits := pick(names, sizes, t)
 		if len(fits) == 0 || written[t.Selector] || glob != "" && t.Matches(host) {
 			continue
 		}
@@ -380,7 +388,7 @@ func targets() []target {
 // arch words in the name. A linux target also requires its libc word, or no libc
 // word when it has none. Elsewhere "gnu" names a toolchain, as in
 // "x86_64-pc-windows-gnu".
-func pick(names []string, t target) []string {
+func pick(names []string, sizes map[string]int64, t target) []string {
 	var fits []string
 
 	for _, name := range names {
@@ -402,13 +410,16 @@ func pick(names []string, t target) []string {
 
 	// A build for the arch sorts before a universal one. A command line build
 	// sorts before a desktop app, which holds no program to link. A tar archive
-	// keeps file modes, so it sorts before a zip. A shorter name sorts before
-	// variants such as "-debug".
+	// keeps file modes, so it sorts before a zip. A smaller asset sorts before a
+	// larger one, because a desktop app with a plain name still bundles far more
+	// than a command line tool. A shorter name sorts before variants such as
+	// "-debug".
 	slices.SortFunc(fits, func(a, b string) int {
 		return cmp.Or(
 			cmp.Compare(t.fat(a), t.fat(b)),
 			cmp.Compare(desktop(a), desktop(b)),
 			cmp.Compare(rank(a), rank(b)),
+			smaller(sizes[a], sizes[b]),
 			cmp.Compare(len(a), len(b)),
 			strings.Compare(a, b),
 		)
@@ -417,15 +428,28 @@ func pick(names []string, t target) []string {
 	return fits
 }
 
-// desktop is 1 for an asset that is a desktop app, such as
+// desktopWords name a desktop app rather than a command line build, such as
 // "tool-desktop-mac-arm64.app.tar.gz" beside "tool-darwin-arm64.zip".
+var desktopWords = []string{"desktop", "app", "gui", "dmg", "installer", "setup"}
+
+// desktop is 1 for an asset that is a desktop app.
 func desktop(name string) int {
 	lower := strings.ToLower(name)
-	if strings.Contains(lower, ".app.") || hasWord(lower, []string{"desktop", "gui", "installer", "setup"}) {
+	if strings.Contains(lower, ".app.") || hasWord(lower, desktopWords) {
 		return 1
 	}
 
 	return 0
+}
+
+// smaller orders a before b when it has fewer bytes. A size of 0 is unknown and
+// orders neither.
+func smaller(a, b int64) int {
+	if a == 0 || b == 0 {
+		return 0
+	}
+
+	return cmp.Compare(a, b)
 }
 
 func rank(name string) int {
@@ -506,7 +530,7 @@ func hasAnySuffix(s string, suffixes []string) bool {
 }
 
 // checksumAsset returns the asset that holds asset's sha256: "<asset>.sha256"
-// first, then a shared checksum file.
+// first, then the shared checksum file that fits asset best.
 func checksumAsset(names []string, asset string) string {
 	for _, suffix := range []string{".sha256", ".sha256sum"} {
 		if slices.Contains(names, asset+suffix) {
@@ -514,9 +538,12 @@ func checksumAsset(names []string, asset string) string {
 		}
 	}
 
-	// A release may hold one checksum file for each OS, such as
-	// "tool-mac-checksums.txt". The one for another OS does not list the asset.
-	shared := ""
+	// A release may hold one checksum file for each OS or each platform, such as
+	// "tool-mac-checksums.txt" or "tool-linux-arm64-checksums.txt". The one for
+	// another platform does not list the asset, so a generic file such as
+	// "checksums.txt" or "SHA256SUMS" beats it, and a file that names the
+	// asset's own OS and arch wins over both.
+	best, bestScore := "", 0
 
 	for _, name := range names {
 		lower := strings.ToLower(name)
@@ -525,33 +552,50 @@ func checksumAsset(names []string, asset string) string {
 			continue
 		}
 
-		switch ours, other := sameOS(lower, strings.ToLower(asset)); {
-		case ours:
-			return name
-		case !other && shared == "":
-			shared = name
+		if score := platformScore(lower, strings.ToLower(asset)); score > bestScore {
+			best, bestScore = name, score
 		}
 	}
 
-	return shared
+	return best
 }
 
-// sameOS reports whether name has an OS word that asset has too, and whether it
-// has the word of another OS only.
-func sameOS(name, asset string) (ours, other bool) {
-	for _, words := range osWords {
+// platformScore rates how well a checksum file fits asset: 3 when it names the
+// asset's OS and arch, 2 when it names one of them and nothing else, 1 when it
+// names no platform, and 0 when it names another OS or another arch.
+func platformScore(name, asset string) int {
+	os, arch := wordsOf(name, asset, osWords), wordsOf(name, asset, archWords)
+
+	switch {
+	case os < 0 || arch < 0:
+		return 0
+	case os > 0 && arch > 0:
+		return 3
+	case os > 0 || arch > 0:
+		return 2
+	default:
+		return 1
+	}
+}
+
+// wordsOf is 1 when name has a word of groups that asset has too, -1 when it
+// has words of other groups only, and 0 when it has none.
+func wordsOf(name, asset string, groups map[string][]string) int {
+	found := 0
+
+	for _, words := range groups {
 		if !hasWord(name, words) {
 			continue
 		}
 
 		if hasWord(asset, words) {
-			return true, false
+			return 1
 		}
 
-		other = true
+		found = -1
 	}
 
-	return false, other
+	return found
 }
 
 // template swaps the tag and the version in a release URL for their variables.

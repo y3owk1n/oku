@@ -198,12 +198,34 @@ func (c *depCache) do(root, key string, install func() (installed, error)) (inst
 // install fetches the manifest, realizes the host's artifact and returns the
 // profile and lock entries for it. It changes the store only.
 func (e env) install(ctx context.Context, opts Options, req request) (installed, error) {
-	r, previous, wantManifest := req.ref, req.previous, req.wantManifest
-
 	fetched, inferred, err := e.manifestData(ctx, opts, req)
 	if err != nil {
 		return installed{}, err
 	}
+
+	got, err := e.installFrom(ctx, opts, req, fetched, inferred)
+
+	// The user never saw an inferred manifest, so an error from it shows what oku
+	// tried.
+	if err != nil && inferred != "" {
+		return installed{}, fmt.Errorf(
+			"%w\n\noku inferred this manifest for %s:\n\n%s", err, req.ref, strings.TrimSpace(inferred),
+		)
+	}
+
+	return got, err
+}
+
+// installFrom installs the manifest in fetched, which is inferred when oku
+// wrote it during this install.
+func (e env) installFrom(
+	ctx context.Context,
+	opts Options,
+	req request,
+	fetched ref.Fetched,
+	inferred string,
+) (installed, error) {
+	r, previous, wantManifest := req.ref, req.previous, req.wantManifest
 
 	m, err := manifest.Parse(fetched.Data, r.String())
 	if err != nil {

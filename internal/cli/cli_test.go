@@ -741,6 +741,46 @@ func TestArtifactChecksumComesFromSHA256URL(t *testing.T) {
 	}
 }
 
+func TestB201SHA256URLReadsAJSONChecksumManifest(t *testing.T) {
+	m := newMachine(t)
+	archive, sum := m.archive(t, "tool", map[string]string{"tool": script})
+	wrong := strings.Repeat("1", 64)
+
+	for name, data := range map[string]string{
+		"object.json": fmt.Sprintf(`{"other.tar.gz": %q, "dist/tool.tar.gz": %q}`, wrong, sum),
+		"array.json": fmt.Sprintf(
+			`[{"name": "other.tar.gz", "sha256": %q}, {"name": "tool.tar.gz", "sha256": %q}]`,
+			wrong, sum,
+		),
+	} {
+		sums := filepath.Join(m.fixtures, name)
+		must(t, os.WriteFile(sums, []byte(data), 0o644))
+
+		ref := m.rawManifest(t, "tool", fmt.Sprintf(
+			"[[artifact]]\nurl = \"file://%s\"\nsha256_url = \"file://%s\"\nbin = [\"tool\"]\n",
+			archive, sums,
+		))
+
+		must(t, os.RemoveAll(m.data))
+		must(t, os.RemoveAll(m.cache))
+		must(t, os.RemoveAll(m.config))
+
+		out, err := m.run(t, "", "add", ref)
+		if err != nil || strings.Contains(out, "trusted") {
+			t.Fatalf("add with %s: %v\n%s", name, err, out)
+		}
+
+		must(t, os.WriteFile(sums, []byte(strings.ReplaceAll(data, sum, wrong)), 0o644))
+		must(t, os.RemoveAll(m.data))
+		must(t, os.RemoveAll(m.cache))
+		must(t, os.RemoveAll(m.config))
+
+		if _, err := m.run(t, "", "add", ref); err == nil {
+			t.Fatalf("add with %s accepted a download that differs from the published digest", name)
+		}
+	}
+}
+
 func TestB178SyncOfAnInstalledPackageReadsNoChecksums(t *testing.T) {
 	m := newMachine(t)
 	archive, sum := m.archive(t, "tool", map[string]string{"tool": script})
@@ -1308,9 +1348,16 @@ func newReleaseServer(t *testing.T, tags ...string) *releaseServer {
 		tags := rs.tags
 
 		if size, err := strconv.Atoi(r.URL.Query().Get("per_page")); err == nil {
-			page, _ := strconv.Atoi(r.URL.Query().Get("page"))
-			from := min(max(page-1, 0)*size, len(tags))
+			page := max(1, atoi(r.URL.Query().Get("page")))
+			from := min((page-1)*size, len(tags))
 			tags = tags[from:min(from+size, len(tags))]
+
+			// GitHub names the next page in the Link header, and oku follows it.
+			if from+size < len(rs.tags) {
+				w.Header().Set("Link", fmt.Sprintf(
+					`<%s%s?per_page=%d&page=%d>; rel="next"`, rs.URL, r.URL.Path, size, page+1,
+				))
+			}
 		}
 
 		var items []string
@@ -1327,6 +1374,12 @@ func newReleaseServer(t *testing.T, tags ...string) *releaseServer {
 	t.Cleanup(rs.Close)
 
 	return rs
+}
+
+func atoi(s string) int {
+	n, _ := strconv.Atoi(s)
+
+	return n
 }
 
 // discoveredManifest writes a manifest whose versions come from the release
@@ -1380,6 +1433,30 @@ func TestB118AddFindsAVersionPastTheFirstPageOfReleases(t *testing.T) {
 
 	if got := m.toolOutput(t); got != "2.0.3" {
 		t.Fatalf("add installed %s, want 2.0.3 from the third page", got)
+	}
+}
+
+func TestB200AddFindsAVersionPastTheFirstHundredReleases(t *testing.T) {
+	m := newMachine(t)
+
+	// A nightly stream on top hides the stable stream past the first 100.
+	var tags []string
+	for i := 120; i > 0; i-- {
+		tags = append(tags, fmt.Sprintf("nightly-%d", i))
+	}
+
+	tags = append(tags, "v2.0.1", "v1.0.0")
+
+	server := newReleaseServer(t, tags...)
+	m.opts.GitHubAPI = server.URL + "/api"
+
+	ref := m.discoveredManifest(t, "2.0.1", "1.0.0")
+
+	_, err := m.run(t, "", "add", ref)
+	must(t, err)
+
+	if got := m.toolOutput(t); got != "2.0.1" {
+		t.Fatalf("add installed %s, want 2.0.1 from past the first 100 releases", got)
 	}
 }
 
@@ -1805,10 +1882,15 @@ func inferServer(t *testing.T, m *machine, assets map[string]string) {
 
 	var items []string
 	for name, file := range assets {
-		items = append(
-			items,
-			fmt.Sprintf(`{"name": %q, "browser_download_url": "file://%s"}`, name, file),
-		)
+		// GitHub reports the size of each asset, and inference compares them.
+		size := int64(0)
+		if info, err := os.Stat(file); err == nil {
+			size = info.Size()
+		}
+
+		items = append(items, fmt.Sprintf(
+			`{"name": %q, "browser_download_url": "file://%s", "size": %d}`, name, file, size,
+		))
 	}
 
 	latest := `{"tag_name": "v1.4.0", "assets": [` + strings.Join(items, ",") + `]}`

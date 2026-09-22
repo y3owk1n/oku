@@ -1,9 +1,144 @@
 package cli_test
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/y3owk1n/oku/internal/platform"
 )
+
+// hostWords returns the OS and arch words of hostAssetName, and the words of
+// another arch.
+func hostWords() (os, arch, otherArch string) {
+	host := platform.Host()
+	arch = map[string]string{"amd64": "x86_64", "arm64": "aarch64"}[host.Arch]
+	otherArch = map[string]string{"amd64": "aarch64", "arm64": "x86_64"}[host.Arch]
+
+	return host.OS, arch, otherArch
+}
+
+// hostArtifact returns the artifact of the machine that runs the test from an
+// inferred manifest, up to its bin line.
+func hostArtifact(t *testing.T, out string) string {
+	t.Helper()
+
+	host := platform.Host()
+
+	at := strings.Index(out, `os = "`+host.OS+`", arch = "`+host.Arch+`"`)
+	if at < 0 {
+		t.Fatalf("the manifest has no artifact for %s:\n%s", host, out)
+	}
+
+	artifact := out[at:]
+
+	return artifact[:strings.Index(artifact, "bin =")]
+}
+
+func TestB197InferencePrefersTheChecksumsOfTheAssetsPlatformOrAGenericFile(t *testing.T) {
+	hostOS, arch, otherArch := hostWords()
+
+	// sums writes one checksum file per name, so the manifest's URL names it.
+	sums := func(t *testing.T, m machine, names ...string) map[string]string {
+		t.Helper()
+
+		files := map[string]string{}
+
+		for _, name := range names {
+			files[name] = filepath.Join(m.fixtures, name)
+			must(t, os.WriteFile(files[name], []byte("x"), 0o644))
+		}
+
+		return files
+	}
+
+	t.Run("os and arch", func(t *testing.T) {
+		m := newMachine(t)
+		archive, _ := m.archive(t, "release", map[string]string{"tool": script})
+		own := "tool-" + hostOS + "-" + arch + "-checksums.txt"
+
+		assets := sums(t, m, "tool-"+hostOS+"-"+otherArch+"-checksums.txt", "checksums.txt", own)
+		assets[hostAssetName()] = archive
+
+		inferServer(t, &m, assets)
+
+		out, err := m.run(t, "", "manifest", "init", "--from", "owner/tool", "-o", "-")
+		must(t, err)
+
+		if got := hostArtifact(t, out); !strings.Contains(got, "/"+own+`"`) {
+			t.Fatalf("the artifact should read the checksums of its own platform:\n%s", out)
+		}
+	})
+
+	t.Run("generic over another platform", func(t *testing.T) {
+		m := newMachine(t)
+		archive, _ := m.archive(t, "release", map[string]string{"tool": script})
+		otherOS := map[string]string{"darwin": "linux", "linux": "darwin"}[hostOS]
+
+		assets := sums(t, m, "tool-"+otherOS+"-checksums.txt", "SHA256SUMS")
+		assets[hostAssetName()] = archive
+
+		inferServer(t, &m, assets)
+
+		out, err := m.run(t, "", "manifest", "init", "--from", "owner/tool", "-o", "-")
+		must(t, err)
+
+		if got := hostArtifact(t, out); !strings.Contains(got, `/SHA256SUMS"`) {
+			t.Fatalf("the artifact should read the generic checksum file:\n%s", out)
+		}
+	})
+}
+
+func TestB198InferencePrefersTheSmallerAssetAndNoneNamedAsAnApp(t *testing.T) {
+	m := newMachine(t)
+	_, arch, _ := hostWords()
+
+	// The command line build has the longer name, so only its size favours it.
+	cli, _ := m.archive(t, "cli-slim", map[string]string{"tool": script})
+	bundle, _ := m.archive(t, "bundle", map[string]string{
+		"tool": script, "resources.bin": strings.Repeat("x", 1<<16),
+	})
+	app, _ := m.archive(t, "app", map[string]string{"tool": script})
+
+	name := hostAssetName()
+	slim := strings.TrimSuffix(name, ".tar.gz") + "-slim.tar.gz"
+	appName := strings.Replace(name, "tool-", "tool-app-", 1)
+
+	inferServer(t, &m, map[string]string{name: bundle, slim: cli, appName: app})
+
+	out, err := m.run(t, "", "manifest", "init", "--from", "owner/tool", "-o", "-")
+	must(t, err)
+
+	got := hostArtifact(t, out)
+	if !strings.Contains(got, "/cli-slim.tar.gz") {
+		t.Fatalf("the %s artifact should be the smaller asset:\n%s", arch, out)
+	}
+
+	if !strings.Contains(out, "fit this machine too: "+name+", "+appName) {
+		t.Fatalf("the manifest should list the larger asset and the app after it:\n%s", out)
+	}
+}
+
+func TestB199AFailedInstallFromAnInferredManifestShowsTheManifest(t *testing.T) {
+	m := newMachine(t)
+	archive, _ := m.archive(t, "release", map[string]string{"tool": script})
+	sums := filepath.Join(m.fixtures, "checksums.txt")
+	must(t, os.WriteFile(sums, []byte(strings.Repeat("1", 64)+"  "+hostAssetName()+"\n"), 0o644))
+
+	inferServer(t, &m, map[string]string{hostAssetName(): archive, "checksums.txt": sums})
+
+	_, err := m.run(t, "", "add", "github:owner/tool")
+	if err == nil {
+		t.Fatal("add installed a download that does not match the published checksum")
+	}
+
+	for _, want := range []string{"oku inferred this manifest", "[[artifact]]", "sha256_url"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("the error does not show the inferred manifest, missing %q:\n%v", want, err)
+		}
+	}
+}
 
 func TestB174InferencePrefersTheCommandLineBuildAndTheChecksumsOfItsOwnOS(t *testing.T) {
 	m := newMachine(t)

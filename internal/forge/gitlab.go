@@ -153,17 +153,26 @@ func (g *gitlab) Release(ctx context.Context, repo, tag string) (Release, error)
 	return found.release(), err
 }
 
-// Releases reads the newest 100 releases.
+// Releases reads the newest maxReleases releases, following the "next" link of
+// each page.
 func (g *gitlab) Releases(ctx context.Context, repo string) ([]Release, error) {
-	var found []gitlabRelease
+	var releases []Release
 
-	if _, err := g.json(ctx, g.project(repo)+"/releases?per_page=100", &found); err != nil {
-		return nil, err
-	}
+	next := g.project(repo) + "/releases?per_page=100"
 
-	releases := make([]Release, len(found))
-	for i, release := range found {
-		releases[i] = release.release()
+	for next != "" && len(releases) < maxReleases {
+		var found []gitlabRelease
+
+		after, err := g.json(ctx, next, &found)
+		if err != nil {
+			return nil, err
+		}
+
+		for _, release := range found {
+			releases = append(releases, release.release())
+		}
+
+		next = after
 	}
 
 	return releases, nil
