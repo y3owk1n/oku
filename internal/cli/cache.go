@@ -400,7 +400,8 @@ func newKeyCmd() *cobra.Command {
 
 				if yours == "" && len(config.TrustedKeys) == 0 {
 					fmt.Fprintln(
-						out, "no keys yet, `oku key generate` makes yours and `oku key trust` adds another",
+						out,
+						"no keys yet, `oku key generate` makes yours and `oku key trust` adds another",
 					)
 
 					return nil

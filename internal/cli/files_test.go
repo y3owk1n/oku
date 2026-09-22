@@ -333,8 +333,12 @@ func TestB171APrebuiltLibraryServesABuildThatDependsOnIt(t *testing.T) {
 	got, err := exec.Command(m.profile("bin", "app")).Output()
 	must(t, err)
 
-	if !strings.Contains(string(got), "hello from the header") || !strings.Contains(string(got), "from lib") {
-		t.Fatalf("the built program should hold what CPATH and LIBRARY_PATH led to, it printed %q", got)
+	if !strings.Contains(string(got), "hello from the header") ||
+		!strings.Contains(string(got), "from lib") {
+		t.Fatalf(
+			"the built program should hold what CPATH and LIBRARY_PATH led to, it printed %q",
+			got,
+		)
 	}
 }
 

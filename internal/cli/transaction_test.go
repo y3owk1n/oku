@@ -263,7 +263,13 @@ func TestB167ADryRunChecksEverythingAndChangesNothing(t *testing.T) {
 	// A dry run finds what a sync would fail on.
 	must(t, os.WriteFile(home(".hello"), []byte("mine"), 0o644))
 
-	if _, err := m.run(t, "", "sync", "--dry-run"); err == nil || !strings.Contains(err.Error(), home(".hello")) {
+	if _, err := m.run(
+		t,
+		"",
+		"sync",
+		"--dry-run",
+	); err == nil ||
+		!strings.Contains(err.Error(), home(".hello")) {
 		t.Fatalf("the dry run should fail like the sync would, got %v", err)
 	}
 }
@@ -280,7 +286,12 @@ func TestB170AServiceSeesTheProfileAndMayNameALocation(t *testing.T) {
 
 	got := m.services.state["hotkeys"].def
 
-	if want := filepath.Join(filepath.Dir(m.config), "hotkeys", "rc"); len(got.Args) != 2 || got.Args[1] != want {
+	if want := filepath.Join(
+		filepath.Dir(m.config),
+		"hotkeys",
+		"rc",
+	); len(got.Args) != 2 ||
+		got.Args[1] != want {
 		t.Fatalf("the service should get the config path %s, its arguments are %v", want, got.Args)
 	}
 
@@ -289,6 +300,9 @@ func TestB170AServiceSeesTheProfileAndMayNameALocation(t *testing.T) {
 	}
 
 	if !strings.HasPrefix(got.Env["PATH"], m.profile("bin")+":") {
-		t.Fatalf("the programs of the profile should come first on the service's PATH, it is %q", got.Env["PATH"])
+		t.Fatalf(
+			"the programs of the profile should come first on the service's PATH, it is %q",
+			got.Env["PATH"],
+		)
 	}
 }

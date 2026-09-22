@@ -272,7 +272,13 @@ func checkPath(r *report, e env) {
 		r.problem(
 			"%s runs in place of oku's %s, because %s is earlier on PATH. "+
 				"Put %s before it, or remove the other copy",
-			filepath.Join(shadowed[0].dir, shadowed[0].name), shadowed[0].name, shadowed[0].dir, bin,
+			filepath.Join(
+				shadowed[0].dir,
+				shadowed[0].name,
+			),
+			shadowed[0].name,
+			shadowed[0].dir,
+			bin,
 		)
 	default:
 		names := make([]string, len(shadowed))

@@ -49,7 +49,13 @@ var systemLibraries = []systemLibrary{
 	},
 	// bzlib.h states no version. macOS has shipped 1.0.8 since 2019, and Homebrew
 	// names the same one.
-	{name: "bzip2", description: "bzip2 compression", header: "bzlib.h", libs: "-lbz2", fixed: "1.0.8"},
+	{
+		name:        "bzip2",
+		description: "bzip2 compression",
+		header:      "bzlib.h",
+		libs:        "-lbz2",
+		fixed:       "1.0.8",
+	},
 }
 
 // writeSystemPkgConfig writes a pkg-config file into dir for each library of

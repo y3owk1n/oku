@@ -296,20 +296,30 @@ func (m *Manifest) validate() error {
 	case m.Version.From != "" && m.Version.Value != "":
 		errs = append(errs, errors.New("set version.value or version.from, not both"))
 	case m.Version.From == FromGitHubReleases && !repoRe.MatchString(m.Version.Repo):
-		errs = append(errs, errors.New(`version.repo must be "owner/repo" or "host/owner/repo" for github-releases`))
+		errs = append(
+			errs,
+			errors.New(
+				`version.repo must be "owner/repo" or "host/owner/repo" for github-releases`,
+			),
+		)
 	case m.Version.From == FromGiteaReleases && !giteaRepoRe.MatchString(m.Version.Repo):
 		errs = append(errs, errors.New(`version.repo must be "host/owner/repo" for gitea-releases`))
 	case m.Version.From == FromGitLabReleases && !gitlabRepoRe.MatchString(m.Version.Repo):
 		errs = append(
 			errs,
-			errors.New(`version.repo must be "group/project" or "host/group/project" for gitlab-releases`),
+			errors.New(
+				`version.repo must be "group/project" or "host/group/project" for gitlab-releases`,
+			),
 		)
 	case m.Version.From == FromNPM && !npmNameRe.MatchString(m.Version.Repo):
 		errs = append(
 			errs, errors.New(`version.repo must be a package name such as "@scope/name" for npm`),
 		)
 	case m.Version.From == FromNPM && m.Version.StripPrefix != "":
-		errs = append(errs, errors.New("version.strip_prefix does not apply to npm, which has no tags"))
+		errs = append(
+			errs,
+			errors.New("version.strip_prefix does not apply to npm, which has no tags"),
+		)
 	case m.Version.From == FromGitTags && m.Version.Repo == "":
 		errs = append(errs, errors.New("version.repo must be a git URL for git-tags"))
 	case m.Version.From == FromGitBranch && (m.Version.Repo == "" || m.Version.Branch == ""):
@@ -385,11 +395,13 @@ func (m *Manifest) validate() error {
 		case !exposes && !a.Data:
 			errs = append(errs, fmt.Errorf(
 				"artifact[%d]: set at least one of bin, lib, include, share, man, completions, app "+
-					"or font, or data = true for a package that only holds files", i,
+					"or font, or data = true for a package that only holds files",
+				i,
 			))
 		case exposes && a.Data:
 			errs = append(errs, fmt.Errorf(
-				"artifact[%d]: data = true says the package exposes nothing, so remove data or the outputs", i,
+				"artifact[%d]: data = true says the package exposes nothing, so remove data or the outputs",
+				i,
 			))
 		}
 
@@ -507,7 +519,11 @@ func splitBin(raw []any) ([]string, []Wrapper, error) {
 
 			for key := range v {
 				if key != "name" && key != "run" && key != "args" {
-					return nil, nil, fmt.Errorf("bin[%d]: unknown key %q, use name, run and args", i, key)
+					return nil, nil, fmt.Errorf(
+						"bin[%d]: unknown key %q, use name, run and args",
+						i,
+						key,
+					)
 				}
 			}
 
@@ -524,7 +540,10 @@ func splitBin(raw []any) ([]string, []Wrapper, error) {
 
 			wraps = append(wraps, w)
 		default:
-			return nil, nil, fmt.Errorf("bin[%d]: want a path, or a table with name, run and args", i)
+			return nil, nil, fmt.Errorf(
+				"bin[%d]: want a path, or a table with name, run and args",
+				i,
+			)
 		}
 	}
 

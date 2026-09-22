@@ -288,7 +288,8 @@ func (p *Profile) Add(pkg Package, lockData []byte) (int, error) {
 func (p *Profile) Has(name string) bool {
 	pkgs, err := p.Packages()
 
-	return err == nil && slices.ContainsFunc(pkgs, func(have Package) bool { return have.Name == name })
+	return err == nil &&
+		slices.ContainsFunc(pkgs, func(have Package) bool { return have.Name == name })
 }
 
 // Remove stages a new generation without the package called name.

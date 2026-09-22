@@ -115,10 +115,14 @@ func ParseIn(dir, s string) (Ref, error) {
 				"%s: want github:owner/repo, github:owner/repo#name or github:host/owner/repo", s,
 			)
 		case r.Scheme == "gitea" && !giteaRe.MatchString(r.Location):
-			return Ref{}, fmt.Errorf("%s: want gitea:host/owner/repo or gitea:host/owner/repo#name", s)
+			return Ref{}, fmt.Errorf(
+				"%s: want gitea:host/owner/repo or gitea:host/owner/repo#name",
+				s,
+			)
 		case r.Scheme == "gitlab" && !gitlabRe.MatchString(r.Location):
 			return Ref{}, fmt.Errorf(
-				"%s: want gitlab:group/project, gitlab:group/project#name or gitlab:host/group/project", s,
+				"%s: want gitlab:group/project, gitlab:group/project#name or gitlab:host/group/project",
+				s,
 			)
 		case r.Scheme == "codeberg" && !codebergRe.MatchString(r.Location):
 			return Ref{}, fmt.Errorf("%s: want codeberg:owner/repo or codeberg:owner/repo#name", s)

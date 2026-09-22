@@ -75,7 +75,11 @@ func Parse(s string) (Platform, error) {
 		names = append(names, p.String())
 	}
 
-	return Platform{}, fmt.Errorf("%q is not a platform, use one of %s", s, strings.Join(names, ", "))
+	return Platform{}, fmt.Errorf(
+		"%q is not a platform, use one of %s",
+		s,
+		strings.Join(names, ", "),
+	)
 }
 
 // Matches reports whether every non-empty selector field equals the platform's.

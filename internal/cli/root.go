@@ -141,7 +141,10 @@ func groupCommands(root *cobra.Command) {
 		title    string
 		commands []string
 	}{
-		{"Packages", []string{"add", "remove", "sync", "update", "list", "info", "why", "which", "shell"}},
+		{
+			"Packages",
+			[]string{"add", "remove", "sync", "update", "list", "info", "why", "which", "shell"},
+		},
 		{"Finding packages", []string{"search", "source"}},
 		{"Generations", []string{"generations", "rollback", "gc"}},
 		{"Projects and shells", []string{"hook", "env", "allow", "deny"}},

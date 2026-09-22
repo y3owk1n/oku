@@ -840,7 +840,12 @@ func TestB178ParallelEnvLimitsHowManyPackagesInstallAtOnce(t *testing.T) {
 
 	t.Setenv("OKU_PARALLEL", "many")
 
-	if _, err := m.run(t, "", "sync"); err == nil || !strings.Contains(err.Error(), "OKU_PARALLEL") {
+	if _, err := m.run(
+		t,
+		"",
+		"sync",
+	); err == nil ||
+		!strings.Contains(err.Error(), "OKU_PARALLEL") {
 		t.Fatalf("want an error that names OKU_PARALLEL, got %v", err)
 	}
 }
@@ -4909,7 +4914,12 @@ func TestB203StartReportsAServiceThatExitsRightAway(t *testing.T) {
 
 		out, err := m.run(t, "", "service", action, "food")
 		if err == nil || strings.Contains(out, "running") {
-			t.Fatalf("service %s: want an error for a service that exited, got %v\n%s", action, err, out)
+			t.Fatalf(
+				"service %s: want an error for a service that exited, got %v\n%s",
+				action,
+				err,
+				out,
+			)
 		}
 
 		want := "food started and then exited, look at /fake/logs/food.log"

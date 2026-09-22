@@ -215,7 +215,9 @@ func (t *Table) Write(w io.Writer) error {
 			text := pad(c.text, widths[i], i == len(row)-1)
 			if c.style != nil {
 				// Style the text, not the padding, so the codes never widen a column.
-				text = c.style(strings.TrimRight(text, " ")) + text[len(strings.TrimRight(text, " ")):]
+				text = c.style(
+					strings.TrimRight(text, " "),
+				) + text[len(strings.TrimRight(text, " ")):]
 			}
 
 			b.WriteString(text)

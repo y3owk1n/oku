@@ -67,7 +67,11 @@ func (inf *Inferrer) FromURL(
 
 	name = strings.ToLower(name)
 	if !nameRe.MatchString(name) {
-		return "", fmt.Errorf("%s: cannot take a package name from %q, write a manifest for it", at, asset)
+		return "", fmt.Errorf(
+			"%s: cannot take a package name from %q, write a manifest for it",
+			at,
+			asset,
+		)
 	}
 
 	files, err := inf.Inspect(ctx, at, forge.Auth{})
