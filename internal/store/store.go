@@ -741,7 +741,8 @@ func writeNew(in io.Reader, dest string) error {
 }
 
 // Unreferenced returns the store paths that are not in keep, with their sizes in
-// bytes. It skips the temporary directories of installs that are in progress.
+// bytes. The caller holds the lock of the busy package, so a temporary directory
+// is left over from an install that was killed.
 func (s *Store) Unreferenced(keep map[string]bool) (map[string]int64, error) {
 	entries, err := os.ReadDir(s.dir)
 	if err != nil && !errors.Is(err, fs.ErrNotExist) {
@@ -752,7 +753,7 @@ func (s *Store) Unreferenced(keep map[string]bool) (map[string]int64, error) {
 
 	for _, entry := range entries {
 		path := filepath.Join(s.dir, entry.Name())
-		if !entry.IsDir() || strings.HasPrefix(entry.Name(), ".tmp-") || keep[path] {
+		if !entry.IsDir() || keep[path] {
 			continue
 		}
 
