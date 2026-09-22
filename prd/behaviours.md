@@ -219,7 +219,12 @@ order step in `prd/product.md`.
   does not strip a bundle at the top of the asset. A `.deb` or `.rpm` symlink
   to an absolute path names a file of the package.
 - B199 [4] When an install from a manifest oku inferred in the same run fails,
-  the error ends with the inferred manifest.
+  the error says which asset oku chose for this machine, which other assets
+  fit, and the `oku add --asset` command that picks one. With `--verbose` it
+  ends with the inferred manifest.
+- B230 [4] When `[lock] platforms` names another OS and the inferred manifest
+  has artifacts for one OS, `add` pins that OS's platforms alone, writes
+  `when = { os = "<os>" }` on the entry in `oku.toml`, and says so.
 - B223 [4] `add`, `update` and `sync` open an asset for the host and for each
   `[lock]` platform, and for no other. A platform outside the lock gets an
   artifact when its asset has the ending of an opened one, and none
