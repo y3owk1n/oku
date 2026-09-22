@@ -82,6 +82,21 @@ func Parse(s string) (Platform, error) {
 	)
 }
 
+// TOML renders the selector as an inline table, such as `{ os = "darwin" }`.
+func (s Selector) TOML() string {
+	var parts []string
+
+	for _, field := range []struct{ key, value string }{
+		{"os", s.OS}, {"arch", s.Arch}, {"libc", s.Libc},
+	} {
+		if field.value != "" {
+			parts = append(parts, fmt.Sprintf("%s = %q", field.key, field.value))
+		}
+	}
+
+	return "{ " + strings.Join(parts, ", ") + " }"
+}
+
 // Matches reports whether every non-empty selector field equals the platform's.
 func (s Selector) Matches(p Platform) bool {
 	return (s.OS == "" || s.OS == p.OS) &&

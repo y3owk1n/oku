@@ -112,23 +112,33 @@ func (c choice) pinned(platforms []platform.Platform) bool {
 	return slices.ContainsFunc(platforms, c.Matches)
 }
 
-// Manifest returns manifest TOML for the repo that a forge ref's scheme and
-// location name. It needs an asset for host, because it opens that asset to
-// find the executable.
+// Inferred is a manifest oku wrote from a release.
+type Inferred struct {
+	// Text is the manifest TOML.
+	Text string
+	// Asset is the release asset the host's artifact downloads, and Others are
+	// the assets that fit the host as well, which --asset may pick instead.
+	Asset  string
+	Others []string
+}
+
+// Manifest returns the manifest inferred for the repo that a forge ref's
+// scheme and location name. It needs an asset for host, because it opens that
+// asset to find the executable.
 func (inf *Inferrer) Manifest(
 	ctx context.Context,
 	scheme, location string,
 	host platform.Platform,
 	opts Options,
-) (string, error) {
+) (Inferred, error) {
 	server, repo, err := inf.Hosts.Open(scheme, location)
 	if err != nil {
-		return "", err
+		return Inferred{}, err
 	}
 
 	rel, err := wanted(ctx, server, repo, opts.Version)
 	if err != nil {
-		return "", err
+		return Inferred{}, err
 	}
 
 	names := make([]string, len(rel.Assets))
@@ -143,11 +153,15 @@ func (inf *Inferrer) Manifest(
 
 	chosen, err := choose(names, sizes, host, opts.Asset)
 	if err != nil {
-		return "", err
+		return Inferred{}, err
 	}
 
-	if !slices.ContainsFunc(chosen, func(c choice) bool { return c.Matches(host) }) {
-		return "", fmt.Errorf(
+	var result Inferred
+
+	if i := slices.IndexFunc(chosen, func(c choice) bool { return c.Matches(host) }); i >= 0 {
+		result.Asset, result.Others = chosen[i].asset, chosen[i].others
+	} else {
+		return Inferred{}, fmt.Errorf(
 			"no release asset fits this machine (%s)\nrelease %s of %s has: %s\n"+
 				"name one with --asset",
 			host, rel.Tag, repo, strings.Join(names, ", "),
@@ -198,12 +212,12 @@ func (inf *Inferrer) Manifest(
 
 		switch {
 		case err != nil && isHost && len(c.others) > 0:
-			return "", fmt.Errorf(
+			return Inferred{}, fmt.Errorf(
 				"%s: %w\nthese assets fit this machine too: %s\nchoose one with --asset",
 				c.asset, err, strings.Join(c.others, ", "),
 			)
 		case err != nil && isHost:
-			return "", fmt.Errorf("%s: %w", c.asset, err)
+			return Inferred{}, fmt.Errorf("%s: %w", c.asset, err)
 		case err != nil:
 			// oku leaves out a platform whose asset it cannot read. A wrong
 			// artifact would fail on that platform at install.
@@ -250,7 +264,9 @@ func (inf *Inferrer) Manifest(
 		b.WriteString(l.toml(c.OS))
 	}
 
-	return b.String(), nil
+	result.Text = b.String()
+
+	return result, nil
 }
 
 // toml writes the strip, bin, app and man lines of a layout for an artifact of os.

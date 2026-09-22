@@ -250,6 +250,7 @@ func reconcile(
 				keepVersion:     !fresh && previous.Ref == r.String(),
 				service:         wanted[name].entry.Service,
 				system:          wanted[name].entry.System,
+				verbose:         flags.verbose,
 				approve:         e.approver(cmd, opts, flags),
 				log:             buildLog(cmd, flags),
 				root:            name,

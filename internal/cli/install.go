@@ -44,6 +44,9 @@ type installed struct {
 	firstUseOthers []string
 	// inferred is the manifest text when oku inferred it during this install.
 	inferred string
+	// when limits the list entry to the one OS an inferred manifest covers,
+	// when the lock names platforms of another OS. It is zero otherwise.
+	when platform.Selector
 	// unsandboxed says why the build ran without the sandbox, or is empty.
 	unsandboxed string
 	// substituted reports that the package came from a cache, and cacheNotes
@@ -77,6 +80,8 @@ type request struct {
 	// asset and bin name the asset and the program for an inferred manifest.
 	// "--asset" and "--bin" set them.
 	asset, bin string
+	// verbose adds the inferred manifest to an error from it.
+	verbose bool
 	// service enables the package's services.
 	service bool
 	// system puts the package's apps, fonts and services in system scope.
@@ -207,20 +212,101 @@ func (e env) install(ctx context.Context, opts Options, req request) (installed,
 		return installed{}, err
 	}
 
-	got, err := e.installFrom(ctx, opts, req, fetched, inferred)
+	// A release for one OS cannot pin the lock's platforms of another. The
+	// list entry gets a when for that OS, as the user would write for it.
+	when, err := coveredOS(fetched, inferred.Text, req.platforms)
+	if err != nil {
+		return installed{}, err
+	}
 
-	// The user never saw an inferred manifest, so an error from it shows what oku
-	// tried.
-	if err != nil && inferred != "" {
-		return installed{}, fmt.Errorf(
-			"%w\n\noku inferred this manifest for %s:\n\n%s",
-			err,
-			req.ref,
-			strings.TrimSpace(inferred),
+	if when.OS != "" {
+		req.platforms = slices.DeleteFunc(slices.Clone(req.platforms), func(p platform.Platform) bool {
+			return !when.Matches(p)
+		})
+	}
+
+	got, err := e.installFrom(ctx, opts, req, fetched, inferred.Text)
+
+	// The user never saw an inferred manifest, so an error from it says what oku
+	// chose and what to type instead.
+	if err != nil && inferred.Text != "" {
+		return installed{}, fmt.Errorf("%w\n%s", err, inferredHints(req, inferred))
+	}
+
+	got.when = when
+
+	return got, err
+}
+
+// coveredOS returns a selector for the one OS that an inferred manifest has
+// artifacts for, when platforms names another OS. It is zero for a manifest
+// that oku did not infer, that covers several OSes, or that covers every
+// platform in platforms.
+func coveredOS(
+	fetched ref.Fetched,
+	inferred string,
+	platforms []platform.Platform,
+) (platform.Selector, error) {
+	if inferred == "" {
+		return platform.Selector{}, nil
+	}
+
+	m, err := manifest.Parse(fetched.Data, "the inferred manifest")
+	if err != nil {
+		return platform.Selector{}, err
+	}
+
+	var oses []string
+
+	for _, a := range m.Artifacts {
+		if a.Match.OS == "" {
+			return platform.Selector{}, nil
+		}
+
+		if !slices.Contains(oses, a.Match.OS) {
+			oses = append(oses, a.Match.OS)
+		}
+	}
+
+	if len(oses) != 1 || m.HasBuild() {
+		return platform.Selector{}, nil
+	}
+
+	when := platform.Selector{OS: oses[0]}
+	if slices.ContainsFunc(platforms, func(p platform.Platform) bool { return !when.Matches(p) }) {
+		return when, nil
+	}
+
+	return platform.Selector{}, nil
+}
+
+// inferredHints tells the user what oku chose from the release and how to
+// choose otherwise. With verbose it ends with the manifest.
+func inferredHints(req request, inferred infer.Inferred) string {
+	var b strings.Builder
+
+	fmt.Fprintf(&b, "oku inferred a manifest for %s from its release", req.ref)
+
+	if !req.verbose {
+		b.WriteString(", --verbose prints it")
+	}
+
+	if inferred.Asset != "" {
+		fmt.Fprintf(&b, "\nit chose the asset %s for this machine", inferred.Asset)
+	}
+
+	if len(inferred.Others) > 0 {
+		fmt.Fprintf(
+			&b, "\nthese fit too: %s\npick one with: oku add %s --asset %s",
+			strings.Join(inferred.Others, ", "), req.ref, inferred.Others[0],
 		)
 	}
 
-	return got, err
+	if req.verbose {
+		fmt.Fprintf(&b, "\n\n%s", strings.TrimSpace(inferred.Text))
+	}
+
+	return b.String()
 }
 
 // installFrom installs the manifest in fetched, which is inferred when oku
@@ -793,47 +879,47 @@ func (e env) manifestData(
 	ctx context.Context,
 	opts Options,
 	req request,
-) (ref.Fetched, string, error) {
+) (ref.Fetched, infer.Inferred, error) {
 	if req.keepVersion && req.previous.Inferred {
 		return ref.Fetched{
 			Data:   []byte(req.previous.Manifest),
 			Commit: req.previous.Commit,
-		}, "", nil
+		}, infer.Inferred{}, nil
 	}
 
 	if req.ref.Kind == ref.NPM {
 		text, err := e.inferNPM(ctx, opts, req)
 
-		return ref.Fetched{Data: []byte(text)}, text, err
+		return ref.Fetched{Data: []byte(text)}, infer.Inferred{Text: text}, err
 	}
 
 	fetched, err := e.fetcher(opts).Fetch(ctx, req.ref, req.commit, ref.Manifest)
 
 	if req.ref.Kind == ref.HTTP && isDownload(req.ref, fetched.Data, err) {
 		if req.asset != "" {
-			return fetched, "", fmt.Errorf("--asset does not apply, %s is the asset", req.ref)
+			return fetched, infer.Inferred{}, fmt.Errorf("--asset does not apply, %s is the asset", req.ref)
 		}
 
 		text, err := e.inferrer(opts).FromURL(ctx, req.ref.Location, req.target(), req.bin)
 		if err != nil {
-			return ref.Fetched{}, "", err
+			return ref.Fetched{}, infer.Inferred{}, err
 		}
 
-		return ref.Fetched{Data: []byte(text)}, text, nil
+		return ref.Fetched{Data: []byte(text)}, infer.Inferred{Text: text}, nil
 	}
 
 	if err == nil && (req.asset != "" || req.bin != "") {
-		return fetched, "", fmt.Errorf(
+		return fetched, infer.Inferred{}, fmt.Errorf(
 			"--asset and --bin apply when oku infers a manifest, and %s has one", req.ref,
 		)
 	}
 
 	if err == nil || !errors.Is(err, ref.ErrNotFound) ||
 		req.ref.Kind != ref.Forge || req.ref.Fragment != "" {
-		return fetched, "", err
+		return fetched, infer.Inferred{}, err
 	}
 
-	text, err := e.inferrer(opts).Manifest(
+	inferred, err := e.inferrer(opts).Manifest(
 		ctx, req.ref.Scheme, req.ref.Location, req.target(), infer.Options{
 			Version:   req.ref.Version,
 			Asset:     req.asset,
@@ -842,10 +928,10 @@ func (e env) manifestData(
 		},
 	)
 	if err != nil {
-		return ref.Fetched{}, "", err
+		return ref.Fetched{}, infer.Inferred{}, err
 	}
 
-	return ref.Fetched{Data: []byte(text), Commit: fetched.Commit}, text, nil
+	return ref.Fetched{Data: []byte(inferred.Text), Commit: fetched.Commit}, inferred, nil
 }
 
 // isDownload reports whether a URL is the package itself and not a manifest.

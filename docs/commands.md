@@ -140,6 +140,7 @@ Common failures:
 | `<name> has no artifact for darwin-arm64` | No `[[artifact]]` matches this machine. |
 | `no release asset fits this machine` | The repo has no manifest, and no asset of its release names this OS and arch. The asset names follow. Pass one to `--asset`. |
 | `cannot tell which file is the program` | The inferred asset holds several executables and none is named after the repo. Pass one to `--bin`. |
+| `it chose the asset <name> for this machine` | An install from an inferred manifest failed. The lines after it list the other assets that fit and the `--asset` command that picks one, and `--verbose` adds the manifest. |
 | `--asset and --bin apply when oku infers a manifest` | The ref has a manifest, and these flags apply to an inferred manifest only. |
 | `<name> has no [build], so it cannot be built from source` | `--from-source` on a manifest with artifacts only. |
 | `the build needs "<tool>", which is not on PATH` | Install that tool yourself. oku does not install `needs`. |
