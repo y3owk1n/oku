@@ -99,20 +99,13 @@ func TestB179LockPlatformsPinsAnotherPlatformWithoutInstallingIt(t *testing.T) {
 	}
 }
 
-func TestB180AProjectPinsEveryPlatformItCanAndTheGlobalListTheHost(t *testing.T) {
+func TestB180WithoutLockPlatformsTheGlobalListAndAProjectPinTheHostAlone(t *testing.T) {
 	m := newMachine(t)
 	other := otherPlatform()
 	ref, _ := m.twoPlatformManifest(t, other)
 
 	_, err := m.run(t, "", "add", ref)
 	must(t, err)
-
-	locked, err := os.ReadFile(filepath.Join(m.config, "oku.lock"))
-	must(t, err)
-
-	if strings.Contains(string(locked), "platform."+other.String()+"]") {
-		t.Fatalf("the global lock pins %s:\n%s", other, locked)
-	}
 
 	project := filepath.Join(m.fixtures, "work")
 	must(t, os.MkdirAll(project, 0o755))
@@ -124,13 +117,16 @@ func TestB180AProjectPinsEveryPlatformItCanAndTheGlobalListTheHost(t *testing.T)
 		t.Fatalf("add: %v\n%s", err, out)
 	}
 
-	locked, err = os.ReadFile(filepath.Join(project, "oku.lock"))
-	must(t, err)
+	for _, lockPath := range []string{
+		filepath.Join(m.config, "oku.lock"), filepath.Join(project, "oku.lock"),
+	} {
+		locked, err := os.ReadFile(lockPath)
+		must(t, err)
 
-	// The manifest has an artifact for two platforms, and oku skips the others.
-	if got := strings.Count(string(locked), "[package.platform."); got != 2 ||
-		!strings.Contains(string(locked), "platform."+other.String()+"]") {
-		t.Fatalf("the project lock does not pin the host and %s alone:\n%s", other, locked)
+		if got := strings.Count(string(locked), "[package.platform."); got != 1 ||
+			strings.Contains(string(locked), "platform."+other.String()+"]") {
+			t.Fatalf("%s does not pin the host alone:\n%s", lockPath, locked)
+		}
 	}
 }
 

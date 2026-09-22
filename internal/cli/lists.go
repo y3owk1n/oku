@@ -75,21 +75,17 @@ type merged struct {
 
 // lockPlatforms returns the platforms besides the host that oku.lock pins a
 // package of own for, limited to those when matches, and whether each one must
-// resolve. [lock] platforms names them, and they must. Without it a project
-// pins every platform it can, because a project is shared between machines,
-// and the global list pins the host alone.
+// resolve. [lock] platforms names them, and they must. Without it oku pins the
+// host alone.
 func (e env) lockPlatforms(
 	own *list.List,
 	when platform.Selector,
 ) ([]platform.Platform, bool) {
-	all, strict := own.LockPlatforms, len(own.LockPlatforms) > 0
-	if !strict && e.project != "" {
-		all = platform.All()
-	}
+	strict := len(own.LockPlatforms) > 0
 
 	var platforms []platform.Platform
 
-	for _, p := range all {
+	for _, p := range own.LockPlatforms {
 		if p != platform.Host() && when.Matches(p) {
 			platforms = append(platforms, p)
 		}

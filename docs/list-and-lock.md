@@ -449,14 +449,14 @@ a new build gives it.
 - A named platform that a package has no artifact and no build for is an
   error. Limit such a package with `when`, and oku pins it for the platforms
   that `when` matches.
-- Without `[lock]`, a [project](projects.md) pins every platform it can, when
-  you `add` or `update`, and skips the ones that have no download. The global
-  list pins your own platform only.
+- Without `[lock]`, `add` and `update` pin your own platform only, in a
+  [project](projects.md) as in the global list. Name the platforms of the
+  machines that share the lock, and oku does the work for those and no more.
 - Only the `[lock]` of your own `oku.toml` counts, not one in an included list.
 - oku also pins a package whose `when` leaves out your own machine, with its
   deps, for the platforms that `when` matches. It installs none of it and
   prints `patchelf 0.18.0, pinned and not installed on darwin-arm64`. The
-  global list without `[lock]` pins the host alone, so there the first machine
+  list without `[lock]` pins the host alone, so there the first machine
   that `when` matches pins the package.
 
 A machine whose platform is missing from the lock adds its own entry the first
