@@ -12,13 +12,14 @@ import (
 	"github.com/y3owk1n/oku/internal/platform"
 	"github.com/y3owk1n/oku/internal/profile"
 	"github.com/y3owk1n/oku/internal/store"
+	"github.com/y3owk1n/oku/internal/ui"
 )
 
 func newInfoCmd(opts Options) *cobra.Command {
 	return &cobra.Command{
 		Use:   "info <name>",
 		Short: "Show what oku knows about an installed package",
-		Args:  cobra.ExactArgs(1),
+		Args:  exactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			e, err := scopedEnv(cmd, opts)
 			if err != nil {
@@ -67,29 +68,29 @@ func newInfoCmd(opts Options) *cobra.Command {
 				})
 			}
 
-			row := func(label, value string) {
-				if value != "" {
-					fmt.Fprintf(out, "%-10s %s\n", label, value)
-				}
+			s := ui.For(out)
+
+			pairs := [][2]string{
+				{"name", s.Bold(pkg.Name)},
+				{"version", pkg.Version},
+				{"ref", s.Home(pkg.Ref)},
+				{"commit", entry.Commit},
+				{"installed", at.Strategy},
+				{"store", s.Home(pkg.StorePath)},
 			}
 
-			row("name", pkg.Name)
-			row("version", pkg.Version)
-			row("ref", pkg.Ref)
-			row("commit", entry.Commit)
-			row("installed", at.Strategy)
-			row("store", pkg.StorePath)
-
 			if entry.Inferred {
-				row("manifest", "inferred by oku from the repo's releases")
+				pairs = append(pairs, [2]string{"manifest", "inferred by oku from the repo's releases"})
 			}
 
 			if at.Impure {
-				row("impure", "a build step used the network, so this build is not reproducible")
+				pairs = append(pairs, [2]string{
+					"impure", s.Warn("a build step used the network, so this build is not reproducible"),
+				})
 			}
 
 			if at.VendorSHA256 != "" {
-				row("vendored", "sha256 "+at.VendorSHA256)
+				pairs = append(pairs, [2]string{"vendored", "sha256 " + at.VendorSHA256})
 			}
 
 			var deps []string
@@ -100,16 +101,16 @@ func newInfoCmd(opts Options) *cobra.Command {
 				}
 			}
 
-			row("deps", strings.Join(deps, ", "))
+			pairs = append(pairs, [2]string{"deps", strings.Join(deps, ", ")})
 
 			bins, _ := filepath.Glob(filepath.Join(pkg.StorePath, "bin", "*"))
 			for i, bin := range bins {
 				bins[i] = filepath.Base(bin)
 			}
 
-			row("programs", strings.Join(bins, ", "))
+			pairs = append(pairs, [2]string{"programs", strings.Join(bins, ", ")})
 
-			return nil
+			return s.KV(out, pairs...)
 		},
 	}
 }

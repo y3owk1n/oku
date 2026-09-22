@@ -13,6 +13,8 @@ import (
 	"time"
 
 	"golang.org/x/term"
+
+	"github.com/y3owk1n/oku/internal/ui"
 )
 
 const (
@@ -27,6 +29,7 @@ type Reporter struct {
 	mu    sync.Mutex
 	out   io.Writer
 	live  bool
+	style ui.Style
 	width func() int
 	tasks []*task
 	stop  chan struct{}
@@ -48,7 +51,7 @@ type task struct {
 // New returns a reporter that writes to out. It redraws a line when out is a
 // terminal that understands escape codes.
 func New(out io.Writer) *Reporter {
-	r := &Reporter{out: out}
+	r := &Reporter{out: out, style: ui.For(out)}
 
 	file, ok := out.(*os.File)
 	if ok && term.IsTerminal(int(file.Fd())) && os.Getenv("TERM") != "dumb" {
@@ -257,7 +260,8 @@ func (r *Reporter) draw() {
 	}
 
 	fmt.Fprintf(
-		r.out, "%s%c %s%s", clearLine, spinner[r.frame%len(spinner)], string(text), tail,
+		r.out, "%s%s %s%s",
+		clearLine, r.style.Accent(string(spinner[r.frame%len(spinner)])), string(text), r.style.Dim(tail),
 	)
 }
 

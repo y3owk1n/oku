@@ -1,10 +1,12 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -13,6 +15,7 @@ import (
 	"github.com/y3owk1n/oku/internal/platform"
 	"github.com/y3owk1n/oku/internal/ref"
 	"github.com/y3owk1n/oku/internal/source"
+	"github.com/y3owk1n/oku/internal/ui"
 )
 
 func newAddCmd(opts Options) *cobra.Command {
@@ -41,7 +44,7 @@ func newAddCmd(opts Options) *cobra.Command {
   npm:@scope/name                     a command-line tool in the npm registry
   git+https://host/repo#path/pkg.toml a file in any git repo
   alias/name                          a package in a source, see "oku source"`,
-		Args: cobra.ExactArgs(1),
+		Args: exactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runAdd(cmd, opts, args[0], &flags, fromSource, enable, system, asset, bin)
 		},
@@ -135,6 +138,14 @@ func runAdd(
 		approve:         e.approver(cmd, opts, flags),
 		log:             buildLog(cmd, flags),
 	})
+	if errors.Is(err, ref.ErrNotFound) && !strings.ContainsAny(arg, ":/\\") {
+		return fmt.Errorf(
+			"%w\n%s is no file here. A package from a source is written alias/name, "+
+				"and `oku add --help` lists every ref form",
+			err, arg,
+		)
+	}
+
 	if err != nil {
 		return err
 	}
@@ -181,7 +192,10 @@ func runAdd(
 	e.reportFirstUse(cmd.ErrOrStderr(), got)
 	reportUnsandboxed(cmd.ErrOrStderr(), got)
 	reportCache(cmd.ErrOrStderr(), got)
-	fmt.Fprintf(cmd.OutOrStdout(), "added %s %s\n", got.lock.Name, got.lock.Version)
+	s := ui.For(cmd.OutOrStdout())
+	fmt.Fprintf(
+		cmd.OutOrStdout(), "%s %s %s\n", s.Good("added"), s.Bold(got.lock.Name), got.lock.Version,
+	)
 
 	switch {
 	case slices.Contains(filepath.SplitList(os.Getenv("PATH")), prof.BinDir()):

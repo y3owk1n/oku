@@ -20,6 +20,7 @@ import (
 	"github.com/y3owk1n/oku/internal/platform"
 	"github.com/y3owk1n/oku/internal/profile"
 	"github.com/y3owk1n/oku/internal/store"
+	"github.com/y3owk1n/oku/internal/ui"
 )
 
 const (
@@ -312,7 +313,16 @@ func reconcile(
 		jobs = []*job{j}
 	}
 
-	var pkgs []profile.Package
+	have, err := e.profile().Packages()
+	if err != nil {
+		return err
+	}
+
+	var (
+		pkgs    []profile.Package
+		style   = ui.For(out)
+		summary = style.Table("", "package", "version", "")
+	)
 
 	for _, j := range jobs {
 		name, r, previous := j.name, j.req.ref, j.req.previous
@@ -335,20 +345,22 @@ func reconcile(
 			)
 		}
 
+		version := got.lock.Version
+
 		switch {
 		case j.req.rebuild:
-			fmt.Fprintf(out, "%s %s, built again\n", name, got.lock.Version)
+			syncRow(style, summary, "~", name, version, "built again")
 		case j.req.lockOnly:
-			fmt.Fprintf(out, "%s %s, pinned and not installed on %s\n", name, got.lock.Version, host)
+			syncRow(style, summary, "·", name, version, "pinned and not installed on "+host.String())
 		case !locksManifest:
-			fmt.Fprintf(out, "%s %s\n", name, got.lock.Version)
-		case previous.Version != got.lock.Version:
-			fmt.Fprintf(out, "%s %s -> %s\n", name, previous.Version, got.lock.Version)
+			syncRow(style, summary, "+", name, version, "")
+		case previous.Version != version:
+			syncRow(style, summary, "^", name, previous.Version+" "+style.Arrow()+" "+version, "")
 		case previous.ManifestSHA256 != got.lock.ManifestSHA256:
-			fmt.Fprintf(out, "%s %s, manifest changed\n", name, got.lock.Version)
+			syncRow(style, summary, "~", name, version, "manifest changed")
 		case previous.Platforms[host.String()] != (lock.Platform{}) &&
 			previous.Platforms[host.String()].SHA256 != got.lock.Platforms[host.String()].SHA256:
-			fmt.Fprintf(out, "%s %s, checksum changed\n", name, got.lock.Version)
+			syncRow(style, summary, "~", name, version, "checksum changed")
 		}
 
 		reportInferred(out, got, flags.verbose)
@@ -361,6 +373,19 @@ func reconcile(
 		if !j.req.lockOnly {
 			pkgs = append(pkgs, got.profile)
 		}
+	}
+
+	// A dry run says "would remove" further down, so it needs no row here.
+	if dryRun, _ := cmd.Flags().GetBool(dryRunFlag); !dryRun {
+		for _, pkg := range have {
+			if _, ok := wanted[pkg.Name]; !ok {
+				syncRow(style, summary, "-", pkg.Name, pkg.Version, "removed")
+			}
+		}
+	}
+
+	if err := summary.Write(out); err != nil {
+		return err
 	}
 
 	lockData, err := next.Bytes(e.lockPath())
@@ -468,4 +493,28 @@ func buildLog(cmd *cobra.Command, flags *buildFlags) io.Writer {
 	}
 
 	return nil
+}
+
+// syncRow adds one changed package to the summary. On a terminal the row
+// starts with a glyph for the kind of change: "+" for a fresh resolve, "^" for
+// a version change, "~" for a rebuild, "·" for a pin on another platform, "-"
+// for a package the list no longer names. In a pipe the row is the one line
+// sync always printed, "name version, note".
+func syncRow(s ui.Style, tab *ui.Table, kind, name, version, note string) {
+	if !s.On() {
+		line := name + " " + version
+		if note != "" {
+			line += ", " + note
+		}
+
+		tab.Row(line)
+
+		return
+	}
+
+	glyph := map[string]string{
+		"+": s.Good("+"), "^": s.Accent("↑"), "~": s.Warn("~"), "·": s.Dim("·"), "-": s.Bad("-"),
+	}[kind]
+
+	tab.Styled([]string{glyph, name, version, note}, nil, s.Bold, nil, s.Dim)
 }

@@ -9,7 +9,6 @@ import (
 	"runtime"
 	"slices"
 	"strings"
-	"text/tabwriter"
 
 	"github.com/spf13/cobra"
 
@@ -18,6 +17,7 @@ import (
 	"github.com/y3owk1n/oku/internal/profile"
 	"github.com/y3owk1n/oku/internal/service"
 	"github.com/y3owk1n/oku/internal/store"
+	"github.com/y3owk1n/oku/internal/ui"
 )
 
 // services returns the OS's service manager, or the one the tests supplied.
@@ -213,7 +213,7 @@ start and stop act on this login session only.`,
 		sub := &cobra.Command{
 			Use:   action.name + " <name>",
 			Short: action.short,
-			Args:  cobra.ExactArgs(1),
+			Args:  exactArgs(1),
 			RunE: func(cmd *cobra.Command, args []string) error {
 				return controlService(cmd, opts, action.name, args[0])
 			},
@@ -288,7 +288,9 @@ func listServices(cmd *cobra.Command, opts Options) error {
 		return nil
 	}
 
-	w := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 0, 2, ' ', 0)
+	out := cmd.OutOrStdout()
+	s := ui.For(out)
+	tab := s.Table("service", "package", "status")
 
 	for _, item := range items {
 		manager, err := e.managerFor(opts, item)
@@ -301,10 +303,18 @@ func listServices(cmd *cobra.Command, opts Options) error {
 			return err
 		}
 
-		fmt.Fprintf(w, "%s\t%s\t%s\n", item.Name, item.Package, describeStatus(status, item.System))
+		mark := s.Dim
+		if status.Running {
+			mark = s.Good
+		}
+
+		tab.Styled(
+			[]string{item.Name, item.Package, describeStatus(status, item.System)},
+			s.Bold, nil, mark,
+		)
 	}
 
-	return w.Flush()
+	return tab.Write(out)
 }
 
 // serviceRow is the JSON form of one service.

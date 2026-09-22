@@ -2,9 +2,11 @@ package cli
 
 import (
 	"fmt"
-	"text/tabwriter"
+	"strings"
 
 	"github.com/spf13/cobra"
+
+	"github.com/y3owk1n/oku/internal/ui"
 )
 
 func newListCmd(opts Options) *cobra.Command {
@@ -44,17 +46,50 @@ func newListCmd(opts Options) *cobra.Command {
 			}
 
 			if len(pkgs) == 0 {
-				fmt.Fprintln(cmd.OutOrStdout(), "no packages installed")
+				fmt.Fprintln(cmd.OutOrStdout(), "no packages installed, `oku add <ref>` installs one")
 
 				return nil
 			}
 
-			w := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 0, 2, ' ', 0)
+			out := cmd.OutOrStdout()
+			s := ui.For(out)
+			tab := s.Table("name", "version", "ref", "")
+
 			for _, pkg := range pkgs {
-				fmt.Fprintf(w, "%s\t%s\t%s\n", pkg.Name, pkg.Version, pkg.Ref)
+				cells := []string{pkg.Name, pkg.Version, s.Home(pkg.Ref)}
+
+				// A terminal gets a column that says what else the package does.
+				if s.On() {
+					var marks []string
+					if pkg.Service {
+						marks = append(marks, "service")
+					}
+
+					if pkg.System {
+						marks = append(marks, "system")
+					}
+
+					cells = append(cells, strings.Join(marks, " "))
+				}
+
+				tab.Styled(cells, s.Bold, nil, s.Dim, s.Accent)
 			}
 
-			return w.Flush()
+			if err := tab.Write(out); err != nil {
+				return err
+			}
+
+			// A terminal gets a footer with the count and which list this is.
+			if s.On() {
+				where := "the global list"
+				if e.project != "" {
+					where = "the project " + s.Home(e.project)
+				}
+
+				fmt.Fprintln(out, s.Dim(count(len(pkgs), "package")+" in "+where))
+			}
+
+			return nil
 		},
 	}
 }

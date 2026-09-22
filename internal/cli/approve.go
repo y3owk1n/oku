@@ -16,6 +16,7 @@ import (
 	"github.com/y3owk1n/oku/internal/platform"
 	"github.com/y3owk1n/oku/internal/status"
 	"github.com/y3owk1n/oku/internal/trust"
+	"github.com/y3owk1n/oku/internal/ui"
 )
 
 // buildFlags are the flags of every command that may build from source.
@@ -63,10 +64,11 @@ func (e env) approver(
 			defer status.Pause(cmd.Context())()
 
 			out := cmd.OutOrStdout()
+			s := ui.For(out)
 			fmt.Fprintf(
 				out,
 				"%s %s builds from source and runs these commands on your machine:\n\n",
-				m.Package.Name,
+				s.Bold(m.Package.Name),
 				m.Version.Value,
 			)
 
@@ -88,9 +90,9 @@ func (e env) approver(
 
 				fmt.Fprintf(
 					out,
-					"  step %d%s\n    %s\n",
-					i,
-					note,
+					"  %s%s\n    %s\n",
+					s.Accent(fmt.Sprintf("step %d", i)),
+					s.Warn(note),
 					strings.ReplaceAll(text, "\n", "\n    "),
 				)
 			}
@@ -102,7 +104,7 @@ func (e env) approver(
 				)
 			}
 
-			fmt.Fprint(out, "\nrun them? [y/N] ")
+			fmt.Fprint(out, "\n"+s.Bold("run them?")+" [y/N] ")
 
 			answer, _ := bufio.NewReader(cmd.InOrStdin()).ReadString('\n')
 			if a := strings.ToLower(strings.TrimSpace(answer)); a != "y" && a != "yes" {

@@ -15,7 +15,9 @@
 | Script it | [`--json`](#json-output) |
 
 Every command exits with status 0 on success. On failure it prints
-`oku: <reason>` to stderr and exits with status 1.
+`oku: <reason>` to stderr and exits with status 1. When there is something to
+do about it, the lines after the first say what. A command that gets the wrong
+number of arguments prints its usage line.
 
 `add`, `remove`, `sync`, `update` and `rollback` change the machine all the way
 or not at all, see [a change that fails](files.md#a-change-that-fails).
@@ -30,6 +32,15 @@ looking up versions, downloading, unpacking, cloning, asking a cache, or running
 a build step, with the package's name in front. In a terminal that is one line
 with the bytes and the time so far, and it goes away when the wait ends. In a
 pipe or a CI log, each wait is one plain line, as it is with `TERM=dumb`.
+
+## Colour
+
+On a terminal oku uses colour, a few glyphs, column headers and `~` for your
+home directory, and the help sorts the commands into sections. In a pipe, a CI
+log or with `TERM=dumb` the same commands print plain text with no header, so
+what a script reads never depends on where it runs. `NO_COLOR=1` turns colour
+off on a terminal too, and `FORCE_COLOR=1` turns it on for a pipe, such as a
+pager.
 
 ## JSON output
 
@@ -165,8 +176,10 @@ does not edit included lists.
 oku list
 ```
 
-Prints one line per installed package: name, version, ref. With nothing
-installed it prints `no packages installed`.
+Prints one line per installed package: name, version, ref. On a terminal a
+last column says `service` or `system` for a package that has one, and a footer
+counts the packages and names the list. With nothing installed it says so and
+points at `oku add`.
 
 ## oku info
 
@@ -269,7 +282,8 @@ build. Repeat the flag, or separate names with commas:
 oku sync --rebuild eza --rebuild pngquant
 ```
 
-oku prints `eza 0.23.5, built again` for each one. The new build takes the
+oku prints `eza 0.23.5, built again` for each one, and `~` in front of it on a
+terminal. The new build takes the
 place of the old one in the store, under the same path,
 so every generation gets it. oku moves the old build aside first and puts it
 back when the new build fails. The lock still applies. A build that vendors
@@ -290,8 +304,12 @@ run one at a time, because each build uses every core. A package that is in the
 store already at the version in the lock needs no request to its server, so a
 sync with nothing to do is fast and works offline.
 
-Output is either `already in sync` or a line such as
-`profile now holds 12 packages`.
+After the summary, output is either `already in sync` or a line such as
+`profile now holds 12 packages`. The summary has one line per package that
+changed: a fresh install, `ripgrep 14.1.1 -> 15.2.0` for a new version, and a
+note for a rebuild, a manifest or checksum change, a pin for another platform,
+or a package that left the list. On a terminal each line starts with a glyph:
+`+` new, `↑` new version, `~` rebuilt or changed, `·` pinned only, `-` removed.
 
 ### A dry run
 
@@ -448,13 +466,19 @@ oku generations
 ```
 
 Every command that changes the installed packages writes a new generation.
-`generations` lists them, oldest first, with `*` on the active one:
+`generations` lists them, oldest first, with `*` on the active one. Each line
+has the time, how many packages the generation holds, and what changed from the
+one before: `+` for a package that came, `-` for one that went, `->` between
+two versions, and `rebuilt` for a new build of the same version. A change with
+more than six parts ends in `and N more`.
 
 ```
-  1  2026-09-20 14:02  ripgrep 14.1.1
-  2  2026-09-20 14:10  ripgrep 15.2.0
-* 3  2026-09-20 14:31  hello 1.0.0, ripgrep 15.2.0
+  1  2026-09-20 14:02  1 package   + ripgrep 14.1.1
+  2  2026-09-20 14:10  1 package   ripgrep 14.1.1 -> 15.2.0
+* 3  2026-09-20 14:31  2 packages  + hello 1.0.0
 ```
+
+`oku generations --json` lists every package of every generation.
 
 ## oku rollback
 
@@ -769,7 +793,9 @@ oku doctor
 ```
 
 Checks this machine's setup and says what to fix. It reads local files only,
-prints one line per check, and exits with code 1 when it found a problem.
+prints one line per check, and exits with code 1 when it found a problem. With
+none it ends with `no problems found`. On a terminal the status words are
+glyphs: a green tick, a yellow `!` for a note, a red cross for a problem.
 
 ```
 $ oku doctor
@@ -777,10 +803,13 @@ ok       the store is /home/you/.local/share/oku/store, in your data directory
 note     builds from source run without a sandbox, because this host does not let an unprivileged user set up namespaces (...)
 ok       the shell hook is loaded from /home/you/.zshrc: [ -x "$HOME/.local/bin/oku" ] && eval "$("$HOME/.local/bin/oku" hook zsh)"
 ok       /home/you/.local/share/oku/profiles/global/current/bin is on PATH
-problem  /usr/bin/rg runs in place of oku's rg, because /usr/bin is earlier on PATH
+problem  /usr/bin/rg runs in place of oku's rg, because /usr/bin is earlier on PATH. Put /home/you/.local/share/oku/profiles/global/current/bin before it, or remove the other copy
 ok       every link in 3 profiles points at a file in the store
 oku: doctor found 1 problem
 ```
+
+Several programs that other directories hide are one problem line that names
+them all, because the fix is one change to `PATH`.
 
 | Check | `problem` when |
 |---|---|

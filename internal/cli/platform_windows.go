@@ -18,7 +18,7 @@ func platformCommands() []*cobra.Command {
 	return []*cobra.Command{{
 		Use:    service.RunCommand + " <definition>",
 		Hidden: true,
-		Args:   cobra.ExactArgs(1),
+		Args:   exactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runService(cmd, args[0])
 		},

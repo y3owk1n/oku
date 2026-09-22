@@ -6,13 +6,13 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
-	"text/tabwriter"
 
 	"github.com/spf13/cobra"
 
 	"github.com/y3owk1n/oku/internal/manifest"
 	"github.com/y3owk1n/oku/internal/ref"
 	"github.com/y3owk1n/oku/internal/source"
+	"github.com/y3owk1n/oku/internal/ui"
 )
 
 func (e env) configPath() string {
@@ -34,7 +34,7 @@ with no sources.`,
 	add := &cobra.Command{
 		Use:   "add <alias> <ref>",
 		Short: "Give a collection an alias",
-		Args:  cobra.ExactArgs(2),
+		Args:  exactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			e, err := loadEnv()
 			if err != nil {
@@ -63,7 +63,7 @@ with no sources.`,
 	remove := &cobra.Command{
 		Use:   "remove <alias>",
 		Short: "Forget an alias",
-		Args:  cobra.ExactArgs(1),
+		Args:  exactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			e, err := loadEnv()
 			if err != nil {
@@ -129,12 +129,15 @@ with no sources.`,
 				return nil
 			}
 
-			w := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 0, 2, ' ', 0)
+			out := cmd.OutOrStdout()
+			s := ui.For(out)
+			tab := s.Table("alias", "ref")
+
 			for _, alias := range slices.Sorted(maps.Keys(config.Sources)) {
-				fmt.Fprintf(w, "%s\t%s\n", alias, config.Sources[alias])
+				tab.Styled([]string{alias, config.Sources[alias]}, s.Bold, s.Dim)
 			}
 
-			return w.Flush()
+			return tab.Write(out)
 		},
 	}
 
@@ -147,7 +150,7 @@ func newSearchCmd(opts Options) *cobra.Command {
 	return &cobra.Command{
 		Use:   "search <term>",
 		Short: "Search the names and descriptions of packages in your sources",
-		Args:  cobra.ExactArgs(1),
+		Args:  exactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			e, err := loadEnv()
 			if err != nil {
@@ -167,7 +170,9 @@ func newSearchCmd(opts Options) *cobra.Command {
 
 			term := strings.ToLower(args[0])
 			fetcher := e.fetcher(opts)
-			w := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 0, 2, ' ', 0)
+			out := cmd.OutOrStdout()
+			s := ui.For(out)
+			tab := s.Table("ref", "description")
 			hits := 0
 
 			type hit struct {
@@ -199,7 +204,7 @@ func newSearchCmd(opts Options) *cobra.Command {
 
 					if strings.Contains(strings.ToLower(m.Package.Name), term) ||
 						strings.Contains(strings.ToLower(m.Package.Description), term) {
-						fmt.Fprintf(w, "%s/%s\t%s\n", alias, name, m.Package.Description)
+						tab.Styled([]string{alias + "/" + name, m.Package.Description}, s.Bold, nil)
 
 						found = append(found, hit{alias + "/" + name, m.Package.Description})
 						hits++
@@ -217,7 +222,7 @@ func newSearchCmd(opts Options) *cobra.Command {
 				return nil
 			}
 
-			return w.Flush()
+			return tab.Write(out)
 		},
 	}
 }
