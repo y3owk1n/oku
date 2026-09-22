@@ -193,6 +193,11 @@ order step in `prd/product.md`.
 - B200 [3] `github-releases`, `gitea-releases` and `gitlab-releases` read the
   newest 1000 releases, one page after another, so a repo whose newest 100
   releases belong to another stream still yields the version `add` wants.
+- B250 [3] oku keeps each answer of a forge API with its ETag and asks again
+  with `If-None-Match`. When the host answers 304, `update` uses the answer it
+  kept, and a changed answer replaces it.
+- B251 [3] When GitHub answers 429, or 403 with `Retry-After`, oku stops and
+  says how many seconds to wait.
 - B123 [3] With `version.from = "npm"`, `add` picks the newest version of the
   package in the npm registry that is no prerelease, and `add <ref>@x` picks x.
 - B124 [3] oku checks a download against the artifact's `integrity`, or against
