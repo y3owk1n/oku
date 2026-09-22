@@ -385,6 +385,10 @@ order step in `prd/product.md`.
   package to its new version on `update`.
 - B141 [13] On Windows a linked directory is a junction and a file is a copy.
   oku stops before any change when a copy was edited by hand, and names it.
+- B192 [13] A `text` or a `render` entry may hold `vars`, a table of strings
+  that overrides `[vars]` for that entry. Two entries may share a target when
+  their `when` clauses differ. `vars` on a `link` or a `secret` entry is an
+  error.
 - B171 [5] An artifact's `lib`, `include` and `share` entries, files or
   directories, fill those directories of the package, and a build that depends
   on the package finds its headers and libraries there.

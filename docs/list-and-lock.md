@@ -139,7 +139,7 @@ A key starts with a location:
 | `{{appdata}}`, `{{localappdata}}` | Windows only. An entry that uses one needs `when = { os = "windows" }`. |
 
 An entry holds one of `link`, `text`, `render` and `secret`, and may hold
-`when`, like a package.
+`when`, like a package, and `vars`.
 
 | Key | Effect |
 |---|---|
@@ -149,6 +149,7 @@ An entry holds one of `link`, `text`, `render` and `secret`, and may hold
 | `render` | Like `text`, with the content read from a template beside the list, see [Variables and templates](#variables-and-templates). |
 | `secret` | The path gets a value that oku decrypts from a sops or an age file, see [Secrets](secrets.md). |
 | `mode` | The permission of a `text`, `render` or `secret` file, such as `"0600"`. Without it the file is read-only, and a file that holds a secret is `0600`. |
+| `vars` | A table of strings that overrides `[vars]` for this `text` or `render` entry, such as `vars = { font-size = "13" }`. |
 
 oku refuses a path that exists and that it did not write. It names the path and
 changes nothing, so move the file away first. The next `sync` removes a path
@@ -197,7 +198,8 @@ foreground = #{{theme.base05}}
 - Write `\{{` for the two braces themselves, for a config that has its own
   `{{...}}` syntax.
 - There are no conditionals and no loops. For a difference between platforms,
-  write two entries with `when`, or let the tool include a second file.
+  write two entries with `when` that share the target and the template, each
+  with its own `vars`, or let the tool include a second file.
 - oku writes every other byte of a template as it is, so the result is the same
   on every OS.
 
