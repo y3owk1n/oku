@@ -1,5 +1,39 @@
 # Changelog
 
+## [0.5.0](https://github.com/y3owk1n/oku/compare/v0.4.0...v0.5.0) (2026-09-22)
+
+
+### Features
+
+* **build:** warn when a built file loads a store package outside runtime.deps ([#147](https://github.com/y3owk1n/oku/issues/147)) ([a961bb1](https://github.com/y3owk1n/oku/commit/a961bb1420ff4213d89b0d80e79e4f3e91670844))
+* **cli:** colour, tables and clearer messages on a terminal ([#143](https://github.com/y3owk1n/oku/issues/143)) ([4e12f4e](https://github.com/y3owk1n/oku/commit/4e12f4eeac69f368e153d07fcfea716acc375834))
+* **cli:** show every installing package, and say more after a change ([#144](https://github.com/y3owk1n/oku/issues/144)) ([b6161fd](https://github.com/y3owk1n/oku/commit/b6161fd465b9935075830fde2aed4d5dfcc8782e))
+* **files:** override [vars] per file entry with a vars table ([#141](https://github.com/y3owk1n/oku/issues/141)) ([5eb3da6](https://github.com/y3owk1n/oku/commit/5eb3da60fb7753c648994ac7e3da20818cc64fc2))
+* **lock:** pin a build for another platform with all that a build writes ([#136](https://github.com/y3owk1n/oku/issues/136)) ([2ee32de](https://github.com/y3owk1n/oku/commit/2ee32dec29f4e17deb237b121a95a748a3692b67))
+* **lock:** pin a package that the host does not install ([#131](https://github.com/y3owk1n/oku/issues/131)) ([63dd455](https://github.com/y3owk1n/oku/commit/63dd45567e01c1aae94a3ef73eec4fb427507ded))
+* **lock:** pin other platforms when oku writes the lock ([#128](https://github.com/y3owk1n/oku/issues/128)) ([4fe89ac](https://github.com/y3owk1n/oku/commit/4fe89ac216c71870e009ccb30fa7a55d7e849c78))
+* **lock:** pin the npm packages of another platform from this one ([#138](https://github.com/y3owk1n/oku/issues/138)) ([43bed76](https://github.com/y3owk1n/oku/commit/43bed76de9282c1257b7e2e7908252f8c656eacf))
+* **manifest:** let a download that is the program itself have a wrapper ([#135](https://github.com/y3owk1n/oku/issues/135)) ([2d9256c](https://github.com/y3owk1n/oku/commit/2d9256c4c635b70ffa3a0b044b0dd5b096c90027))
+* **manifest:** match ** in font and man patterns ([#146](https://github.com/y3owk1n/oku/issues/146)) ([db7d6e0](https://github.com/y3owk1n/oku/commit/db7d6e07a1b9c494e0e8bf2dfc448bb61845a4db))
+* **npm:** run the install scripts a manifest names, and lint every artifact ([#152](https://github.com/y3owk1n/oku/issues/152)) ([c178c2d](https://github.com/y3owk1n/oku/commit/c178c2dd3139ad19c297b10fcc89f6fc99182dbf))
+* **service:** limit a service to some platforms with when ([#133](https://github.com/y3owk1n/oku/issues/133)) ([0a9a8dc](https://github.com/y3owk1n/oku/commit/0a9a8dc898443fa6d15b709ea88da8c7541d1ab1))
+* **sync:** build a package again with --rebuild ([#140](https://github.com/y3owk1n/oku/issues/140)) ([abbd2b2](https://github.com/y3owk1n/oku/commit/abbd2b260073da95a2b88409f732d1fe88245c77))
+* **sync:** fail with --locked when oku.lock would change ([#130](https://github.com/y3owk1n/oku/issues/130)) ([d61f2ee](https://github.com/y3owk1n/oku/commit/d61f2eea213b94db56ec4b33c4794fbf5eba6556))
+
+
+### Bug Fixes
+
+* **build:** link man/, isolate needs tools, add bin path, sbin and xcrun cache ([#151](https://github.com/y3owk1n/oku/issues/151)) ([61c1868](https://github.com/y3owk1n/oku/commit/61c186859e6b3593716998dc0a1008a9ed38d3f6))
+* **cli:** let which find a global program inside a project ([#153](https://github.com/y3owk1n/oku/issues/153)) ([3efc702](https://github.com/y3owk1n/oku/commit/3efc702f0c700dee63b89acbf8ee61c1b91c2d7a))
+* **files:** keep entries of one target that differ by when across lists ([#142](https://github.com/y3owk1n/oku/issues/142)) ([659e104](https://github.com/y3owk1n/oku/commit/659e104b48e08904afbf5606086621f042eb1631))
+* **files:** private directories for private files, and a mode change for a secret ([#150](https://github.com/y3owk1n/oku/issues/150)) ([449e62e](https://github.com/y3owk1n/oku/commit/449e62e6dd4e9ce5dd477f093a5dd968bcf0ceab))
+* **infer:** pick the asset and checksums that fit, and read more releases ([#145](https://github.com/y3owk1n/oku/issues/145)) ([e4e8a0d](https://github.com/y3owk1n/oku/commit/e4e8a0d81523df26934d2bacedf304d2e3554899))
+* **lock:** complete a build entry that lacks a pin ([#139](https://github.com/y3owk1n/oku/issues/139)) ([cc4891a](https://github.com/y3owk1n/oku/commit/cc4891a9e37b7ca379eb011d6f202abd1b9dbb2d))
+* **lock:** keep the pins of a build that the store already holds ([#137](https://github.com/y3owk1n/oku/issues/137)) ([2aa3dbe](https://github.com/y3owk1n/oku/commit/2aa3dbe8bf6de335d080585b74f61fd84efa2b3b))
+* **npm:** keep the path of this machine out of the lock of an npm package ([#132](https://github.com/y3owk1n/oku/issues/132)) ([827ae87](https://github.com/y3owk1n/oku/commit/827ae871466af23653072da3fdb2496031cc5f5a))
+* **service:** report a service that exits right after start ([#148](https://github.com/y3owk1n/oku/issues/148)) ([1eb25b6](https://github.com/y3owk1n/oku/commit/1eb25b69ffdf19bb68f091805dece27ed78de8d4))
+* **service:** skip services on a Linux machine that systemd does not run ([#134](https://github.com/y3owk1n/oku/issues/134)) ([934f07a](https://github.com/y3owk1n/oku/commit/934f07a95681999770519d299abbc83983e56f56))
+
 ## [0.4.0](https://github.com/y3owk1n/oku/compare/v0.3.0...v0.4.0) (2026-09-21)
 
 
