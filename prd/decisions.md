@@ -1060,3 +1060,24 @@ changed template is a changed manifest hash, which already stops `oku sync`.
 `completions = "dir/"` links the conventional files that exist and fails only
 when none do. Why: lint cannot see the archive, and releases ship two of the
 three often enough that a missing one must not fail the install.
+
+## D73. One oku process changes the machine at a time
+
+Every command that writes oku's state takes an OS lock on `<data>/oku/busy`
+(`flock` on unix, `LockFileEx` on Windows) and holds it for its whole run.
+Another such command waits and says which process it waits for. Commands that
+only read take no lock. Why: `pending.toml` means "a change that did not
+finish", and a second process could not tell that from a change still running,
+so it reverted it. `gc` could delete a store path that a running install had
+built but not yet put in a generation. The OS releases the lock when the
+process exits, so a killed oku never leaves a stale lock. A lock that is only a
+file on disk would stay behind.
+Waiting rather than failing keeps a sync started from two terminals, or from a
+script, working.
+
+The lock is per user, in the data directory, because a store root from
+`oku setup --system` belongs to one user as well. `oku shell` holds it only
+while it installs, and `oku self uninstall` releases it before it deletes the
+data directory, which Windows refuses while the file is open. With the lock
+held, a `.tmp-` directory in the store can only be left by a killed install,
+so `gc` deletes it.

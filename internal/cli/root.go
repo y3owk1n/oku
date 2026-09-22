@@ -123,6 +123,12 @@ func NewRootCmd(opts Options) *cobra.Command {
 	root.AddCommand(platformCommands()...)
 	groupCommands(root)
 
+	for _, path := range exclusive {
+		if c, _, err := root.Find(path); err == nil && c != root {
+			oneAtATime(c)
+		}
+	}
+
 	// The Linux sandbox re-runs oku inside new namespaces to finish the setup.
 	root.AddCommand(&cobra.Command{
 		Use:    sandbox.InitCommand,

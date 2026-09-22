@@ -32,6 +32,7 @@ XDG on unix, `%APPDATA%` and `%LOCALAPPDATA%` on Windows. `<root>` is
 <data>/oku/trust/allow.toml, approvals.toml
 <data>/oku/exposed.toml              ledger of every file written elsewhere (D17)
 <data>/oku/pending.toml              present only while oku applies a change (D59)
+<data>/oku/busy                      held by the oku process that changes the machine (D73)
 <data>/oku/secrets/                  decrypted secrets, readable by the user only (D63)
 <cache>/oku/downloads/, git/
 ```

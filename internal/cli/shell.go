@@ -61,6 +61,13 @@ func runShell(
 		return err
 	}
 
+	// Only the install waits for other oku processes, not the shell itself.
+	release, err := lockMachine(cmd)
+	if err != nil {
+		return err
+	}
+	defer release()
+
 	var bins []string
 
 	environ := os.Environ()
@@ -100,6 +107,8 @@ func runShell(
 			environ = append(environ, name+"="+value)
 		}
 	}
+
+	release()
 
 	path := strings.Join(append(bins, os.Getenv("PATH")), string(os.PathListSeparator))
 	environ = append(environ, "PATH="+path, "OKU_SHELL="+strings.Join(refs, " "))

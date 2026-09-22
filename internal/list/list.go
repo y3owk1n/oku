@@ -545,8 +545,8 @@ func edit(path, name, line string) error {
 	return WriteFile(path, []byte(strings.Join(lines, "\n")+"\n"))
 }
 
-// WriteFile replaces path in one rename, so a crash leaves the old file or the
-// new one.
+// WriteFile replaces path in one rename, so a crash or a power loss leaves the
+// old file or the new one.
 func WriteFile(path string, data []byte) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
@@ -559,6 +559,10 @@ func WriteFile(path string, data []byte) error {
 	defer os.Remove(tmp.Name())
 
 	_, err = tmp.Write(data)
+	if err == nil {
+		err = tmp.Sync()
+	}
+
 	if closeErr := tmp.Close(); err == nil {
 		err = closeErr
 	}
@@ -571,5 +575,16 @@ func WriteFile(path string, data []byte) error {
 		return err
 	}
 
-	return os.Rename(tmp.Name(), path)
+	if err := os.Rename(tmp.Name(), path); err != nil {
+		return err
+	}
+
+	// The rename lasts a power loss once the directory is on disk. Windows cannot
+	// open a directory for this.
+	if dir, err := os.Open(filepath.Dir(path)); err == nil {
+		_ = dir.Sync()
+		dir.Close()
+	}
+
+	return nil
 }

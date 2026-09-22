@@ -54,6 +54,7 @@ export XDG_CACHE_HOME=/tmp/oku-try/cache
     project-2d27013d8c67/      one per project, same layout
   exposed.toml                 every file oku wrote outside these directories
   pending.toml                 exists only while oku applies a change
+  busy                         the pid of the oku that changes the machine now
   secrets/                     decrypted secrets, which only you can read
   services/                    definitions of services that are not enabled (macOS)
   logs/                        output of services (macOS)
@@ -144,6 +145,29 @@ for example because the service manager refuses, it says which one and keeps
 An OS gives no single step that covers files, services and the list at once.
 So oku does not promise one atomic step. It promises to check first and to undo
 on failure.
+
+## One change at a time
+
+Only one oku process changes the machine at a time. Before it changes
+anything, each of these commands takes a lock on `busy`:
+
+- `add`, `remove`, `sync`, `update`, `rollback` and `gc`
+- `allow` and `deny`
+- `source add`, `source remove`, `cache add`, `cache remove`, `cache push`,
+  `key generate`, `key trust` and `key revoke`
+- `self uninstall`
+- `shell`, while it installs
+
+A second command from that list waits until the first one ends, and says which
+process it waits for:
+
+```
+waiting for oku process 4312 to finish
+```
+
+Commands that only read, such as `list`, `generations` and `doctor`, never
+wait. The OS releases the lock when the process ends, so a killed oku does not
+leave a stale lock.
 
 ## Outside oku's directories
 

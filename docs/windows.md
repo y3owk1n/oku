@@ -55,8 +55,10 @@ what every user may create:
 | `bin/rg` is a symlink into the store | `bin\rg.exe` is a shim, beside `bin\rg.shim` |
 | other files are symlinks into the store | other files are hard links, or copies across volumes |
 
-oku replaces a junction by deleting it and creating a new one, so for a moment
-`current` does not exist. On unix the switch is one rename.
+Windows cannot rename over a junction, so oku creates the new junction beside
+`current`, moves the old one aside and renames the new one into place. Between
+those two renames `current` does not exist. When oku is killed there, the next
+command puts the previous generation back. On unix the switch is one rename.
 
 ### Shims
 

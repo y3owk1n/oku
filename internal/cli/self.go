@@ -62,6 +62,12 @@ func runUninstall(
 		return err
 	}
 
+	release, err := lockMachine(cmd)
+	if err != nil {
+		return err
+	}
+	defer release()
+
 	out := cmd.OutOrStdout()
 	binDir := e.globalProfile().BinDir()
 
@@ -138,6 +144,9 @@ func runUninstall(
 	if err != nil {
 		return err
 	}
+
+	// Windows cannot delete the lock file while it is open.
+	release()
 
 	// The cache goes first because on Windows it is inside the data directory.
 	for _, dir := range []string{e.cache, e.data} {

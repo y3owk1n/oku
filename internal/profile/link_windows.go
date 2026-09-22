@@ -1,6 +1,7 @@
 package profile
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -13,23 +14,42 @@ import (
 
 // point makes "current" name the generation directory gen. Windows users cannot
 // create symlinks without extra rights, so "current" is a directory junction.
-// Windows cannot rename over a junction, so there is a moment without one.
+// Windows cannot rename over a junction either, so the new one is made beside it
+// and the old one moves aside first. Between those two renames there is no
+// "current", for far less time than mklink takes.
 func (p *Profile) point(gen string) error {
 	link := filepath.Join(p.dir, current)
+	tmp, old := link+".tmp", link+".old"
 
-	if err := os.Remove(link); err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("activate generation: %w", err)
+	// Either may be left by a switch that was killed. Remove deletes a junction,
+	// not what it points at.
+	for _, path := range []string{tmp, old} {
+		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+			return fmt.Errorf("activate generation: %w", err)
+		}
 	}
 
 	target := filepath.Join(p.dir, gen)
 
-	out, err := exec.Command("cmd", "/c", "mklink", "/J", link, target).CombinedOutput()
+	out, err := exec.Command("cmd", "/c", "mklink", "/J", tmp, target).CombinedOutput()
 	if err != nil {
 		return fmt.Errorf(
 			"activate generation: mklink /J: %w: %s",
 			err,
 			strings.TrimSpace(string(out)),
 		)
+	}
+
+	if err := os.Rename(link, old); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("activate generation: %w", err)
+	}
+
+	if err := os.Rename(tmp, link); err != nil {
+		return fmt.Errorf("activate generation: %w", errors.Join(err, os.Rename(old, link)))
+	}
+
+	if err := os.Remove(old); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("activate generation: %w", err)
 	}
 
 	return nil

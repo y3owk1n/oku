@@ -72,6 +72,25 @@ Oku rollback
 Check 'rollback takes fd away and keeps rg' {
     (Test-Path "$bin\rg.exe") -and -not (Test-Path "$bin\fd.exe")
 }
+$profileDir = Join-Path $env:XDG_DATA_HOME 'oku\profiles\global'
+Check 'a switch of generation leaves no spare junction' {
+    -not (Test-Path "$profileDir\current.tmp") -and -not (Test-Path "$profileDir\current.old")
+}
+
+# This script holds the lock the way another oku would, on the byte oku locks.
+$busy = [IO.File]::Open((Join-Path $env:XDG_DATA_HOME 'oku\busy'), 'OpenOrCreate', 'ReadWrite', 'ReadWrite')
+$busy.Lock(1GB, 1)
+$waitLog = Join-Path $root 'wait.log'
+$waiter = Start-Process $oku -ArgumentList 'gc', '--dry-run' -NoNewWindow -PassThru -RedirectStandardError $waitLog
+$null = $waiter.Handle # without it ExitCode stays empty
+Start-Sleep -Seconds 2
+Check 'a second oku waits while another one holds the lock' { -not $waiter.HasExited }
+$busy.Unlock(1GB, 1)
+$busy.Close()
+$waiter.WaitForExit()
+Check 'it says what it waits for, and runs once the lock is free' {
+    ($waiter.ExitCode -eq 0) -and ((Get-Content $waitLog -Raw) -match 'waiting for')
+}
 
 $generations = & $oku generations
 Check 'generations marks the active one' { @($generations | Where-Object { $_ -match '^\* ' }).Count -eq 1 }
