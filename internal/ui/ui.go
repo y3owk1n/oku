@@ -142,9 +142,30 @@ func (s Style) Pick(fancy, plain string) string {
 }
 
 // Glyphs, each one column wide, for the start of a line.
-func (s Style) Check() string  { return s.Good(s.Pick("✓", "ok")) }
-func (s Style) Cross() string  { return s.Bad(s.Pick("✗", "problem")) }
-func (s Style) Note() string   { return s.Warn(s.Pick("!", "note")) }
+func (s Style) Check() string { return s.Good(s.Pick("✓", "ok")) }
+func (s Style) Cross() string { return s.Bad(s.Pick("✗", "problem")) }
+func (s Style) Note() string  { return s.Warn(s.Pick("!", "note")) }
+
+// Done marks a line for something that finished, the way a package manager's
+// install log does: a green check in front on a terminal, the text alone
+// anywhere else.
+func (s Style) Done(text string) string {
+	if !s.on {
+		return text
+	}
+
+	return s.Good("✓") + " " + text
+}
+
+// Gone marks a line for something oku removed, with a red minus in front
+// on a terminal.
+func (s Style) Gone(text string) string {
+	if !s.on {
+		return text
+	}
+
+	return s.Bad("-") + " " + text
+}
 func (s Style) Bullet() string { return s.Dim(s.Pick("•", "-")) }
 func (s Style) Arrow() string  { return s.Pick("→", "->") }
 

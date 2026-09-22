@@ -241,6 +241,7 @@ func runPush(cmd *cobra.Command, dir string, names []string) error {
 	}
 
 	pushed := 0
+	s := ui.For(cmd.OutOrStdout())
 
 	for _, path := range paths {
 		meta, err := store.ReadMeta(path)
@@ -264,7 +265,7 @@ func runPush(cmd *cobra.Command, dir string, names []string) error {
 
 		pushed++
 
-		fmt.Fprintf(cmd.OutOrStdout(), "pushed %s\n", filepath.Base(path))
+		fmt.Fprintln(cmd.OutOrStdout(), s.Done("pushed "+filepath.Base(path)))
 	}
 
 	if pushed == 0 {
@@ -272,6 +273,12 @@ func runPush(cmd *cobra.Command, dir string, names []string) error {
 			cmd.OutOrStdout(),
 			"nothing to push, none of these packages was built from source",
 		)
+
+		return nil
+	}
+
+	if s.On() {
+		fmt.Fprintln(cmd.OutOrStdout(), s.Done("pushed "+count(pushed, "package")))
 	}
 
 	return nil

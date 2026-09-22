@@ -178,3 +178,49 @@ func TestB229TheApprovalPromptCollapsesToOneLineOnceAnswered(t *testing.T) {
 		t.Fatalf("an approved prompt should be erased and say so:\n%q", out)
 	}
 }
+
+func TestB231EveryFinishedItemAndTheClosingLineCarryACheck(t *testing.T) {
+	t.Setenv("NO_COLOR", "")
+	t.Setenv("FORCE_COLOR", "1")
+
+	m, store := settingsMachine(t)
+	store.values["com.apple.dock tilesize"] = "<integer>64</integer>"
+	target := home(".config", "tool", "config")
+
+	managedList(t, m, "one", "48")
+	out, err := m.run(t, "", "sync")
+	must(t, err)
+
+	for _, want := range []string{
+		"✓\x1b[0m wrote " + target, "✓\x1b[0m set com.apple.dock tilesize",
+		"✓\x1b[0m done in ", "profile holds 0 packages, 1 file, 1 setting, generation 1",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("sync should print %q:\n%s", want, out)
+		}
+	}
+
+	m.writeFilesList(t, "")
+	out, err = m.run(t, "", "sync")
+	must(t, err)
+
+	if !strings.Contains(out, "-\x1b[0m removed "+target) ||
+		!strings.Contains(out, "✓\x1b[0m restored com.apple.dock tilesize") {
+		t.Fatalf("a removal gets a minus and a restore a check:\n%s", out)
+	}
+
+	out, err = m.run(t, "", "sync")
+	must(t, err)
+
+	if !strings.Contains(out, "✓\x1b[0m already in sync") {
+		t.Fatalf("a sync with nothing to do closes with a check:\n%s", out)
+	}
+
+	// update shares the path of sync, so it closes the same way.
+	out, err = m.run(t, "", "update")
+	must(t, err)
+
+	if !strings.Contains(out, "✓\x1b[0m already in sync") && !strings.Contains(out, "✓\x1b[0m done in ") {
+		t.Fatalf("update should close with a check:\n%s", out)
+	}
+}
