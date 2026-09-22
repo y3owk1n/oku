@@ -75,17 +75,21 @@ var (
 		"musl":  {"musl"},
 	}
 	// unpackable are the archive endings oku can unpack. A name with no known
-	// ending is taken as a single binary.
+	// ending is taken as a single binary, which is what an AppImage is.
 	unpackable = []string{
 		".tar.gz", ".tgz", ".tar.bz2", ".tbz2", ".tar.xz", ".txz", ".tar.zst", ".zip", ".7z",
-		".tar",
+		".tar", ".deb", ".rpm", ".msi", ".dmg", ".pkg",
 	}
+	// installers are the endings that rank after a single binary. A .pkg ranks
+	// after them. oku can open a .dmg or a .pkg on macOS only and an .msi on
+	// Windows only, so inference for another platform leaves them out when it
+	// cannot read them.
+	installers = []string{".deb", ".rpm", ".msi", ".dmg"}
 	// skipped are endings of files that are not the package itself, or that oku
-	// cannot unpack yet.
+	// cannot unpack.
 	skipped = []string{
 		".sha256", ".sha256sum", ".sha512", ".md5", ".sig", ".asc", ".pem", ".sbom", ".json",
-		".txt", ".deb", ".rpm", ".apk", ".msi", ".pkg", ".dmg", ".appimage",
-		".minisig", ".crt", ".intoto.jsonl", ".vsix",
+		".txt", ".apk", ".minisig", ".crt", ".intoto.jsonl", ".vsix", ".delta",
 	}
 	// signatures are endings of files that sign or describe a checksum file.
 	signatures = []string{".sig", ".asc", ".pem", ".minisig", ".crt", ".sbom", ".json"}
@@ -217,23 +221,38 @@ func (inf *Inferrer) Manifest(
 			fmt.Fprintf(&b, "sha256_url = %q\n", template(urls[sums], rel.Tag, version))
 		}
 
-		bin := l.bin
-		if c.OS == "windows" {
-			bin += ".exe"
-		}
-
-		if l.strip > 0 {
-			fmt.Fprintf(&b, "strip = %d\n", l.strip)
-		}
-
-		fmt.Fprintf(&b, "bin = [%q]\n", bin)
-
-		if len(l.man) > 0 {
-			fmt.Fprintf(&b, "man = [%s]\n", quoteAll(l.man))
-		}
+		b.WriteString(l.toml(c.OS))
 	}
 
 	return b.String(), nil
+}
+
+// toml writes the strip, bin, app and man lines of a layout for an artifact of os.
+func (l layout) toml(os string) string {
+	var b strings.Builder
+
+	if l.strip > 0 {
+		fmt.Fprintf(&b, "strip = %d\n", l.strip)
+	}
+
+	if l.bin != "" {
+		bin := l.bin
+		if os == "windows" {
+			bin += ".exe"
+		}
+
+		fmt.Fprintf(&b, "bin = [%q]\n", bin)
+	}
+
+	if len(l.app) > 0 {
+		fmt.Fprintf(&b, "app = [%s]\n", quoteAll(l.app))
+	}
+
+	if len(l.man) > 0 {
+		fmt.Fprintf(&b, "man = [%s]\n", quoteAll(l.man))
+	}
+
+	return b.String()
 }
 
 func (inf *Inferrer) layoutOf(
@@ -394,8 +413,14 @@ func pick(names []string, sizes map[string]int64, t target) []string {
 	for _, name := range names {
 		lower := strings.ToLower(name)
 
-		if hasAnySuffix(lower, skipped) || !hasWord(lower, t.words.os) ||
-			!hasWord(lower, t.words.arch) && !hasWord(lower, t.words.fat) {
+		// A macOS-only app often names no platform at all, as "Tool1.2.dmg". Its
+		// format names the OS, and with no arch word oku takes it as a build for
+		// the arches the OS still runs on.
+		formatOS := installerOS(lower)
+		anyArch := formatOS != "" && !namesArch(lower) && (t.Arch == "amd64" || t.Arch == "arm64")
+
+		if hasAnySuffix(lower, skipped) || !hasWord(lower, t.words.os) && formatOS != t.OS ||
+			!hasWord(lower, t.words.arch) && !hasWord(lower, t.words.fat) && !anyArch {
 			continue
 		}
 
@@ -410,9 +435,10 @@ func pick(names []string, sizes map[string]int64, t target) []string {
 
 	// A build for the arch sorts before a universal one. A command line build
 	// sorts before a desktop app, which holds no program to link. A tar archive
-	// keeps file modes, so it sorts before a zip. A smaller asset sorts before a
-	// larger one, because a desktop app with a plain name still bundles far more
-	// than a command line tool. A shorter name sorts before variants such as
+	// keeps file modes, so it sorts before a zip, and both sort before an
+	// installer, whose paths are the ones of an install tree. A smaller asset
+	// sorts before a larger one, because a desktop app with a plain name still
+	// bundles far more than a command line tool. A shorter name sorts before variants such as
 	// "-debug".
 	slices.SortFunc(fits, func(a, b string) int {
 		return cmp.Or(
@@ -428,9 +454,36 @@ func pick(names []string, sizes map[string]int64, t target) []string {
 	return fits
 }
 
+// installerOS returns the OS an installer format runs on, or "" for any other
+// file.
+func installerOS(name string) string {
+	switch {
+	case strings.HasSuffix(name, ".dmg"), strings.HasSuffix(name, ".pkg"):
+		return "darwin"
+	case strings.HasSuffix(name, ".msi"):
+		return "windows"
+	case strings.HasSuffix(name, ".deb"), strings.HasSuffix(name, ".rpm"):
+		return "linux"
+	default:
+		return ""
+	}
+}
+
+// namesArch reports whether name holds a word of any arch.
+func namesArch(name string) bool {
+	for _, words := range archWords {
+		if hasWord(name, words) {
+			return true
+		}
+	}
+
+	return false
+}
+
 // desktopWords name a desktop app rather than a command line build, such as
-// "tool-desktop-mac-arm64.app.tar.gz" beside "tool-darwin-arm64.zip".
-var desktopWords = []string{"desktop", "app", "gui", "dmg", "installer", "setup"}
+// "tool-desktop-mac-arm64.app.tar.gz" beside "tool-darwin-arm64.zip". A format
+// such as .dmg is not a word here, because rank orders formats.
+var desktopWords = []string{"desktop", "app", "gui", "installer", "setup"}
 
 // desktop is 1 for an asset that is a desktop app.
 func desktop(name string) int {
@@ -452,10 +505,18 @@ func smaller(a, b int64) int {
 	return cmp.Compare(a, b)
 }
 
+// rank orders the formats an asset comes in: tar archives, then zip and 7z,
+// then a single binary, then installers, and a .pkg last. A .pkg holds an
+// install tree with the app somewhere inside, and the .dmg beside it holds the
+// app at its top.
 func rank(name string) int {
 	lower := strings.ToLower(name)
 
 	switch {
+	case strings.HasSuffix(lower, ".pkg"):
+		return 4
+	case hasAnySuffix(lower, installers):
+		return 3
 	case strings.HasSuffix(lower, ".zip"), strings.HasSuffix(lower, ".7z"):
 		return 1
 	case isArchive(lower):
@@ -643,11 +704,13 @@ const maxManPages = 8
 type layout struct {
 	strip int
 	bin   string
+	app   []string
 	man   []string
 }
 
 // findLayout locates the program among files. That is the file called want, or
 // without a want the executable called name, or the only executable there is.
+// A macOS app bundle becomes an app, and the files inside it are no program.
 func findLayout(files []File, name, want string, archive bool) (layout, error) {
 	if want != "" {
 		name = strings.ToLower(strings.TrimSuffix(want, ".exe"))
@@ -671,7 +734,8 @@ func findLayout(files []File, name, want string, archive bool) (layout, error) {
 		top = first
 	}
 
-	if shared && top != "" {
+	// The bundle is the package, so it stays where the artifact can name it.
+	if shared && top != "" && !strings.HasSuffix(strings.ToLower(top), ".app") {
 		l.strip = 1
 	}
 
@@ -694,7 +758,11 @@ func findLayout(files []File, name, want string, archive bool) (layout, error) {
 
 		// Some archives mark every file executable, so a man page is recognised by
 		// its name first.
-		switch {
+		switch bundle := bundleOf(inside(f.Path)); {
+		case bundle != "":
+			if !slices.Contains(l.app, bundle) {
+				l.app = append(l.app, bundle)
+			}
 		case strings.HasSuffix(f.Path, ".1"):
 			l.man = append(l.man, inside(f.Path))
 		case f.Executable && base == name:
@@ -706,6 +774,8 @@ func findLayout(files []File, name, want string, archive bool) (layout, error) {
 		}
 	}
 
+	slices.Sort(l.app)
+
 	switch {
 	case l.bin != "":
 	case len(plain) == 1 && (want != "" || len(executables) == 0):
@@ -714,6 +784,9 @@ func findLayout(files []File, name, want string, archive bool) (layout, error) {
 		return l, fmt.Errorf("no file in it is called %s", want)
 	case len(executables) == 1:
 		l.bin = executables[0]
+	case len(l.app) > 0:
+		// An app with helpers beside it is still an app.
+		return l, nil
 	case len(executables) == 0:
 		return l, errors.New("no file in it is executable\nwrite a manifest for it")
 	default:
@@ -735,6 +808,25 @@ func findLayout(files []File, name, want string, archive bool) (layout, error) {
 	}
 
 	return l, nil
+}
+
+// bundleOf returns the outermost macOS app bundle that holds p, such as
+// "Foo.app" for "Foo.app/Contents/MacOS/foo", or "" when none does. A bundle
+// is a directory ending in ".app" with a Contents directory.
+func bundleOf(p string) string {
+	for at := 0; ; {
+		i := strings.Index(p[at:], ".app/Contents/")
+		if i < 0 {
+			return ""
+		}
+
+		end := at + i + len(".app")
+		if end < len(p) {
+			return p[:end]
+		}
+
+		at = end
+	}
 }
 
 func selectorTOML(s platform.Selector) string {

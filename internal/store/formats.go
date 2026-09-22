@@ -124,7 +124,7 @@ func undeb(f *os.File, root *os.Root, strip int) error {
 				return err
 			}
 
-			return untar(data, root, strip)
+			return untarLinks(data, root, strip, true)
 		}
 
 		// Members are padded to an even length.
@@ -178,7 +178,12 @@ func unrpm(f *os.File, root *os.Root, strip int) error {
 		case hdr.Mode.IsDir():
 			err = root.MkdirAll(name, 0o755)
 		case hdr.Mode&cpio.TypeSymlink == cpio.TypeSymlink:
-			err = writeSymlink(root, name, hdr.Linkname)
+			var target string
+
+			target, err = rootedLink(name, hdr.Linkname, strip)
+			if err == nil {
+				err = writeSymlink(root, name, target)
+			}
 		case hdr.Mode.IsRegular():
 			err = writeFile(root, name, fs.FileMode(hdr.Mode.Perm()), hdr.ModTime, archive)
 		}

@@ -182,3 +182,22 @@ func TestB174InferencePrefersTheCommandLineBuildAndTheChecksumsOfItsOwnOS(t *tes
 		t.Fatalf("the Linux artifact should read the checksums of Linux:\n%s", out)
 	}
 }
+
+func TestB222InferenceTakesAnAppBundleAsAnAppAndNotAsAProgram(t *testing.T) {
+	m := newMachine(t)
+	archive, _ := m.archive(t, "app", map[string]string{
+		"Tool.app/Contents/MacOS/tool":   script,
+		"Tool.app/Contents/Info.plist":   "<plist/>",
+		"Tool.app/Contents/Frameworks/x": "helper",
+	})
+
+	inferServer(t, &m, map[string]string{hostAssetName(): archive})
+
+	out, err := m.run(t, "", "manifest", "init", "--from", "owner/tool", "-o", "-")
+	must(t, err)
+
+	if !strings.Contains(out, `app = ["Tool.app"]`) || strings.Contains(out, "bin =") ||
+		strings.Contains(out, "strip =") {
+		t.Fatalf("the bundle should be an app at the top of the package:\n%s", out)
+	}
+}

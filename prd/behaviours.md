@@ -195,8 +195,15 @@ order step in `prd/product.md`.
   one such as `checksums.txt` or `SHA256SUMS`, and never one that names another
   OS or arch.
 - B198 [4] With several assets that fit a platform equally, inference skips
-  one whose name says `desktop`, `app`, `gui`, `dmg`, `installer` or `setup`,
+  one whose name says `desktop`, `app`, `gui`, `installer` or `setup`,
   and takes the smaller of the rest when the host reports sizes.
+- B222 [4] Inference takes a `.deb`, `.rpm`, `.msi`, `.dmg`, `.pkg` or
+  AppImage asset when no archive or single binary fits, a `.dmg` before a
+  `.pkg`. An installer's format names its OS, and one that names no arch fits
+  amd64 and arm64 of that OS. An asset that holds `Name.app` gives
+  `app = ["Name.app"]`, the files inside the bundle are no program, and oku
+  does not strip a bundle at the top of the asset. A `.deb` or `.rpm` symlink
+  to an absolute path names a file of the package.
 - B199 [4] When an install from a manifest oku inferred in the same run fails,
   the error ends with the inferred manifest.
 - B26 [4] Inference that finds no asset for the host fails and lists the asset
