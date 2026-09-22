@@ -194,7 +194,7 @@ machine, so put specific entries before general ones.
 | `bin` | see below | Paths of executables inside the package. An entry may also be a table that makes oku write the program, see [A program that needs an interpreter](#a-program-that-needs-an-interpreter), or that exposes a file [under another name](#a-program-under-another-name). |
 | `lib`, `include`, `share` | see below | Files and directories for the package's `lib`, `include` and `share`, see [A prebuilt library](#a-prebuilt-library). |
 | `man` | see below | Paths of man pages. The file name needs a section, such as `rg.1` or `rg.1.gz`. An entry may be a [pattern](#patterns-in-font-and-man). |
-| `completions` | see below | Shell name to path, such as `{ fish = "complete/rg.fish" }`. |
+| `completions` | see below | Shell name to path, such as `{ fish = "complete/rg.fish" }`, a directory, or a command that generates them. See [Completions](#completions). |
 | `app` | see below | macOS app bundles, such as `["Foo.app"]`. See [Apps and fonts](#apps-and-fonts). |
 | `font` | see below | Font files, such as `["fonts/ttf/Foo-Regular.ttf"]`. An entry may be a [pattern](#patterns-in-font-and-man), such as `["fonts/ttf/*.ttf"]`. |
 | `data` | see below | `true` for a package that only holds files, see [A package that only holds files](#a-package-that-only-holds-files). |
@@ -396,6 +396,52 @@ in the `pkg/` directory of the store path it prints.
 `strip`. A path that does not exist, is not a regular file, or points outside
 the package fails the install. Two outputs with the same file name fail too.
 
+### Completions
+
+`completions` takes one of three forms. The first maps a shell to a file in the
+package:
+
+```toml
+completions = { fish = "complete/rg.fish", zsh = "complete/_rg", bash = "complete/rg.bash" }
+```
+
+The second names a directory that holds the conventional file of each shell,
+named after the program in the first `bin` entry: `<name>.fish`, `_<name>` and
+`<name>.bash`. oku links the ones the directory has, so a release that ships
+two of the three still works, and it fails when the directory has none:
+
+```toml
+completions = "complete/"
+```
+
+The third runs the program to print them, for a release that ships a bare
+binary. `{{shell}}` expands to `fish`, `zsh` and `bash` in turn, and each run's
+stdout becomes the conventional file of that shell:
+
+```toml
+[[artifact]]
+bin = ["atuin"]
+completions = { generate = "atuin gen-completions --shell {{shell}}" }
+```
+
+oku runs the command after it unpacks the download and before it links the
+package into the profile. The working directory is the unpacked package, the
+package's own `bin` is first on PATH, and the command runs in the
+[sandbox](#the-sandbox) of a build step. A non-zero exit or an empty stdout
+fails the install, and the error holds the command and its stderr. The files
+take their name from the first `bin` entry, or from `name` when that is another
+program:
+
+```toml
+completions = { generate = "just --completions {{shell}}", name = "just" }
+```
+
+`generate` executes the download, so oku asks for the same
+[approval](trust.md#build-commands) as for a build, and `oku.lock` records
+`commands = true` for the platform. A changed command is a changed manifest, so
+`oku sync` stops until `oku update` takes it. `generate` takes no shell paths
+beside it, and `oku manifest lint` rejects the two together.
+
 ### Checksums
 
 In order, oku uses `sha256`, then the file at `sha256_url`, then the digest the
@@ -464,6 +510,8 @@ linked into the user's profile:
 | `bin = [{ name = "probe", path = "dir/ffprobe" }]` | `bin/probe` |
 | `man = ["doc/tool.1"]` | `share/man/man1/tool.1` |
 | `completions = { fish = "c/tool.fish" }` | `share/completions/fish/tool.fish` |
+| `completions = "c/"` | `share/completions/fish/tool.fish`, `share/completions/zsh/_tool` and `share/completions/bash/tool.bash`, the ones that exist |
+| `completions = { generate = "tool completions {{shell}}" }` | The same three files, from the command's output |
 
 A build that installs its own files, such as `make install`, may put man pages
 under `{{prefix}}/share/man` or under `{{prefix}}/man`. Both reach the
@@ -808,7 +856,7 @@ one of these keys:
 | Key | What it does |
 |---|---|
 | `run = "..."` | Runs a command string in a shell. |
-| `install = { bin, lib, include, man, share, completions, app, font }` | Copies files from the source directory into the package. `bin` files become executable. A `bin` entry may be a [table](#a-program-that-needs-an-interpreter) too, and there `{{pkg}}` equals `{{prefix}}`. `man` and `completions` go where an artifact's would. |
+| `install = { bin, lib, include, man, share, completions, app, font }` | Copies files from the source directory into the package. `bin` files become executable. A `bin` entry may be a [table](#a-program-that-needs-an-interpreter) too, and there `{{pkg}}` equals `{{prefix}}`. `man` and `completions` go where an artifact's would, and `completions` takes the same [three forms](#completions). With `generate`, the command runs in the source directory after the files are copied, with the package's `bin` first on PATH, and the step appears in the approval prompt. |
 | `copy = { from, to }` | Copies one file. `from` is relative to the source directory and `to` to the package. |
 | `patch = { file, strip }` | Applies a unified diff to the source, see below. |
 | `fetch = { url, sha256, to }` | Downloads a file into the source directory. `sha256` is required. |
@@ -1097,5 +1145,6 @@ deletes the half-built package, and leaves the user's profile as it was.
 
 ### Approval
 
-Before the first build of a manifest that has `run` steps, oku shows the user
-those commands and asks, see [Trust and checksums](trust.md#build-commands).
+Before the first build of a manifest that has `run` steps, or an `install` step
+that generates completions, oku shows the user those commands and asks, see
+[Trust and checksums](trust.md#build-commands).

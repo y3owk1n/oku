@@ -281,6 +281,14 @@ func (s *Store) Build(
 			vendored = append(vendored, digest)
 		default:
 			err = s.runStep(ctx, step, src, prefix, vars)
+
+			// The completions command runs the program the step just installed.
+			if err == nil && step.Generates() {
+				result.Unsandboxed, err = generateCompletions(
+					ctx, step.Install.Completions, src, prefix,
+					withBinFirst(env, filepath.Join(prefix, "bin")), box, log,
+				)
+			}
 		}
 
 		done()
@@ -765,9 +773,13 @@ func installFiles(in manifest.Install, src, prefix string) error {
 		}
 	}
 
-	for shell, file := range in.Completions {
-		to := path.Join("share", "completions", shell, path.Base(file))
-		if err := copyInto(src, file, prefix, to, 0); err != nil {
+	completions, err := completionPaths(in.Completions, src)
+	if err != nil {
+		return err
+	}
+
+	for shell, file := range completions {
+		if err := copyInto(src, file, prefix, completionDest(shell, file), 0); err != nil {
 			return err
 		}
 	}

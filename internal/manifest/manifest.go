@@ -100,11 +100,14 @@ type Artifact struct {
 	Strip     int    `toml:"strip"`
 	// RawBin is "bin" as TOML gives it. Parse splits it into Bin, the files that
 	// are programs, and Wrap, the programs that oku writes.
-	RawBin      []any             `toml:"bin"`
-	Bin         []string          `toml:"-"`
-	Wrap        []Wrapper         `toml:"-"`
-	Man         []string          `toml:"man"`
-	Completions map[string]string `toml:"completions"`
+	RawBin []any     `toml:"bin"`
+	Bin    []string  `toml:"-"`
+	Wrap   []Wrapper `toml:"-"`
+	Man    []string  `toml:"man"`
+	// RawCompletions is "completions" as TOML gives it. Parse reads it into
+	// Completions.
+	RawCompletions any         `toml:"completions"`
+	Completions    Completions `toml:"-"`
 	// Lib, Include and Share hold files and directories for the package's lib,
 	// include and share directories, which a build that depends on the package
 	// finds there.
@@ -226,6 +229,14 @@ func (m *Manifest) validate() error {
 				if err != nil {
 					errs = append(errs, fmt.Errorf("build.step[%d]: install.%w", i, err))
 				}
+
+				step.Install.Completions, err = parseCompletions(
+					step.Install.RawCompletions,
+					binNames(step.Install.Bin, step.Install.Wrap),
+				)
+				if err != nil {
+					errs = append(errs, fmt.Errorf("build.step[%d]: install.%w", i, err))
+				}
 			}
 
 			switch {
@@ -247,7 +258,8 @@ func (m *Manifest) validate() error {
 				if !npmNameRe.MatchString(name) {
 					errs = append(errs, fmt.Errorf(
 						`build.step[%d]: scripts must name npm packages such as "@scope/name", not %q`,
-						i, name,
+						i,
+						name,
 					))
 				}
 			}
@@ -406,8 +418,8 @@ func (m *Manifest) validate() error {
 			errs = append(errs, fmt.Errorf("artifact[%d]: set sha256 or sha256_url, not both", i))
 		}
 
-		exposes := len(a.Bin)+len(a.Wrap)+len(a.Man)+len(a.Completions)+len(a.App)+len(a.Font)+
-			len(a.Lib)+len(a.Include)+len(a.Share) > 0
+		exposes := len(a.Bin)+len(a.Wrap)+len(a.Man)+len(a.App)+len(a.Font)+
+			len(a.Lib)+len(a.Include)+len(a.Share) > 0 || !a.Completions.Empty()
 
 		switch {
 		case !exposes && !a.Data:
@@ -502,7 +514,11 @@ func reservedEnv(name string) bool {
 func (a *Artifact) splitBin() error {
 	var err error
 
-	a.Bin, a.Wrap, err = splitBin(a.RawBin)
+	if a.Bin, a.Wrap, err = splitBin(a.RawBin); err != nil {
+		return err
+	}
+
+	a.Completions, err = parseCompletions(a.RawCompletions, binNames(a.Bin, a.Wrap))
 
 	return err
 }

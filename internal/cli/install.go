@@ -94,8 +94,9 @@ type request struct {
 	// lockOnly pins the package for platforms and installs nothing. sync sets it
 	// for a package whose when leaves out the host.
 	lockOnly bool
-	// approve decides whether a manifest may run its build commands.
-	approve func(m *manifest.Manifest, host platform.Platform) error
+	// approve decides whether a manifest may run its build commands, or, with an
+	// artifact, the command that generates the artifact's completions.
+	approve func(m *manifest.Manifest, host platform.Platform, a *manifest.Artifact) error
 	// log receives the output of build commands, or is nil.
 	log io.Writer
 	// constraint limits the version of a dep, such as ">=3". A version pin in ref
@@ -391,7 +392,7 @@ func (e env) installFrom(
 			SHA256:       meta.SHA256,
 		}, previous, m, host)
 	case build:
-		if err := req.approve(m, host); err != nil {
+		if err := req.approve(m, host, nil); err != nil {
 			return installed{}, err
 		}
 
@@ -471,6 +472,12 @@ func (e env) installFrom(
 
 		auth := e.fetcher(opts).Hosts.AuthFor(m.Version.From, m.Version.Repo)
 
+		if artifact.Completions.Generate != "" {
+			if err := req.approve(m, host, &artifact); err != nil {
+				return installed{}, err
+			}
+		}
+
 		if realized, err = e.store().As(auth).Realize(
 			ctx, m, artifact, host, pinned, deps.prefixes,
 		); err != nil {
@@ -481,6 +488,7 @@ func (e env) installFrom(
 			Strategy: strategyArtifact,
 			URL:      artifact.URL,
 			SHA256:   realized.SHA256,
+			Commands: artifact.Completions.Generate != "",
 		}
 	}
 
@@ -762,7 +770,10 @@ func pinFor(
 		return lock.Platform{}, false, fmt.Errorf("%s for %s: %w", m.Package.Name, p, err)
 	}
 
-	return lock.Platform{Strategy: strategyArtifact, URL: artifact.URL, SHA256: sum}, trusted, nil
+	return lock.Platform{
+		Strategy: strategyArtifact, URL: artifact.URL, SHA256: sum,
+		Commands: artifact.Completions.Generate != "",
+	}, trusted, nil
 }
 
 // target returns the platform that an inferred manifest must fit. That is the

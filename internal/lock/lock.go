@@ -89,6 +89,9 @@ type Platform struct {
 	SHA256   string `toml:"sha256,omitempty"`
 	// Impure marks a build whose run steps could use the network.
 	Impure bool `toml:"impure,omitempty"`
+	// Commands marks an artifact whose manifest ran the download, to generate
+	// its completions. A build always runs commands, so it leaves this unset.
+	Commands bool `toml:"commands,omitempty"`
 	// VendorSHA256 pins what the build's vendor steps downloaded.
 	VendorSHA256 string `toml:"vendor_sha256,omitempty"`
 }

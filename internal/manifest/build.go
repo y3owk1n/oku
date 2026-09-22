@@ -61,16 +61,19 @@ type Step struct {
 type Install struct {
 	// RawBin is "bin" as TOML gives it. Parse splits it into Bin, the files that
 	// are programs, and Wrap, the programs that oku writes.
-	RawBin      []any             `toml:"bin"`
-	Bin         []string          `toml:"-"`
-	Wrap        []Wrapper         `toml:"-"`
-	Lib         []string          `toml:"lib"`
-	Include     []string          `toml:"include"`
-	Man         []string          `toml:"man"`
-	Share       []string          `toml:"share"`
-	Completions map[string]string `toml:"completions"`
-	App         []string          `toml:"app"`
-	Font        []string          `toml:"font"`
+	RawBin  []any     `toml:"bin"`
+	Bin     []string  `toml:"-"`
+	Wrap    []Wrapper `toml:"-"`
+	Lib     []string  `toml:"lib"`
+	Include []string  `toml:"include"`
+	Man     []string  `toml:"man"`
+	Share   []string  `toml:"share"`
+	// RawCompletions is "completions" as TOML gives it. Parse reads it into
+	// Completions.
+	RawCompletions any         `toml:"completions"`
+	Completions    Completions `toml:"-"`
+	App            []string    `toml:"app"`
+	Font           []string    `toml:"font"`
 }
 
 // Fetch downloads URL to the path To inside the source directory.
@@ -136,17 +139,23 @@ func (s Step) Impure() bool {
 }
 
 // CommandSteps returns the steps that run a program on p, with their positions:
-// run steps and vendor steps.
+// run steps, vendor steps and install steps that generate completions.
 func (b *Build) CommandSteps(p platform.Platform) map[int]Step {
 	found := map[int]Step{}
 
 	for i, step := range b.Steps {
-		if (step.Run != nil || step.Vendor != nil) && step.When.Matches(p) {
+		if (step.Run != nil || step.Vendor != nil || step.Generates()) && step.When.Matches(p) {
 			found[i] = step
 		}
 	}
 
 	return found
+}
+
+// Generates reports whether the step is an install step that runs the package
+// to generate its completions.
+func (s Step) Generates() bool {
+	return s.Install != nil && s.Install.Completions.Generate != ""
 }
 
 // Runtime holds what the package needs after it is installed.

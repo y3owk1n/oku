@@ -36,17 +36,20 @@ func (f *buildFlags) register(cmd *cobra.Command) {
 		BoolVar(&f.acceptKey, "accept-key", false, "accept a signing key that differs from the one in oku.lock")
 }
 
-// approver returns the check that install runs before a build. A manifest with
-// run steps needs the user's approval once per manifest hash.
+// approver returns the check that install runs before a build, or before an
+// artifact whose completions a command generates. A manifest that runs commands
+// needs the user's approval once per manifest hash.
 func (e env) approver(
 	cmd *cobra.Command,
 	opts Options,
 	flags *buildFlags,
-) func(*manifest.Manifest, platform.Platform) error {
-	return func(m *manifest.Manifest, host platform.Platform) error {
-		steps := m.Build.CommandSteps(host)
-		if len(steps) == 0 {
-			return nil
+) func(*manifest.Manifest, platform.Platform, *manifest.Artifact) error {
+	return func(m *manifest.Manifest, host platform.Platform, a *manifest.Artifact) error {
+		var steps map[int]manifest.Step
+		if a == nil {
+			if steps = m.Build.CommandSteps(host); len(steps) == 0 {
+				return nil
+			}
 		}
 
 		approvals, err := trust.Read(e.data)
@@ -65,17 +68,32 @@ func (e env) approver(
 
 			out := cmd.OutOrStdout()
 			s := ui.For(out)
-			fmt.Fprintf(
-				out,
-				"%s %s builds from source and runs these commands on your machine:\n\n",
-				s.Bold(m.Package.Name),
-				m.Version.Value,
-			)
+
+			if a != nil {
+				fmt.Fprintf(
+					out,
+					"%s %s runs its download on your machine to generate completions:\n\n    %s\n"+
+						"  %s\n",
+					s.Bold(m.Package.Name), m.Version.Value, a.Completions.Generate,
+					s.Warn("(once for each of "+strings.Join(manifest.Shells, ", ")+")"),
+				)
+			} else {
+				fmt.Fprintf(
+					out,
+					"%s %s builds from source and runs these commands on your machine:\n\n",
+					s.Bold(m.Package.Name),
+					m.Version.Value,
+				)
+			}
 
 			for _, i := range slices.Sorted(maps.Keys(steps)) {
 				text, note := "", ""
 
 				switch {
+				case steps[i].Generates():
+					text = steps[i].Install.Completions.Generate
+					note = "  (generates completions, once for each of " +
+						strings.Join(manifest.Shells, ", ") + ")"
 				case steps[i].Vendor != nil:
 					text = "vendor " + *steps[i].Vendor
 					note = "  (downloads packages, checked against oku.lock)"
@@ -106,14 +124,20 @@ func (e env) approver(
 				)
 			}
 
+			question, them := "run them?", "them"
+			if a != nil {
+				question, them = "run it?", "it"
+			}
+
 			if !interactive(cmd, opts) {
 				return fmt.Errorf(
-					"%s needs approval to run them, and this is not a terminal\npass --yes to approve",
+					"%s needs approval to run %s, and this is not a terminal\npass --yes to approve",
 					m.Package.Name,
+					them,
 				)
 			}
 
-			fmt.Fprint(out, "\n"+s.Bold("run them?")+" [y/N] ")
+			fmt.Fprint(out, "\n"+s.Bold(question)+" [y/N] ")
 
 			answer, _ := bufio.NewReader(cmd.InOrStdin()).ReadString('\n')
 			if a := strings.ToLower(strings.TrimSpace(answer)); a != "y" && a != "yes" {

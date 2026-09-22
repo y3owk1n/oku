@@ -89,7 +89,11 @@ run them? [y/N]
 - A `vendor` step is shown too. It runs the language's package tool with the
   network on, and `oku.lock` pins a digest of what it downloads.
 - A manifest with only `install`, `copy`, `fetch` and `extract` steps runs no
-  commands and needs no approval.
+  commands and needs no approval, unless an `install` step
+  [generates completions](manifest.md#completions).
+- An artifact whose completions a command generates runs the download, so it
+  asks the same way, with `run it? [y/N]`, and `oku.lock` records
+  `commands = true` for that platform.
 
 On macOS and Linux, build commands run in a
 [sandbox](manifest.md#the-sandbox) with no network and no access to your home

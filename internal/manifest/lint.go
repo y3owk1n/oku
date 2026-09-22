@@ -38,7 +38,7 @@ type schema struct {
 		Lib          []string          `toml:"lib"`
 		Include      []string          `toml:"include"`
 		Man          []string          `toml:"man"`
-		Completions  map[string]string `toml:"completions"`
+		Completions  any               `toml:"completions"`
 		Share        []string          `toml:"share"`
 		App          []string          `toml:"app"`
 		Font         []string          `toml:"font"`
@@ -59,6 +59,7 @@ var (
 	artifactVars = []string{"version", "tag", "os", "arch", "libc"}
 	wrapVars     = append([]string{"prefix", "pkg"}, artifactVars...)
 	buildVars    = append([]string{"prefix", "src", "jobs"}, artifactVars...)
+	generateVars = []string{"shell"}
 )
 
 // Report is what Lint found. A manifest with Errors must not be published.
@@ -104,6 +105,12 @@ func Lint(data []byte) Report {
 
 	// A wrapper may also name the package's own directories and its deps.
 	for i, a := range m.Artifacts {
+		for _, name := range unknownVars(a.Completions.Generate, generateVars) {
+			report.Errors = append(report.Errors, fmt.Sprintf(
+				"artifact[%d]: completions.generate: unknown template variable {{%s}}", i, name,
+			))
+		}
+
 		for _, w := range a.Wrap {
 			for _, text := range append([]string{w.Run}, w.Args...) {
 				for _, name := range unknownVars(text, wrapVars) {
@@ -167,6 +174,22 @@ func Lint(data []byte) Report {
 
 	for i, s := range full.Build.Steps {
 		report.Errors = append(report.Errors, lintStep(i, s)...)
+	}
+
+	if m.Build != nil {
+		for i, s := range m.Build.Steps {
+			if !s.Generates() {
+				continue
+			}
+
+			for _, name := range unknownVars(s.Install.Completions.Generate, generateVars) {
+				report.Errors = append(report.Errors, fmt.Sprintf(
+					"build.step[%d]: install.completions.generate: unknown template variable {{%s}}",
+					i,
+					name,
+				))
+			}
+		}
 	}
 
 	if full.Package.Description == "" {
