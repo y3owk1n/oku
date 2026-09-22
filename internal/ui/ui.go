@@ -118,6 +118,16 @@ func (s Style) Home(path string) string {
 	return "~" + rest
 }
 
+// Homes is Home for every path inside text.
+func (s Style) Homes(text string) string {
+	home, err := os.UserHomeDir()
+	if !s.on || err != nil || home == "" {
+		return text
+	}
+
+	return strings.ReplaceAll(text, home+string(os.PathSeparator), "~"+string(os.PathSeparator))
+}
+
 // Table lays out rows in aligned columns. A styled terminal gets a dim header
 // row. Anywhere else the rows print with two spaces between columns and no
 // header, as tabwriter did.

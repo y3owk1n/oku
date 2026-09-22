@@ -102,6 +102,7 @@ func NewRootCmd(opts Options) *cobra.Command {
 		newSearchCmd(opts),
 		newListCmd(opts),
 		newWhyCmd(opts),
+		newWhichCmd(opts),
 		newInfoCmd(opts),
 		newCacheCmd(),
 		newKeyCmd(),
@@ -136,7 +137,7 @@ func groupCommands(root *cobra.Command) {
 		title    string
 		commands []string
 	}{
-		{"Packages", []string{"add", "remove", "sync", "update", "list", "info", "why", "shell"}},
+		{"Packages", []string{"add", "remove", "sync", "update", "list", "info", "why", "which", "shell"}},
 		{"Finding packages", []string{"search", "source"}},
 		{"Generations", []string{"generations", "rollback", "gc"}},
 		{"Projects and shells", []string{"hook", "env", "allow", "deny"}},

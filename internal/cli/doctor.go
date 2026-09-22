@@ -103,7 +103,7 @@ func runDoctor(cmd *cobra.Command, opts Options) error {
 				glyph = s.Cross()
 			}
 
-			fmt.Fprintf(out, "%s %s\n", glyph, c.Message)
+			fmt.Fprintf(out, "%s %s\n", glyph, s.Homes(c.Message))
 		}
 	}
 

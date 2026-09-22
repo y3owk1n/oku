@@ -23,6 +23,7 @@ import (
 	"github.com/y3owk1n/oku/internal/source"
 	"github.com/y3owk1n/oku/internal/status"
 	"github.com/y3owk1n/oku/internal/store"
+	"github.com/y3owk1n/oku/internal/ui"
 )
 
 const (
@@ -483,7 +484,7 @@ func (e env) install(ctx context.Context, opts Options, req request) (installed,
 			Service:   req.service,
 			System:    req.system,
 		},
-		lock: lockEntry(req, m, fetched, inferred, platforms, deps.locks),
+		lock:           lockEntry(req, m, fetched, inferred, platforms, deps.locks),
 		closure:        append([]string{realized.Path}, deps.closure...),
 		firstUse:       realized.FirstUse,
 		firstUseOthers: firstUseOthers,
@@ -882,12 +883,25 @@ func inferredText(inferred string, req request) string {
 	return inferred
 }
 
+// warn prints a note the user should read but need not act on. On a terminal
+// it starts with a glyph, and the lines after the first are indented under it.
+func warn(w io.Writer, format string, args ...any) {
+	s := ui.For(w)
+	text := fmt.Sprintf(format, args...)
+
+	if s.On() {
+		text = s.Note() + " " + strings.ReplaceAll(text, "\n", "\n  ")
+	}
+
+	fmt.Fprintln(w, text)
+}
+
 // reportUnsandboxed warns that a build's commands ran without the sandbox.
 func reportUnsandboxed(w io.Writer, got installed) {
 	if got.unsandboxed != "" {
-		fmt.Fprintf(
+		warn(
 			w, "%s was built without the sandbox, because %s\n"+
-				"its build commands could use the network and read your files\n",
+				"its build commands could use the network and read your files",
 			got.lock.Name, got.unsandboxed,
 		)
 	}
@@ -896,7 +910,7 @@ func reportUnsandboxed(w io.Writer, got installed) {
 // reportCache says which packages came from a cache and which entries oku ignored.
 func reportCache(w io.Writer, got installed) {
 	for _, note := range got.cacheNotes {
-		fmt.Fprintln(w, note)
+		warn(w, "%s", note)
 	}
 
 	for _, name := range got.substituted {
@@ -925,11 +939,11 @@ func reportInferred(w io.Writer, got installed, verbose bool) {
 	if verbose {
 		fmt.Fprintf(w, "%s %s:\n\n%s\n", got.lock.Ref, why, got.inferred)
 	} else {
-		fmt.Fprintf(w, "%s %s, --verbose prints it\n", got.lock.Ref, why)
+		warn(w, "%s %s, --verbose prints it", got.lock.Ref, why)
 	}
 
 	if npm && !strings.Contains(got.inferred, "[runtime]") {
-		fmt.Fprintln(
+		warn(
 			w, "its programs run the node on PATH. To pin one, set runtimes.node in config.toml "+
 				"to the ref of a package that provides node",
 		)
@@ -939,8 +953,8 @@ func reportInferred(w io.Writer, got installed, verbose bool) {
 // reportFirstUse tells the user that oku trusted a download unverified.
 func (e env) reportFirstUse(w io.Writer, got installed) {
 	if len(got.firstUseOthers) > 0 {
-		fmt.Fprintf(
-			w, "%s publishes no checksum for %s, so oku trusted those downloads and pinned them in %s\n",
+		warn(
+			w, "%s publishes no checksum for %s, so oku trusted those downloads and pinned them in %s",
 			got.lock.Name, strings.Join(got.firstUseOthers, ", "), e.lockPath(),
 		)
 	}
@@ -949,9 +963,9 @@ func (e env) reportFirstUse(w io.Writer, got installed) {
 		return
 	}
 
-	fmt.Fprintf(
+	warn(
 		w,
-		"%s publishes no checksum, so oku trusted this download and pinned sha256 %s in %s\n",
+		"%s publishes no checksum, so oku trusted this download and pinned sha256 %s in %s",
 		got.lock.Name, got.lock.Platforms[platform.Host().String()].SHA256, e.lockPath(),
 	)
 }

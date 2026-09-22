@@ -13,6 +13,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -136,6 +137,8 @@ func reconcile(
 	update bool,
 	before *savedLists,
 ) error {
+	started := time.Now()
+
 	e, err := scopedEnv(cmd, opts)
 	if err != nil {
 		return err
@@ -434,12 +437,10 @@ func reconcile(
 	}
 
 	if staged != 0 {
-		noun := "packages"
-		if len(pkgs) == 1 {
-			noun = "package"
-		}
-
-		fmt.Fprintf(out, "profile now holds %d %s\n", len(pkgs), noun)
+		fmt.Fprintf(
+			out, "profile now holds %s, generation %d, %s\n",
+			count(len(pkgs), "package"), staged, time.Since(started).Round(time.Second),
+		)
 	} else {
 		fmt.Fprintln(out, "already in sync")
 	}
