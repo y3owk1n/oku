@@ -43,12 +43,18 @@ func newHookCmd(opts Options) *cobra.Command {
 				return err
 			}
 
-			dirs := []string{e.globalProfile().BinDir()}
+			prof := e.globalProfile()
+
+			dirs := []string{prof.BinDir()}
+			oku := "oku"
 			if opts.Executable != "" {
 				dirs = append(dirs, filepath.Dir(opts.Executable))
+				oku = opts.Executable
 			}
 
-			code, err := shellhook.Hook(args[0], dirs)
+			code, err := shellhook.Hook(
+				args[0], dirs, filepath.Join(prof.ShareDir(), "completions"), oku,
+			)
 			if err != nil {
 				return err
 			}
