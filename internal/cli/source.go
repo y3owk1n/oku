@@ -121,10 +121,7 @@ with no sources.`,
 			}
 
 			if len(config.Sources) == 0 {
-				fmt.Fprintln(
-					cmd.OutOrStdout(),
-					"no sources, add one with `oku source add <alias> <ref>`",
-				)
+				hint(cmd.OutOrStdout(), "no sources, add one with `oku source add <alias> <ref>`")
 
 				return nil
 			}

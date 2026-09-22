@@ -345,6 +345,8 @@ func reconcile(
 	var (
 		pkgs    []profile.Package
 		summary = style.Table("", "package", "version", "")
+		// A terminal gets one note for all the manifests oku inferred.
+		inferred []installed
 	)
 
 	for _, j := range jobs {
@@ -372,7 +374,12 @@ func reconcile(
 			syncRow(style, summary, kind, name, version, note)
 		}
 
-		reportInferred(out, got, flags.verbose)
+		if style.On() && !flags.verbose {
+			inferred = append(inferred, got)
+		} else {
+			reportInferred(out, got, flags.verbose)
+		}
+
 		e.reportFirstUse(cmd.ErrOrStderr(), got)
 		reportUnsandboxed(cmd.ErrOrStderr(), got)
 		reportLinks(cmd.ErrOrStderr(), got)
@@ -384,6 +391,8 @@ func reconcile(
 			pkgs = append(pkgs, got.profile)
 		}
 	}
+
+	reportInferredTogether(out, inferred)
 
 	// A dry run says "would remove" further down, so it needs no row here.
 	if !dryRun {
@@ -429,6 +438,14 @@ func reconcile(
 		return err
 	}
 
+	// A list with nothing in it, not even a pin for another platform, writes
+	// no first generation.
+	if len(jobs) == 0 && len(files) == 0 && len(wantedSettings) == 0 && e.profile().Current() == 0 {
+		fmt.Fprintln(out, style.Done("nothing to sync, "+e.listPath()+" lists no packages, files or settings"))
+
+		return nil
+	}
+
 	staged, err := e.profile().Replace(pkgs, files, wantedSettings, lockData)
 	if err != nil {
 		return err
@@ -449,7 +466,7 @@ func reconcile(
 	}
 
 	held := holds(profile.Generation{Packages: pkgs, Files: files, Settings: wantedSettings})
-	took := time.Since(started).Round(time.Second)
+	took := elapsed(time.Since(started))
 
 	switch {
 	case staged != 0 && style.On():
@@ -463,6 +480,16 @@ func reconcile(
 	}
 
 	return nil
+}
+
+// elapsed rounds a duration for the closing line: to the second, or under a
+// second to 10ms, so that a quick sync does not read "0s".
+func elapsed(d time.Duration) time.Duration {
+	if d < time.Second {
+		return max(d.Round(10*time.Millisecond), 10*time.Millisecond)
+	}
+
+	return d.Round(time.Second)
 }
 
 // needsLock reports whether sync must pin a package that it does not install.

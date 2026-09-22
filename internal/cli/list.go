@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -62,10 +63,7 @@ func newListCmd(opts Options) *cobra.Command {
 			}
 
 			if len(pkgs) == 0 {
-				fmt.Fprintln(
-					cmd.OutOrStdout(),
-					"no packages installed, `oku add <ref>` installs one",
-				)
+				hint(cmd.OutOrStdout(), "no packages installed, `oku add <ref>` installs one")
 
 				return nil
 			}
@@ -264,4 +262,10 @@ func (e env) mergedList(cmd *cobra.Command, opts Options) (merged, error) {
 	}
 
 	return e.loadList(cmd.Context(), opts, locked, false)
+}
+
+// hint prints a line that says what to do next, such as the hint of an empty
+// list, with each `command` in colour on a terminal.
+func hint(w io.Writer, text string) {
+	fmt.Fprintln(w, ui.For(w).Code(text))
 }

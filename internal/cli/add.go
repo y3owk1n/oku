@@ -29,9 +29,11 @@ func newAddCmd(opts Options) *cobra.Command {
 	)
 
 	cmd := &cobra.Command{
-		Use:   "add <ref>[@version]",
-		Short: "Install a package from a manifest",
-		Long: `Install a package from a manifest. A ref is one of:
+		Use:   "add <ref>[@version]...",
+		Short: "Install packages from their manifests",
+		Long: `Install packages from their manifests, one generation each, in the order
+given. A failure stops the command, and the packages before it stay. A ref is
+one of:
 
   ./pkg.toml                          a local file
   https://host/pkg.toml               a URL of a manifest
@@ -44,9 +46,36 @@ func newAddCmd(opts Options) *cobra.Command {
   npm:@scope/name                     a command-line tool in the npm registry
   git+https://host/repo#path/pkg.toml a file in any git repo
   alias/name                          a package in a source, see "oku source"`,
-		Args: exactArgs(1),
+		Args: minArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runAdd(cmd, opts, args[0], &flags, fromSource, enable, system, asset, bin)
+			if len(args) > 1 && (asset != "" || bin != "") {
+				return errors.New("--asset and --bin describe one download, so add that ref on its own")
+			}
+
+			programs := false
+
+			for _, arg := range args {
+				ran, err := runAdd(cmd, opts, arg, &flags, fromSource, enable, system, asset, bin)
+				if err != nil {
+					return err
+				}
+
+				programs = programs || ran
+			}
+
+			if !programs {
+				// An app, a font or a file has nothing to run, so PATH does not matter.
+				return nil
+			}
+
+			e, err := scopedEnv(cmd, opts)
+			if err != nil {
+				return err
+			}
+
+			reportPath(cmd, opts, e)
+
+			return nil
 		},
 	}
 
@@ -88,24 +117,24 @@ func runAdd(
 	flags *buildFlags,
 	fromSource, enable, system bool,
 	asset, bin string,
-) error {
+) (bool, error) {
 	e, err := scopedEnv(cmd, opts)
 	if err != nil {
-		return err
+		return false, err
 	}
 
 	if err := e.recoverPending(cmd, opts); err != nil {
-		return err
+		return false, err
 	}
 
 	r, err := e.parseRef(arg)
 	if err != nil {
-		return err
+		return false, err
 	}
 
 	locked, err := lock.Read(e.lockPath())
 	if err != nil {
-		return err
+		return false, err
 	}
 
 	// The manifest names the package, so the lock entry to reuse is found by ref.
@@ -119,7 +148,7 @@ func runAdd(
 
 	own, err := list.Read(e.listPath())
 	if err != nil {
-		return err
+		return false, err
 	}
 
 	platforms, strict := e.lockPlatforms(own, platform.Selector{})
@@ -140,29 +169,29 @@ func runAdd(
 		log:             buildLog(cmd, flags),
 	})
 	if errors.Is(err, ref.ErrNotFound) && !strings.ContainsAny(arg, ":/\\") {
-		return fmt.Errorf(
-			"%w\n%s is no file here. A package from a source is written alias/name, "+
-				"and `oku add --help` lists every ref form",
-			err, arg,
+		return false, fmt.Errorf(
+			"there is no file named %s here\n"+
+				"a package from a source is written alias/name, and `oku add --help` lists every ref form",
+			arg,
 		)
 	}
 
 	if err != nil {
-		return err
+		return false, err
 	}
 
 	locked.Set(got.lock)
 
 	lockData, err := locked.Bytes(e.lockPath())
 	if err != nil {
-		return err
+		return false, err
 	}
 
 	prof := e.profile()
 
 	staged, err := prof.Add(got.profile, lockData)
 	if err != nil {
-		return err
+		return false, err
 	}
 
 	err = e.apply(cmd, opts, change{
@@ -187,7 +216,7 @@ func runAdd(
 		},
 	})
 	if err != nil {
-		return err
+		return false, err
 	}
 
 	reportInferred(cmd.OutOrStdout(), got, flags.verbose)
@@ -209,9 +238,15 @@ func runAdd(
 
 	programs, _ := filepath.Glob(filepath.Join(got.profile.StorePath, "bin", "*"))
 
+	return len(programs) > 0, nil
+}
+
+// reportPath says how to run the programs oku added, when PATH does not have
+// the profile yet.
+func reportPath(cmd *cobra.Command, opts Options, e env) {
+	prof := e.profile()
+
 	switch {
-	case len(programs) == 0:
-		// An app, a font or a file has nothing to run, so PATH does not matter.
 	case slices.Contains(filepath.SplitList(os.Getenv("PATH")), prof.BinDir()):
 	case e.project != "":
 		fmt.Fprintf(cmd.ErrOrStderr(), "this project's programs are in %s\n", prof.BinDir())
@@ -223,6 +258,4 @@ func runAdd(
 			fmt.Fprintf(cmd.ErrOrStderr(), "add %s to PATH to run it\n", prof.BinDir())
 		}
 	}
-
-	return nil
 }

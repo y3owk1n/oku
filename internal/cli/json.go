@@ -28,6 +28,17 @@ func exactArgs(n int) cobra.PositionalArgs {
 	}
 }
 
+// minArgs is cobra.MinimumNArgs with the usage line under the error.
+func minArgs(n int) cobra.PositionalArgs {
+	return func(cmd *cobra.Command, args []string) error {
+		if len(args) < n {
+			return fmt.Errorf("missing argument\nusage: %s", cmd.UseLine())
+		}
+
+		return nil
+	}
+}
+
 // wantJSON reports whether the user asked for JSON in place of text.
 func wantJSON(cmd *cobra.Command) bool {
 	asked, _ := cmd.Flags().GetBool(jsonFlag)

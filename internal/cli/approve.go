@@ -122,12 +122,14 @@ func (e env) approver(
 					text = *steps[i].Run
 				}
 
+				// Steps count from 1, as the wait line of a build does. A command
+				// line that wraps goes on further in, so it reads apart from the next.
 				fmt.Fprintf(
 					out,
-					"  %s%s\n    %s\n",
-					s.Accent(fmt.Sprintf("step %d", i)),
+					"  %s%s\n%s\n",
+					s.Accent(fmt.Sprintf("step %d", i+1)),
 					s.Warn(note),
-					strings.ReplaceAll(text, "\n", "\n    "),
+					s.Wrap("    "+strings.ReplaceAll(text, "\n", "\n    "), 6),
 				)
 			}
 

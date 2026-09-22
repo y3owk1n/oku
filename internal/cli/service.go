@@ -403,7 +403,7 @@ func controlService(cmd *cobra.Command, opts Options, action, name string) error
 	if item.System && action != "status" && action != "logs" {
 		if !system {
 			return fmt.Errorf(
-				"%s runs in system scope, so %s needs administrator rights: run \"oku service %s %s --system\"",
+				"%s runs in system scope, so %s needs administrator rights: run `oku service %s %s --system`",
 				name,
 				action,
 				action,
@@ -432,7 +432,7 @@ func controlService(cmd *cobra.Command, opts Options, action, name string) error
 			fmt.Fprintln(out, text)
 		} else if item.System {
 			err = fmt.Errorf(
-				"%w\nif that is a permission error, run \"oku service logs %s --system\"",
+				"%w\nif that is a permission error, run `oku service logs %s --system`",
 				err,
 				name,
 			)

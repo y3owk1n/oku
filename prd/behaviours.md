@@ -50,6 +50,23 @@ order step in `prd/product.md`.
   it when two columns do not fit. A pipe gets the text unchanged.
 - B235 [1] A command names its project on stderr once. On a terminal the
   rows of `sync --dry-run` start with a yellow tilde, not a check.
+- B236 [1] `oku add` takes several refs and adds them one after another, one
+  generation each, and says how to run their programs once. A failure stops
+  it and keeps the packages added before. `--asset` and `--bin` take one ref.
+- B237 [1] On a terminal each `command` in a hint, a note, an error or a
+  `doctor` line is in colour without its backticks, and the lines of an
+  error after the first are not dimmed. A pipe keeps the backticks.
+- B238 [1] On a terminal `sync` prints one note that names the packages
+  whose manifests oku inferred from the same kind of source. A note about a
+  download with no published checksum shows the first 12 characters of its
+  sha256. `info` shows the first 12 characters of the commit and says in
+  words how oku installed the package.
+- B239 [1] When a rollback activates a generation that holds a package the
+  list no longer names, it says the next `sync` removes it again and which
+  `oku add` keeps it. A list with includes gets no such note.
+- B240 [1] A first `sync` of a list with nothing in it writes no generation
+  and says there is nothing to sync. A run under a second reports its time in
+  milliseconds, not `0s`.
 - B196 [1] `oku which <program>` names the package and version that provide a
   program in the profile and the file in the store it runs. Inside a project
   it looks in the project's profile, then in the global one. It warns when
