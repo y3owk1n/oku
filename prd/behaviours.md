@@ -411,6 +411,11 @@ order step in `prd/product.md`.
 - B111 [11] `oku self update --nightly` replaces the oku binary with the build
   of the `nightly` release after the same signature check, and changes nothing
   when the running binary is that build.
+- B221 [11] On a nightly build, `oku self update` without a flag refuses and
+  names `--nightly` and `--release`. `--release` goes back to the newest
+  release. `--to <tag>` takes that release, older or newer, after the same
+  signature check, and says so when the running binary is that release. After
+  a replacement oku prints the link to the release's notes.
 - B176 [11] While oku waits for a download, a lookup, a clone, an unpack, a
   cache or a build step, stderr says what it waits for and for which package.
   A terminal shows one line with the time and the bytes so far, which goes
