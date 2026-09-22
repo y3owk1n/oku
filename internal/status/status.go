@@ -44,8 +44,14 @@ type Reporter struct {
 	frame int
 	// drawn counts the lines on the terminal from the last draw.
 	drawn int
-	// paused stops the redraw while another program uses the terminal.
+	// paused stops the redraw while another program uses the terminal, or
+	// while oku asks the user something. held is what the line writers got
+	// meanwhile, which the resume writes out below the answer.
 	paused bool
+	held   []byte
+	// prompt lets one pause at a time hold the terminal, so two packages that
+	// need approval ask one after the other.
+	prompt sync.Mutex
 }
 
 type task struct {
@@ -146,12 +152,24 @@ func Writer(ctx context.Context, out io.Writer) io.Writer {
 	return &lineWriter{r: r, out: out}
 }
 
-// Pause hides the redrawn line until the caller calls the returned function, so
-// that another program can ask the user something.
+// Pause hides the redrawn lines until the caller calls the returned function,
+// so that oku or another program can ask the user something. Output that the
+// other packages send through Writer meanwhile waits, and appears below the
+// answer. A second Pause waits for the first to end.
 func Pause(ctx context.Context) func() {
 	r, _ := ctx.Value(reporterKey{}).(*Reporter)
-	if r == nil || !r.live {
+	if r == nil {
 		return func() {}
+	}
+
+	return r.pause()
+}
+
+func (r *Reporter) pause() func() {
+	r.prompt.Lock()
+
+	if !r.live {
+		return r.prompt.Unlock
 	}
 
 	r.mu.Lock()
@@ -162,7 +180,15 @@ func Pause(ctx context.Context) func() {
 	return func() {
 		r.mu.Lock()
 		r.paused = false
+
+		if len(r.held) > 0 {
+			_, _ = r.out.Write(r.held)
+			r.held = nil
+		}
+
+		r.draw()
 		r.mu.Unlock()
+		r.prompt.Unlock()
 	}
 }
 
@@ -330,7 +356,8 @@ func (c *countingReader) Read(p []byte) (int, error) {
 }
 
 // lineWriter passes on whole lines only, because the next redraw would erase
-// the start of a line.
+// the start of a line. While the reporter is paused for a question, the lines
+// wait in the reporter, so that nothing writes over the question.
 type lineWriter struct {
 	r       *Reporter
 	out     io.Writer
@@ -348,10 +375,18 @@ func (w *lineWriter) Write(p []byte) (int, error) {
 		return len(p), nil
 	}
 
+	lines := w.pending[:end]
+	w.pending = w.pending[end:]
+
+	if w.r.paused {
+		w.r.held = append(w.r.held, lines...)
+
+		return len(p), nil
+	}
+
 	w.r.clear()
 
-	_, err := w.out.Write(w.pending[:end])
-	w.pending = w.pending[end:]
+	_, err := w.out.Write(lines)
 
 	w.r.draw()
 
