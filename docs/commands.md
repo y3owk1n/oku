@@ -348,8 +348,11 @@ oku prints `eza 0.23.5, built again` for each one, and `~` in front of it on a
 terminal. The new build takes the
 place of the old one in the store, under the same path,
 so every generation gets it. oku moves the old build aside first and puts it
-back when the new build fails. The lock still applies. A build that vendors
-other packages than `oku.lock` pins stops, and the old build stays.
+back when the new build fails. While the build runs, the programs of the
+package do not work. When oku is killed during the build, the next `sync` puts
+the old build back, and `oku gc` keeps it until then. The lock still applies.
+A build that vendors other packages than `oku.lock` pins stops, and the old
+build stays.
 
 Use it for a build that an older oku made and that has no `vendor_sha256` in
 the lock, or after a change on the machine that a build depends on, such as a

@@ -1022,8 +1022,9 @@ manifest, the version, the platform and the deps, and none of those changed.
 oku renames the old build to `<path>.old`, builds into the path, and deletes
 the old build on success or renames it back on failure. A build that finds
 `<path>.old` and no build at the path puts the old one back first, which
-covers a rebuild that a crash interrupted. A rebuild takes nothing from a
-cache.
+covers a rebuild that a crash interrupted. `gc` keeps `<path>.old` while a
+generation uses `<path>`, because until the next install it holds the only good
+build. A rebuild takes nothing from a cache.
 
 Why: a store path is immutable by rule, and one case needs an exception. A
 build from an older oku holds no vendor digest beside it (D34, B188), and only
