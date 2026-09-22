@@ -523,6 +523,12 @@ order step in `prd/product.md`.
   puts the machine back first, and says so.
 - B134 [12] When oku cannot undo a step, it names what is left, and
   `oku doctor` reports it until the user resolves it.
+- B243 [12] While one oku process changes the machine, another command that
+  changes it waits, prints `waiting for oku process <pid> to finish`, and runs
+  once the first one ends. A command that only reads, such as `list`, does not
+  wait.
+- B244 [12] `oku gc` deletes a temporary directory that a killed install left
+  in the store.
 
 ## Files
 
