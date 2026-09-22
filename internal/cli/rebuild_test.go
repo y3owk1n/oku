@@ -90,3 +90,44 @@ func TestB191RebuildRefusesADownload(t *testing.T) {
 		t.Fatalf("want an error that says tool is a download, got %v", err)
 	}
 }
+
+func TestB245GCKeepsTheOldBuildThatAKilledRebuildLeft(t *testing.T) {
+	m := newMachine(t)
+	ref, dir := m.readingManifest(t)
+	text := filepath.Join(dir, "text")
+
+	must(t, os.WriteFile(text, []byte("first"), 0o644))
+
+	_, err := m.run(t, "", "add", ref, "--yes")
+	must(t, err)
+
+	// A rebuild that is killed halfway leaves the old build at <path>.old and a
+	// half-written build at the path.
+	var prefix string
+
+	for _, entry := range m.storeEntries(t) {
+		if strings.HasPrefix(entry, "tool-") {
+			prefix = filepath.Join(m.data, "store", entry)
+		}
+	}
+
+	must(t, os.Rename(prefix, prefix+".old"))
+	must(t, os.MkdirAll(prefix, 0o755))
+
+	out, err := m.run(t, "", "gc")
+	must(t, err)
+
+	if !exists(prefix + ".old") {
+		t.Fatalf("gc deleted the old build of a killed rebuild:\n%s", out)
+	}
+
+	// The next sync puts the old build back and builds nothing.
+	must(t, os.WriteFile(text, []byte("second"), 0o644))
+
+	_, err = m.run(t, "", "sync", "--yes")
+	must(t, err)
+
+	if got := m.output(t, "tool"); got != "first" {
+		t.Fatalf("sync did not put the old build back, tool printed %q", got)
+	}
+}

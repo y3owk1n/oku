@@ -162,6 +162,8 @@ order step in `prd/product.md`.
   its build, under the same store path, and takes no build from a cache. When
   the build fails, oku puts the old build back. It refuses a package that is
   a download on the host, one that the host does not install, and `--dry-run`.
+- B245 [2] After a `sync --rebuild` was killed during the build, `oku gc`
+  keeps the old build, and the next `sync` puts it back without building.
 - B181 [2] `sync --locked` fails before any download when the lock does not pin
   a package of the list for the host, and names the packages and the platform.
   It also fails when the lock would change in any other way. It never writes
