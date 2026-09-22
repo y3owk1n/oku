@@ -131,3 +131,50 @@ func TestB226ListShowsTheFilesAndTheSettingsOfTheList(t *testing.T) {
 		t.Fatalf("list --settings --json: %s", out)
 	}
 }
+
+func TestB228ATerminalGetsEachPackageRowWithACheckAsItFinishes(t *testing.T) {
+	t.Setenv("NO_COLOR", "")
+	t.Setenv("FORCE_COLOR", "1")
+
+	m := newMachine(t)
+	ref := m.manifest(t, "tool", map[string]string{"tool": script}, `bin = ["tool"]`)
+
+	m.writeFilesList(t, "[packages]\ntool = \""+strings.ReplaceAll(ref, `\`, `\\`)+"\"\n")
+
+	out, err := m.run(t, "", "sync")
+	must(t, err)
+
+	if !strings.Contains(out, "✓\x1b[0m \x1b[1mtool\x1b[0m  1.2.3") {
+		t.Fatalf("sync should print a checked row for the package:\n%s", out)
+	}
+
+	m.writeFilesList(t, "[packages]\n")
+
+	out, err = m.run(t, "", "sync")
+	must(t, err)
+
+	if !strings.Contains(out, "-\x1b[0m \x1b[1mtool\x1b[0m  1.2.3  \x1b[2mremoved") {
+		t.Fatalf("sync should print a minus row for the removed package:\n%s", out)
+	}
+}
+
+func TestB229TheApprovalPromptCollapsesToOneLineOnceAnswered(t *testing.T) {
+	t.Setenv("NO_COLOR", "")
+	t.Setenv("FORCE_COLOR", "1")
+
+	m := newMachine(t)
+	m.opts.Interactive = yes()
+	ref := m.buildManifest(t, false, "", writeTool+installTool)
+
+	out, err := m.run(t, "n\n", "add", ref)
+	if err == nil || !strings.Contains(out, "\x1b[1A") || !strings.Contains(out, "✗\x1b[0m rejected tool 1.0.0") {
+		t.Fatalf("a rejected prompt should be erased and say so: %v\n%q", err, out)
+	}
+
+	out, err = m.run(t, "y\n", "add", ref)
+	must(t, err)
+
+	if !strings.Contains(out, "\x1b[1A") || !strings.Contains(out, "✓\x1b[0m approved tool 1.0.0") {
+		t.Fatalf("an approved prompt should be erased and say so:\n%q", out)
+	}
+}

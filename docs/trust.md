@@ -78,6 +78,8 @@ tree 2.3.2 builds from source and runs these commands on your machine:
 run them? [y/N]
 ```
 
+- On a terminal the prompt goes once you answer, and one line stays in its
+  place: `✓ approved tree 2.3.2` or `✗ rejected tree 2.3.2`.
 - Your answer is recorded for that exact manifest, by its sha256, in
   `<data>/oku/trust/approvals.toml`. The same manifest never asks twice, and a
   manifest that changed asks again.
