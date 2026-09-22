@@ -338,7 +338,7 @@ func reconcile(
 	}
 
 	// A failure leaves the profile as it was. The rows a terminal got already
-	// carry a check, so the error says that none of them was installed.
+	// start with a check, so the error says that none of them was installed.
 	unchanged := func(err error) error {
 		if !rowsShown {
 			return err
