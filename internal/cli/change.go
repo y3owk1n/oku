@@ -184,6 +184,10 @@ func (e env) plan(cmd *cobra.Command, opts Options, c change) (pending, exposePl
 
 	plan.secrets = secrets
 
+	if plan.rewritten, err = e.rewritten(c.to); err != nil {
+		return pending{}, exposePlan{}, err
+	}
+
 	p := pending{
 		Project: e.project, From: prof.Current(), To: c.to,
 		Staged: c.staged, Elevated: plan.elevated,
@@ -206,6 +210,33 @@ func (e env) plan(cmd *cobra.Command, opts Options, c change) (pending, exposePl
 	}
 
 	return p, plan, list.WriteFile(filepath.Join(e.data, pendingFile), data)
+}
+
+// rewritten returns the targets whose content generation to gives other bytes
+// than the active generation, apart from a file that holds a secret.
+func (e env) rewritten(to int) ([]string, error) {
+	prof := e.profile()
+
+	before, err := prof.FilesOf(prof.Current())
+	if err != nil {
+		return nil, err
+	}
+
+	after, err := prof.FilesOf(to)
+	if err != nil {
+		return nil, err
+	}
+
+	var targets []string
+
+	for _, f := range after {
+		i := slices.IndexFunc(before, func(b profile.File) bool { return b.Target == f.Target })
+		if i >= 0 && before[i].Hash != f.Hash && len(f.Secrets) == 0 && f.Content != "" {
+			targets = append(targets, f.Target)
+		}
+	}
+
+	return targets, nil
 }
 
 // describe prints what the apply of c would do, for a dry run. The plan has
@@ -249,22 +280,8 @@ func (e env) describe(cmd *cobra.Command, c change, plan exposePlan) error {
 		}
 	}
 
-	// A file with content changes through "current" and has no ledger step.
-	before, err := prof.FilesOf(prof.Current())
-	if err != nil {
-		return err
-	}
-
-	after, err := prof.FilesOf(c.to)
-	if err != nil {
-		return err
-	}
-
-	for _, f := range after {
-		i := slices.IndexFunc(before, func(b profile.File) bool { return b.Target == f.Target })
-		if i >= 0 && before[i].Hash != f.Hash && len(f.Secrets) == 0 && f.Content != "" {
-			say("would change the content of %s", f.Target)
-		}
+	for _, target := range plan.rewritten {
+		say("would change the content of %s", target)
 	}
 
 	if e.project == "" {

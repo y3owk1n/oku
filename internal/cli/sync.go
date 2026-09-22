@@ -448,7 +448,8 @@ func reconcile(
 	if staged != 0 {
 		fmt.Fprintf(
 			out, "profile now holds %s, generation %d, %s\n",
-			count(len(pkgs), "package"), staged, time.Since(started).Round(time.Second),
+			holds(profile.Generation{Packages: pkgs, Files: files, Settings: wantedSettings}),
+			staged, time.Since(started).Round(time.Second),
 		)
 	} else {
 		fmt.Fprintln(out, "already in sync")

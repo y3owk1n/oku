@@ -509,6 +509,18 @@ order step in `prd/product.md`.
   the user's own list.
 - B148 [14] The same template and variables give the same bytes on every OS.
 
+- B224 [13] `add`, `sync`, `update` and `rollback` print one line for each
+  file, secret, setting, app, font or service the change wrote, changed,
+  removed or restored, and `sync` ends with the packages, files and settings
+  the profile holds.
+- B225 [13] `oku generations` counts the files and settings of each
+  generation and lists which came, went or changed beside the packages.
+  `--json` lists them, and `rollback` reports the same way.
+- B226 [13] `oku list --files` shows each file entry for this machine with
+  its kind, source and the list that declares it. `oku list --settings` shows
+  each setting of this OS with its value and the value the key had before oku
+  wrote it. Both take `--json`.
+
 ## Settings
 
 - B149 [15] After `sync` a key under `[defaults.<domain>]` has the value and
