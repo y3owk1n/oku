@@ -978,8 +978,11 @@ Replaces the `oku` binary with the newest release from
 
 oku downloads the file for your OS and CPU, `oku-<os>-<arch>`, and the minisign
 signature beside it. It replaces itself only when the release key that is built
-into the running binary made that signature. It writes nothing near the running
-binary before that check has passed, so a failed check leaves oku as it was.
+into the running binary made that signature, and the signed comment of the
+signature names the release, as `oku v0.5.0` or `oku nightly`. The comment stops
+an older release, which the same key signed, from passing for a newer one. oku
+writes nothing near the running binary before that check has passed, so a
+failed check leaves oku as it was.
 
 | Flag | Effect |
 |---|---|

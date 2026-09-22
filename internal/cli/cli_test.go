@@ -6090,9 +6090,10 @@ func TestB97UninstallLeavesAProjectsListAndLockAlone(t *testing.T) {
 	}
 }
 
-// releaseWith serves release v1.4.0 of owner/tool with an oku binary for this
-// platform and its signature by secret.
-func (m *machine) releaseWith(t *testing.T, body string, secret minisign.PrivateKey) {
+// releaseWith serves every release of owner/tool with an oku binary for this
+// platform and its signature by secret for the release tag, as the release
+// workflow signs it.
+func (m *machine) releaseWith(t *testing.T, body, tag string, secret minisign.PrivateKey) {
 	t.Helper()
 
 	name := "oku-" + runtime.GOOS + "-" + runtime.GOARCH
@@ -6102,7 +6103,8 @@ func (m *machine) releaseWith(t *testing.T, body string, secret minisign.Private
 	reader := minisign.NewReader(strings.NewReader(body))
 	_, err := io.Copy(io.Discard, reader)
 	must(t, err)
-	must(t, os.WriteFile(binary+".minisig", reader.Sign(secret), 0o644))
+	signature := reader.SignWithComments(secret, "oku "+tag, "")
+	must(t, os.WriteFile(binary+".minisig", signature, 0o644))
 
 	inferServer(t, m, map[string]string{name: binary, name + ".minisig": binary + ".minisig"})
 	m.opts.ReleaseRepo = "owner/tool"
@@ -6123,7 +6125,7 @@ func TestB92SelfUpdateReplacesTheBinaryOnlyAfterItsSignatureChecksOut(t *testing
 		return string(data)
 	}
 
-	m.releaseWith(t, "the new oku", secret)
+	m.releaseWith(t, "the new oku", "v1.4.0", secret)
 
 	// Without an override oku trusts only its built-in release key, which did not
 	// sign this test release.
@@ -6143,7 +6145,7 @@ func TestB92SelfUpdateReplacesTheBinaryOnlyAfterItsSignatureChecksOut(t *testing
 
 	forged := newMachine(t)
 	forged.opts.ReleaseKey = public.String()
-	forged.releaseWith(t, "a forged oku", stranger)
+	forged.releaseWith(t, "a forged oku", "v1.4.0", stranger)
 
 	if _, err := forged.run(t, "", "self", "update"); err == nil ||
 		!strings.Contains(err.Error(), "is not signed by") {
@@ -6175,6 +6177,27 @@ func TestB92SelfUpdateReplacesTheBinaryOnlyAfterItsSignatureChecksOut(t *testing
 	}
 }
 
+func TestB246SelfUpdateRefusesABinaryThatTheKeySignedForAnotherRelease(t *testing.T) {
+	m := newMachine(t)
+
+	public, secret, err := minisign.GenerateKey(rand.Reader)
+	must(t, err)
+
+	m.opts.ReleaseKey = public.String()
+
+	// An older release, signed by the release key, served as the newest one.
+	m.releaseWith(t, "an older oku", "v1.3.0", secret)
+
+	_, err = m.run(t, "", "self", "update")
+	if err == nil || !strings.Contains(err.Error(), `the signature is for "oku v1.3.0", not "oku v1.4.0"`) {
+		t.Fatalf("want a refusal that names both releases, got %v", err)
+	}
+
+	if data, _ := os.ReadFile(m.exe); string(data) != "binary" {
+		t.Fatalf("a binary signed for another release replaced oku with %q", data)
+	}
+}
+
 func TestB111SelfUpdateNightlyTakesTheNightlyBuildAfterTheSameCheck(t *testing.T) {
 	public, secret, err := minisign.GenerateKey(rand.Reader)
 	must(t, err)
@@ -6183,7 +6206,7 @@ func TestB111SelfUpdateNightlyTakesTheNightlyBuildAfterTheSameCheck(t *testing.T
 
 	forged := newMachine(t)
 	forged.opts.ReleaseKey = public.String()
-	forged.releaseWith(t, "a forged oku", stranger)
+	forged.releaseWith(t, "a forged oku", "nightly", stranger)
 
 	if _, err := forged.run(t, "", "self", "update", "--nightly"); err == nil ||
 		!strings.Contains(err.Error(), "is not signed by") {
@@ -6196,7 +6219,7 @@ func TestB111SelfUpdateNightlyTakesTheNightlyBuildAfterTheSameCheck(t *testing.T
 
 	m := newMachine(t)
 	m.opts.ReleaseKey = public.String()
-	m.releaseWith(t, "the nightly oku", secret)
+	m.releaseWith(t, "the nightly oku", "nightly", secret)
 
 	out, err := m.run(t, "", "self", "update", "--nightly")
 	must(t, err)
@@ -6207,7 +6230,7 @@ func TestB111SelfUpdateNightlyTakesTheNightlyBuildAfterTheSameCheck(t *testing.T
 	}
 
 	// The nightly tag moves, so the same url serves another build the next day.
-	m.releaseWith(t, "the next nightly oku", secret)
+	m.releaseWith(t, "the next nightly oku", "nightly", secret)
 
 	_, err = m.run(t, "", "self", "update", "--nightly")
 	must(t, err)
@@ -6236,7 +6259,7 @@ func TestB221SelfUpdateKeepsANightlyAndTakesANamedRelease(t *testing.T) {
 	m := newMachine(t)
 	m.opts.ReleaseKey = public.String()
 	m.opts.Version = "nightly-20260921010203-1111111"
-	m.releaseWith(t, "the release oku", secret)
+	m.releaseWith(t, "the release oku", "v1.4.0", secret)
 
 	current := func() string {
 		data, err := os.ReadFile(m.exe)
@@ -6263,7 +6286,7 @@ func TestB221SelfUpdateKeepsANightlyAndTakesANamedRelease(t *testing.T) {
 	}
 
 	m.opts.Version = "1.4.0"
-	m.releaseWith(t, "the older oku", secret)
+	m.releaseWith(t, "the older oku", "v1.3.0", secret)
 
 	out, err = m.run(t, "", "self", "update", "--to", "v1.3.0")
 	must(t, err)

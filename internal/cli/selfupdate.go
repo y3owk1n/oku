@@ -197,7 +197,9 @@ func runSelfUpdate(cmd *cobra.Command, opts Options, check, nightly, release boo
 	}
 
 	// Nothing is written near the running binary before this check has passed.
-	if err := store.VerifyDetached(key, downloaded, signed); err != nil {
+	// The release workflow signs "oku <tag>", which stops an older release that
+	// the same key signed from passing for this one.
+	if err := store.VerifyDetached(key, downloaded, signed, "oku "+found.Tag); err != nil {
 		if errors.Is(err, store.ErrSignature) {
 			return fmt.Errorf(
 				"release %s: %w\nif oku's release key was rotated, run the install script again, "+
