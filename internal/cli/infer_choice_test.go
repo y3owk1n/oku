@@ -1,6 +1,7 @@
 package cli_test
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -199,5 +200,65 @@ func TestB222InferenceTakesAnAppBundleAsAnAppAndNotAsAProgram(t *testing.T) {
 	if !strings.Contains(out, `app = ["Tool.app"]`) || strings.Contains(out, "bin =") ||
 		strings.Contains(out, "strip =") {
 		t.Fatalf("the bundle should be an app at the top of the package:\n%s", out)
+	}
+}
+
+// thirdPlatform returns a platform of an OS that is neither the host's nor
+// otherPlatform's.
+func thirdPlatform() platform.Platform {
+	for _, p := range platform.All() {
+		if p.OS != platform.Host().OS && p.OS != otherPlatform().OS {
+			return p
+		}
+	}
+
+	panic("unreachable")
+}
+
+// assetFor names a release asset for p with the given ending.
+func assetFor(p platform.Platform, ending string) string {
+	arch := map[string]string{"amd64": "x86_64", "arm64": "aarch64"}[p.Arch]
+
+	return "tool-v1.4.0-" + arch + "-" + p.OS + ending
+}
+
+// matchOf is the start of the match line of p's artifact in an inferred manifest.
+func matchOf(p platform.Platform) string {
+	return fmt.Sprintf("match = { os = %q, arch = %q", p.OS, p.Arch)
+}
+
+func TestB223InferenceOpensAssetsForTheHostAndTheLockPlatformsOnly(t *testing.T) {
+	m := newMachine(t)
+	archive, _ := m.archive(t, "release", map[string]string{"tool": script})
+	other, third := otherPlatform(), thirdPlatform()
+
+	// The other platform shares the host's ending, and the third has its own.
+	// The store reads the format from the bytes, so one file serves both names.
+	inferServer(t, &m, map[string]string{
+		hostAssetName():            archive,
+		assetFor(other, ".tar.gz"): archive,
+		assetFor(third, ".tar"):    archive,
+	})
+
+	out, err := m.run(t, "", "add", "github:owner/tool", "--verbose")
+	must(t, err)
+
+	if !strings.Contains(out, matchOf(other)) || strings.Contains(out, matchOf(third)) {
+		t.Fatalf("without [lock] the manifest should cover %s and not %s:\n%s", other, third, out)
+	}
+
+	// The lock names the third platform, and update infers again for it.
+	listPath := filepath.Join(m.config, "oku.toml")
+	own, err := os.ReadFile(listPath)
+	must(t, err)
+	must(t, os.WriteFile(
+		listPath, append([]byte("[lock]\nplatforms = [\""+third.String()+"\"]\n\n"), own...), 0o644,
+	))
+
+	out, err = m.run(t, "", "update", "--verbose")
+	must(t, err)
+
+	if !strings.Contains(out, matchOf(third)) {
+		t.Fatalf("with [lock] naming %s the manifest should cover it:\n%s", third, out)
 	}
 }

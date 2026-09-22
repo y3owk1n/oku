@@ -64,8 +64,11 @@ this machine to find the executable, so run it where a release asset exists.`,
 			if r.Kind == ref.NPM {
 				text, err = e.inferNPM(cmd.Context(), opts, request{ref: r})
 			} else {
+				// A published manifest serves every platform, so init opens an
+				// asset for each, where add opens them for the lock's.
 				text, err = e.inferrer(opts).Manifest(
-					cmd.Context(), r.Scheme, r.Location, platform.Host(), infer.Options{},
+					cmd.Context(), r.Scheme, r.Location, platform.Host(),
+					infer.Options{Platforms: platform.All()},
 				)
 			}
 

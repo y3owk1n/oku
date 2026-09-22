@@ -835,9 +835,10 @@ func (e env) manifestData(
 
 	text, err := e.inferrer(opts).Manifest(
 		ctx, req.ref.Scheme, req.ref.Location, req.target(), infer.Options{
-			Version: req.ref.Version,
-			Asset:   req.asset,
-			Bin:     req.bin,
+			Version:   req.ref.Version,
+			Asset:     req.asset,
+			Bin:       req.bin,
+			Platforms: req.platforms,
 		},
 	)
 	if err != nil {
