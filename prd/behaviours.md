@@ -197,7 +197,9 @@ order step in `prd/product.md`.
   OS or arch.
 - B198 [4] With several assets that fit a platform equally, inference skips
   one whose name says `desktop`, `app`, `gui`, `installer` or `setup`,
-  and takes the smaller of the rest when the host reports sizes.
+  and takes the smaller of the rest when the host reports sizes. A comment
+  lists every other asset that fits the host, in any format, and leaves out a
+  universal build beside one for the arch.
 - B222 [4] Inference takes a `.deb`, `.rpm`, `.msi`, `.dmg`, `.pkg` or
   AppImage asset when no archive or single binary fits, a `.dmg` before a
   `.pkg`. An installer's format names its OS, and one that names no arch fits
