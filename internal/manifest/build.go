@@ -44,7 +44,11 @@ type Step struct {
 	// with its dependencies, into the package's lib directory. Without it the
 	// step installs what the source's lockfile lists.
 	Package string `toml:"package"`
-	Patch   *Patch `toml:"patch"`
+	// Scripts names the packages of an npm step with Package whose install
+	// scripts run after the install. A script that downloads or builds a binary
+	// makes the build impure.
+	Scripts []string `toml:"scripts"`
+	Patch   *Patch   `toml:"patch"`
 
 	When    platform.Selector `toml:"when"`
 	Shell   string            `toml:"shell"`
@@ -122,6 +126,13 @@ func (s Step) Kinds() []string {
 	}
 
 	return set
+}
+
+// Impure reports whether the step may put something into the build that the
+// lock cannot check: a run step with the network, or an npm step that runs
+// install scripts, which may download a binary.
+func (s Step) Impure() bool {
+	return s.Run != nil && s.Network || s.Vendor != nil && len(s.Scripts) > 0
 }
 
 // CommandSteps returns the steps that run a program on p, with their positions:

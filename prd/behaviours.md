@@ -158,6 +158,9 @@ order step in `prd/product.md`.
   `strip_prefix`. With `tag` it warns about a missing checksum only for an
   artifact whose `url` is no download of that repo's releases. `manifest bump`
   refuses a manifest with `tag`.
+- B213 [4] `manifest lint` warns about every artifact that has neither
+  `sha256` nor `sha256_url`, the first one included, and about no artifact
+  that has one.
 - B22 [3] Every profile change creates a generation. `oku rollback` restores
   the previous one, `oku rollback <n>` a named one. Rollback restores
   `oku.lock` with it, so a following `sync` changes nothing, and it never
@@ -205,6 +208,11 @@ order step in `prd/product.md`.
   built by an npm vendor step with `package`. It installs the package with its
   dependencies as of the version's publish time, runs no install scripts, and
   `oku.lock` pins a digest of what it installed.
+- B212 [4] An npm vendor step with `package` may name dependencies in
+  `scripts`. After the install oku runs their install scripts with the network
+  on, the approval prompt says so, and `oku.lock` marks the build impure. A
+  step without `scripts` runs none. A name that is not the package or one of
+  its dependencies fails the build and is named.
 - B189 [4] When the host builds a package whose vendor steps are all `npm` and
   no `run` step comes before them, oku pins the `vendor_sha256` of each other
   lock platform too. It runs the npm steps for that platform in a temporary

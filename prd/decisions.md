@@ -996,6 +996,22 @@ directory first. The install runs with `--ignore-scripts`, as every npm step of 
 does, so no code of the packages runs on the host. pip can name a platform too,
 but only for wheels. oku does not do that yet.
 
+A step may name dependencies in `scripts`. After the install is hashed, oku
+runs `npm rebuild <names>` in the same sandbox with the network on, which runs
+the lifecycle scripts of the named packages alone, and marks the build impure
+the way `network = true` on a run step does (D11). The trade-off is that a
+package such as claude-code or opencode-ai has a dependency whose postinstall
+downloads or builds a native binary, and without it the install succeeds and
+the program fails at run time. What the script downloads is not in the digest
+that the lock pins, because the hash is taken first, so `sync` still checks
+the packages but the build cannot be reproduced from the lock and never goes
+to a cache. The names are a list, and not `scripts = true`, so a manifest says
+whose code runs. oku checks each name against the package's dependencies from
+the registry when it builds, and fails on one it does not find. A step
+without `scripts` still runs none. When oku pins the step for another
+platform it does not run the scripts, since the digest covers the install
+alone and the scripts would run the host's code.
+
 ## D70. A rebuild replaces a build under its own store path
 
 `oku sync --rebuild <name>` builds a package again although the store holds

@@ -155,7 +155,10 @@ its program in a platform package, as typescript 7 does. oku then writes
 a [build](manifest.md#vendoring) that runs the `npm` of your node package, so
 that package has to list `bin/npm` beside `bin/node`. npm picks each dependency
 as it was when the version was published and runs no install scripts, and
-`oku.lock` pins a digest of what it installed. A build asks for
+`oku.lock` pins a digest of what it installed. A package whose dependency
+needs its install script, because that script downloads a native binary, takes
+a manifest of your own that names it in
+[`scripts`](manifest.md#vendoring). A build asks for
 [approval](trust.md#build-commands) once, or takes `--yes`. oku cannot do this
 on Windows yet, and says so there.
 
