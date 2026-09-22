@@ -284,6 +284,8 @@ func reconcile(
 		dryRun, _ = cmd.Flags().GetBool(dryRunFlag)
 		liveMu    sync.Mutex
 		nameWidth = 0
+		// rowsShown records that a terminal got a row for a finished package.
+		rowsShown bool
 	)
 
 	for _, j := range jobs {
@@ -322,6 +324,7 @@ func reconcile(
 
 				liveMu.Lock()
 				fmt.Fprintln(liveOut, liveRow(style, nameWidth, kind, j.name, version, note))
+				rowsShown = true
 				liveMu.Unlock()
 			}
 		}()
@@ -334,13 +337,25 @@ func reconcile(
 		return err
 	}
 
+	// A failure leaves the profile as it was. The rows a terminal got already
+	// carry a check, so the error says that none of them was installed.
+	unchanged := func(err error) error {
+		if !rowsShown {
+			return err
+		}
+
+		return fmt.Errorf(
+			"%w\nnothing was installed, and the next run reuses the downloads above", err,
+		)
+	}
+
 	// The packages that stopped because of the first failure have nothing to say.
 	if j := failed.Load(); j != nil {
 		jobs = []*job{j}
 	}
 
 	if err := driftError(jobs, names); err != nil {
-		return err
+		return unchanged(err)
 	}
 
 	have, err := e.profile().Packages()
@@ -361,12 +376,12 @@ func reconcile(
 
 		switch {
 		case err != nil:
-			return fmt.Errorf("%s: %w", name, err)
+			return unchanged(fmt.Errorf("%s: %w", name, err))
 		case got.lock.Name != name:
-			return fmt.Errorf(
+			return unchanged(fmt.Errorf(
 				"%s lists %s, but the manifest at %s is named %s",
 				e.listPath(), name, r, got.lock.Name,
-			)
+			))
 		}
 
 		if kind, version, note := j.row(style, host); kind != "" && !live {
