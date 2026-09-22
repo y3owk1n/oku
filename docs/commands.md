@@ -237,6 +237,8 @@ oku which <program>
 ```
 
 Says which package provides a program and which file in the store it runs.
+Inside a project it looks in the project's profile first, then in the global
+one.
 
 ```
 $ oku which rg

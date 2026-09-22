@@ -6373,4 +6373,19 @@ func TestB196WhichNamesThePackageOfAProgram(t *testing.T) {
 		!strings.Contains(err.Error(), "no program named nothing") {
 		t.Fatalf("which for an unknown program: %v", err)
 	}
+
+	// Inside a project, a program from the global profile is still found.
+	project := filepath.Join(m.fixtures, "work", "api")
+	must(t, os.MkdirAll(project, 0o755))
+	must(t, os.WriteFile(filepath.Join(project, "oku.toml"), []byte("# api tools\n"), 0o644))
+
+	m.opts.WorkDir = project
+	t.Setenv("PATH", filepath.Dir(m.profile("bin", "tool")))
+
+	out, err = m.run(t, "", "which", "tool")
+	must(t, err)
+
+	if !strings.Contains(out, "tool 1.2.3") {
+		t.Fatalf("which inside a project:\n%s", out)
+	}
 }

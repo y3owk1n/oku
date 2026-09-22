@@ -25,16 +25,29 @@ func newWhichCmd(opts Options) *cobra.Command {
 				return err
 			}
 
-			prof := e.profile()
-
-			pkgs, err := prof.Packages()
-			if err != nil {
-				return err
+			// A project's profile holds its own programs, and the global profile
+			// holds the rest, so a project looks in both.
+			profiles := []*profile.Profile{e.profile()}
+			if e.project != "" {
+				profiles = append(profiles, e.globalProfile())
 			}
 
-			answer, err := which(prof, pkgs, args[0])
-			if err != nil {
-				return err
+			var answer whichAnswer
+
+			for i, prof := range profiles {
+				pkgs, err := prof.Packages()
+				if err != nil {
+					return err
+				}
+
+				answer, err = which(prof, pkgs, args[0])
+				if err == nil {
+					break
+				}
+
+				if i == len(profiles)-1 {
+					return err
+				}
 			}
 
 			if wantJSON(cmd) {

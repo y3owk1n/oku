@@ -24,7 +24,8 @@ order step in `prd/product.md`.
 - B195 [1] `oku remove` takes several names and drops them in one generation.
   A name that is not installed stops the command before anything changes.
 - B196 [1] `oku which <program>` names the package and version that provide a
-  program in the profile and the file in the store it runs. It warns when
+  program in the profile and the file in the store it runs. Inside a project
+  it looks in the project's profile, then in the global one. It warns when
   another program earlier on PATH runs in its place, and it fails for a program
   oku did not install, saying what PATH runs.
 - B5 [1] `oku list` shows name, version and ref for the active list.
