@@ -193,10 +193,10 @@ machine, so put specific entries before general ones.
 | `strip` | no | How many leading path components to drop when unpacking. Default 0. |
 | `bin` | see below | Paths of executables inside the package. An entry may also be a table that makes oku write the program, see [A program that needs an interpreter](#a-program-that-needs-an-interpreter). |
 | `lib`, `include`, `share` | see below | Files and directories for the package's `lib`, `include` and `share`, see [A prebuilt library](#a-prebuilt-library). |
-| `man` | see below | Paths of man pages. The file name needs a section, such as `rg.1` or `rg.1.gz`. |
+| `man` | see below | Paths of man pages. The file name needs a section, such as `rg.1` or `rg.1.gz`. An entry may be a [pattern](#patterns-in-font-and-man). |
 | `completions` | see below | Shell name to path, such as `{ fish = "complete/rg.fish" }`. |
 | `app` | see below | macOS app bundles, such as `["Foo.app"]`. See [Apps and fonts](#apps-and-fonts). |
-| `font` | see below | Font files, such as `["fonts/ttf/Foo-Regular.ttf"]`. An entry may be a pattern, such as `["fonts/ttf/*.ttf"]`, for a family that ships dozens of files. `*` matches within one directory, and a pattern that matches no file is an error. |
+| `font` | see below | Font files, such as `["fonts/ttf/Foo-Regular.ttf"]`. An entry may be a [pattern](#patterns-in-font-and-man), such as `["fonts/ttf/*.ttf"]`. |
 | `data` | see below | `true` for a package that only holds files, see [A package that only holds files](#a-package-that-only-holds-files). |
 
 Each artifact needs at least one of `bin`, `lib`, `include`, `share`, `man`,
@@ -503,6 +503,23 @@ Apps and fonts come from the user's global list only. A package in a
 fonts were skipped.
 
 A `[build]` can install them too, with `install = { app = [...], font = [...] }`.
+
+### Patterns in font and man
+
+A font family ships dozens of files. Instead of naming each one, a `font` or
+`man` entry may be a pattern, relative to the unpacked package:
+
+```toml
+font = ["fonts/ttf/*.ttf", "**/*.otf"]
+man = ["doc/*.1"]
+```
+
+`*` and `?` match within one path segment, and `**` matches any number of
+segments. oku resolves a pattern once, when it installs the package, and the
+matched files go into the profile the way listed files do. A pattern that
+matches no file is an error that names the pattern. An entry without `*` or
+`?` is a plain path, as before. The `install` table of a `[build]` takes the
+same patterns for `font` and `man`.
 
 ## [[service]]
 

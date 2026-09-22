@@ -302,8 +302,10 @@ order step in `prd/product.md`.
 
 - B70 [8] A package `app` appears in the OS launcher for the current user.
   `remove` and `rollback` take it away again.
-- B175 [8] A `font` entry may be a pattern such as `fonts/*.ttf`. oku installs
-  every file it matches, and a pattern that matches none is an error.
+- B175 [8] A `font` or `man` entry may be a pattern such as `fonts/*.ttf` or
+  `**/*.otf`. `*` and `?` match within one path segment and `**` matches any
+  depth. oku resolves it once at install, and a pattern that matches no file is
+  an error that names the pattern.
 - B71 [8] A package `font` is usable by applications for the current user.
   `remove` and `rollback` take it away again.
 - B72 [8] oku unpacks dmg, pkg, deb, rpm and AppImage downloads without
