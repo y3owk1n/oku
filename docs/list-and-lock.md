@@ -482,8 +482,10 @@ In GitHub Actions the action of this repo does that in one step:
     path: .            # the directory of the oku.toml, the default
 ```
 
-It installs the newest oku release, or the one `version` names, unless an oku
-is already on `PATH`. Then it runs `oku sync --yes --locked` in `path`. `args`
+It installs the oku release that `version` names, unless an oku is already on
+`PATH`. Without `version`, an action used by a release tag, as in
+`uses: y3owk1n/oku@v1.2.3`, installs that release, and `@main` installs the
+newest. So a pinned tag pins oku too, and a bot that bumps the tag moves both. Then it runs `oku sync --yes --locked` in `path`. `args`
 replaces `--locked`. The later steps of the job find the programs of the global
 profile and of the project on `PATH`, and the variables of their `[env]` in the
 environment. It works on Linux, macOS and Windows runners. It keeps the store

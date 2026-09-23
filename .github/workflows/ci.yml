@@ -75,6 +75,30 @@ jobs:
         shell: bash
         run: fd --version
 
+  action-tag:
+    # The action used by a release tag, with no oku on PATH, installs that
+    # release. A local action in a directory named like the tag stands in for
+    # y3owk1n/oku@v0.6.0.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Put the action in a directory named like a tag
+        shell: bash
+        run: mkdir -p .github/v0.6.0 && cp action.yml .github/v0.6.0/
+      - uses: ./.github/v0.6.0
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        with:
+          path: .github/action-test
+          cache: "false"
+      - name: The action installed the release of its tag
+        shell: bash
+        run: oku --version | grep -F 0.6.0
+
   lint:
     # Files with a build tag for another OS are only linted under that GOOS, so
     # one run per OS, all on the Linux runner.

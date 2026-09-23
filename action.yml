@@ -7,7 +7,7 @@ branding:
 
 inputs:
   version:
-    description: The oku release to install, such as v0.6.0 or nightly. Empty installs the newest release. An oku already on PATH is used as it is.
+    description: The oku release to install, such as v0.6.0 or nightly. Empty installs the release of the action's own tag, as in y3owk1n/oku@v1.2.3, and the newest release otherwise. An oku already on PATH is used as it is.
     default: ""
   path:
     description: The directory that holds the oku.toml to sync. Its lock must pin this runner's platform.
@@ -28,6 +28,13 @@ runs:
       env:
         OKU_VERSION: ${{ inputs.version }}
       run: |
+        # When a workflow uses the action by a release tag, as in
+        # y3owk1n/oku@v1.2.3, the action installs that release, so a bump of the
+        # tag moves both.
+        ref="$(basename "$GITHUB_ACTION_PATH")"
+        if [ -z "$OKU_VERSION" ] && printf '%s' "$ref" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+          export OKU_VERSION="$ref"
+        fi
         if ! command -v oku >/dev/null 2>&1; then
           curl -fsSL https://raw.githubusercontent.com/y3owk1n/oku/main/install.sh | sh
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
@@ -39,6 +46,8 @@ runs:
       env:
         OKU_VERSION: ${{ inputs.version }}
       run: |
+        $ref = Split-Path -Leaf $env:GITHUB_ACTION_PATH
+        if (-not $env:OKU_VERSION -and $ref -match '^v\d+\.\d+\.\d+$') { $env:OKU_VERSION = $ref }
         if (-not (Get-Command oku -ErrorAction SilentlyContinue)) {
           Invoke-RestMethod https://raw.githubusercontent.com/y3owk1n/oku/main/install.ps1 | Invoke-Expression
           Join-Path $env:LOCALAPPDATA 'oku\bin' | Out-File -Append -Encoding utf8 $env:GITHUB_PATH
