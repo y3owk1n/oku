@@ -145,6 +145,13 @@ func TestB181LockedSyncFailsWhenTheLockWouldChange(t *testing.T) {
 	locked, err := os.ReadFile(lockPath)
 	must(t, err)
 
+	// git on Windows checks the lock out with CRLF line endings.
+	must(t, os.WriteFile(lockPath, []byte(strings.ReplaceAll(string(locked), "\n", "\r\n")), 0o644))
+
+	if out, err := m.run(t, "", "sync", "--locked"); err != nil {
+		t.Fatalf("a locked sync of a lock with CRLF line endings failed: %v\n%s", err, out)
+	}
+
 	// The lock now looks as if another machine wrote it, on an empty store.
 	foreign := strings.ReplaceAll(string(locked), platform.Host().String(), "plan9-mips")
 	must(t, os.WriteFile(lockPath, []byte(foreign), 0o644))

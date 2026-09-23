@@ -336,7 +336,9 @@ run `oku sync` without --locked, and commit oku.lock
 oku checks that before it downloads anything, so a locked sync never trusts a
 download on first use. It also fails, with `oku.lock is out of date`, when the
 lock holds a package that left the list, or lacks a platform that
-[`[lock]`](list-and-lock.md#one-lock-for-several-machines) names.
+[`[lock]`](list-and-lock.md#one-lock-for-several-machines) names. Line
+endings do not count, so a lock that git checked out with CRLF on Windows
+passes.
 
 `--rebuild <name>` builds a package again, even though the store holds its
 build. Repeat the flag, or separate names with commas:
