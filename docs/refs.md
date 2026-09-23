@@ -160,8 +160,8 @@ overrides an earlier one, as with `[vars]`. A relative path starts at the list
 that names it. In a list from a repo, `node = "./packages/node.toml"` names that
 file of the same repo, so a machine that adopts the repo with
 `oku sync github:you/machines` gets the same node. `oku.lock` stores a node
-inside the config directory relative to it, so the lock works on every machine
-and for every user name.
+inside the list's directory relative to it, so the lock works under another home
+directory and in another checkout of a project.
 
 `config.toml` may hold the same `[runtimes]` table. oku uses it when no list
 names a node, and a relative path there starts at the directory of

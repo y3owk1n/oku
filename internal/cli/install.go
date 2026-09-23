@@ -1078,8 +1078,9 @@ func (e env) inferPyPI(ctx context.Context, opts Options, req request) (string, 
 // runtime returns the ref of the package that [runtimes] names for the
 // interpreter name, in the list or else in config.toml, and that package's name.
 // Both are empty when neither names one. The lock stores the manifest that
-// holds the ref, so a package inside the config directory is named relative to
-// it, and the lock works under another home directory.
+// holds the ref, so runtime names a package inside the list's directory
+// relative to that directory. The lock then works in another checkout or home
+// directory.
 func (e env) runtime(ctx context.Context, opts Options, name string) (string, string, error) {
 	// The list's refs are resolved already. A relative path in config.toml
 	// starts at the directory of config.toml, not at the working directory.
@@ -1116,7 +1117,7 @@ func (e env) runtime(ctx context.Context, opts Options, name string) (string, st
 		return "", "", fmt.Errorf("runtimes.%s in %s: %w", name, origin, err)
 	}
 
-	return ref.InDir(filepath.Dir(e.configPath()), r.String()), m.Package.Name, nil
+	return ref.InDir(e.listDir(), r.String()), m.Package.Name, nil
 }
 
 func inferredText(inferred string, req request) string {
@@ -1326,8 +1327,8 @@ func (e env) installDeps(
 	case ref.File:
 		base = filepath.Dir(parent.ref.Location)
 	case ref.NPM, ref.PyPI, ref.Go, ref.Cargo:
-		// These infer a manifest that names its runtime relative to config.toml.
-		base = filepath.Dir(e.configPath())
+		// These infer a manifest that names its runtime relative to the list.
+		base = e.listDir()
 	}
 
 	remote := parent.ref.Kind == ref.Forge || parent.ref.Kind == ref.Git ||
