@@ -742,8 +742,9 @@ order step in `prd/product.md`.
 - B101 [9] On Windows the oku binary is gone from its path once the command has
   exited, and the renamed file a few seconds later.
 - B105 [11] The one hook line in a shell's startup file is the whole shell
-  setup. After it, `oku` and the programs of the global profile run by name, and
-  loading it twice changes nothing. The installer, `oku add` and `oku doctor`
+  setup. After it, `oku` and the programs of the global profile run by name,
+  before any program of the same name elsewhere, also when `PATH` held their
+  directories behind others already. Loading it twice changes nothing. The installer, `oku add` and `oku doctor`
   print that line with the file it goes into.
 - B173 [5] In a build on macOS, pkg-config resolves zlib, bzip2, expat,
   libxml-2.0, sqlite3, libcurl and ncurses of the OS, with the version of the
