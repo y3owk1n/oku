@@ -237,8 +237,8 @@ exec = "bin/hello.exe"
 Set-Location $root
 Oku add (Join-Path $fixtures 'hello.toml') --yes --verbose
 $shimSpec = Get-Content "$bin\hello.shim"
-Check 'the shim lists the bin directory of the dep' {
-    ($shimSpec -join "`n") -match 'dir = .*greet-1\.0\.0-.*bin'
+Check 'the shim leaves the build dep off PATH' {
+    ($shimSpec -join "`n") -notmatch 'dir = .*greet-1\.0\.0-'
 }
 
 $greeting = Get-ChildItem "$env:XDG_DATA_HOME\oku\store\greet-*\share\greeting.txt"
