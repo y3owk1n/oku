@@ -1,220 +1,168 @@
 # Getting started
 
-## Install oku
+In about ten minutes you will install oku, use it to install ripgrep, move
+ripgrep to a newer version, and undo that change. Along the way you will see
+the two files oku keeps for you.
 
-One line installs oku for your user, with no root:
+You need macOS, Linux or Windows, and a terminal. You do not need root.
+
+## 1. Install oku
+
+On macOS and Linux:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/y3owk1n/oku/main/install.sh | sh
 ```
 
+On Windows, in PowerShell:
+
 ```powershell
 irm https://raw.githubusercontent.com/y3owk1n/oku/main/install.ps1 | iex
 ```
 
-The script downloads the binary for your OS and CPU from the newest GitHub
-release, checks its sha256 against the release's `checksums.txt`, and puts it in
-`~/.local/bin`, or `%LOCALAPPDATA%\oku\bin` on Windows. On unix it also checks
-the minisign signature when `minisign` is installed. It edits no file of yours.
-It ends by printing the installed version, the one line your shell needs, see
-[Set up your shell](#set-up-your-shell), and the commands to run next. When
-your startup file has that line from an earlier install, it says so instead.
+The script downloads oku for your OS and CPU, checks its sha256, and puts it
+in `~/.local/bin`, or `%LOCALAPPDATA%\oku\bin` on Windows. It changes none of
+your files. At the end it prints one line for your shell, which you add in the
+next step.
 
-| Variable | Effect |
-|---|---|
-| `OKU_INSTALL_DIR` | Where the binary goes. |
-| `OKU_VERSION` | A release tag such as `v0.1.0`, or `nightly` for the build of the newest commit on `main`. Default is the newest release. |
+## 2. Set up your shell
 
-`oku self update` replaces the binary later, see
-[Commands](commands.md#oku-self-update). `oku doctor` checks the whole setup
-and says what to fix, see [Commands](commands.md#oku-doctor).
+Add the line for your shell to its startup file. This puts `oku` and every
+program oku installs on your `PATH`.
 
-## Build oku
-
-You only need this to work on oku, or for a platform without a release.
-
-You need Go 1.26.4 or newer.
-
-```
-git clone https://github.com/y3owk1n/oku
-cd oku
-CGO_ENABLED=0 go build -o oku ./cmd/oku
-```
-
-`CGO_ENABLED=0` makes one static binary with no C library dependency.
-
-Move the `oku` binary somewhere on your `PATH`, for example `~/.local/bin`.
-
-The repo also has a `justfile`. `just build` writes `bin/oku` with the git
-version stamped in.
-
-## Install a package
-
-Point oku at a GitHub repo:
-
-```
-$ oku add github:BurntSushi/ripgrep
-github:BurntSushi/ripgrep has no manifest, so oku inferred one from its newest release, --verbose prints it
-added ripgrep 15.2.0
-add /home/you/.local/share/oku/profiles/global/current/bin to PATH to run it
-```
-
-The ripgrep repo has no oku manifest. oku read its newest release, matched the
-release files to operating systems and CPU types, found the published
-checksums, and opened the download to find the program inside. Add `--verbose`
-to read the manifest it wrote. See
-[Inferred manifests](manifest.md#inferred-manifests) for when this works.
-
-To pick a version, add `@version`:
-
-```
-$ oku add github:BurntSushi/ripgrep@14.1.1
-```
-
-The same works for a repo on another host, and for a URL that is the download
-itself. [Refs](refs.md) lists every form.
-
-```
-$ oku add gitlab:gitlab-org/cli --bin glab
-$ oku add codeberg:owner/repo
-$ oku add gitea:gitea.com/gitea/tea
-$ oku add https://example.com/tool-1.2.0-linux-amd64.tar.gz
-```
-
-`--bin glab` is there because that repo is called `cli` and its program `glab`.
-When oku picks the wrong release file, `--asset '<glob>'` names the right one.
-
-## Write a manifest yourself
-
-A manifest is a small TOML file that says where a package's downloads are.
-Write one when inference gets a package wrong and `--asset` and `--bin` do not
-fix it, to build from source, or to install something that has no release for
-oku to read. Save this as `ripgrep.toml`:
-
-```toml
-[package]
-name = "ripgrep"
-
-[version]
-from = "github-releases"
-repo = "BurntSushi/ripgrep"
-
-[[artifact]]
-match = { os = "darwin", arch = "arm64" }
-url = "https://github.com/BurntSushi/ripgrep/releases/download/{{tag}}/ripgrep-{{version}}-aarch64-apple-darwin.tar.gz"
-sha256_url = "https://github.com/BurntSushi/ripgrep/releases/download/{{tag}}/ripgrep-{{version}}-aarch64-apple-darwin.tar.gz.sha256"
-strip = 1
-bin = ["rg"]
-
-[[artifact]]
-match = { os = "linux", arch = "amd64" }
-url = "https://github.com/BurntSushi/ripgrep/releases/download/{{tag}}/ripgrep-{{version}}-x86_64-unknown-linux-musl.tar.gz"
-sha256_url = "https://github.com/BurntSushi/ripgrep/releases/download/{{tag}}/ripgrep-{{version}}-x86_64-unknown-linux-musl.tar.gz.sha256"
-strip = 1
-bin = ["rg"]
-```
-
-Then:
-
-```
-$ oku add ./ripgrep.toml
-added ripgrep 15.2.0
-```
-
-The [manifest reference](manifest.md) lists every key.
-
-## Set up your shell
-
-The installer puts `oku` in `~/.local/bin`, and oku links every program it
-installs into one directory. Neither is on `PATH` on a new machine. One line in
-your shell's startup file puts both there. The installer prints that line for
-your shell, with a command that appends it.
-
-| Shell | File | Line |
-|---|---|---|
-| bash | `~/.bashrc` | `[ -x "$HOME/.local/bin/oku" ] && eval "$("$HOME/.local/bin/oku" hook bash)"` |
-| zsh | `~/.zshrc` | `[ -x "$HOME/.local/bin/oku" ] && eval "$("$HOME/.local/bin/oku" hook zsh)"` |
-| fish | `~/.config/fish/config.fish` | `test -x "$HOME/.local/bin/oku"; and "$HOME/.local/bin/oku" hook fish \| source` |
-| PowerShell | the file `$PROFILE` names | `if (Test-Path "$HOME\AppData\Local\oku\bin\oku.exe") { Invoke-Expression ((& "$HOME\AppData\Local\oku\bin\oku.exe" hook pwsh) -join [Environment]::NewLine) }` |
-
-For zsh on a new Mac, which has no `~/.zshrc` yet:
+For zsh, the default shell on macOS:
 
 ```sh
 echo '[ -x "$HOME/.local/bin/oku" ] && eval "$("$HOME/.local/bin/oku" hook zsh)"' >> ~/.zshrc
 exec zsh
 ```
 
-The line does four things:
+For other shells, add this line to the file in the second column, then open a
+new terminal:
 
-- It puts the directory of `oku` on `PATH`.
-- It puts `<data>/oku/profiles/global/current/bin` on `PATH`, where the programs
-  you install are.
-- It loads the shell completions of those programs, and of `oku` itself, in
-  bash, zsh and fish. PowerShell gets the completions of `oku`.
-- It applies a [project's](projects.md) tools and variables while you are inside
-  an allowed project.
+| Shell | File | Line |
+|---|---|---|
+| bash | `~/.bashrc` | `[ -x "$HOME/.local/bin/oku" ] && eval "$("$HOME/.local/bin/oku" hook bash)"` |
+| fish | `~/.config/fish/config.fish` | `test -x "$HOME/.local/bin/oku"; and "$HOME/.local/bin/oku" hook fish \| source` |
+| PowerShell | the file `$PROFILE` names | `if (Test-Path "$HOME\AppData\Local\oku\bin\oku.exe") { Invoke-Expression ((& "$HOME\AppData\Local\oku\bin\oku.exe" hook pwsh) -join [Environment]::NewLine) }` |
 
-It names `oku` by its full path, because `oku` is not on `PATH` before the line
-has run. It does nothing when that file is gone, so it is safe in a dotfiles
-repo that other machines share. Loading it twice changes nothing. oku never
-edits a startup file itself.
+The line does nothing on a machine without oku, so it is safe in a dotfiles
+repo you share between machines. oku never edits your startup files itself.
 
-If you chose another directory with `OKU_INSTALL_DIR`, the line has that path.
-`oku hook --help` prints the four lines for the oku you are running, and
-`oku doctor` says whether the line is in place.
+## 3. Install a package
+
+oku installs packages from wherever their author publishes them. There is no
+central catalogue, so you point oku at the project. ripgrep lives on GitHub:
 
 ```
-$ oku add github:BurntSushi/ripgrep
+$ oku add github:BurntSushi/ripgrep@14.1.1
+github:BurntSushi/ripgrep has no manifest, so oku inferred one from its newest release, --verbose prints it
+added ripgrep 14.1.1
+```
+
+`@14.1.1` asks for that version. Without it, oku takes the newest release.
+
+The ripgrep repo has no manifest, so oku read the release itself.
+It picked the download for your OS and CPU, checked it against the checksum
+ripgrep publishes, and found the `rg` program inside. Now it runs:
+
+```
 $ rg --version
-ripgrep 15.2.0
+ripgrep 14.1.1 (rev 4649aa9700)
 ```
 
-## See and remove what is installed
+> [!TIP]
+> oku asks the GitHub API about releases. Without a token, GitHub allows 60
+> requests an hour. If you have the `gh` CLI logged in, oku uses its login.
+> Otherwise set `GITHUB_TOKEN`.
+
+## 4. Look at your list
+
+`oku add` wrote ripgrep into your list, `~/.config/oku/oku.toml`:
+
+```toml
+[packages]
+ripgrep = { ref = "github:BurntSushi/ripgrep", version = "14.1.1" }
+```
+
+This file is what you want installed. oku also wrote `oku.lock` next to it,
+which records exactly what it installed, down to the sha256 of the download.
+You edit `oku.toml`, and oku keeps `oku.lock` up to date. Keep both in git, and
+another machine can install the same thing. [How oku works](how-oku-works.md)
+explains why there are two files.
+
+## 5. Change the version
+
+Open `~/.config/oku/oku.toml` in an editor and change the version to `"15"`,
+which means the newest 15.x release:
+
+```toml
+[packages]
+ripgrep = { ref = "github:BurntSushi/ripgrep", version = "15" }
+```
+
+Ask oku what that would change, without changing anything:
 
 ```
-$ oku list
-ripgrep  15.2.0  github:BurntSushi/ripgrep
+$ oku sync --dry-run
+would change ripgrep from 14.1.1 to 15.2.0
+dry run: nothing was changed
+```
 
+Then apply it:
+
+```
+$ oku sync
+ripgrep 14.1.1 -> 15.2.0
+profile now holds 1 package, generation 2, 1s
+```
+
+`oku sync` makes your machine match your list. Every change like this one
+makes a new numbered generation.
+
+## 6. Undo the change
+
+List the generations, then go back one:
+
+```
+$ oku generations
+  1  2026-09-23 21:37  1 package  + ripgrep 14.1.1
+* 2  2026-09-23 21:37  1 package  ripgrep 14.1.1 -> 15.2.0
+
+$ oku rollback
+generation 1 is active, 1 package: ripgrep 15.2.0 -> 14.1.1
+```
+
+`rg --version` prints 14.1.1 again. Rollback downloads nothing, because the old
+version is still on disk.
+
+Rollback does not edit `oku.toml`. It still asks for version 15, so the next
+`oku sync` would move to 15.2.0 again. To stay on 14.1.1, change the version
+in `oku.toml` back to `"14.1.1"`:
+
+```
+$ oku sync
+already in sync
+```
+
+## 7. Remove it
+
+```
 $ oku remove ripgrep
 removed ripgrep
 ```
 
-## Undo a change
+That removes ripgrep from your list and from your `PATH`. The files stay on
+disk so you can still roll back. `oku gc` deletes what no generation uses.
 
-Every change to the installed packages is a numbered generation.
+## Next steps
 
-```
-$ oku update
-ripgrep 14.1.1 -> 15.2.0
-$ oku rollback
-generation 1 is active: ripgrep 14.1.1
-```
+- [Add packages](guides/add-packages.md) from GitHub, GitLab, a URL, npm, PyPI,
+  Go or crates.io.
+- [Set up a machine from a repo](guides/new-machine.md), so a new laptop is one
+  `git clone` and one `oku sync` away.
+- [Manage your dotfiles](guides/dotfiles.md) with the same list.
+- Run `oku doctor` any time something looks wrong. It checks your `PATH`, the
+  shell line and the store, and says what to fix.
 
-See [Commands](commands.md#oku-rollback).
-
-## Move to another machine
-
-`oku add` records every package in `~/.config/oku/oku.toml` and pins what it
-resolved in `~/.config/oku/oku.lock`. Commit both files to a repo. On a new
-machine, one command restores the same versions:
-
-```
-$ oku sync github:you/machines
-adopted github:you/machines with 1 locked package
-profile now holds 1 package
-```
-
-Use URL or repo refs in a list you publish. A ref such as `./ripgrep.toml` only
-works on the machine that has that file.
-
-See [List and lock](list-and-lock.md#a-new-machine).
-
-## Uninstall oku
-
-```
-$ oku self uninstall
-```
-
-It lists what it will delete, asks once, and removes every package, its own
-directories and the `oku` binary. `--keep-list` keeps `oku.toml` and `oku.lock`.
-See [Commands](commands.md#oku-self-uninstall).
+To remove oku itself, see [Undo and clean up](guides/undo-and-clean-up.md).

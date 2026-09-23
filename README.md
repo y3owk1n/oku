@@ -4,7 +4,7 @@
 
 **Your machine, from one file.**
 
-One `oku.toml` names the tools, dotfiles, secrets and OS settings of your account. A lock pins every byte. `oku sync` builds that machine on Linux, macOS or Windows, and `oku rollback` puts the previous one back. No registry, no language, no root.
+One `oku.toml` names the tools, dotfiles, secrets and OS settings of your account. A lock pins the sha256 of every download. `oku sync` builds that machine on Linux, macOS or Windows, and `oku rollback` puts the previous one back. oku needs no registry, no language to learn and no root.
 
 [![Latest Release](https://img.shields.io/github/v/release/y3owk1n/oku?style=flat-square)](https://github.com/y3owk1n/oku/releases)
 [![CI](https://img.shields.io/github/actions/workflow/status/y3owk1n/oku/ci.yml?branch=main&style=flat-square&label=ci)](https://github.com/y3owk1n/oku/actions/workflows/ci.yml)
@@ -17,7 +17,7 @@ One `oku.toml` names the tools, dotfiles, secrets and OS settings of your accoun
 
 <sub>Manifest keys, CLI flags and behaviour may still change between releases. See the [CHANGELOG](CHANGELOG.md).</sub>
 
-[Install](#install) · [The list](#the-list) · [Publish a package](#publish-a-package) · [Compare](#how-oku-compares) · [Docs](#documentation)
+[Install](#install) · [What it does](#what-it-does) · [Publish a package](#publish-a-package) · [Compare](#how-oku-compares) · [Docs](docs/README.md)
 
 </div>
 
@@ -56,7 +56,8 @@ color-scheme = "prefer-dark"
 ```
 
 ```bash
-oku sync github:you/machines   # a new machine, from that list and its lock
+git clone https://github.com/you/machines ~/.config/oku   # a new machine
+oku sync                       # install and apply everything the list and lock name
 oku sync --dry-run             # what would change, and nothing changes
 oku rollback                   # the machine as it was before the last change
 ```
@@ -105,93 +106,36 @@ You need Go 1.26.4 or newer.
 
 ### First run
 
+Add the line the installer printed to your shell's startup file. For zsh:
+
 ```bash
 echo '[ -x "$HOME/.local/bin/oku" ] && eval "$("$HOME/.local/bin/oku" hook zsh)"' >> ~/.zshrc && exec zsh
 
 oku add github:sharkdp/fd      # install something
 fd --version
-oku doctor                     # checks PATH, the hook, the sandbox and the profiles
+oku doctor                     # checks PATH, the shell line, the sandbox and the profiles
 ```
 
-`oku add` writes to `oku.toml` and `oku.lock` for you, so a list grows one command at a time. For the GitHub API oku uses `GITHUB_TOKEN`, or the login of `gh` when it is installed. Without either, GitHub allows 60 requests an hour, which a first list of a dozen packages can use up. [Getting started](docs/getting-started.md) · [A real list that replaced nix-darwin](https://github.com/y3owk1n/oku-config)
+[Getting started](docs/getting-started.md) walks through a first package, a version change and a rollback in about ten minutes.
 
 ---
 
-## The list
+## What it does
 
-**Packages.** A ref is enough. For a repo on GitHub, GitLab, Codeberg, or any Gitea or Forgejo server, oku reads the newest release, matches the files to your OS and CPU, finds the checksums, and shows you the manifest it wrote before it installs. Every line below installs a real package:
+| You want to | oku does it with | Guide |
+| :-- | :-- | :-- |
+| Install a tool from GitHub, GitLab, Codeberg, Gitea, a URL or a file | `oku add github:BurntSushi/ripgrep` | [Add packages](docs/guides/add-packages.md) |
+| Install from npm, PyPI, Go or crates.io without their toolchains on `PATH` | `oku add npm:prettier` and `[runtimes]` | [Registry packages](docs/guides/npm-pypi-go-cargo.md) |
+| Set up every machine from one repo | a git clone at `~/.config/oku` and `oku sync` | [New machine](docs/guides/new-machine.md) |
+| Place dotfiles and templates | `[files]` and `[vars]` | [Dotfiles](docs/guides/dotfiles.md) |
+| Keep SSH keys and tokens in the repo, encrypted | `[secrets]` with sops and age | [Secrets](docs/guides/secrets.md) |
+| Set macOS defaults, Windows registry values or GNOME settings | `[defaults]`, `[registry]`, `[dconf]` | [OS settings](docs/guides/os-settings.md) |
+| Run a daemon at login | `service = true` | [Services](docs/guides/services.md) |
+| Give a repo its own tools | an `oku.toml` in the repo and `oku allow` | [Projects](docs/guides/projects.md) |
+| Use the same tools in CI | `uses: y3owk1n/oku@main` | [CI](docs/guides/ci.md) |
+| Undo a change | `oku rollback` | [Undo and clean up](docs/guides/undo-and-clean-up.md) |
 
-```bash
-# A repo with no manifest. oku infers one from the release.
-oku add github:BurntSushi/ripgrep
-oku add gitlab:gitlab-org/cli                     # the glab CLI
-oku add codeberg:mergiraf/mergiraf
-oku add gitea:gitea.com/gitea/tea                 # any Gitea or Forgejo server
-oku add github:rxhanson/Rectangle                 # a macOS app, copied to ~/Applications
-
-# A manifest in a repo, by name or by path, or in any git repo.
-oku add github:y3owk1n/oku-config#bat             # bat.toml or packages/bat.toml
-oku add github:y3owk1n/oku-config#packages/zoxide.toml
-oku add git+https://github.com/y3owk1n/oku-config#lazygit
-
-# A manifest at a URL or on disk, or a download itself, here the one for macOS arm64.
-oku add https://raw.githubusercontent.com/y3owk1n/oku-config/main/packages/starship.toml
-oku add ./gh.toml
-oku add https://github.com/sharkdp/hyperfine/releases/download/v1.19.0/hyperfine-v1.19.0-aarch64-apple-darwin.tar.gz
-
-# A registry package, built or run with the toolchain that [runtimes] names.
-oku add npm:prettier                              # runs on node
-oku add pypi:ruff                                 # installed with uv
-oku add go:mvdan.cc/gofumpt                       # built as go install does
-oku add cargo:hexyl                               # built as cargo install --locked does
-
-# A version: exact, the newest of a line, or a range.
-oku add github:BurntSushi/ripgrep@14.1.1
-oku add github:BurntSushi/ripgrep@14
-oku add 'npm:prettier@^3'
-
-# A short name for a repo of manifests.
-oku source add kyle github:y3owk1n/oku-config
-oku add kyle/sesh
-```
-
-When oku picks the wrong file of a release, `--asset` and `--bin` name the right one. `--service` starts a package's daemon now and at every login. A version in `oku.toml` names what `oku update` may move to, and `oku.lock` pins the exact build. `oku outdated` lists what is behind, with the newest version the list allows and the latest release.
-
-A package can be a prebuilt download in tar, zip, 7z, `.deb`, `.rpm`, AppImage, `.dmg`, `.pkg` or `.msi`, or a build from source with dependencies between packages. It can ship a desktop app, fonts, a service, a library that other builds link against, a script oku wraps with its interpreter, or only files, such as agent skills or a colour scheme. A version can follow releases, an npm package, a branch, or a moving tag such as `nightly`.
-
-**Home files.** `[files]` places links, text, rendered templates and decrypted secrets. `[vars]` feeds the templates, so a colour scheme is a table of variables and changing it re-renders every file in one generation. Secrets come from [sops](https://github.com/getsops/sops) and [age](https://age-encryption.org) files and are decrypted at apply time. oku refuses to overwrite a file it did not write.
-
-**Settings.** `[defaults]` on macOS, `[registry]` on Windows and `[dconf]` on Linux set per-user OS settings. Before oku first writes a setting it records the old value, and it puts that value back when the entry leaves the list.
-
-**Projects.** A repo can carry its own `oku.toml`, lock and profile. With the shell hook for bash, zsh, fish or PowerShell, entering the directory puts the project's tools on `PATH`, after you allowed it once.
-
-```bash
-cd ~/work/api && oku allow                 # once per repo
-oku shell github:cli/cli -- gh --version   # try a package without installing it
-oku exec gopls                             # run a project's tool where no hook runs, as in an editor
-```
-
-**CI.** The action in this repo installs oku and the tools that a project's lock pins, on Linux, macOS and Windows, and puts them on `PATH` for the later steps:
-
-```yaml
-- uses: y3owk1n/oku@main   # oku sync --yes --locked, with the store cached by oku.lock
-- run: golangci-lint run
-```
-
-`oku outdated --json` lists each package with a newer version, for a bot that opens pull requests.
-
-**History.** Every change is a generation, and it covers packages, files and settings.
-
-```bash
-oku generations
-oku rollback
-oku gc --keep 3
-oku list --json | jq -r '.[].name'   # every command that prints data takes --json
-```
-
-**Sharing builds.** A signed cache is any directory or static web host. oku takes a built package from it only when a key you trust signed it, and builds it itself otherwise.
-
-[List and lock](docs/list-and-lock.md) · [Refs](docs/refs.md) · [Secrets](docs/secrets.md) · [Projects](docs/projects.md) · [Commands](docs/commands.md) · [The action](docs/list-and-lock.md#one-lock-for-several-machines)
+Every change is a generation that covers packages, files and settings together. `oku generations` lists them, and `oku rollback` switches back without downloading anything.
 
 ---
 
@@ -232,7 +176,7 @@ oku manifest bump         # move it to the newest release, checksums included
 oku manifest hash <url>   # print the checksums of a download
 ```
 
-[Manifest reference](docs/manifest.md) · [Trust and checksums](docs/trust.md) · [Build caches](docs/caches.md)
+[Publish a manifest](docs/guides/publish-a-manifest.md) · [Manifest reference](docs/reference/manifest.md) · [Security](docs/reference/security.md) · [Build caches](docs/guides/build-caches.md)
 
 ---
 
@@ -242,7 +186,7 @@ oku covers what a package manager, a dotfile manager and a settings script do se
 
 | Setup | Tools from | Home files | Secrets | OS settings | Lock with hashes | Rollback | Root | You write |
 | :-- | :-- | :-- | :-- | :-- | :-- | :-- | :-- | :-- |
-| **oku** | Any repo, URL or file, and npm, PyPI, Go and crates.io packages. No registry of its own | Links, text, templates | sops and age files | macOS defaults, Windows registry, dconf | Always, every download | Packages, files and settings, in one generation | Only for [system scope](docs/system-scope.md) | TOML, or nothing |
+| **oku** | Any repo, URL or file, and npm, PyPI, Go and crates.io packages. No registry of its own | Links, text, templates | sops and age files | macOS defaults, Windows registry, dconf | Always, every download | Packages, files and settings, in one generation | Only to [install for every user](docs/guides/system-wide.md) | TOML, or nothing |
 | [Nix](https://nixos.org) + [home-manager](https://github.com/nix-community/home-manager) + [nix-darwin](https://github.com/nix-darwin/nix-darwin) | nixpkgs, plus flakes | Yes | Separate projects, sops-nix or agenix | macOS defaults, dconf | `flake.lock` pins inputs, nixpkgs pins each source | Per tool, each with its own generations | To create `/nix`, and for every nix-darwin switch | The Nix language |
 | [Homebrew](https://brew.sh) + [chezmoi](https://www.chezmoi.io) | homebrew-core, plus taps | Files, links, templates | Password managers, age, gpg | Scripts you write | No. A Brewfile pins nothing | No. Revert the source in git and apply again | Homebrew, to install on macOS | Ruby, Go templates, shell |
 | [mise](https://mise.jdx.dev) | A registry, backends such as `github:owner/repo`, and OS packages through apt, brew, winget and others | Links, copies, templates, tracked files, line edits | Environment variables from fnox, sops or age. Templates can write them to files | macOS defaults | Optional, `mise.lock`. It pins checksums for downloads, only versions for some backends, and nothing for OS packages | Files only, from a git history. Tools and packages stay as they are | For OS packages, system files and system services | TOML |
@@ -251,65 +195,13 @@ oku fits if you want a machine you can rebuild and roll back without learning Ni
 
 ---
 
-## How it works
-
-```
-oku sync
-  -> read the list             oku.toml, its includes, and the tables for this OS
-  -> resolve each package      a manifest from a file, a URL or a forge, or one inferred
-                               from a release or from npm, PyPI, Go or crates.io, at the
-                               version the lock pins
-  -> realize in the store      <data>/oku/store/<name>-<version>-<hash>/
-  -> check everything          downloads, checksums, targets, secrets, before the first change
-  -> new profile generation    a directory of links, swapped in with one rename
-  -> apply the rest            apps, fonts, services, files, templates, secrets, settings,
-                               each recorded in a ledger so rollback can undo it
-```
-
-A store path's hash covers the manifest, the version, the platform and the download's sha256, so a changed input never overwrites an old package. On Windows a profile uses shims, hard links and a junction where unix uses symlinks, so it needs no administrator rights either. [Files and directories](docs/files.md)
-
----
-
 ## Documentation
 
-| Using oku                                  |                                                            |
-| :----------------------------------------- | :--------------------------------------------------------- |
-| [Getting started](docs/getting-started.md) | Install, a first package, `PATH`, uninstall                |
-| [Commands](docs/commands.md)               | Every command, its flags, what it prints, its JSON         |
-| [Refs](docs/refs.md)                       | The ways to point oku at a manifest, and sources           |
-| [List and lock](docs/list-and-lock.md)     | `oku.toml`, `oku.lock`, home files, templates, OS settings |
-| [Projects](docs/projects.md)               | A list and a profile that belong to one repo, the hook     |
-| [Secrets](docs/secrets.md)                 | SSH keys and tokens from sops and age files                |
-| [Services](docs/services.md)               | Running a package's daemon                                 |
-| [System scope](docs/system-scope.md)       | Apps, fonts and services for the whole machine             |
-| [Windows](docs/windows.md)                 | Shims, junctions, and what is not verified there           |
-| [Trust and checksums](docs/trust.md)       | What oku verifies, what it pins, and when it stops         |
-| [Files and directories](docs/files.md)     | Where oku keeps things on disk                             |
-
-| Publishing with oku                    |                                              |
-| :------------------------------------- | :------------------------------------------- |
-| [Manifest reference](docs/manifest.md) | Every key, every build step, the sandbox     |
-| [Build caches](docs/caches.md)         | Serving built packages, signed               |
-
-| Working on oku                       |                                            |
-| :----------------------------------- | :----------------------------------------- |
-| [Releasing](docs/releasing.md)       | release-please, the signing key, rotating it |
-| [Product spec](prd/product.md)       | Vision, promises, boundaries               |
-| [Decisions](prd/decisions.md)        | Every design decision and why              |
-| [Behaviours](prd/behaviours.md)      | Every promise oku tests                    |
-| [Architecture](prd/architecture.md)  | Schema, lock format, paths, packages       |
-
----
+[Getting started](docs/getting-started.md) · [How oku works](docs/how-oku-works.md) · [All guides](docs/README.md#guides) · [Commands](docs/reference/commands.md) · [Troubleshooting](docs/troubleshooting.md) · [Coming from another tool](docs/guides/coming-from.md)
 
 ## Contributing
 
-oku is written in Go, and it installs its own toolchain. `oku sync && oku allow` sets it up from the repo's `oku.toml`. CI takes the same tools from the same lock with the [action](action.yml), so [`ci.yml`](.github/workflows/ci.yml) shows how to use it in a workflow of your own.
-
-```bash
-just fmt && just lint && just test && just build   # the pre-commit gate
-```
-
-Every behaviour in [`prd/behaviours.md`](prd/behaviours.md) has a test named after it. CI runs the suite on Linux, macOS and Windows, and on Windows it also runs the real `oku.exe` against real releases. Report bugs through the [issues](https://github.com/y3owk1n/oku/issues).
+oku is written in Go and installs its own toolchain with `oku sync && oku allow`. See [CONTRIBUTING.md](CONTRIBUTING.md) for the build, the tests and releases. Report bugs through the [issues](https://github.com/y3owk1n/oku/issues).
 
 ---
 
@@ -330,6 +222,6 @@ MIT. See [LICENSE](LICENSE).
 curl -fsSL https://raw.githubusercontent.com/y3owk1n/oku/main/install.sh | sh && ~/.local/bin/oku add github:sharkdp/fd
 ```
 
-Made with ❤️ by <a href="https://github.com/y3owk1n">y3owk1n</a>
+Made by <a href="https://github.com/y3owk1n">y3owk1n</a>
 
 </div>

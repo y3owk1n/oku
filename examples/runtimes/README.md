@@ -21,8 +21,8 @@ rust = "./rust.toml"
 
 None of these toolchains goes on your `PATH`. A build finds its toolchain in
 the store, and a program from an `npm:` or `pypi:` package finds its node or
-python first on its own `PATH`. Add the toolchain under `[packages]` too only
-if you want to run it yourself.
+python first on its own `PATH`. To run a toolchain yourself, add it under
+`[packages]` as well.
 
 node, go and rust follow upstream releases, so `oku update` moves them.
 
@@ -41,5 +41,6 @@ On Windows, `rust.toml` does not build, because it runs the installer's
 one rustup installs.
 
 [`oku.toml`](oku.toml) is a list that installs one package of each kind with
-these runtimes. See [Refs](../../docs/refs.md#npm-packages) for how each kind
-of package uses its runtime.
+these runtimes. See
+[npm, PyPI, Go and cargo packages](../../docs/guides/npm-pypi-go-cargo.md)
+for how each kind of package uses its runtime.
