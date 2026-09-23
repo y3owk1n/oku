@@ -104,8 +104,8 @@ type request struct {
 	approve func(m *manifest.Manifest, host platform.Platform, a *manifest.Artifact) error
 	// log receives the output of build commands, or is nil.
 	log io.Writer
-	// constraint limits the version of a dep, such as ">=3". A version pin in ref
-	// overrides it.
+	// constraint limits the version of a dep, as a range such as ">=3" or a
+	// prefix such as "22", as Pick reads it. A version pin in ref overrides it.
 	constraint string
 	// progress reports each build step of this package, and may be nil. Deps do
 	// not inherit it.
@@ -359,7 +359,7 @@ func (e env) installFrom(
 	switch {
 	case keep:
 	case r.Version == "" && req.constraint != "":
-		release, err = e.resolver(opts).PickWithin(ctx, m.Version, req.constraint)
+		release, err = e.resolver(opts).Pick(ctx, m.Version, req.constraint)
 	default:
 		release, err = e.resolver(opts).Pick(ctx, m.Version, r.Version)
 	}
