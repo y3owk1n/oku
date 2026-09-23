@@ -1123,6 +1123,12 @@ of the package, and copies the package's other programs there. Those are the
 programs oku links when the build has no `install` step. `oku add pypi:<name>`
 writes this build, see [Python packages](refs.md#python-packages).
 
+A cargo step with `package` names the crate that the source is. It vendors
+what the crate's `Cargo.lock` pins, and once oku has hashed that, it runs
+`cargo install --path . --locked --offline --no-track --root {{prefix}}`.
+`oku add cargo:<name>` writes this build, see [Rust crates](refs.md#rust-crates).
+On Windows the step runs through PowerShell.
+
 A go step with `package` builds that Go package. The go command downloads the
 module that `version.repo` names, and every module it needs, into a module
 cache in the source directory, and checks each against the checksum database.

@@ -1194,9 +1194,10 @@ infers it again.
 ## D78. A crate builds from its .crate file with the digest crates.io publishes
 
 `cargo:<name>` infers a manifest with `version.from = "crates"`, a `source` that
-is the version's `.crate` file on static.crates.io with no sha256, a `cargo`
-vendor step, and `cargo install --path . --locked --offline --no-track --root
-{{prefix}}`. The resolver keeps the sha256 that crates.io lists for each
+is the version's `.crate` file on static.crates.io with no sha256, and a `cargo`
+vendor step with `package`. That step vendors what `Cargo.lock` pins, and after
+the hash it runs `cargo install --path . --locked --offline --no-track --root
+{{prefix}}`, through PowerShell on Windows, as the go step does (D77). The resolver keeps the sha256 that crates.io lists for each
 version's download as that release's digest, and the build takes a source's
 sha256 from the release when the manifest states none. The rust is
 `[runtimes] rust` as a build dep (D75), else a `needs` on the cargo of `PATH`.
@@ -1209,4 +1210,5 @@ its `Cargo.lock`, so `cargo vendor --locked` pins the same dependencies that
 platform. Why the `bin_names` of crates.io: a library has none, so oku refuses
 it before any download, instead of building a crate that installs nothing.
 
-Windows is refused for now, because the build runs through sh.
+A manifest that oku inferred before the install moved into the vendor step
+holds a separate run step. `oku update <name>` infers it again.

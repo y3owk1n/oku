@@ -43,10 +43,25 @@ type vendorKind struct {
 	portable bool
 }
 
+// cargoVendor vendors what Cargo.lock pins and points cargo at the vendor
+// directory, so the build after it works offline. cargoVendorPwsh is the same
+// for Windows. The TOML strings take single quotes, which neither shell has to
+// escape.
 const (
-	npmPackageKind = "npm package"
-	pipPackageKind = "pip package"
-	goPackageKind  = "go package"
+	cargoVendor = `"$tool" vendor --locked vendor >/dev/null
+mkdir -p .cargo
+printf "\n[source.crates-io]\nreplace-with = 'vendored-sources'\n\n[source.vendored-sources]\ndirectory = 'vendor'\n" >> .cargo/config.toml`
+	cargoVendorPwsh = `& $tool vendor --locked vendor | Out-Null
+if ($LASTEXITCODE -ne 0) { exit 1 }
+New-Item -ItemType Directory -Force .cargo | Out-Null
+Add-Content .cargo/config.toml "` + "`n[source.crates-io]`nreplace-with = 'vendored-sources'`n`n[source.vendored-sources]`ndirectory = 'vendor'" + `"`
+)
+
+const (
+	npmPackageKind   = "npm package"
+	pipPackageKind   = "pip package"
+	goPackageKind    = "go package"
+	cargoPackageKind = "cargo package"
 )
 
 var vendorKinds = map[string]vendorKind{
@@ -59,12 +74,23 @@ var vendorKinds = map[string]vendorKind{
 		portable: true,
 	},
 	"cargo": {
-		tools: []string{"cargo"},
-		script: `"$tool" vendor --locked vendor >/dev/null
-mkdir -p .cargo
-printf '\n[source.crates-io]\nreplace-with = "vendored-sources"\n\n[source.vendored-sources]\ndirectory = "vendor"\n' >> .cargo/config.toml`,
+		tools:    []string{"cargo"},
+		script:   cargoVendor,
+		pwsh:     cargoVendorPwsh,
 		output:   "vendor",
 		portable: true,
+	},
+	// cargoPackageKind is a cargo step with "package", in the source of that
+	// crate. It vendors what the crate's Cargo.lock pins, and once that is
+	// hashed it installs the crate's programs from it alone.
+	cargoPackageKind: {
+		tools:     []string{"cargo"},
+		script:    cargoVendor,
+		pwsh:      cargoVendorPwsh,
+		after:     `"$tool" install --path . --locked --offline --no-track --root "$OKU_PREFIX"`,
+		pwshAfter: "& $tool install --path . --locked --offline --no-track --root $env:OKU_PREFIX\nif ($LASTEXITCODE -ne 0) { exit 1 }",
+		output:    "vendor",
+		portable:  true,
 	},
 	"npm": {
 		tools:  []string{"npm"},

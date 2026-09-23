@@ -1030,11 +1030,6 @@ func (e env) inferCargo(ctx context.Context, opts Options, req request) (string,
 		return "", fmt.Errorf("--asset and --bin do not apply, %s names its programs", req.ref)
 	}
 
-	// The build runs cargo through sh.
-	if platform.Host().OS == "windows" {
-		return "", fmt.Errorf("%s: oku cannot build a crate on Windows yet", req.ref)
-	}
-
 	rust, _, err := e.runtime(ctx, opts, "rust")
 	if err != nil {
 		return "", err
