@@ -1,3 +1,13 @@
+# oku installs this repo's tools from this list. CI does it with the action in
+# action.yml, from the lock, on each of the platforms below.
+[lock]
+platforms = ["darwin-arm64", "linux-amd64-glibc", "windows-amd64"]
+
+# go: packages build with this go, at the version of the go package below, not
+# with a go on PATH.
+[runtimes]
+go = { ref = "./.oku/go.toml", version = "1.26.4" }
+
 [packages]
 just = { ref = "github:casey/just", version = "1.54.0" }
 gofumpt = { ref = "github:mvdan/gofumpt", version = "0.10.0" }
@@ -6,5 +16,5 @@ just-lsp = { ref = "github:terror/just-lsp", version = "0.4.7" }
 go = { ref = "./.oku/go.toml", version = "1.26.4" }
 golangci-lint = { ref = "github:golangci/golangci-lint", version = "2.12.2" }
 golines = { ref = "github:golangci/golines", version = "0.15.0" }
-goimports = { ref = "./.oku/goimports.toml", version = "0.44.0" }
-gopls = { ref = "./.oku/gopls.toml", version = "0.22.0" }
+goimports = { ref = "go:golang.org/x/tools/cmd/goimports", version = "0.44.0" }
+gopls = { ref = "go:golang.org/x/tools/gopls", version = "0.22.0" }

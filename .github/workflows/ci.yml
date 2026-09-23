@@ -21,9 +21,13 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-go@v7
+      # The action installs the tools of oku.toml with the nightly oku, so a
+      # broken commit cannot break the tools that test it.
+      - uses: ./
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         with:
-          go-version-file: go.mod
+          version: nightly
       - run: go vet ./...
       - run: go test ./...
       - name: Live test on Linux
@@ -81,11 +85,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-go@v7
+      - uses: ./
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         with:
-          go-version-file: go.mod
-      - uses: golangci/golangci-lint-action@v9
+          version: nightly
+      - run: golangci-lint run
         env:
           GOOS: ${{ matrix.goos }}
-        with:
-          version: v2.12.2

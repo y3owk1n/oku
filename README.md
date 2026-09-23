@@ -265,7 +265,7 @@ A store path's hash covers the manifest, the version, the platform and the downl
 
 ## Contributing
 
-oku is written in Go, and it installs its own toolchain. `oku sync && oku allow` sets it up from the repo's `oku.toml`.
+oku is written in Go, and it installs its own toolchain. `oku sync && oku allow` sets it up from the repo's `oku.toml`. CI takes the same tools from the same lock with the [action](action.yml), so [`ci.yml`](.github/workflows/ci.yml) shows how to use it in a workflow of your own.
 
 ```bash
 just fmt && just lint && just test && just build   # the pre-commit gate
