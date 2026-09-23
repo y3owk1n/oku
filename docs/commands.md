@@ -132,8 +132,9 @@ cannot provide one, oku builds anyway and prints a warning on stderr that names
 the reason.
 
 Without `@version`, oku installs the newest version the manifest offers.
-`@version` picks one, see [Pinning a version](refs.md#pinning-a-version). The
-pin is recorded in `oku.toml` as `{ ref = "...", version = "..." }`.
+`@version` picks one, and a range or a prefix such as `@^1.4` or `@22` picks
+the newest it allows, see [Pinning a version](refs.md#pinning-a-version). The
+version is recorded in `oku.toml` as `{ ref = "...", version = "..." }`.
 
 Output:
 
@@ -469,8 +470,10 @@ and `git+` refs, moves each package to the newest version its manifest offers,
 accepts changed manifests, and accepts a new checksum when the manifest states
 one. Then it syncs.
 
-A package pinned with `version` in `oku.toml` stays on that version. A version
-changes only when you run `update`.
+A package with a `version` in `oku.toml` moves to the newest version that it
+allows, so an exact version stays where it is, and `^1.4` moves to the newest
+1.x. See [Pinning a version](refs.md#pinning-a-version). A version changes only
+when you run `update`.
 
 A package that follows a [moving tag](manifest.md#a-moving-tag) moves when the
 tag points at another commit.
@@ -505,8 +508,8 @@ freebuff  0.0.183  0.0.184  ./packages/freebuff.toml
 `oku update` takes the newest versions, `oku update <name>` one package
 ```
 
-oku asks each package's version source which version is the newest, as
-`oku update` would pick it. It downloads no package and changes nothing. A
+oku asks each package's version source which version is the newest that the
+package's `version` in `oku.toml` allows, as `oku update` would pick it. It downloads no package and changes nothing. A
 manifest that oku inferred is read from `oku.lock`, and any other manifest from
 its ref. When every package is at its newest version, oku says so. When a
 version source cannot answer, oku lists the rest and ends with an error that

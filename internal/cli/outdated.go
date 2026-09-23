@@ -22,8 +22,9 @@ func newOutdatedCmd(opts Options) *cobra.Command {
 		Short: "List the packages that have a newer version than oku.lock pins",
 		Long: `List the packages that have a newer version than oku.lock pins.
 
-For each package, oku asks its version source which version is the newest.
-It downloads no package and changes nothing. oku update takes the new versions.`,
+For each package, oku asks its version source which version is the newest
+that the version in oku.toml allows. It downloads no package and changes
+nothing. oku update takes the new versions.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			e, err := scopedEnv(cmd, opts)
@@ -49,6 +50,12 @@ func (e env) outdated(cmd *cobra.Command, opts Options) error {
 		return err
 	}
 
+	// A version in the list limits what oku update takes.
+	all, err := e.loadList(cmd.Context(), opts, locked, false)
+	if err != nil {
+		return err
+	}
+
 	found := make([]staleness, len(locked.Packages))
 
 	// Each package asks its own host, so they ask at once, a few at a time.
@@ -61,7 +68,7 @@ func (e env) outdated(cmd *cobra.Command, opts Options) error {
 			limit <- struct{}{}
 			defer func() { <-limit }()
 
-			newest, err := e.newest(cmd.Context(), opts, pkg)
+			newest, err := e.newest(cmd.Context(), opts, pkg, all.packages[pkg.Name].ref.Version)
 			found[i] = staleness{pkg: pkg, newest: newest, err: err}
 		})
 	}
@@ -91,8 +98,9 @@ func (e env) outdated(cmd *cobra.Command, opts Options) error {
 	return errors.Join(failed...)
 }
 
-// newest returns the newest version of pkg, as oku update would pick it.
-func (e env) newest(ctx context.Context, opts Options, pkg lock.Package) (string, error) {
+// newest returns the newest version of pkg that want allows, as oku update
+// would pick it.
+func (e env) newest(ctx context.Context, opts Options, pkg lock.Package, want string) (string, error) {
 	r, err := ref.ParseIn(e.listDir(), pkg.Ref)
 	if err != nil {
 		return "", err
@@ -115,7 +123,7 @@ func (e env) newest(ctx context.Context, opts Options, pkg lock.Package) (string
 		return "", err
 	}
 
-	release, err := e.resolver(opts).Pick(ctx, m.Version, "")
+	release, err := e.resolver(opts).Pick(ctx, m.Version, want)
 	if err != nil {
 		return "", err
 	}

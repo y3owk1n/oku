@@ -49,16 +49,26 @@ type Release struct {
 	Integrity map[string]string
 }
 
-// Pick returns the release of v to install. want selects an exact version, and
-// an empty want selects the newest. A manifest with a fixed version has one
-// release, whose tag equals its version.
+// Pick returns the release of v to install. An empty want selects the newest.
+// Otherwise want is an exact version, a prefix such as "22" for the newest 22.x,
+// or a range such as "^1.4", as Matches reads it. A manifest with a fixed
+// version has one release, whose tag equals its version.
 func (r *Resolver) Pick(ctx context.Context, v manifest.Version, want string) (Release, error) {
 	if v.From == "" {
-		if want != "" && want != v.Value {
+		ok, err := Matches(v.Value, want)
+		if err != nil {
+			return Release{}, err
+		}
+
+		if !ok {
 			return Release{}, fmt.Errorf("the manifest provides version %s, not %s", v.Value, want)
 		}
 
 		return Release{Version: v.Value, Tag: v.Value}, nil
+	}
+
+	if IsRange(want) {
+		return r.PickWithin(ctx, v, want)
 	}
 
 	releases, err := r.List(ctx, v)
@@ -76,6 +86,13 @@ func (r *Resolver) Pick(ctx context.Context, v manifest.Version, want string) (R
 
 	for _, release := range releases {
 		if release.Version == want {
+			return release, nil
+		}
+	}
+
+	// The releases are newest first, with every prerelease behind them.
+	for _, release := range releases {
+		if strings.HasPrefix(release.Version, want+".") {
 			return release, nil
 		}
 	}
@@ -131,9 +148,30 @@ func (r *Resolver) PickWithin(
 	)
 }
 
+// IsRange reports whether want is a range for Satisfies, which starts with an
+// operator or holds several parts, and not a version or a prefix of one.
+func IsRange(want string) bool {
+	return want != "" && (strings.ContainsAny(want[:1], "^~<>=") || strings.Contains(want, ","))
+}
+
+// Matches reports whether version is one that want selects. An empty want
+// selects every version, a range those that satisfy it, and a version itself
+// and every version it is a prefix of, so "22" selects 22.1.0.
+func Matches(version, want string) (bool, error) {
+	switch {
+	case want == "":
+		return true, nil
+	case IsRange(want):
+		return Satisfies(version, want)
+	default:
+		return version == want || strings.HasPrefix(version, want+"."), nil
+	}
+}
+
 // Satisfies reports whether version meets every comma-separated part of
-// constraint. A part is an operator (>=, >, <=, <, =) and a version, and a bare
-// version means "=".
+// constraint. A part is an operator (>=, >, <=, <, =, ^, ~) and a version, and a
+// bare version means "=". As in npm, ^1.4 allows versions below 2 and ^0.4
+// those below 0.5, and ~1.4 allows versions below 1.5.
 func Satisfies(version, constraint string) (bool, error) {
 	for _, part := range strings.Split(constraint, ",") {
 		part = strings.TrimSpace(part)
@@ -143,7 +181,7 @@ func Satisfies(version, constraint string) (bool, error) {
 
 		op := "="
 
-		for _, candidate := range []string{">=", "<=", ">", "<", "="} {
+		for _, candidate := range []string{">=", "<=", ">", "<", "=", "^", "~"} {
 			if rest, ok := strings.CutPrefix(part, candidate); ok {
 				op, part = candidate, strings.TrimSpace(rest)
 
@@ -160,6 +198,19 @@ func Satisfies(version, constraint string) (bool, error) {
 
 		order := Compare(version, part)
 
+		if op == "^" || op == "~" {
+			below, err := ceiling(part, op)
+			if err != nil {
+				return false, fmt.Errorf("version constraint %q: %w", constraint, err)
+			}
+
+			if order < 0 || Compare(version, below) >= 0 {
+				return false, nil
+			}
+
+			continue
+		}
+
 		met := map[string]bool{
 			">=": order >= 0, ">": order > 0, "<=": order <= 0, "<": order < 0, "=": order == 0,
 		}[op]
@@ -169,6 +220,45 @@ func Satisfies(version, constraint string) (bool, error) {
 	}
 
 	return true, nil
+}
+
+// ceiling returns the first version that ^part or ~part excludes. ~ raises
+// the second number, or the first when part has one. ^ raises the first number
+// that is not 0, or the last when all are 0.
+func ceiling(part, op string) (string, error) {
+	fields := strings.Split(part, ".")
+	nums := make([]int, len(fields))
+
+	for i, field := range fields {
+		n, err := strconv.Atoi(field)
+		if err != nil {
+			return "", fmt.Errorf("%s%s: want numbers, such as %s1.4", op, part, op)
+		}
+
+		nums[i] = n
+	}
+
+	raise := min(1, len(nums)-1)
+	if op == "^" {
+		raise = len(nums) - 1
+
+		for i, n := range nums {
+			if n != 0 {
+				raise = i
+
+				break
+			}
+		}
+	}
+
+	out := make([]string, raise+1)
+	for i := range raise {
+		out[i] = strconv.Itoa(nums[i])
+	}
+
+	out[raise] = strconv.Itoa(nums[raise] + 1)
+
+	return strings.Join(out, "."), nil
 }
 
 // List returns the releases of v, newest first.

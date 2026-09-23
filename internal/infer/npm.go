@@ -45,7 +45,7 @@ func (inf *Inferrer) FromNPM(ctx context.Context, name string, opts NPMOptions) 
 
 	published, ok := pkg.Versions[version]
 	if !ok {
-		return "", fmt.Errorf("the npm package %s has no version %s", name, version)
+		return "", fmt.Errorf("the npm package %s %w %s", name, ErrNoVersion, version)
 	}
 
 	if len(published.Bin) == 0 {

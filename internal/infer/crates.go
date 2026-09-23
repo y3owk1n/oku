@@ -49,7 +49,7 @@ func (inf *Inferrer) FromCrates(ctx context.Context, name string, opts CratesOpt
 
 	switch {
 	case picked == nil && opts.Version != "":
-		return "", fmt.Errorf("the crate %s has no version %s", name, opts.Version)
+		return "", fmt.Errorf("the crate %s %w %s", name, ErrNoVersion, opts.Version)
 	case picked == nil:
 		return "", fmt.Errorf("the crate %s has no release", name)
 	case len(picked.Programs) == 0:

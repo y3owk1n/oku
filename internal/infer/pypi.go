@@ -43,7 +43,7 @@ func (inf *Inferrer) FromPyPI(ctx context.Context, name string, opts PyPIOptions
 
 	if opts.Version != "" {
 		if _, ok := pkg.Versions[opts.Version]; !ok {
-			return "", fmt.Errorf("the Python package %s has no version %s", name, opts.Version)
+			return "", fmt.Errorf("the Python package %s %w %s", name, ErrNoVersion, opts.Version)
 		}
 	}
 
