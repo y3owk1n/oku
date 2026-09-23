@@ -542,10 +542,14 @@ startup file with one line, which `oku hook --help` and
 [Set up your shell](getting-started.md#set-up-your-shell) show for each shell.
 oku never edits that file.
 
-The code puts the directory of `oku` and the global profile's `bin` on `PATH`,
-unless they are there already. It loads the shell completions of the programs
-you installed and of `oku` itself. It also runs `oku env` before each prompt,
-which applies a [project's](projects.md) environment. In PowerShell it wraps
+The code puts the global profile's `bin` and the directory of `oku` first on
+`PATH`. When they are on `PATH` already, it moves them to the front. A login
+shell that tmux starts puts the system's directories before the ones it
+inherited, so otherwise `/usr/bin/jq` would run in place of yours.
+
+It loads the shell completions of the programs you installed and of `oku`
+itself. It also runs `oku env` before each prompt, which applies a
+[project's](projects.md) environment. In PowerShell it wraps
 your `prompt` function, keeps `$LASTEXITCODE`, and works on Windows, macOS and
 Linux.
 

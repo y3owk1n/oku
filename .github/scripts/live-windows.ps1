@@ -116,9 +116,16 @@ $fdVersion = & $oku exec fd --version
 Check 'exec runs a program of the project by its name without .exe' { $fdVersion -match '^fd \d' }
 Set-Location $root
 
+# The profile's bin is on PATH already, behind the system's directories, as in
+# a shell that another one started. The hook moves it to the front, once.
+$env:PATH = "$env:PATH$([IO.Path]::PathSeparator)$bin"
 Invoke-Expression ((& oku hook pwsh) -join [Environment]::NewLine)
 Invoke-Expression ((& oku hook pwsh) -join [Environment]::NewLine)
 Check 'the hook wrapped the prompt' { Test-Path Function:\_oku_prompt }
+$entries = $env:PATH -split [IO.Path]::PathSeparator
+Check 'the hook puts the profile bin first on PATH, once' {
+    ($entries[0] -eq $bin) -and (@($entries | Where-Object { $_ -eq $bin }).Count -eq 1)
+}
 
 prompt | Out-Null
 Check 'outside the project fd is not on PATH' { -not (Get-Command fd -ErrorAction SilentlyContinue) }
