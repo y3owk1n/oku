@@ -815,5 +815,12 @@ Check 'packages that share a download install in one sync' {
     Test-Path (Join-Path $env:XDG_DATA_HOME 'oku\profiles\project-*\current\bin\stringer.exe')
 }
 
-Remove-Item -Recurse -Force $root
+# A process that a build started may still hold a directory for a moment.
+Set-Location $repoRoot
+foreach ($try in 1..30) {
+    try { Remove-Item -Recurse -Force $root; break } catch {
+        if ($try -eq 30) { Get-Process go* -ErrorAction SilentlyContinue | Format-Table Id, Path; throw }
+        Start-Sleep 1
+    }
+}
 Write-Host 'live test passed'
