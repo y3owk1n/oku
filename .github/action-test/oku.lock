@@ -1,0 +1,29 @@
+# Written by oku. Commit this file, and change it with oku commands only.
+
+include = []
+
+[[package]]
+name = 'fd'
+ref = 'github:sharkdp/fd'
+commit = '9e8927e8f3ee7bb699df55cb0b440f848dce6857'
+manifest_sha256 = '26a86152acf5beb270e2350fc15697bc9d59a12bc96ed9c508b9c7ec98bd52f7'
+version = '10.5.0'
+tag = 'v10.5.0'
+inferred = true
+manifest = "[package]\nname = \"fd\"\nhomepage = \"https://github.com/sharkdp/fd\"\n\n[version]\nfrom = \"github-releases\"\nrepo = \"sharkdp/fd\"\nstrip_prefix = \"v\"\n\n[[artifact]]\nmatch = { os = \"linux\", arch = \"amd64\", libc = \"glibc\" }\nurl = \"https://github.com/sharkdp/fd/releases/download/{{tag}}/fd-{{tag}}-x86_64-unknown-linux-gnu.tar.gz\"\nstrip = 1\nbin = [\"fd\"]\nman = [\"fd.1\"]\n\n[[artifact]]\nmatch = { os = \"linux\", arch = \"amd64\" }\nurl = \"https://github.com/sharkdp/fd/releases/download/{{tag}}/fd-{{tag}}-x86_64-unknown-linux-musl.tar.gz\"\nstrip = 1\nbin = [\"fd\"]\nman = [\"fd.1\"]\n\n[[artifact]]\nmatch = { os = \"darwin\", arch = \"amd64\" }\nurl = \"https://github.com/sharkdp/fd/releases/download/{{tag}}/fd-{{tag}}-x86_64-apple-darwin.tar.gz\"\nstrip = 1\nbin = [\"fd\"]\nman = [\"fd.1\"]\n\n[[artifact]]\nmatch = { os = \"windows\", arch = \"amd64\" }\nurl = \"https://github.com/sharkdp/fd/releases/download/{{tag}}/fd-{{tag}}-x86_64-pc-windows-gnu.zip\"\nstrip = 1\nbin = [\"fd.exe\"]\nman = [\"fd.1\"]\n\n[[artifact]]\nmatch = { os = \"linux\", arch = \"arm64\", libc = \"glibc\" }\nurl = \"https://github.com/sharkdp/fd/releases/download/{{tag}}/fd-{{tag}}-aarch64-unknown-linux-gnu.tar.gz\"\nstrip = 1\nbin = [\"fd\"]\nman = [\"fd.1\"]\n\n[[artifact]]\nmatch = { os = \"linux\", arch = \"arm64\" }\nurl = \"https://github.com/sharkdp/fd/releases/download/{{tag}}/fd-{{tag}}-aarch64-unknown-linux-musl.tar.gz\"\nstrip = 1\nbin = [\"fd\"]\nman = [\"fd.1\"]\n\n[[artifact]]\nmatch = { os = \"darwin\", arch = \"arm64\" }\nurl = \"https://github.com/sharkdp/fd/releases/download/{{tag}}/fd-{{tag}}-aarch64-apple-darwin.tar.gz\"\nstrip = 1\nbin = [\"fd\"]\nman = [\"fd.1\"]\n\n[[artifact]]\nmatch = { os = \"windows\", arch = \"arm64\" }\nurl = \"https://github.com/sharkdp/fd/releases/download/{{tag}}/fd-{{tag}}-aarch64-pc-windows-msvc.zip\"\nstrip = 1\nbin = [\"fd.exe\"]\nman = [\"fd.1\"]\n\n[[artifact]]\nmatch = { os = \"linux\", arch = \"386\", libc = \"glibc\" }\nurl = \"https://github.com/sharkdp/fd/releases/download/{{tag}}/fd-{{tag}}-i686-unknown-linux-gnu.tar.gz\"\nstrip = 1\nbin = [\"fd\"]\nman = [\"fd.1\"]\n\n[[artifact]]\nmatch = { os = \"linux\", arch = \"386\" }\nurl = \"https://github.com/sharkdp/fd/releases/download/{{tag}}/fd-{{tag}}-i686-unknown-linux-musl.tar.gz\"\nstrip = 1\nbin = [\"fd\"]\nman = [\"fd.1\"]\n\n[[artifact]]\nmatch = { os = \"windows\", arch = \"386\" }\nurl = \"https://github.com/sharkdp/fd/releases/download/{{tag}}/fd-{{tag}}-i686-pc-windows-msvc.zip\"\nstrip = 1\nbin = [\"fd.exe\"]\nman = [\"fd.1\"]\n"
+
+[package.platform]
+[package.platform.darwin-arm64]
+strategy = 'artifact'
+url = 'https://github.com/sharkdp/fd/releases/download/v10.5.0/fd-v10.5.0-aarch64-apple-darwin.tar.gz'
+sha256 = 'b67e1836c468e42e411984b56e52fa7abec08c2bd22c867398e7cc134aac5e12'
+
+[package.platform.linux-amd64-glibc]
+strategy = 'artifact'
+url = 'https://github.com/sharkdp/fd/releases/download/v10.5.0/fd-v10.5.0-x86_64-unknown-linux-gnu.tar.gz'
+sha256 = 'a1259cd129636efbc3fef123525c1b49e88fe5088c012630983c310e52fdfa95'
+
+[package.platform.windows-amd64]
+strategy = 'artifact'
+url = 'https://github.com/sharkdp/fd/releases/download/v10.5.0/fd-v10.5.0-x86_64-pc-windows-gnu.zip'
+sha256 = '1720ed5b2f5b09870ea9580eb0653d87972e8e7039d5d2f39ea2f54fbfda9f42'

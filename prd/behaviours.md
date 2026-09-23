@@ -170,10 +170,16 @@ order step in `prd/product.md`.
   a download on the host, one that the host does not install, and `--dry-run`.
 - B245 [2] After a `sync --rebuild` was killed during the build, `oku gc`
   keeps the old build, and the next `sync` puts it back without building.
+- B263 [2] The action in `action.yml` installs oku unless one is on `PATH`,
+  runs `oku sync --yes --locked` in its `path`, and puts the global profile,
+  the project's tools and their `[env]` on the `PATH` and in the environment
+  of the later steps, on Linux, macOS and Windows. The action job of `ci.yml`
+  runs it on all three.
 - B181 [2] `sync --locked` fails before any download when the lock does not pin
   a package of the list for the host, and names the packages and the platform.
   It also fails when the lock would change in any other way. It never writes
-  the lock.
+  the lock. Line endings do not count, so a lock that git checked out with CRLF
+  passes.
 - B16 [2] `include` merges the named lists. A local entry overrides an
   included entry of the same name. `sync` stops when a list from a URL or a
   repo changed since the lock, and reads a list on this machine as it is.

@@ -435,9 +435,10 @@ func reconcile(
 	}
 
 	if frozen {
-		// A missing lock reads as empty, which differs too.
+		// A missing lock reads as empty, which differs too. git on Windows checks
+		// the lock out with CRLF line endings, which change no pin.
 		onDisk, _ := os.ReadFile(e.lockPath())
-		if !bytes.Equal(onDisk, lockData) {
+		if !bytes.Equal(bytes.ReplaceAll(onDisk, []byte("\r\n"), []byte("\n")), lockData) {
 			return fmt.Errorf(
 				"%s is out of date, and --locked does not change it\n%s", e.lockPath(), lockedHint,
 			)
