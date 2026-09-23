@@ -211,9 +211,14 @@ func lintStep(i int, s Step) []string {
 	var found []string
 
 	if s.Run != nil {
-		// A step with no when.os, or with when.os = "windows", can run on Windows,
-		// where no default shell exists.
-		if (s.When.OS == "" || s.When.OS == "windows") && s.Shell == "" {
+		// A step whose when matches a Windows platform can run on Windows, where
+		// no default shell exists.
+		when, _ := platform.ParseWhen(s.RawWhen)
+
+		onWindows := slices.ContainsFunc(when.Of(), func(p platform.Platform) bool {
+			return p.OS == "windows"
+		})
+		if onWindows && s.Shell == "" {
 			found = append(found, fmt.Sprintf(
 				"build.step[%d]: this run step can run on Windows, so set shell, "+
 					`or limit it with when = { os = "..." }`, i,

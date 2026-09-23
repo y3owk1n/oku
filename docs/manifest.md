@@ -620,7 +620,7 @@ restart = "on-failure"
 | `args` | no | Arguments. They expand `{{prefix}}`, `{{version}}` and the locations `{{home}}`, `{{config}}` and `{{data}}`, so a service can name its config file, as in `["--config", "{{config}}/tool/rc"]`. |
 | `env` | no | Variables for the service. Values expand the same variables. |
 | `restart` | no | `never`, `on-failure` or `always`. Default `never`. |
-| `when` | no | Limits the service to matching machines, with the keys of [`match`](#match-values). oku installs no service on a machine that `when` leaves out. |
+| `when` | no | Limits the service to matching machines, with the keys of [`match`](#match-values), as one table or an array of them. oku installs no service on a machine that `when` leaves out. |
 
 A program that runs from inside an app bundle on macOS and from `bin` on Linux
 gets one service for each:
@@ -929,7 +929,7 @@ Any step may also set:
 
 | Key | Meaning |
 |---|---|
-| `when = { os, arch, libc }` | The step only runs on a matching machine. |
+| `when = { os, arch, libc }` | The step only runs on a matching machine. With an array of tables, such as `[{ os = "darwin" }, { os = "linux" }]`, the step runs where any table matches. |
 | `shell` | For `run`: `sh`, `bash`, `pwsh` or `cmd`. Default `sh`, except on Windows, which has no default. On Windows without PowerShell 7, `pwsh` runs Windows PowerShell 5.1. `oku manifest lint` requires `shell` on every `run` step that can reach Windows. |
 | `env = { KEY = "value" }` | Extra variables for `run`. Values expand template variables. |
 

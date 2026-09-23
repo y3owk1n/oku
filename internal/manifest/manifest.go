@@ -140,8 +140,10 @@ type Service struct {
 	Args    []string          `toml:"args"`
 	Env     map[string]string `toml:"env"`
 	Restart string            `toml:"restart"`
-	// When limits the service to matching platforms. The zero value matches all.
-	When platform.Selector `toml:"when,omitempty"`
+	// RawWhen is "when" as TOML gives it. Parse converts it into When, which
+	// limits the service to matching platforms. The empty When matches all.
+	RawWhen any           `toml:"when,omitempty"`
+	When    platform.When `toml:"-"`
 }
 
 // App is a launcher entry for Linux desktops, from a [[app]] table.
@@ -234,6 +236,13 @@ func (m *Manifest) validate() error {
 		for i := range m.Build.Steps {
 			step := &m.Build.Steps[i]
 
+			when, err := platform.ParseWhen(step.RawWhen)
+			if err != nil {
+				errs = append(errs, fmt.Errorf("build.step[%d].%w", i, err))
+			}
+
+			step.When = when
+
 			if step.Install != nil {
 				var err error
 
@@ -324,7 +333,16 @@ func (m *Manifest) validate() error {
 		}
 	}
 
-	for i, svc := range m.Services {
+	for i := range m.Services {
+		svc := &m.Services[i]
+
+		when, err := platform.ParseWhen(svc.RawWhen)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("service[%d].%w", i, err))
+		}
+
+		svc.When = when
+
 		switch {
 		case !nameRe.MatchString(svc.Name):
 			errs = append(errs, fmt.Errorf(
@@ -502,12 +520,15 @@ func (m *Manifest) validate() error {
 	return errors.Join(errs...)
 }
 
-// ServicesFor returns the services whose when matches p.
+// ServicesFor returns the services whose when matches p, without their when.
+// The store keeps them for p only, and an older oku cannot read a when that
+// is an array.
 func (m *Manifest) ServicesFor(p platform.Platform) []Service {
 	var services []Service
 
 	for _, svc := range m.Services {
 		if svc.When.Matches(p) {
+			svc.RawWhen, svc.When = nil, nil
 			services = append(services, svc)
 		}
 	}
