@@ -1069,11 +1069,6 @@ func (e env) inferPyPI(ctx context.Context, opts Options, req request) (string, 
 		)
 	}
 
-	// The build runs uv and python through sh.
-	if platform.Host().OS == "windows" {
-		return "", fmt.Errorf("%s: oku cannot install a pypi package on Windows yet", req.ref)
-	}
-
 	python, _, err := e.runtime(ctx, opts, "python")
 	if err != nil {
 		return "", err

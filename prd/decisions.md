@@ -1159,8 +1159,11 @@ setup for the user, and the lock pins it like any package. Pins for another
 platform pass `--python-platform` to uv, the way npm gets `npm_config_os`.
 
 A prerelease or a yanked version sorts behind every release, as a forge
-prerelease does (D24). Windows is refused for now, because the vendor step runs
-through sh.
+prerelease does (D24). On Windows the step runs pwsh scripts, uv's `Scripts`
+directory leaves the hash as `bin` does, and each console script becomes a shim
+spec, which the profile turns into a program. The code a shim runs is one line,
+because a spec holds one argument per line. A Windows build has no python of
+the system, so there `runtimes.python` is required.
 
 ## D77. A Go program is a go install from a module cache that oku hashed
 

@@ -752,5 +752,27 @@ Oku add --yes cargo:hexyl
 $hexyl = & "$bin\hexyl.exe" --version
 Check 'a cargo: ref builds on Windows' { $hexyl -match '^hexyl \d' }
 
+||||||| Stash base
+# Python packages from PyPI with uv, through a python that the list names, since
+# a Windows build has no python of the system. ruff ships a binary, and httpie
+# console scripts, which become shims.
+$pythonToml = Join-Path $fixtures 'python.toml'
+Set-Content $pythonToml @'
+[package]
+name = "python"
+[version]
+value = "3.13.15"
+[[artifact]]
+url = "https://github.com/astral-sh/python-build-standalone/releases/download/20260901/cpython-3.13.15+20260901-x86_64-pc-windows-msvc-install_only.tar.gz"
+strip = 1
+bin = ["python.exe"]
+'@
+Add-Content $listPath "`n[runtimes]`npython = '$($pythonToml -replace '\\', '/')'`n"
+Oku add --yes pypi:ruff pypi:httpie
+$ruff = & "$bin\ruff.exe" --version
+Check 'a pypi: package that ships a binary installs on Windows' { $ruff -match '^ruff \d' }
+$http = & "$bin\http.exe" --version
+Check 'a console script of a pypi: package runs on Windows through its shim' { $http -match '^\d' }
+
 Remove-Item -Recurse -Force $root
 Write-Host 'live test passed'
