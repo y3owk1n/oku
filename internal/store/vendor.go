@@ -173,8 +173,7 @@ rm -rf "$OKU_PREFIX/lib/python-bin"
 if [ -d "$OKU_PREFIX/lib/python/bin" ]; then mv "$OKU_PREFIX/lib/python/bin" "$OKU_PREFIX/lib/python-bin"; fi
 "$python" - "$OKU_PREFIX/lib/python" "$OKU_PREFIX/lib/python-bin" <<'EOF'
 ` + pipRecords + `EOF`,
-		pwsh: `$python = (Get-Command python3, python -CommandType Application -ErrorAction SilentlyContinue |
-  Select-Object -First 1).Source
+		pwsh: pwshPython + `
 if (-not $python) { [Console]::Error.WriteLine('a pypi package needs python, name it in [runtimes]'); exit 1 }
 $lib = Join-Path $env:OKU_PREFIX 'lib\python'
 $moved = Join-Path $env:OKU_PREFIX 'lib\python-bin'
@@ -195,8 +194,7 @@ foreach ($dir in 'bin', 'Scripts') {
 @'
 ` + pipRecords + `'@ | & $python - $lib $moved
 if ($LASTEXITCODE -ne 0) { exit 1 }`,
-		pwshAfter: `$python = (Get-Command python3, python -CommandType Application -ErrorAction SilentlyContinue |
-  Select-Object -First 1).Source
+		pwshAfter: pwshPython + `
 @'
 ` + pipWrappers + `'@ | & $python - $env:OKU_PREFIX $env:OKU_PIP_PACKAGE $python
 if ($LASTEXITCODE -ne 0) { exit 1 }`,
@@ -209,6 +207,18 @@ if ($LASTEXITCODE -ne 0) { exit 1 }`,
 		env: []string{"UV_PYTHON_DOWNLOADS=never", "UV_NO_PROGRESS=1"},
 	},
 }
+
+// pwshPython sets $python to the python of the build. In the store, bin holds
+// a link to python.exe, and Windows looks for python's DLL beside the file it
+// started, so $python is the python.exe in the package's download.
+const pwshPython = `$python = (Get-Command python3, python -CommandType Application -ErrorAction SilentlyContinue |
+  Select-Object -First 1).Source
+if ($python) {
+  $download = Join-Path (Split-Path (Split-Path $python)) 'pkg'
+  $real = Get-ChildItem $download -Recurse -File -Filter (Split-Path $python -Leaf) -ErrorAction SilentlyContinue |
+    Select-Object -First 1
+  if ($real) { $python = $real.FullName }
+}`
 
 // pipRecords moves the lines for bin out of each RECORD of the install, next
 // to the programs they name. Those programs hold the python's path, so their
