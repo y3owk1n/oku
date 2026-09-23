@@ -56,6 +56,9 @@ type merger struct {
 	// platforms.
 	files map[fileKey]listedFile
 	vars  map[string]string
+	// runtimes holds the ref of each interpreter's package, resolved against the
+	// list that names it.
+	runtimes map[string]string
 	// secrets is keyed by the name in [secrets].
 	secrets map[string]listedSecret
 	// settings is keyed by backend, domain and key.
@@ -68,9 +71,10 @@ type merger struct {
 type merged struct {
 	packages map[string]listed
 	// files is sorted by target.
-	files   []listedFile
-	vars    map[string]string
-	secrets map[string]listedSecret
+	files    []listedFile
+	vars     map[string]string
+	runtimes map[string]string
+	secrets  map[string]listedSecret
 	// settings is sorted by backend, domain and key.
 	settings []list.Setting
 	includes []lock.Include
@@ -122,6 +126,7 @@ func (e env) loadList(
 		packages: map[string]listed{},
 		files:    map[fileKey]listedFile{},
 		vars:     map[string]string{},
+		runtimes: map[string]string{},
 		secrets:  map[string]listedSecret{},
 		settings: map[[3]string]list.Setting{},
 		seen:     map[string]bool{},
@@ -153,7 +158,7 @@ func (e env) loadList(
 	}
 
 	return merged{
-		packages: m.packages, files: files, vars: m.vars, secrets: m.secrets,
+		packages: m.packages, files: files, vars: m.vars, runtimes: m.runtimes, secrets: m.secrets,
 		settings: settings, includes: m.includes, own: own,
 	}, nil
 }
@@ -327,6 +332,15 @@ func (m *merger) merge(
 	// A later list overrides a variable or a setting of an earlier one, like a
 	// package.
 	maps.Copy(m.vars, l.Vars)
+
+	for name, s := range l.Runtimes {
+		r, err := parse(s)
+		if err != nil {
+			return fmt.Errorf("%s: runtimes.%s: %w", origin, name, err)
+		}
+
+		m.runtimes[name] = r.String()
+	}
 
 	for _, s := range l.Settings {
 		m.settings[[3]string{s.Backend, s.Domain, s.Key}] = s

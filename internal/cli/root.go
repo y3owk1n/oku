@@ -362,6 +362,9 @@ type env struct {
 	// project is the directory of the project list in use, or empty for the
 	// global list.
 	project string
+	// runtimes holds the [runtimes] of the list in use and its includes, after a
+	// command loaded it. config.toml's [runtimes] is the fallback.
+	runtimes map[string]string
 }
 
 func loadEnv() (env, error) {

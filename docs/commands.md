@@ -433,7 +433,9 @@ sets the machine up from it, then syncs:
    `base.toml` with `base.lock`.
 2. Writes a global `oku.toml` that holds only `include = ["<ref>"]`.
 3. Writes a global `oku.lock` that starts from the published lock and pins the
-   list itself.
+   list itself. A relative path in the published lock, such as
+   `./packages/node.toml`, named a file beside the list on the machine that
+   wrote it, so oku turns it into that file of the repo at the list's commit.
 
 The machine then installs what the published lock pinned, so it ends with the
 same store paths as the machine that published it.

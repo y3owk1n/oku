@@ -155,6 +155,16 @@ func runAdd(
 
 	platforms, strict := e.lockPlatforms(own, platform.Selector{})
 
+	// An npm package runs through the node that the list names.
+	if r.Kind == ref.NPM {
+		all, err := e.mergedList(cmd, opts)
+		if err != nil {
+			return false, err
+		}
+
+		e.runtimes = all.runtimes
+	}
+
 	got, err := e.install(cmd.Context(), opts, request{
 		ref:             r,
 		previous:        previous,
