@@ -1,5 +1,69 @@
 # Changelog
 
+## [0.6.0](https://github.com/y3owk1n/oku/compare/v0.5.0...v0.6.0) (2026-09-23)
+
+
+### Features
+
+* add a GitHub Action that syncs an oku list and puts its tools on PATH ([#187](https://github.com/y3owk1n/oku/issues/187)) ([b1bd5dc](https://github.com/y3owk1n/oku/commit/b1bd5dc579280ef4a6ebe2863401574c6ec8ede8))
+* **add:** infer manifests from installers and macOS app bundles ([#161](https://github.com/y3owk1n/oku/issues/161)) ([3b35fff](https://github.com/y3owk1n/oku/commit/3b35fffc1972590b2ae4d9edbae2ba76189dc538))
+* build cargo: refs on Windows ([#189](https://github.com/y3owk1n/oku/issues/189)) ([e470550](https://github.com/y3owk1n/oku/commit/e470550ec272faae016aba3ecd3912b38dafda78))
+* build Go programs with go: refs, the way go install does ([#184](https://github.com/y3owk1n/oku/issues/184)) ([8e2a7df](https://github.com/y3owk1n/oku/commit/8e2a7df7667bef0f8b5e13cb7bf9a21fad8135f0))
+* build go: refs on Windows ([#188](https://github.com/y3owk1n/oku/issues/188)) ([5808372](https://github.com/y3owk1n/oku/commit/580837276ae2f259dcd381f5b7e2646d264e96e2))
+* build Rust crates from crates.io with cargo: refs ([#185](https://github.com/y3owk1n/oku/issues/185)) ([e5a2e14](https://github.com/y3owk1n/oku/commit/e5a2e140bc034927d318930a022dabbe1e822bca))
+* **cli:** list packages with a newer version in oku outdated ([#186](https://github.com/y3owk1n/oku/issues/186)) ([37876fd](https://github.com/y3owk1n/oku/commit/37876fd1cbcf526b323411450fd2e4faa8cb4b7b))
+* **cli:** report files and settings in sync, generations, rollback and list ([#164](https://github.com/y3owk1n/oku/issues/164)) ([b5bdf07](https://github.com/y3owk1n/oku/commit/b5bdf0736d618c91888195b16e1eebf90287c8a1))
+* **cli:** run a command with the directory's programs in oku exec ([#199](https://github.com/y3owk1n/oku/issues/199)) ([5ca202d](https://github.com/y3owk1n/oku/commit/5ca202dff7328791f936b9ff1be792467e89abe1))
+* **cli:** show the latest release in oku outdated ([#205](https://github.com/y3owk1n/oku/issues/205)) ([0b58070](https://github.com/y3owk1n/oku/commit/0b5807094c066c482286da8cd3e4c7bd84bf4641))
+* **cli:** take a version constraint for a runtime ([#193](https://github.com/y3owk1n/oku/issues/193)) ([020effa](https://github.com/y3owk1n/oku/commit/020effa9883885c7084d2a66a89192f7a8741bdb))
+* **cli:** take a version range or a prefix for a package ([#197](https://github.com/y3owk1n/oku/issues/197)) ([9e2f4e9](https://github.com/y3owk1n/oku/commit/9e2f4e9d2b2bf9d779702efaec5cdb2f343ad745))
+* **completions:** generate completions by running the package ([#155](https://github.com/y3owk1n/oku/issues/155)) ([1ae3874](https://github.com/y3owk1n/oku/commit/1ae387420d0a233ad9c708e6bc88433fbe22b79a))
+* **forge:** use the gh CLI's login when GITHUB_TOKEN is not set ([#181](https://github.com/y3owk1n/oku/issues/181)) ([1559317](https://github.com/y3owk1n/oku/commit/1559317dd7643c172332d8aa72264a8d6eea78c3))
+* **hook:** load package and oku completions from the shell hook ([#158](https://github.com/y3owk1n/oku/issues/158)) ([0fe3013](https://github.com/y3owk1n/oku/commit/0fe3013e5dda75abbd4b7c245516b80d51c06825))
+* install npm packages with dependencies on Windows ([#191](https://github.com/y3owk1n/oku/issues/191)) ([b445f03](https://github.com/y3owk1n/oku/commit/b445f03546b41c07a965c8be879e9486b4c4e18d))
+* install pypi: packages on Windows ([#190](https://github.com/y3owk1n/oku/issues/190)) ([abac714](https://github.com/y3owk1n/oku/commit/abac714de4d036eea871fb4d37aa4b429df56219))
+* install Python tools from PyPI with pypi: refs ([#183](https://github.com/y3owk1n/oku/issues/183)) ([c2bad74](https://github.com/y3owk1n/oku/commit/c2bad745410ac902c55b8d1cd2e9cc89dd3d7ed2))
+* **install:** print the version, detect the hook line and list the next steps ([#159](https://github.com/y3owk1n/oku/issues/159)) ([d809d04](https://github.com/y3owk1n/oku/commit/d809d0438354fd02e3c6cfb61dcd8eb601c48e68))
+* **lists:** name the node of npm packages in the list ([#182](https://github.com/y3owk1n/oku/issues/182)) ([fd3d2ec](https://github.com/y3owk1n/oku/commit/fd3d2ec9a6bf430e36be8af3613ce79797b4b399))
+* **lists:** place the files and secrets of a list from a repo ([#179](https://github.com/y3owk1n/oku/issues/179)) ([ba3106c](https://github.com/y3owk1n/oku/commit/ba3106cc3d4d7f8e1b1da0582a81509c3e424f24))
+* **lists:** resolve a relative path in a remote list inside the same repo ([#178](https://github.com/y3owk1n/oku/issues/178)) ([7d72bf8](https://github.com/y3owk1n/oku/commit/7d72bf82b0cf1a829466d73fc59d8bd6af27287c))
+* **lock:** without [lock] platforms every command works for the host alone ([#162](https://github.com/y3owk1n/oku/issues/162)) ([d8c8095](https://github.com/y3owk1n/oku/commit/d8c8095cc4e8addbeafa9734914cb25a58fe97b8))
+* **resolve:** check a release file against the digest GitHub reports ([#202](https://github.com/y3owk1n/oku/issues/202)) ([826be9a](https://github.com/y3owk1n/oku/commit/826be9adfdea09d919290cdddea383a145fed97a))
+* **self:** keep a nightly build, add --release and --to, link the release notes ([#160](https://github.com/y3owk1n/oku/issues/160)) ([14f8a3f](https://github.com/y3owk1n/oku/commit/14f8a3f7b994a18b91857ee3e52cfa0d7afbd2a5))
+* **store:** check a fetch step against a published checksum file ([#204](https://github.com/y3owk1n/oku/issues/204)) ([780eb07](https://github.com/y3owk1n/oku/commit/780eb07a7f26bc3c28d549016d94dc09bface7e2))
+* **ui:** a check on every finished line and a done line to close ([#167](https://github.com/y3owk1n/oku/issues/167)) ([e86e5d9](https://github.com/y3owk1n/oku/commit/e86e5d9f457edceae1098761926f5c849f9f6f39))
+* **ui:** fit tables to the terminal, print sync rows as they finish, collapse the approval prompt ([#165](https://github.com/y3owk1n/oku/issues/165)) ([73d182d](https://github.com/y3owk1n/oku/commit/73d182d80bd56dfbbad625a41224f64fdc0785fd))
+
+
+### Bug Fixes
+
+* **add:** limit a one-OS inferred package with when, and say what to type on failure ([#166](https://github.com/y3owk1n/oku/issues/166)) ([1def6a7](https://github.com/y3owk1n/oku/commit/1def6a7456a919f25d52ed87a8f5db4f1b8f00a1))
+* **add:** list every asset that fits the host as an alternative ([#163](https://github.com/y3owk1n/oku/issues/163)) ([923fd4c](https://github.com/y3owk1n/oku/commit/923fd4c8d64f8eaf7790021762bf3cadd8fea851))
+* check archive links on the unpacked tree and self update's release ([#175](https://github.com/y3owk1n/oku/issues/175)) ([0c5be05](https://github.com/y3owk1n/oku/commit/0c5be055bdaf6de927225011c1040992f995317c))
+* **cli:** check a build source named by {{tag}} against GitHub's digest ([#203](https://github.com/y3owk1n/oku/issues/203)) ([1328caf](https://github.com/y3owk1n/oku/commit/1328cafe56baaee665d139111d815c3a7c7870ff))
+* **cli:** clearer messages, commands in colour, oku add takes several refs ([#170](https://github.com/y3owk1n/oku/issues/170)) ([dbbc8e1](https://github.com/y3owk1n/oku/commit/dbbc8e1107da5a07e9b81a179a4f18b87621735d))
+* **cli:** name a project's runtime relative to the project in its lock ([#192](https://github.com/y3owk1n/oku/issues/192)) ([06eee91](https://github.com/y3owk1n/oku/commit/06eee91284f22c0c5a9945a380ee6e2ab1b21d89))
+* **cli:** read a bare version in a dep or a runtime as a prefix ([#201](https://github.com/y3owk1n/oku/issues/201)) ([a8021e3](https://github.com/y3owk1n/oku/commit/a8021e3a9ef01e7878952f712bd9f17b3051084f))
+* **forge:** ask GitHub whether an answer changed, and read 100 releases a page ([#177](https://github.com/y3owk1n/oku/issues/177)) ([9f90021](https://github.com/y3owk1n/oku/commit/9f900213287cda3355511ca0256d36c214b40da3))
+* **gc:** keep the old build that a killed rebuild left ([#174](https://github.com/y3owk1n/oku/issues/174)) ([7f1c7ed](https://github.com/y3owk1n/oku/commit/7f1c7eda91b6e6aaf09118ff135ca1f11468f442))
+* **generations:** compare each generation with the one it replaced ([#171](https://github.com/y3owk1n/oku/issues/171)) ([e76228b](https://github.com/y3owk1n/oku/commit/e76228b7e704512f2035d7092b06c5bb366bcb1d))
+* let one oku process change the machine at a time ([#173](https://github.com/y3owk1n/oku/issues/173)) ([b9a5118](https://github.com/y3owk1n/oku/commit/b9a5118e97626c9629c2f6255f81b55c4a6a66f5))
+* **manifest:** ignore line endings in a manifest's digest ([#195](https://github.com/y3owk1n/oku/issues/195)) ([853ee39](https://github.com/y3owk1n/oku/commit/853ee39b08f72d72eed5314196617498c5a8cd73))
+* **resolve:** read a tag with or without a v as a version ([#198](https://github.com/y3owk1n/oku/issues/198)) ([0d1a5df](https://github.com/y3owk1n/oku/commit/0d1a5df8717336d9b30d43ecd48694997a6e1299))
+* **sandbox:** make the filesystem read-only and hide the session on Linux ([#176](https://github.com/y3owk1n/oku/issues/176)) ([3fde7c8](https://github.com/y3owk1n/oku/commit/3fde7c8c228ac83632e3bd3edd62df36310566a4))
+* **shellhook:** move oku's directories to the front of PATH ([#200](https://github.com/y3owk1n/oku/issues/200)) ([d7b3808](https://github.com/y3owk1n/oku/commit/d7b3808ec8c96b4deeaeaad1d7d4612c0930021b))
+* **status:** hold the other packages' output while oku asks a question ([#168](https://github.com/y3owk1n/oku/issues/168)) ([31c6083](https://github.com/y3owk1n/oku/commit/31c6083d255af9ccc498f16b989de3e85ebe09a6))
+* **store:** keep a download that another package of the sync finished ([#196](https://github.com/y3owk1n/oku/issues/196)) ([f6b7433](https://github.com/y3owk1n/oku/commit/f6b7433d690fb5978f2a8e92baa77b6970ec92ad))
+* **sync:** name every drifted package in one update command ([#172](https://github.com/y3owk1n/oku/issues/172)) ([8b72b32](https://github.com/y3owk1n/oku/commit/8b72b32692b9a91d5ae5be620d035527d643447b))
+* **ui:** fit tables, wraps and help to the terminal, one wait row per package ([#169](https://github.com/y3owk1n/oku/issues/169)) ([1c00dcd](https://github.com/y3owk1n/oku/commit/1c00dcdb3e68d05550dd600305ddaf2fdf104a15))
+
+
+### Documentation
+
+* bring the README up to date, with real oku add examples ([#207](https://github.com/y3owk1n/oku/issues/207)) ([115886d](https://github.com/y3owk1n/oku/commit/115886d8166aed6cee4a066f9c6ea0a95a13ccb2))
+* correct the journeys and the Windows skip of the CLI tests ([#180](https://github.com/y3owk1n/oku/issues/180)) ([c293821](https://github.com/y3owk1n/oku/commit/c293821fa8bf69c2356b08f776ad59724a060bdf))
+* **prd:** record D72, completions generated from the download ([#157](https://github.com/y3owk1n/oku/issues/157)) ([41b8bf3](https://github.com/y3owk1n/oku/commit/41b8bf3c9e72dfac5d6588245dcb4ae97007b930))
+
 ## [0.5.0](https://github.com/y3owk1n/oku/compare/v0.4.0...v0.5.0) (2026-09-22)
 
 
