@@ -11,8 +11,11 @@ digest from the first of these that exists:
 
 1. `sha256` in the manifest.
 2. The checksum file at the manifest's `sha256_url`.
-3. For a [moving tag](manifest.md#a-moving-tag), the sha256 that the GitHub API
-   reports for the file. GitLab, Gitea and Forgejo report none.
+3. The sha256 that the version source publishes for the file. With
+   `github-releases` it is the one the GitHub API reports for a file of the
+   repo's release, which GitHub has for most files uploaded since mid 2025.
+   With `crates` it is the one crates.io publishes for the `.crate` file.
+   GitLab, Gitea and Forgejo report none.
 4. The digest `oku.lock` pinned for the same package version and URL.
 
 An artifact may also have an `integrity`, a sha512 the way npm publishes it. A

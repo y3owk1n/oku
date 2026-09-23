@@ -133,9 +133,9 @@ bin = ["bin/nvim"]
   build has its own store path, so `oku rollback` returns to the earlier build
   without a download.
 - When the artifact has no `sha256` and no `sha256_url`, oku checks the download
-  against the sha256 that the GitHub API reports for that file. `url` must be
-  the file's GitHub download URL for that, and `oku manifest lint` warns when
-  it is not. Gitea, Forgejo and GitLab report no sha256 for a file, so with
+  against the sha256 that the GitHub API reports for that file, as for any
+  `github-releases` manifest. `url` must be the file's GitHub download URL for
+  that, and `oku manifest lint` warns when it is not. Gitea, Forgejo and GitLab report no sha256 for a file, so with
   `gitea-releases` or `gitlab-releases` the user trusts the first download, and
   `lint` warns about that too.
 - A `[build]` whose `source` clones `{{tag}}` fails when the clone is not at the
@@ -449,8 +449,11 @@ beside it, and `oku manifest lint` rejects the two together.
 
 ### Checksums
 
-In order, oku uses `sha256`, then the file at `sha256_url`, then the digest the
-user's `oku.lock` pinned earlier. It also checks `integrity` when the artifact
+In order, oku uses `sha256`, then the file at `sha256_url`, then the sha256 that
+GitHub reports for the file when the manifest follows `github-releases`, then
+the digest that the user's `oku.lock` pinned earlier. GitHub has one for most files
+uploaded since mid 2025, so a manifest that follows a GitHub repo's releases
+needs no `sha256` for them, and `oku manifest lint` does not warn. It also checks `integrity` when the artifact
 has one, or when the npm registry publishes one for the download. With none of
 them it trusts the first download and pins it. Publish `sha256`, `sha256_url` or
 `integrity`. See [Trust and checksums](trust.md).
