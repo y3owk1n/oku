@@ -114,6 +114,9 @@ order step in `prd/product.md`.
   `gitlab:`, `npm:` and `git+` refs.
 - B114 [2] `github:host/owner/repo` reads a GitHub Enterprise Server at `host`.
   oku sends it `GH_ENTERPRISE_TOKEN` and never `GITHUB_TOKEN`.
+- B254 [2] Without `GITHUB_TOKEN`, oku sends GitHub the token that
+  `gh auth token --hostname github.com` prints, when `gh` is on `PATH`. An
+  Enterprise Server gets the one gh holds for its host.
 - B115 [2] `codeberg:owner/repo` and `gitea:host/owner/repo` fetch, infer and
   list releases the way `github:owner/repo` does, with
   `version.from = "gitea-releases"`. oku sends `CODEBERG_TOKEN` to codeberg.org
