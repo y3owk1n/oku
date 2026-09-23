@@ -1,5 +1,29 @@
 # Changelog
 
+## [0.7.0](https://github.com/y3owk1n/oku/compare/v0.6.1...v0.7.0) (2026-09-23)
+
+
+### Features
+
+* **infer:** expose every program named after the package, and keep --bin on update ([#220](https://github.com/y3owk1n/oku/issues/220)) ([ce1e28e](https://github.com/y3owk1n/oku/commit/ce1e28e6e7bce17a04c19c3fa8a26f7fa73514ab))
+* **lock:** let packages fit some platforms without blocking ([#215](https://github.com/y3owk1n/oku/issues/215)) ([edd7e9f](https://github.com/y3owk1n/oku/commit/edd7e9f3b718173e592f5fbc253ad7d503bda3dc))
+* **manifest:** let a service and a build step take an array of when tables ([#217](https://github.com/y3owk1n/oku/issues/217)) ([6522094](https://github.com/y3owk1n/oku/commit/65220945b742272827fc95e91fdd02d3b3da45a7))
+* **store:** keep build tools off a program's PATH and put its runtime there ([#218](https://github.com/y3owk1n/oku/issues/218)) ([a3e4ddb](https://github.com/y3owk1n/oku/commit/a3e4ddbb0a78d182d957edc41f5ed19546f679d8))
+
+
+### Bug Fixes
+
+* **infer:** skip checksum files that disagree with GitHub and read AppImage as Linux ([#216](https://github.com/y3owk1n/oku/issues/216)) ([ef76941](https://github.com/y3owk1n/oku/commit/ef769411b110b334c74411374a9c83cda8b7dddd))
+* **manifest:** drop signature_url, which lint accepted and nothing read ([#221](https://github.com/y3owk1n/oku/issues/221)) ([b0e700e](https://github.com/y3owk1n/oku/commit/b0e700ec4848633756f2fca886d1ff2b57079516))
+* **store:** run pwsh steps in Windows PowerShell when PowerShell 7 is missing ([#212](https://github.com/y3owk1n/oku/issues/212)) ([53c6531](https://github.com/y3owk1n/oku/commit/53c65312ddf8cf1386c850480d9a0687868ef066))
+
+
+### Documentation
+
+* drop unnecessary text from guides ([#224](https://github.com/y3owk1n/oku/issues/224)) ([056a42f](https://github.com/y3owk1n/oku/commit/056a42f6dece4b63c7378d82efa78255f1e42691))
+* **examples:** add manifests for the node, python, go and rust runtimes ([#219](https://github.com/y3owk1n/oku/issues/219)) ([f608ff4](https://github.com/y3owk1n/oku/commit/f608ff41796aa5c1f9f466160bbd75acd6a4b729))
+* rewrite the docs into a tutorial, guides, concepts and reference ([#223](https://github.com/y3owk1n/oku/issues/223)) ([3b585f1](https://github.com/y3owk1n/oku/commit/3b585f1e722d64d5c82cc799ce8fb8dbdb79a07a))
+
 ## [0.6.1](https://github.com/y3owk1n/oku/compare/v0.6.0...v0.6.1) (2026-09-23)
 
 
