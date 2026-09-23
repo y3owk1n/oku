@@ -11,8 +11,9 @@ import (
 )
 
 // digestServer fakes GitHub for owner/tool, whose one release v1.0.0 lists its
-// file with the digest that the API reports for it.
-func digestServer(t *testing.T, m *machine, digest string) string {
+// file with the digest that the API reports for it. It returns a manifest that
+// installs the file as an artifact, and the server's URL.
+func digestServer(t *testing.T, m *machine, digest string) (string, string) {
 	t.Helper()
 
 	archive, sum := m.archive(t, "tool", map[string]string{"tool": "#!/bin/sh\necho 1.0.0\n"})
@@ -46,12 +47,12 @@ func digestServer(t *testing.T, m *machine, digest string) string {
 		server.URL,
 	)), 0o644))
 
-	return path
+	return path, server.URL
 }
 
 func TestB268AReleaseFileIsCheckedAgainstTheDigestGitHubReports(t *testing.T) {
 	m := newMachine(t)
-	tool := digestServer(t, &m, "")
+	tool, _ := digestServer(t, &m, "")
 
 	out, err := m.run(t, "", "add", tool)
 	if err != nil {
@@ -64,9 +65,26 @@ func TestB268AReleaseFileIsCheckedAgainstTheDigestGitHubReports(t *testing.T) {
 
 	tampered := newMachine(t)
 
-	_, err = tampered.run(t, "", "add", digestServer(t, &tampered, strings.Repeat("0", 64)))
+	artifact, url := digestServer(t, &tampered, strings.Repeat("0", 64))
+
+	_, err = tampered.run(t, "", "add", artifact)
 	if err == nil || !strings.Contains(err.Error(), "checksum mismatch") {
 		t.Fatalf("want a file that differs from GitHub's digest refused, got %v", err)
+	}
+
+	// A build's source that is the release's file, named by {{tag}}, too.
+	source := filepath.Join(tampered.fixtures, "built.toml")
+	must(t, os.WriteFile(source, []byte(fmt.Sprintf(
+		"[package]\nname = \"built\"\n"+
+			"[version]\nfrom = \"github-releases\"\nrepo = \"owner/tool\"\nstrip_prefix = \"v\"\n"+
+			"[build]\nsource = { url = \"%s/owner/tool/releases/download/{{tag}}/tool.tar.gz\" }\n"+
+			"[[build.step]]\ninstall = { bin = [\"tool\"] }\n",
+		url,
+	)), 0o644))
+
+	_, err = tampered.run(t, "", "add", "--yes", source)
+	if err == nil || !strings.Contains(err.Error(), "checksum mismatch") {
+		t.Fatalf("want a source that differs from GitHub's digest refused, got %v", err)
 	}
 }
 
@@ -94,6 +112,9 @@ func TestB268LintDoesNotWarnWhenGitHubOrCratesIOReportTheDigest(t *testing.T) {
 			"bin = [\"tool\"]\n",
 		"crate": strings.Replace(crate, "[build]\n",
 			"[build]\nsource = { url = \"https://static.crates.io/crates/tool/tool-{{version}}.crate\", strip = 1 }\n", 1),
+		"source": release + "[build]\n" +
+			"source = { url = \"https://github.com/owner/tool/releases/download/{{tag}}/tool.tar.gz\", strip = 1 }\n" +
+			"[[build.step]]\ninstall = { bin = [\"tool\"] }\n",
 	} {
 		if out := lint(name, text); strings.Contains(out, "trust the first download") {
 			t.Fatalf("lint warned about %s, whose host reports the digest:\n%s", name, out)

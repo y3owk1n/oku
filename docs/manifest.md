@@ -855,7 +855,7 @@ install = { bin = ["tree"], man = ["doc/tree.1"] }
 | Key | Meaning |
 |---|---|
 | `needs` | Tools that must be on the user's `PATH`, such as `cc` or `cargo`. oku checks them before any step runs and never installs them. A build sees each tool by its name and nothing else from the tool's directory, see [The build environment](#the-build-environment). |
-| `source` | `{ git, tag }` clones that tag at depth 1 and needs `git`. `{ url, sha256, strip }` downloads and unpacks an archive. `sha256_url` names a checksum file that upstream publishes, in place of `sha256`. With neither, oku trusts the first download and pins its sha256 in `oku.lock`, as it does for an [artifact](#checksums), and `oku manifest lint` warns. Without `source` the build starts in an empty directory. |
+| `source` | `{ git, tag }` clones that tag at depth 1 and needs `git`. `{ url, sha256, strip }` downloads and unpacks an archive. `sha256_url` names a checksum file that upstream publishes, in place of `sha256`. With neither and `github-releases`, oku checks a file of the repo's release against the sha256 GitHub reports for it. With `crates` it checks the `.crate` file against the sha256 crates.io publishes. Otherwise it trusts the first download and pins its sha256 in `oku.lock`, as it does for an [artifact](#checksums), and `oku manifest lint` warns. Without `source` the build starts in an empty directory. |
 | `deps` | Other oku packages the build uses, see [Dependencies](#dependencies). |
 
 A source archive with no fixed `sha256` can follow upstream. With a

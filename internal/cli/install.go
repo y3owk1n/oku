@@ -487,10 +487,11 @@ func (e env) installFrom(
 			return installed{}, err
 		}
 
-		// A registry such as crates.io publishes the digest of each version's
-		// source, which the manifest cannot state for every version.
+		// crates.io and GitHub publish the digest of each version's source, which
+		// the manifest cannot state for every version.
 		if src := &m.Build.Source; src.URL != "" && src.SHA256 == "" && src.SHA256URL == "" {
-			if at, err := manifest.Expand(src.URL, map[string]string{"version": m.Version.Value}); err == nil {
+			vars := map[string]string{"version": m.Version.Value, "tag": m.Tag}
+			if at, err := manifest.Expand(src.URL, vars); err == nil {
 				src.SHA256 = release.Digests[at]
 			}
 		}
