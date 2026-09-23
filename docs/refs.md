@@ -18,6 +18,7 @@ one per package.
 | `gitlab:host/group/project` | The same on a GitLab server of your own. |
 | `npm:name`, `npm:@scope/name` | A package in the npm registry. It has no manifest, so oku always [infers one](#npm-packages). |
 | `pypi:name` | A package in the Python Package Index, installed with uv. oku always [infers its manifest](#python-packages). |
+| `go:host/path` | A Go program, such as `go:golang.org/x/tools/gopls`, built the way `go install` builds it. oku always [infers its manifest](#go-programs). |
 | `git+https://host/repo` | `oku.pkg.toml` at the root of any git repo. |
 | `git+https://host/repo#name` | `name.toml` at the root, else `packages/name.toml`. A fragment with no `/` and no `.` is a name. |
 | `git+https://host/repo#dir/name.toml` | That file in the repo. |
@@ -221,6 +222,38 @@ each console script of the package, and copies any other program the package
 ships, such as ruff's binary. The programs of its dependencies are not
 exposed. A build asks for [approval](trust.md#build-commands) once, or takes
 `--yes`. oku cannot install a pypi package on Windows yet, and says so there.
+
+## Go programs
+
+`oku add go:golang.org/x/tools/gopls` builds a Go program the way
+`go install golang.org/x/tools/gopls@latest` does. oku asks the Go module proxy
+which module holds the package. That is the longest part of the path that is a
+module. The manifest oku writes follows that module's tagged versions. A
+version with a `-`, such as `1.3.0-rc.1`, is never the newest, and `@version`
+takes one. A module with no tags has one version, the pseudo-version of its
+newest commit. The program is named after the last part of the path that is no
+major version, so `go:github.com/mikefarah/yq/v4` gives `yq`.
+`oku manifest init --from go:<path>` writes the manifest to a file.
+
+The build needs the go command. Name a package that provides it in
+`[runtimes]`:
+
+```toml
+[runtimes]
+go = "./packages/go.toml"
+```
+
+Without `runtimes.go` the build uses the `go` on your `PATH`, and reads its
+standard library where `go env GOROOT` says it is. A Go program needs nothing at
+run time, so go is only a build dep and stays out of `PATH` either way.
+
+The build downloads the module and every module it needs with the network on,
+and the go command checks each against the Go checksum database. `oku.lock`
+pins a digest of those downloads, which is the same on every platform. Then
+`go install` runs offline from them, with cgo off, so the program knows its own
+version as a `go install` gives it. A build asks for
+[approval](trust.md#build-commands) once, or takes `--yes`. oku cannot build a
+Go program on Windows yet, and says so there.
 
 ## Private repos
 

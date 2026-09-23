@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	"github.com/y3owk1n/oku/internal/ref"
 )
 
 // ExitError holds the exit code of the program that "oku shell" ran, so that
@@ -79,8 +78,9 @@ func runShell(
 			return err
 		}
 
-		// An npm or a pypi package runs through the interpreter that the list names.
-		if (r.Kind == ref.NPM || r.Kind == ref.PyPI) && e.runtimes == nil {
+		// A package of a registry runs through, or builds with, the runtime that
+		// the list names.
+		if e.inferrerOf(r.Kind) != nil && e.runtimes == nil {
 			all, err := e.mergedList(cmd, opts)
 			if err != nil {
 				return err

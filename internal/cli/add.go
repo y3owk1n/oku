@@ -155,8 +155,9 @@ func runAdd(
 
 	platforms, strict := e.lockPlatforms(own, platform.Selector{})
 
-	// An npm or a pypi package runs through the interpreter that the list names.
-	if r.Kind == ref.NPM || r.Kind == ref.PyPI {
+	// A package of a registry runs through, or builds with, the runtime that
+	// the list names.
+	if e.inferrerOf(r.Kind) != nil {
 		all, err := e.mergedList(cmd, opts)
 		if err != nil {
 			return false, err

@@ -27,6 +27,8 @@ type Resolver struct {
 	NPM string
 	// PyPI replaces the URL of the Python Package Index when set.
 	PyPI string
+	// GoProxy replaces the URL of the Go module proxy when set.
+	GoProxy string
 }
 
 // Release is one installable version and the upstream tag it came from.
@@ -185,6 +187,10 @@ func (r *Resolver) List(ctx context.Context, v manifest.Version) ([]Release, err
 
 	if v.From == manifest.FromPyPI {
 		return r.pypiVersions(ctx, v.Repo)
+	}
+
+	if v.From == manifest.FromGo {
+		return r.goVersions(ctx, v.Repo)
 	}
 
 	if v.From == manifest.FromGitBranch {

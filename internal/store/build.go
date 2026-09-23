@@ -2,6 +2,7 @@ package store
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -23,6 +24,7 @@ import (
 	"github.com/pelletier/go-toml/v2"
 
 	"github.com/y3owk1n/oku/internal/expose"
+	"github.com/y3owk1n/oku/internal/goproxy"
 	"github.com/y3owk1n/oku/internal/manifest"
 	"github.com/y3owk1n/oku/internal/npm"
 	"github.com/y3owk1n/oku/internal/platform"
@@ -224,6 +226,11 @@ func (s *Store) Build(
 		}
 	}
 
+	if root := goRoot(build.Needs); root != "" {
+		env = append(env, "GOROOT="+root)
+		box.Readable = append(box.Readable, root)
+	}
+
 	result := Realized{
 		Path: prefix, SHA256: source.sha256, SourceURL: source.url, FirstUse: source.firstUse,
 	}
@@ -259,9 +266,19 @@ func (s *Store) Build(
 					scripts = nil
 				}
 
-				if *step.Vendor == "pip" {
+				switch *step.Vendor {
+				case "pip":
 					vendorEnv, err = s.pipPackageEnv(ctx, env, step.Package, m.Version.Value, opts.PyPIIndex)
-				} else {
+				case "go":
+					// The go command reads its default proxy from the go.env of its
+					// GOROOT, and a toolchain may not have one.
+					vendorEnv = append(
+						slices.Clone(env),
+						"OKU_GO_MODULE="+step.Package, "OKU_GO_VERSION="+m.Version.Value,
+						"GOPROXY="+cmp.Or(opts.GoProxy, goproxy.Proxy+",direct"),
+						"GOSUMDB=sum.golang.org",
+					)
+				default:
 					vendorEnv, err = s.npmPackageEnv(
 						ctx,
 						env,
@@ -377,6 +394,33 @@ func rustupHome(needs []string, home string) string {
 	}
 
 	return dir
+}
+
+// goRoot returns the GOROOT of the go that needs names, when it is one. The go
+// command reads its standard library there, and a go that oku installed is in
+// the home directory, which the sandbox hides. The build may read it, and
+// GOROOT tells the go command where it is, since it reaches the build as a link.
+func goRoot(needs []string) string {
+	if !slices.Contains(needs, "go") {
+		return ""
+	}
+
+	tool, err := exec.LookPath("go")
+	if err != nil {
+		return ""
+	}
+
+	out, err := exec.Command(tool, "env", "GOROOT").Output()
+	if err != nil {
+		return ""
+	}
+
+	root := strings.TrimSpace(string(out))
+	if info, err := os.Stat(filepath.Join(root, "src")); err != nil || !info.IsDir() {
+		return ""
+	}
+
+	return root
 }
 
 // removeTree deletes dir even when it holds read-only directories. Go marks its
@@ -844,6 +888,8 @@ type BuildOptions struct {
 	NPMRegistry string
 	// PyPIIndex replaces the URL of the Python Package Index when set.
 	PyPIIndex string
+	// GoProxy replaces the URL of the Go module proxy when set.
+	GoProxy string
 	// Progress is called after each step that ran, with its position, the number
 	// of steps, its kind and its error. It may be nil.
 	Progress func(step, total int, kind string, err error)
@@ -875,7 +921,9 @@ func runVendor(
 	log io.Writer,
 ) (digest, unsandboxed string, err error) {
 	if pkg {
-		kind = map[string]string{"npm": npmPackageKind, "pip": pipPackageKind}[kind]
+		kind = map[string]string{
+			"npm": npmPackageKind, "pip": pipPackageKind, "go": goPackageKind,
+		}[kind]
 	}
 
 	vendor, ok := vendorKinds[kind]
@@ -909,7 +957,7 @@ func runVendor(
 	}
 
 	output := filepath.Join(src, filepath.FromSlash(vendor.output))
-	if pkg {
+	if vendor.inPrefix {
 		output = filepath.Join(prefix, filepath.FromSlash(vendor.output))
 	}
 

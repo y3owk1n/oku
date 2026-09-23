@@ -1123,6 +1123,32 @@ of the package, and copies the package's other programs there. Those are the
 programs oku links when the build has no `install` step. `oku add pypi:<name>`
 writes this build, see [Python packages](refs.md#python-packages).
 
+A go step with `package` downloads a Go module and every module it needs into
+a module cache in the source directory. The go command checks each against
+the checksum database. oku hashes `modcache/cache/download` without the
+checksum database's own files, which change as it grows, so the digest is the
+same on every platform. A run step then installs from that cache offline:
+
+```toml
+[version]
+from = "go"
+repo = "golang.org/x/tools/gopls"
+
+[build]
+needs = ["go"]
+
+[[build.step]]
+vendor = "go"
+package = "golang.org/x/tools/gopls"
+
+[[build.step]]
+run = "go install -trimpath golang.org/x/tools/gopls@v{{version}}"
+shell = "sh"
+env = { GOMODCACHE = "{{src}}/modcache", GOBIN = "{{prefix}}/bin", GOPROXY = "file://{{src}}/modcache/cache/download", GOSUMDB = "off", GOFLAGS = "-mod=mod", GOTOOLCHAIN = "local", CGO_ENABLED = "0" }
+```
+
+`oku add go:<path>` writes this build, see [Go programs](refs.md#go-programs).
+
 The user's `oku.lock` pins one digest for what the vendor steps downloaded.
 `oku sync` runs them again and fails if the digest differs, so a locked build
 cannot get different packages. `oku update` accepts the new digest. What `pip`
@@ -1182,9 +1208,10 @@ network = true
 ```
 
 A `needs` tool that is installed in the user's home directory and loads files
-from elsewhere in it cannot read them in the sandbox. rustup is the one case oku
-handles. For anything else, depend on a toolchain package or on a system-wide
-install.
+from elsewhere in it cannot read them in the sandbox. oku handles two cases. A
+`cargo` that rustup manages reads `RUSTUP_HOME`, and a `go` reads its GOROOT,
+which oku asks `go env GOROOT` for. For anything else, depend on a toolchain
+package or on a system-wide install.
 
 oku uses `sandbox-exec` on macOS and user, mount and network namespaces on
 Linux. On a Linux host that forbids unprivileged user namespaces, which
