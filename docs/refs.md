@@ -170,6 +170,20 @@ names a node, and a relative path there starts at the directory of
 full path from the machine that wrote it. Run `oku update <name>` for each npm
 package to replace it.
 
+A runtime may also be a table with a `version` constraint, written like the
+[constraint of a dep](manifest.md#dependencies):
+
+```toml
+[runtimes]
+go = { ref = "./packages/go.toml", version = "1.26.4" }
+```
+
+oku then picks the newest version of that package that the constraint allows,
+when it adds a package and at `oku update`. Without a constraint it picks the
+newest. Either way `oku.lock` pins the version it picked, and `oku sync` keeps
+it. The lock copies the constraint into the manifest of each package that uses
+the runtime. After you change it, run `oku update <name>` for those packages.
+
 Without `runtimes.node` in a list or in `config.toml`, the programs run the
 `node` on `PATH`, and `oku add` says so. That does not work on Windows, where
 `oku add npm:` then fails and names the key.

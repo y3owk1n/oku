@@ -987,7 +987,7 @@ func (e env) inferNPM(ctx context.Context, opts Options, req request) (string, e
 		return "", err
 	}
 
-	if npmOpts.Node == "" && platform.Host().OS == "windows" {
+	if npmOpts.Node.Ref == "" && platform.Host().OS == "windows" {
 		return "", fmt.Errorf(
 			"%s needs node, and Windows cannot run a script through PATH\n"+
 				"set runtimes.node in %s to the ref of a package that provides node",
@@ -1075,49 +1075,57 @@ func (e env) inferPyPI(ctx context.Context, opts Options, req request) (string, 
 	})
 }
 
-// runtime returns the ref of the package that [runtimes] names for the
-// interpreter name, in the list or else in config.toml, and that package's name.
-// Both are empty when neither names one. The lock stores the manifest that
-// holds the ref, so runtime names a package inside the list's directory
-// relative to that directory. The lock then works in another checkout or home
-// directory.
-func (e env) runtime(ctx context.Context, opts Options, name string) (string, string, error) {
+// runtime returns the package that [runtimes] names for the interpreter name,
+// in the list or else in config.toml, with its version constraint, and that
+// package's name. Both are empty when neither names one. The lock stores the
+// manifest that holds the ref, so runtime names a package inside the list's
+// directory relative to that directory. The lock then works in another checkout
+// or home directory.
+func (e env) runtime(ctx context.Context, opts Options, name string) (manifest.Dep, string, error) {
 	// The list's refs are resolved already. A relative path in config.toml
 	// starts at the directory of config.toml, not at the working directory.
-	at, origin := e.runtimes[name], e.listPath()
-	if at == "" {
+	d, origin := e.runtimes[name], e.listPath()
+	if d.Ref == "" {
 		config, err := source.Read(e.configPath())
 		if err != nil {
-			return "", "", err
-		}
-
-		if at, err = config.Expand(config.Runtimes[name]); err != nil {
-			return "", "", fmt.Errorf("runtimes.%s in %s: %w", name, e.configPath(), err)
+			return manifest.Dep{}, "", err
 		}
 
 		origin = e.configPath()
+
+		if value, ok := config.Runtimes[name]; ok {
+			if d, err = manifest.ParseDep(value); err != nil {
+				return manifest.Dep{}, "", fmt.Errorf("runtimes.%s in %s: %w", name, origin, err)
+			}
+
+			if d.Ref, err = config.Expand(d.Ref); err != nil {
+				return manifest.Dep{}, "", fmt.Errorf("runtimes.%s in %s: %w", name, origin, err)
+			}
+		}
 	}
 
-	if at == "" {
-		return "", "", nil
+	if d.Ref == "" {
+		return manifest.Dep{}, "", nil
 	}
 
-	r, err := ref.ParseIn(filepath.Dir(e.configPath()), at)
+	r, err := ref.ParseIn(filepath.Dir(e.configPath()), d.Ref)
 	if err != nil {
-		return "", "", fmt.Errorf("runtimes.%s in %s: %w", name, origin, err)
+		return manifest.Dep{}, "", fmt.Errorf("runtimes.%s in %s: %w", name, origin, err)
 	}
 
 	fetched, err := e.fetcher(opts).Fetch(ctx, r, "", ref.Manifest)
 	if err != nil {
-		return "", "", fmt.Errorf("runtimes.%s in %s: %w", name, origin, err)
+		return manifest.Dep{}, "", fmt.Errorf("runtimes.%s in %s: %w", name, origin, err)
 	}
 
 	m, err := manifest.Parse(fetched.Data, r.String())
 	if err != nil {
-		return "", "", fmt.Errorf("runtimes.%s in %s: %w", name, origin, err)
+		return manifest.Dep{}, "", fmt.Errorf("runtimes.%s in %s: %w", name, origin, err)
 	}
 
-	return ref.InDir(e.listDir(), r.String()), m.Package.Name, nil
+	d.Ref = ref.InDir(e.listDir(), r.String())
+
+	return d, m.Package.Name, nil
 }
 
 func inferredText(inferred string, req request) string {

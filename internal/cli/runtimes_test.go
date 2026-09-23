@@ -1,11 +1,14 @@
 package cli_test
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/y3owk1n/oku/internal/lock"
 )
 
 // runsThroughItsNode reports whether the program tool of the profile runs, with
@@ -157,5 +160,56 @@ func TestB183AProjectLockNamesTheNodeRelativeToTheProject(t *testing.T) {
 
 	if out, err := m.run(t, "", "sync", "--locked"); err != nil {
 		t.Fatalf("sync --locked in the moved project: %v\n%s", err, out)
+	}
+}
+
+func TestB264ARuntimeVersionConstraintHoldsForAddAndUpdate(t *testing.T) {
+	m := goMachine(t, "1.2.0")
+
+	server := newReleaseServer(t, "v1.0.0", "v2.0.0")
+	m.opts.GitHubAPI = server.URL + "/api"
+
+	archive, sum := m.archive(t, "go", map[string]string{"bin/go": fakeGo})
+	goRef := filepath.Join(m.fixtures, "go.toml")
+	must(t, os.WriteFile(goRef, []byte(fmt.Sprintf(
+		"[package]\nname = \"go\"\n"+
+			"[version]\nfrom = \"github-releases\"\nrepo = \"owner/tool\"\nstrip_prefix = \"v\"\n"+
+			"[[artifact]]\nurl = \"file://%s\"\nsha256 = %q\nbin = [\"bin/go\"]\n",
+		archive, sum,
+	)), 0o644))
+	must(t, os.WriteFile(filepath.Join(m.config, "oku.toml"), []byte(fmt.Sprintf(
+		"[runtimes]\ngo = { ref = %q, version = \"<2\" }\n", goRef,
+	)), 0o644))
+
+	goVersion := func() string {
+		t.Helper()
+
+		locked, err := lock.Read(filepath.Join(m.config, "oku.lock"))
+		must(t, err)
+
+		tool, ok := locked.Find("tool")
+		if !ok {
+			t.Fatal("the lock has no tool")
+		}
+
+		return tool.FindDep(goRef).Version
+	}
+
+	if out, err := m.run(t, "", "add", "go:example.com/tool", "--yes"); err != nil {
+		t.Fatalf("add: %v\n%s", err, out)
+	}
+
+	if got := goVersion(); got != "1.0.0" {
+		t.Fatalf("the build took go %q, want 1.0.0, the newest below 2", got)
+	}
+
+	server.tags = append(server.tags, "v1.5.0", "v3.0.0")
+
+	if out, err := m.run(t, "", "update", "tool", "--yes"); err != nil {
+		t.Fatalf("update: %v\n%s", err, out)
+	}
+
+	if got := goVersion(); got != "1.5.0" {
+		t.Fatalf("update took go %q, want 1.5.0, the newest below 2", got)
 	}
 }

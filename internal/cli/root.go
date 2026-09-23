@@ -21,6 +21,7 @@ import (
 	"github.com/y3owk1n/oku/internal/infer"
 	"github.com/y3owk1n/oku/internal/list"
 	"github.com/y3owk1n/oku/internal/lock"
+	"github.com/y3owk1n/oku/internal/manifest"
 	"github.com/y3owk1n/oku/internal/profile"
 	"github.com/y3owk1n/oku/internal/ref"
 	"github.com/y3owk1n/oku/internal/resolve"
@@ -374,7 +375,7 @@ type env struct {
 	project string
 	// runtimes holds the [runtimes] of the list in use and its includes, after a
 	// command loaded it. config.toml's [runtimes] is the fallback.
-	runtimes map[string]string
+	runtimes map[string]manifest.Dep
 }
 
 func loadEnv() (env, error) {

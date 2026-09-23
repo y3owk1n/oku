@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/y3owk1n/oku/internal/goproxy"
+	"github.com/y3owk1n/oku/internal/manifest"
 )
 
 // GoOptions say how FromGo writes a manifest.
@@ -18,9 +19,9 @@ type GoOptions struct {
 	Proxy string
 	// Version is the version the user wrote after "@". Empty means the newest.
 	Version string
-	// Go is the ref of a package that provides the go command, or "". Without
+	// Go is the package that provides the go command, or none. Without
 	// one, the build uses the go on the user's PATH.
-	Go string
+	Go manifest.Dep
 }
 
 // majorRe is the last element of a package path that names a major version,
@@ -65,8 +66,8 @@ func (inf *Inferrer) FromGo(ctx context.Context, pkg string, opts GoOptions) (st
 		strings.ToLower(name), "https://pkg.go.dev/"+pkg)
 	fmt.Fprintf(&b, "[version]\nfrom = \"go\"\nrepo = %q\n\n[build]\n", module)
 
-	if opts.Go != "" {
-		fmt.Fprintf(&b, "deps = [%q]\n", opts.Go)
+	if opts.Go.Ref != "" {
+		fmt.Fprintf(&b, "deps = [%s]\n", opts.Go.TOML())
 	} else {
 		b.WriteString("needs = [\"go\"]\n")
 	}
