@@ -14,6 +14,7 @@ import (
 
 	"github.com/y3owk1n/oku/internal/list"
 	"github.com/y3owk1n/oku/internal/lock"
+	"github.com/y3owk1n/oku/internal/manifest"
 	"github.com/y3owk1n/oku/internal/platform"
 	"github.com/y3owk1n/oku/internal/ref"
 )
@@ -56,9 +57,9 @@ type merger struct {
 	// platforms.
 	files map[fileKey]listedFile
 	vars  map[string]string
-	// runtimes holds the ref of each interpreter's package, resolved against the
-	// list that names it.
-	runtimes map[string]string
+	// runtimes holds each interpreter's package, with its ref resolved against
+	// the list that names it.
+	runtimes map[string]manifest.Dep
 	// secrets is keyed by the name in [secrets].
 	secrets map[string]listedSecret
 	// settings is keyed by backend, domain and key.
@@ -73,7 +74,7 @@ type merged struct {
 	// files is sorted by target.
 	files    []listedFile
 	vars     map[string]string
-	runtimes map[string]string
+	runtimes map[string]manifest.Dep
 	secrets  map[string]listedSecret
 	// settings is sorted by backend, domain and key.
 	settings []list.Setting
@@ -126,7 +127,7 @@ func (e env) loadList(
 		packages: map[string]listed{},
 		files:    map[fileKey]listedFile{},
 		vars:     map[string]string{},
-		runtimes: map[string]string{},
+		runtimes: map[string]manifest.Dep{},
 		secrets:  map[string]listedSecret{},
 		settings: map[[3]string]list.Setting{},
 		seen:     map[string]bool{},
@@ -333,13 +334,14 @@ func (m *merger) merge(
 	// package.
 	maps.Copy(m.vars, l.Vars)
 
-	for name, s := range l.Runtimes {
-		r, err := parse(s)
+	for name, d := range l.Runtimes {
+		r, err := parse(d.Ref)
 		if err != nil {
 			return fmt.Errorf("%s: runtimes.%s: %w", origin, name, err)
 		}
 
-		m.runtimes[name] = r.String()
+		d.Ref = r.String()
+		m.runtimes[name] = d
 	}
 
 	for _, s := range l.Settings {

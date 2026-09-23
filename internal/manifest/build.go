@@ -1,6 +1,7 @@
 package manifest
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/y3owk1n/oku/internal/platform"
@@ -176,30 +177,49 @@ func parseDeps(raw []any) ([]Dep, error) {
 	deps := make([]Dep, 0, len(raw))
 
 	for i, value := range raw {
-		var d Dep
-
-		switch v := value.(type) {
-		case string:
-			d.Ref = v
-		case map[string]any:
-			d.Ref, _ = v["ref"].(string)
-			d.Version, _ = v["version"].(string)
-
-			for key := range v {
-				if key != "ref" && key != "version" {
-					return nil, fmt.Errorf("deps[%d]: unknown key %q, use ref and version", i, key)
-				}
-			}
-		default:
-			return nil, fmt.Errorf("deps[%d]: want a ref string or a table with ref and version", i)
-		}
-
-		if d.Ref == "" {
-			return nil, fmt.Errorf("deps[%d]: ref is required", i)
+		d, err := ParseDep(value)
+		if err != nil {
+			return nil, fmt.Errorf("deps[%d]: %w", i, err)
 		}
 
 		deps = append(deps, d)
 	}
 
 	return deps, nil
+}
+
+// ParseDep converts a dep in either TOML form.
+func ParseDep(value any) (Dep, error) {
+	var d Dep
+
+	switch v := value.(type) {
+	case string:
+		d.Ref = v
+	case map[string]any:
+		d.Ref, _ = v["ref"].(string)
+		d.Version, _ = v["version"].(string)
+
+		for key := range v {
+			if key != "ref" && key != "version" {
+				return Dep{}, fmt.Errorf("unknown key %q, use ref and version", key)
+			}
+		}
+	default:
+		return Dep{}, errors.New("want a ref string or a table with ref and version")
+	}
+
+	if d.Ref == "" {
+		return Dep{}, errors.New("ref is required")
+	}
+
+	return d, nil
+}
+
+// TOML writes d in the form ParseDep reads, as a string without a version.
+func (d Dep) TOML() string {
+	if d.Version == "" {
+		return fmt.Sprintf("%q", d.Ref)
+	}
+
+	return fmt.Sprintf("{ ref = %q, version = %q }", d.Ref, d.Version)
 }

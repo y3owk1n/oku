@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/y3owk1n/oku/internal/crates"
+	"github.com/y3owk1n/oku/internal/manifest"
 )
 
 // CratesOptions say how FromCrates writes a manifest.
@@ -16,9 +17,9 @@ type CratesOptions struct {
 	API, Downloads string
 	// Version is the version the user wrote after "@". Empty means the newest.
 	Version string
-	// Rust is the ref of a package that provides cargo and rustc, or "".
+	// Rust is the package that provides cargo and rustc, or none.
 	// Without one, the build uses the cargo on the user's PATH.
-	Rust string
+	Rust manifest.Dep
 }
 
 // FromCrates returns manifest TOML for the crate called name. The manifest
@@ -66,8 +67,8 @@ func (inf *Inferrer) FromCrates(ctx context.Context, name string, opts CratesOpt
 	fmt.Fprintf(&b, "homepage = %q\n\n", "https://crates.io/crates/"+name)
 	fmt.Fprintf(&b, "[version]\nfrom = \"crates\"\nrepo = %q\n\n[build]\n", name)
 
-	if opts.Rust != "" {
-		fmt.Fprintf(&b, "deps = [%q]\n", opts.Rust)
+	if opts.Rust.Ref != "" {
+		fmt.Fprintf(&b, "deps = [%s]\n", opts.Rust.TOML())
 	} else {
 		b.WriteString("needs = [\"cargo\"]\n")
 	}

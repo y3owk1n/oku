@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/y3owk1n/oku/internal/manifest"
 	"github.com/y3owk1n/oku/internal/npm"
 )
 
@@ -17,9 +18,9 @@ type NPMOptions struct {
 	// Version is the version whose programs FromNPM reads, the way the user
 	// wrote it after "@". Empty means the newest.
 	Version string
-	// Node is the ref of a package that provides node, or "". With one, every
+	// Node is the package that provides node, or none. With one, every
 	// program runs through it. Without one, a program runs the node on PATH.
-	Node string
+	Node manifest.Dep
 	// NodeName is the name of the package at Node.
 	NodeName string
 }
@@ -68,13 +69,13 @@ func (inf *Inferrer) FromNPM(ctx context.Context, name string, opts NPMOptions) 
 	)
 	fmt.Fprintf(&b, "[version]\nfrom = \"npm\"\nrepo = %q\n", name)
 
-	if opts.Node != "" {
-		fmt.Fprintf(&b, "\n[runtime]\ndeps = [%q]\n", opts.Node)
+	if opts.Node.Ref != "" {
+		fmt.Fprintf(&b, "\n[runtime]\ndeps = [%s]\n", opts.Node.TOML())
 	}
 
 	// A package that lists dependencies gets them installed with it. That takes
 	// npm, which comes with the node package.
-	if published.Dependencies && opts.Node != "" {
+	if published.Dependencies && opts.Node.Ref != "" {
 		b.WriteString(npmBuild(name, opts, programs, published.Bin))
 
 		return b.String(), nil
@@ -110,7 +111,7 @@ func (inf *Inferrer) FromNPM(ctx context.Context, name string, opts NPMOptions) 
 		b.WriteString("\n]\n")
 	}
 
-	if opts.Node == "" {
+	if opts.Node.Ref == "" {
 		artifact("match = { os = \"linux\" }\n", "")
 		artifact("match = { os = \"darwin\" }\n", "")
 
@@ -129,7 +130,7 @@ func (inf *Inferrer) FromNPM(ctx context.Context, name string, opts NPMOptions) 
 func npmBuild(name string, opts NPMOptions, programs []string, bin map[string]string) string {
 	var b strings.Builder
 
-	fmt.Fprintf(&b, "\n[build]\ndeps = [%q]\n", opts.Node)
+	fmt.Fprintf(&b, "\n[build]\ndeps = [%s]\n", opts.Node.TOML())
 	fmt.Fprintf(&b, "\n[[build.step]]\nvendor = \"npm\"\npackage = %q\n", name)
 
 	// oku cannot run this build on Windows yet, so the programs are for unix.

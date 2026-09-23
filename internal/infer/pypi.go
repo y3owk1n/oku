@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/y3owk1n/oku/internal/manifest"
 	"github.com/y3owk1n/oku/internal/pypi"
 )
 
@@ -20,11 +21,11 @@ type PyPIOptions struct {
 	Index string
 	// Version is the version the user wrote after "@". Empty means the newest.
 	Version string
-	// Python is the ref of a package that provides python3, or "". Without one,
+	// Python is the package that provides python3, or none. Without one,
 	// the build and the programs use the python3 on the build's PATH.
-	Python string
-	// UV is the ref of the package that provides uv. Empty means UV.
-	UV string
+	Python manifest.Dep
+	// UV is the package that provides uv. Without one, the build uses UV.
+	UV manifest.Dep
 }
 
 // FromPyPI returns manifest TOML for the Python package called name. The
@@ -57,13 +58,13 @@ func (inf *Inferrer) FromPyPI(ctx context.Context, name string, opts PyPIOptions
 	fmt.Fprintf(&b, "homepage = %q\n\n", "https://pypi.org/project/"+pypi.Normalize(name)+"/")
 	fmt.Fprintf(&b, "[version]\nfrom = \"pypi\"\nrepo = %q\n", name)
 
-	uv := cmp.Or(opts.UV, UV)
-	deps := fmt.Sprintf("%q", uv)
+	uv := cmp.Or(opts.UV, manifest.Dep{Ref: UV}).TOML()
+	deps := uv
 
 	// The programs run through this python, so gc must keep it.
-	if opts.Python != "" {
-		fmt.Fprintf(&b, "\n[runtime]\ndeps = [%q]\n", opts.Python)
-		deps = fmt.Sprintf("%q, %q", opts.Python, uv)
+	if opts.Python.Ref != "" {
+		fmt.Fprintf(&b, "\n[runtime]\ndeps = [%s]\n", opts.Python.TOML())
+		deps = opts.Python.TOML() + ", " + uv
 	}
 
 	fmt.Fprintf(&b, "\n[build]\ndeps = [%s]\n", deps)
