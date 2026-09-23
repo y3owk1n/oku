@@ -729,7 +729,14 @@ func runCommand(
 		return "", fmt.Errorf("shell %q must be sh, bash, pwsh or cmd", shell)
 	}
 
-	box.Argv = append(append([]string{shell}, args...), script)
+	// Windows ships Windows PowerShell 5.1 and not PowerShell 7, so without pwsh
+	// on PATH a pwsh step runs in powershell.exe.
+	program := shell
+	if _, err := exec.LookPath("pwsh"); shell == "pwsh" && runtime.GOOS == "windows" && err != nil {
+		program = "powershell"
+	}
+
+	box.Argv = append(append([]string{program}, args...), script)
 	box.Dir = src
 	box.Network = step.Network
 	box.Env = slices.Clone(env)
