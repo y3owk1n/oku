@@ -149,3 +149,21 @@ func TestB266ATagWithOrWithoutAVIsAVersion(t *testing.T) {
 		t.Fatalf("1.2.0 came from the tag %q, want v1.2.0, the form strip_prefix names", pkg.Tag)
 	}
 }
+
+func TestB265ADepReadsABareVersionAsAPrefix(t *testing.T) {
+	m := newMachine(t)
+	server := newReleaseServer(t, "v1.0.0", "v1.5.0", "v2.0.0")
+	m.opts.GitHubAPI = server.URL + "/api"
+
+	m.dataDep(t)
+
+	// A [runtimes] entry with a version becomes a dep with this constraint too.
+	out, err := m.run(t, "", "add", m.dataUser(t, "user", "1"), "--yes")
+	if err != nil {
+		t.Fatalf("add a package whose dep is data 1: %v\n%s", err, out)
+	}
+
+	if got := m.output(t, "user"); got != "1.5.0" {
+		t.Fatalf("the dep data 1 was %s, want 1.5.0, the newest 1.x", got)
+	}
+}
