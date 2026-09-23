@@ -10,6 +10,8 @@ order step in `prd/product.md`.
 - B122 [1] A `bin` entry that is a table makes oku write a program that runs
   `run` with `args` before the user's arguments. `run` may name a runtime dep,
   and that dep stays out of the user's profile.
+- B277 [1] A program from a `bin` table finds the programs of its runtime deps
+  on its `PATH`, and never those of its build deps.
 - B209 [1] A `bin` table with `name` and `path` exposes the file at `path`
   inside the package under `name`, in an artifact and in an `install` step.
   A table with both `path` and `run` fails `oku manifest lint` and `add`.
