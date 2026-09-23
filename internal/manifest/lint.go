@@ -9,6 +9,7 @@ import (
 
 	"github.com/pelletier/go-toml/v2"
 
+	"github.com/y3owk1n/oku/internal/crates"
 	"github.com/y3owk1n/oku/internal/forge"
 	"github.com/y3owk1n/oku/internal/platform"
 )
@@ -131,8 +132,8 @@ func Lint(data []byte) Report {
 			}
 		}
 
-		// For a moving tag oku takes the sha256 from the GitHub API, which only
-		// knows the files of that repo's releases.
+		// With github-releases oku takes the sha256 from the GitHub API, which
+		// only knows the files of that repo's releases.
 		fromRelease := "https://github.com/" + full.Version.Repo + "/releases/download/"
 		if host, repo := forge.Split(full.Version.Repo); host != "" {
 			fromRelease = "https://" + host + "/" + repo + "/releases/download/"
@@ -141,13 +142,13 @@ func Lint(data []byte) Report {
 		switch {
 		case a.SHA256 != "" || a.SHA256URL != "" || a.Integrity != "" ||
 			full.Package.SigningKey != "" || full.Version.From == FromNPM:
-		case full.Version.Tag == "":
+		case full.Version.From != FromGitHubReleases && full.Version.Tag == "":
 			report.Warnings = append(report.Warnings, fmt.Sprintf(
 				"artifact[%d]: no sha256 or sha256_url, so users trust the first download", i,
 			))
 		case full.Version.From != FromGitHubReleases:
 			report.Warnings = append(report.Warnings, fmt.Sprintf(
-				"artifact[%d]: only GitHub reports a sha256 for the files of a moving tag, "+
+				"artifact[%d]: only GitHub reports a sha256 for the files of a release, "+
 					"so users trust the first download", i,
 			))
 		case !strings.HasPrefix(a.URL, fromRelease):
@@ -161,7 +162,9 @@ func Lint(data []byte) Report {
 	switch source := full.Build.Source; {
 	case source.SHA256 != "" && source.SHA256URL != "":
 		report.Errors = append(report.Errors, "build.source: set sha256 or sha256_url, not both")
-	case source.URL != "" && source.SHA256 == "" && source.SHA256URL == "":
+	// crates.io publishes the sha256 of each version's .crate file.
+	case source.URL != "" && source.SHA256 == "" && source.SHA256URL == "" &&
+		(full.Version.From != FromCrates || source.URL != crates.URL("", full.Version.Repo, "{{version}}")):
 		report.Warnings = append(report.Warnings,
 			"build.source: no sha256 or sha256_url, so users trust the first download")
 	}

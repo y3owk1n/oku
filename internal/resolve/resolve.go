@@ -41,8 +41,8 @@ type Release struct {
 	// Commit is the commit a moving tag points at. It is empty for every other
 	// release.
 	Commit string
-	// Digests maps a download URL of a moving tag's release to the sha256 that
-	// GitHub reports for it.
+	// Digests maps a download URL of the release to the sha256 that the host
+	// reports for it.
 	Digests map[string]string
 	// Integrity maps the download URL of an npm version to the digest the
 	// registry publishes for it, such as "sha512-...".
@@ -300,13 +300,14 @@ func (r *Resolver) List(ctx context.Context, v manifest.Version) ([]Release, err
 	}
 
 	var (
-		tags []string
-		err  error
+		tags    []string
+		digests map[string]map[string]string
+		err     error
 	)
 
 	switch v.From {
 	case manifest.FromGitHubReleases, manifest.FromGiteaReleases, manifest.FromGitLabReleases:
-		tags, err = r.published(ctx, v)
+		tags, digests, err = r.published(ctx, v)
 	case manifest.FromGitTags:
 		tags, err = gitTags(ctx, v.Repo)
 	default:
@@ -340,14 +341,14 @@ func (r *Resolver) List(ctx context.Context, v manifest.Version) ([]Release, err
 
 		if i, seen := at[version]; seen {
 			if declared {
-				releases[i].Tag = tag
+				releases[i].Tag, releases[i].Digests = tag, digests[tag]
 			}
 
 			continue
 		}
 
 		at[version] = len(releases)
-		releases = append(releases, Release{Version: version, Tag: tag})
+		releases = append(releases, Release{Version: version, Tag: tag, Digests: digests[tag]})
 	}
 
 	// A prerelease sorts behind every release, so the newest is never one, and
@@ -399,19 +400,11 @@ func (r *Resolver) movingTag(ctx context.Context, v manifest.Version) (Release, 
 		return Release{}, fmt.Errorf("%s: the host named no commit for the tag", what)
 	}
 
-	digests := map[string]string{}
-
-	for _, asset := range found.Assets {
-		if asset.Digest != "" {
-			digests[asset.URL] = asset.Digest
-		}
-	}
-
 	return Release{
 		Version: commit.Date.UTC().Format("2006.01.02") + "-" + commit.SHA[:7],
 		Tag:     tag,
 		Commit:  commit.SHA,
-		Digests: digests,
+		Digests: assetDigests(found),
 	}, nil
 }
 
@@ -420,28 +413,49 @@ func (r *Resolver) open(v manifest.Version) (forge.Forge, string, error) {
 	return r.Hosts.Open(strings.TrimSuffix(v.From, "-releases"), v.Repo)
 }
 
-// published returns the tags of published releases. It reads the newest page
-// the host gives and skips drafts and prereleases.
-func (r *Resolver) published(ctx context.Context, v manifest.Version) ([]string, error) {
+// published returns the tags of published releases, and the digests of each
+// one's files by tag. It skips drafts and prereleases.
+func (r *Resolver) published(
+	ctx context.Context,
+	v manifest.Version,
+) ([]string, map[string]map[string]string, error) {
 	host, repo, err := r.open(v)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	found, err := host.Releases(ctx, repo)
 	if err != nil {
-		return nil, explain(err, "list releases of "+v.Repo, "the repository was not found")
+		return nil, nil, explain(err, "list releases of "+v.Repo, "the repository was not found")
 	}
 
 	var tags []string
 
+	digests := map[string]map[string]string{}
+
 	for _, release := range found {
 		if !release.Draft && !release.Prerelease {
 			tags = append(tags, release.Tag)
+			digests[release.Tag] = assetDigests(release)
 		}
 	}
 
-	return tags, nil
+	return tags, digests, nil
+}
+
+// assetDigests maps the download URL of each file of release to the sha256
+// that the host reports for it. GitHub reports one for most files uploaded
+// since mid 2025, and other hosts report none.
+func assetDigests(release forge.Release) map[string]string {
+	digests := map[string]string{}
+
+	for _, asset := range release.Assets {
+		if asset.Digest != "" {
+			digests[asset.URL] = asset.Digest
+		}
+	}
+
+	return digests
 }
 
 // explain names the request in a forge's error. missing says what a missing
