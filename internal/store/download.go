@@ -173,10 +173,10 @@ func fileIntegrity(path string) (string, error) {
 
 var hexDigestRe = regexp.MustCompile(`\b[0-9a-fA-F]{64}\b`)
 
-// publishedSHA256 reads the digest of fileName from a checksum file at url. The
+// PublishedSHA256 reads the digest of fileName from a checksum file at url. The
 // file holds one digest, "digest  name" lines such as sha256sum writes, or a JSON
 // document that maps file names to digests.
-func (s *Store) publishedSHA256(ctx context.Context, url, fileName string) (string, error) {
+func (s *Store) PublishedSHA256(ctx context.Context, url, fileName string) (string, error) {
 	defer status.Start(ctx, "reading the checksums at %s", url)()
 
 	resp, err := s.get(ctx, url)

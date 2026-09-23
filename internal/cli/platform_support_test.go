@@ -239,3 +239,33 @@ func TestB230InferenceWithNoAssetForTheHostInfersForALockPlatform(t *testing.T) 
 		t.Fatalf("oku.toml should limit the package to %s:\n%s", other, own)
 	}
 }
+
+func TestB222AnAppImageFitsLinuxAlone(t *testing.T) {
+	m := newMachine(t)
+	image := filepath.Join(m.fixtures, "tool.AppImage")
+	must(t, os.WriteFile(image, []byte(script), 0o755))
+
+	inferServer(t, &m, map[string]string{
+		"tool-x86_64.AppImage":  image,
+		"tool-aarch64.AppImage": image,
+	})
+
+	linux := platform.Platform{OS: "linux", Arch: "arm64", Libc: platform.LibcGlibc}
+	if platform.Host().OS == "linux" {
+		linux = platform.Platform{OS: "darwin", Arch: "arm64"}
+	}
+
+	m.writeOwnList(t, fmt.Sprintf("[lock]\nplatforms = [%q]\n\n[packages]\n", linux))
+
+	out, err := m.run(t, "", "add", "github:owner/tool")
+	if err != nil {
+		t.Fatalf("add: %v\n%s", err, out)
+	}
+
+	own, err := os.ReadFile(filepath.Join(m.config, "oku.toml"))
+	must(t, err)
+
+	if !strings.Contains(string(own), `when = { os = "linux" }`) {
+		t.Fatalf("an AppImage should limit the package to Linux:\n%s", own)
+	}
+}

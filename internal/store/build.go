@@ -602,7 +602,7 @@ func (s *Store) fetchSource(
 				return fetchedSource{}, err
 			}
 
-			if want, err = s.publishedSHA256(ctx, checksums, path.Base(url)); err != nil {
+			if want, err = s.PublishedSHA256(ctx, checksums, path.Base(url)); err != nil {
 				return fetchedSource{}, err
 			}
 		}
@@ -670,7 +670,7 @@ func (s *Store) runStep(
 				return err
 			}
 
-			if want, err = s.publishedSHA256(ctx, checksums, path.Base(url)); err != nil {
+			if want, err = s.PublishedSHA256(ctx, checksums, path.Base(url)); err != nil {
 				return err
 			}
 		}
