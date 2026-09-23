@@ -785,5 +785,35 @@ Oku add $pythonToml
 $version = & "$bin\python.exe" --version
 Check 'a program that loads a DLL beside it in its download runs from its shim' { $version -match '^Python 3\.13' }
 
+# In this project the go package is also the runtime of a go: package, so one
+# sync downloads the go zip twice at once. Windows refuses to replace the file
+# while the other install unpacks it.
+$goProject = Join-Path $root 'go-project'
+New-Item -ItemType Directory -Force $goProject | Out-Null
+Set-Content (Join-Path $goProject 'go.toml') @'
+[package]
+name = "go"
+[version]
+value = "1.26.4"
+[[artifact]]
+url = "https://dl.google.com/go/go{{version}}.{{os}}-{{arch}}.zip"
+sha256_url = "https://dl.google.com/go/go{{version}}.{{os}}-{{arch}}.zip.sha256"
+strip = 1
+bin = ["bin/go.exe", "bin/gofmt.exe"]
+'@
+Set-Content (Join-Path $goProject 'oku.toml') @'
+[runtimes]
+go = "./go.toml"
+[packages]
+go = "./go.toml"
+stringer = "go:golang.org/x/tools/cmd/stringer"
+'@
+Set-Location $goProject
+Oku sync --yes
+Set-Location $root
+Check 'packages that share a download install in one sync' {
+    Test-Path (Join-Path $env:XDG_DATA_HOME 'oku\profiles\project-*\current\bin\stringer.exe')
+}
+
 Remove-Item -Recurse -Force $root
 Write-Host 'live test passed'
