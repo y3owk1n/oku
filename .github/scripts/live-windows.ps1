@@ -752,7 +752,6 @@ Oku add --yes cargo:hexyl
 $hexyl = & "$bin\hexyl.exe" --version
 Check 'a cargo: ref builds on Windows' { $hexyl -match '^hexyl \d' }
 
-||||||| Stash base
 # Python packages from PyPI with uv, through a python that the list names, since
 # a Windows build has no python of the system. ruff ships a binary, and httpie
 # console scripts, which become shims.
