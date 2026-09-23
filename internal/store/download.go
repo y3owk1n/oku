@@ -95,9 +95,14 @@ func (s *Store) download(
 		)
 	}
 
+	// Two packages of one sync may download the same file at once. Windows
+	// refuses to replace the file while the other package unpacks it. The
+	// file's name is its digest, so it holds the same bytes and oku uses it.
 	dest := filepath.Join(dir, got)
 	if err := os.Rename(tmp.Name(), dest); err != nil {
-		return "", "", fmt.Errorf("download %s: %w", url, err)
+		if have, shaErr := fileSHA256(dest); shaErr != nil || have != got {
+			return "", "", fmt.Errorf("download %s: %w", url, err)
+		}
 	}
 
 	// The index only avoids a later download, so fetch ignores a failed write.
