@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.1](https://github.com/y3owk1n/oku/compare/v0.6.0...v0.6.1) (2026-09-23)
+
+
+### Bug Fixes
+
+* **action:** install the release of the tag the action is used by ([#208](https://github.com/y3owk1n/oku/issues/208)) ([e24e647](https://github.com/y3owk1n/oku/commit/e24e647822ed1a5a1d7bea86f12e6d98356ffc78))
+
 ## [0.6.0](https://github.com/y3owk1n/oku/compare/v0.5.0...v0.6.0) (2026-09-23)
 
 
