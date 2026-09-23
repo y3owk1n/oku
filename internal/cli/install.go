@@ -44,9 +44,16 @@ type installed struct {
 	firstUseOthers []string
 	// inferred is the manifest text when oku inferred it during this install.
 	inferred string
-	// when limits the list entry to the one OS an inferred manifest covers,
-	// when the lock names platforms of another OS. It is zero otherwise.
-	when platform.Selector
+	// unsupported holds the platforms install was asked for that the manifest
+	// has no artifact and no build for. when is then the entry's when narrowed to
+	// the platforms it fits, or empty when it fits none of them.
+	unsupported []platform.Platform
+	when        platform.When
+	// support holds every platform the manifest has an artifact or a build for.
+	support []platform.Platform
+	// lockOnly says that nothing was installed, since the manifest does not fit
+	// the host or the request only locks.
+	lockOnly bool
 	// unsandboxed says why the build ran without the sandbox, or is empty.
 	unsandboxed string
 	// substituted reports that the package came from a cache, and cacheNotes
@@ -57,6 +64,21 @@ type installed struct {
 	// it in runtime.deps, for the deps too.
 	linkNotes []string
 }
+
+// fitMode says what install does with a platform that the manifest has no
+// artifact and no build for.
+type fitMode int
+
+const (
+	// fitStrict makes it an error, as for a dep, `oku shell` and `manifest test`.
+	fitStrict fitMode = iota
+	// fitNarrow leaves it out, and the result has the narrowed when, which add
+	// and update write to the list. A package that fits none is an error.
+	fitNarrow
+	// fitReport leaves it out, and sync reports the package. A package that fits
+	// none keeps its lock entry and installs nothing.
+	fitReport
+)
 
 // request says what install should fetch and what it must match.
 type request struct {
@@ -99,6 +121,10 @@ type request struct {
 	// lockOnly pins the package for platforms and installs nothing. sync sets it
 	// for a package whose when leaves out the host.
 	lockOnly bool
+	// when is the list entry's when, and fit says what install does with a
+	// platform the manifest has no artifact or build for.
+	when platform.When
+	fit  fitMode
 	// approve decides whether a manifest may run its build commands, or, with an
 	// artifact, the command that generates the artifact's completions.
 	approve func(m *manifest.Manifest, host platform.Platform, a *manifest.Artifact) error
@@ -212,17 +238,35 @@ func (e env) install(ctx context.Context, opts Options, req request) (installed,
 		return installed{}, err
 	}
 
-	// A release for one OS cannot pin the lock's platforms of another. The
-	// list entry gets a when for that OS, as the user would write for it.
-	when, err := coveredOS(fetched, inferred.Text, req.platforms)
+	m, err := manifest.Parse(fetched.Data, req.ref.String())
 	if err != nil {
 		return installed{}, err
 	}
 
-	if when.OS != "" {
+	// install drops a platform that the manifest has no artifact and no build
+	// for from the request, so the rest of the list still installs there.
+	fits, unsupported := supportedTargets(m, req)
+	if req.fit == fitStrict {
+		unsupported = nil
+	}
+
+	if len(unsupported) > 0 && len(fits) == 0 {
+		if req.fit == fitNarrow {
+			return installed{}, noSupportError(m, unsupported)
+		}
+
+		// sync keeps what oku.lock pins, installs nothing, and reports the package.
+		return installed{
+			lock: req.previous, lockOnly: true, unsupported: unsupported,
+			when: narrowedWhen(m, req.when),
+		}, nil
+	}
+
+	if len(unsupported) > 0 {
 		req.platforms = slices.DeleteFunc(slices.Clone(req.platforms), func(p platform.Platform) bool {
-			return !when.Matches(p)
+			return !m.Supports(p)
 		})
+		req.lockOnly = req.lockOnly || !m.Supports(platform.Host())
 	}
 
 	got, err := e.installFrom(ctx, opts, req, fetched, inferred.Text)
@@ -233,51 +277,73 @@ func (e env) install(ctx context.Context, opts Options, req request) (installed,
 		return installed{}, fmt.Errorf("%w\n%s", err, inferredHints(req, inferred))
 	}
 
-	got.when = when
+	got.lockOnly = req.lockOnly
+	got.support = slices.DeleteFunc(platform.All(), func(p platform.Platform) bool {
+		return !m.Supports(p)
+	})
+
+	if len(unsupported) > 0 {
+		got.unsupported = unsupported
+		got.when = narrowedWhen(m, req.when)
+	}
 
 	return got, err
 }
 
-// coveredOS returns a selector for the one OS that an inferred manifest has
-// artifacts for, when platforms names another OS. It is zero for a manifest
-// that oku did not infer, that covers several OSes, or that covers every
-// platform in platforms.
-func coveredOS(
-	fetched ref.Fetched,
-	inferred string,
-	platforms []platform.Platform,
-) (platform.Selector, error) {
-	if inferred == "" {
-		return platform.Selector{}, nil
+// supportedTargets splits the platforms install works for, the host unless
+// req only locks and the platforms of req, into those that m has an artifact
+// or a build for and the rest.
+func supportedTargets(m *manifest.Manifest, req request) (fits, unsupported []platform.Platform) {
+	targets := req.platforms
+	if !req.lockOnly {
+		targets = append([]platform.Platform{platform.Host()}, targets...)
 	}
 
-	m, err := manifest.Parse(fetched.Data, "the inferred manifest")
-	if err != nil {
-		return platform.Selector{}, err
-	}
-
-	var oses []string
-
-	for _, a := range m.Artifacts {
-		if a.Match.OS == "" {
-			return platform.Selector{}, nil
-		}
-
-		if !slices.Contains(oses, a.Match.OS) {
-			oses = append(oses, a.Match.OS)
+	for _, p := range targets {
+		if m.Supports(p) {
+			fits = append(fits, p)
+		} else {
+			unsupported = append(unsupported, p)
 		}
 	}
 
-	if len(oses) != 1 || m.HasBuild() {
-		return platform.Selector{}, nil
+	return fits, unsupported
+}
+
+// narrowedWhen returns the when that leaves out every platform m has no
+// artifact or build for, within the platforms that when already matches. It is
+// empty when no platform is left.
+func narrowedWhen(m *manifest.Manifest, when platform.When) platform.When {
+	left := slices.DeleteFunc(when.Of(), func(p platform.Platform) bool { return !m.Supports(p) })
+	if len(left) == 0 {
+		return nil
 	}
 
-	when := platform.Selector{OS: oses[0]}
-	if slices.ContainsFunc(platforms, func(p platform.Platform) bool { return !when.Matches(p) }) {
-		return when, nil
+	return platform.Cover(left)
+}
+
+// noSupportError says that m fits none of the platforms oku works for, and
+// which ones it does fit.
+func noSupportError(m *manifest.Manifest, unsupported []platform.Platform) error {
+	var has []string
+
+	for _, p := range platform.All() {
+		if m.Supports(p) {
+			has = append(has, p.String())
+		}
 	}
 
-	return platform.Selector{}, nil
+	if len(has) == 0 {
+		return fmt.Errorf(
+			"%s has no artifact and no build for %s, nor for any other platform",
+			m.Package.Name, platformNames(unsupported),
+		)
+	}
+
+	return fmt.Errorf(
+		"%s has no artifact or build for %s, only for %s",
+		m.Package.Name, platformNames(unsupported), strings.Join(has, ", "),
+	)
 }
 
 // inferredHints tells the user what oku chose from the release and how to
@@ -391,9 +457,15 @@ func (e env) installFrom(
 		previous.Version == m.Version.Value
 
 	switch {
-	case (build || !ok) && m.HasBuild():
+	case (build || !ok) && m.BuildsOn(host):
 		build = true
 	case build:
+		if m.HasBuild() {
+			return installed{}, fmt.Errorf(
+				"the [build] of %s leaves out %s in its when", m.Package.Name, host,
+			)
+		}
+
 		return installed{}, fmt.Errorf(
 			"%s has no [build], so it cannot be built from source",
 			m.Package.Name,
@@ -829,7 +901,7 @@ func pinFor(
 	switch {
 	case err != nil:
 		return lock.Platform{}, false, err
-	case !ok && m.HasBuild():
+	case !ok && m.BuildsOn(p):
 		pin, err := s.PinBuild(ctx, m, p, store.BuildPin{SourceURL: at.URL, SHA256: at.SHA256})
 		if err != nil {
 			return lock.Platform{}, false, fmt.Errorf("%s for %s: %w", m.Package.Name, p, err)
@@ -943,22 +1015,49 @@ func (e env) manifestData(
 		return fetched, infer.Inferred{}, err
 	}
 
-	var inferred infer.Inferred
+	var (
+		inferred infer.Inferred
+		first    error
+	)
 
-	_, err = e.inferAt(ctx, opts, req.ref.Version, func(version string) (string, error) {
-		var err error
+	// A release with no asset for the host may still have one for a platform of
+	// the lock, which add and sync then pin without installing it here.
+	targets := []platform.Platform{req.target()}
+	if req.fit != fitStrict && !req.lockOnly {
+		targets = append(targets, req.platforms...)
+	}
 
-		inferred, err = e.inferrer(opts).Manifest(
-			ctx, req.ref.Scheme, req.ref.Location, req.target(), infer.Options{
-				Version:   version,
-				Asset:     req.asset,
-				Bin:       req.bin,
-				Platforms: req.platforms,
-			},
-		)
+	for i, target := range targets {
+		_, err = e.inferAt(ctx, opts, req.ref.Version, func(version string) (string, error) {
+			var err error
 
-		return inferred.Text, err
-	})
+			inferred, err = e.inferrer(opts).Manifest(
+				ctx, req.ref.Scheme, req.ref.Location, target, infer.Options{
+					Version:   version,
+					Asset:     req.asset,
+					Bin:       req.bin,
+					Platforms: req.platforms,
+				},
+			)
+
+			return inferred.Text, err
+		})
+
+		if i == 0 && err != nil {
+			first = err
+		}
+
+		if !errors.Is(err, infer.ErrNoAsset) {
+			break
+		}
+	}
+
+	// The host's error names the assets, unless another platform failed for a
+	// reason of its own.
+	if errors.Is(err, infer.ErrNoAsset) {
+		err = first
+	}
+
 	if err != nil {
 		return ref.Fetched{}, infer.Inferred{}, err
 	}
@@ -1210,6 +1309,29 @@ func warn(w io.Writer, format string, args ...any) {
 	}
 
 	fmt.Fprintln(w, text)
+}
+
+// reportNarrowed says which platforms the package has no artifact or build
+// for, and the when that list now says for it.
+func reportNarrowed(w io.Writer, got installed, listPath string) {
+	if len(got.unsupported) == 0 {
+		return
+	}
+
+	warn(
+		w, "%s has no artifact or build for %s, so its entry in %s says when = %s",
+		got.lock.Name, platformNames(got.unsupported), listPath, got.when.TOML(),
+	)
+}
+
+// platformNames joins the names of platforms with commas.
+func platformNames(platforms []platform.Platform) string {
+	names := make([]string, len(platforms))
+	for i, p := range platforms {
+		names[i] = p.String()
+	}
+
+	return strings.Join(names, ", ")
 }
 
 // reportUnsandboxed warns that a build's commands ran without the sandbox.

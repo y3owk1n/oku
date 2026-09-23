@@ -153,7 +153,7 @@ func runAdd(
 		return false, err
 	}
 
-	platforms, strict := e.lockPlatforms(own, platform.Selector{})
+	platforms, strict := e.lockPlatforms(own, nil)
 
 	// A package of a registry runs through, or builds with, the runtime that
 	// the list names.
@@ -171,6 +171,7 @@ func runAdd(
 		previous:        previous,
 		platforms:       platforms,
 		strictPlatforms: strict,
+		fit:             fitNarrow,
 		fromSource:      fromSource,
 		asset:           asset,
 		bin:             bin,
@@ -202,51 +203,58 @@ func runAdd(
 
 	prof := e.profile()
 
-	staged, err := prof.Add(got.profile, lockData)
-	if err != nil {
-		return false, err
+	// oku only pins a package that has nothing for this machine, so the current
+	// generation stays.
+	c := change{to: prof.Current(), system: system}
+	if !got.lockOnly {
+		if c.to, err = prof.Add(got.profile, lockData); err != nil {
+			return false, err
+		}
+
+		c.staged = true
 	}
 
-	err = e.apply(cmd, opts, change{
-		to: staged, staged: true, system: system,
-		commit: func() error {
-			err := list.Set(
-				e.listPath(),
-				got.lock.Name,
-				list.Entry{
-					Ref:     ref.InDir(filepath.Dir(e.listPath()), r.String()),
-					Version: r.Version,
-					Service: enable,
-					System:  system,
-					When:    got.when,
-				},
-			)
-			if err != nil {
-				return err
-			}
+	c.commit = func() error {
+		err := list.Set(
+			e.listPath(),
+			got.lock.Name,
+			list.Entry{
+				Ref:     ref.InDir(filepath.Dir(e.listPath()), r.String()),
+				Version: r.Version,
+				Service: enable,
+				System:  system,
+				When:    got.when,
+			},
+		)
+		if err != nil {
+			return err
+		}
 
-			return locked.Write(e.lockPath())
-		},
-	})
-	if err != nil {
+		return locked.Write(e.lockPath())
+	}
+
+	if err := e.apply(cmd, opts, c); err != nil {
 		return false, err
 	}
 
 	reportInferred(cmd.OutOrStdout(), got, flags.verbose)
-
-	if got.when.OS != "" {
-		warn(
-			cmd.ErrOrStderr(),
-			"%s has a release for %s only, so its entry in %s says when = %s",
-			got.lock.Name, got.when.OS, e.listPath(), got.when.TOML(),
-		)
-	}
+	reportNarrowed(cmd.ErrOrStderr(), got, e.listPath())
 
 	e.reportFirstUse(cmd.ErrOrStderr(), got)
 	reportUnsandboxed(cmd.ErrOrStderr(), got)
 	reportLinks(cmd.ErrOrStderr(), got)
 	reportCache(cmd.ErrOrStderr(), got)
 	s := ui.For(cmd.OutOrStdout())
+
+	if got.lockOnly {
+		fmt.Fprintln(cmd.OutOrStdout(), s.Done(
+			"added "+s.Bold(got.lock.Name)+" "+got.lock.Version+
+				", pinned and not installed on "+platform.Host().String(),
+		))
+
+		return false, nil
+	}
+
 	fmt.Fprintln(cmd.OutOrStdout(), s.Done("added "+s.Bold(got.lock.Name)+" "+got.lock.Version))
 
 	programs, _ := filepath.Glob(filepath.Join(got.profile.StorePath, "bin", "*"))

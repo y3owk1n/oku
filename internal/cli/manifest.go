@@ -520,7 +520,7 @@ func runManifestTest(
 
 	got, err := e.install(cmd.Context(), opts, request{
 		ref:        r,
-		fromSource: m.HasBuild(),
+		fromSource: m.BuildsOn(platform.Host()),
 		approve:    e.approver(cmd, opts, flags),
 		log:        buildLog(cmd, flags),
 		progress: func(step, total int, kind string, err error) {

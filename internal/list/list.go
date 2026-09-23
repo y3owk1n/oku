@@ -27,8 +27,8 @@ const FileName = "oku.toml"
 type Entry struct {
 	Ref     string
 	Version string
-	// When limits the package to matching platforms. The zero value matches all.
-	When platform.Selector
+	// When limits the package to matching platforms. The empty When matches all.
+	When platform.When
 	// Service enables the package's services, so they start now and at login.
 	Service bool
 	// System puts the package's apps, fonts and services in system scope, for
@@ -54,8 +54,8 @@ type File struct {
 	Key    string
 	// Mode is the permission of a file with content. Zero means read-only.
 	Mode fs.FileMode
-	// When limits the entry to matching platforms. The zero value matches all.
-	When platform.Selector
+	// When limits the entry to matching platforms. The empty When matches all.
+	When platform.When
 	// Vars overrides [vars] for a text or a render entry.
 	Vars map[string]string
 }
@@ -397,29 +397,9 @@ func toFile(value any) (File, error) {
 
 	var err error
 
-	f.When, err = toSelector(table["when"])
+	f.When, err = platform.ParseWhen(table["when"])
 
 	return f, err
-}
-
-// toSelector reads a when table. A missing one matches every platform.
-func toSelector(value any) (platform.Selector, error) {
-	var sel platform.Selector
-
-	when, _ := value.(map[string]any)
-	for key, field := range map[string]*string{
-		"os": &sel.OS, "arch": &sel.Arch, "libc": &sel.Libc,
-	} {
-		*field, _ = when[key].(string)
-	}
-
-	for key := range when {
-		if key != "os" && key != "arch" && key != "libc" {
-			return sel, fmt.Errorf("when.%s is not a selector key, use os, arch or libc", key)
-		}
-	}
-
-	return sel, nil
 }
 
 // toEntry accepts the short form "ref" and the table form { ref, version, when }.
@@ -441,7 +421,7 @@ func toEntry(value any) (Entry, error) {
 
 		var err error
 
-		e.When, err = toSelector(v["when"])
+		e.When, err = platform.ParseWhen(v["when"])
 
 		return e, err
 	default:
@@ -452,7 +432,7 @@ func toEntry(value any) (Entry, error) {
 // Set writes entry under name in the list at path. It edits the file's text, so
 // the user's comments and ordering stay.
 func Set(path, name string, entry Entry) error {
-	return edit(path, name, formatLine(name, entry))
+	return edit(path, name, Line(name, entry))
 }
 
 // Delete removes name from the list at path.
@@ -460,10 +440,11 @@ func Delete(path, name string) error {
 	return edit(path, name, "")
 }
 
-func formatLine(name string, entry Entry) string {
+// Line is the line of oku.toml that declares entry under name.
+func Line(name string, entry Entry) string {
 	value := fmt.Sprintf("%q", entry.Ref)
 
-	if entry.Version != "" || entry.Service || entry.System || entry.When != (platform.Selector{}) {
+	if entry.Version != "" || entry.Service || entry.System || len(entry.When) > 0 {
 		fields := []string{fmt.Sprintf("ref = %q", entry.Ref)}
 
 		if entry.Version != "" {
@@ -478,7 +459,7 @@ func formatLine(name string, entry Entry) string {
 			fields = append(fields, "system = true")
 		}
 
-		if entry.When != (platform.Selector{}) {
+		if len(entry.When) > 0 {
 			fields = append(fields, "when = "+entry.When.TOML())
 		}
 

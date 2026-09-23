@@ -309,6 +309,13 @@ func (m *Manifest) validate() error {
 		}
 
 		m.Build.Deps = deps
+
+		when, err := platform.ParseWhen(m.Build.RawWhen)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("build.%w", err))
+		}
+
+		m.Build.When = when
 	}
 
 	for i, app := range m.Apps {
@@ -511,6 +518,18 @@ func (m *Manifest) ServicesFor(p platform.Platform) []Service {
 // HasBuild reports whether the manifest declares a source build.
 func (m *Manifest) HasBuild() bool {
 	return m.Build != nil && len(m.Build.Steps) > 0
+}
+
+// BuildsOn reports whether the manifest's [build] applies to p.
+func (m *Manifest) BuildsOn(p platform.Platform) bool {
+	return m.HasBuild() && m.Build.When.Matches(p)
+}
+
+// Supports reports whether the manifest has an artifact or a build for p.
+func (m *Manifest) Supports(p platform.Platform) bool {
+	return m.BuildsOn(p) || slices.ContainsFunc(m.Artifacts, func(a Artifact) bool {
+		return a.Match.Matches(p)
+	})
 }
 
 // Select returns the first artifact whose selector matches p and expands the

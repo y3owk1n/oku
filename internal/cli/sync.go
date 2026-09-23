@@ -17,6 +17,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/y3owk1n/oku/internal/list"
 	"github.com/y3owk1n/oku/internal/lock"
 	"github.com/y3owk1n/oku/internal/platform"
 	"github.com/y3owk1n/oku/internal/profile"
@@ -236,10 +237,19 @@ func reconcile(
 			wantManifest = previous.ManifestSHA256
 		}
 
+		// update writes a narrowed when to the user's own list. sync, and update
+		// of an included package, report it.
+		fit := fitReport
+		if fresh && wanted[name].from == "" {
+			fit = fitNarrow
+		}
+
 		jobs = append(jobs, &job{
 			name: name, fresh: fresh, locksManifest: locksManifest,
 			req: request{
 				ref:             r,
+				when:            wanted[name].entry.When,
+				fit:             fit,
 				platforms:       platforms,
 				strictPlatforms: strict,
 				lockOnly:        lockOnly,
@@ -368,6 +378,10 @@ func reconcile(
 	var (
 		pkgs    []profile.Package
 		summary = style.Table("", "package", "version", "")
+		// narrowed holds the packages whose when update narrows, and unfit the
+		// ones sync left out on a platform they have no build for.
+		narrowed []*job
+		unfit    []error
 		// A terminal gets one note for all the manifests oku inferred.
 		inferred []installed
 	)
@@ -379,6 +393,9 @@ func reconcile(
 		switch {
 		case err != nil:
 			return unchanged(fmt.Errorf("%s: %w", name, err))
+		case got.lock.Name == "" && len(got.unsupported) > 0:
+			// A package that fits no platform and that the lock does not pin yet
+			// has no entry to keep.
 		case got.lock.Name != name:
 			return unchanged(fmt.Errorf(
 				"%s lists %s, but the manifest at %s is named %s",
@@ -401,10 +418,23 @@ func reconcile(
 		reportLinks(cmd.ErrOrStderr(), got)
 		reportCache(cmd.ErrOrStderr(), got)
 
-		next.Set(got.lock)
+		if got.lock.Name != "" {
+			next.Set(got.lock)
+		}
 
-		if !j.req.lockOnly {
+		if !got.lockOnly {
 			pkgs = append(pkgs, got.profile)
+		}
+
+		switch {
+		case len(got.unsupported) > 0 && j.req.fit == fitNarrow:
+			narrowed = append(narrowed, j)
+		case len(got.unsupported) > 0:
+			unfit = append(unfit, e.unfitError(wanted[name], name, got))
+		}
+
+		if j.fresh && j.req.previous.Version != "" && j.req.previous.Version != got.lock.Version {
+			reportGained(cmd.ErrOrStderr(), all.own, name, j.req.when, got)
 		}
 	}
 
@@ -476,14 +506,33 @@ func reconcile(
 
 	c := change{
 		to: staged, staged: true, system: system, before: before, dryRun: dryRun,
-		commit: func() error { return next.Write(e.lockPath()) },
+		commit: func() error {
+			for _, j := range narrowed {
+				entry := all.own.Packages[j.name]
+				entry.When = j.got.when
+
+				if err := list.Set(e.listPath(), j.name, entry); err != nil {
+					return err
+				}
+			}
+
+			return next.Write(e.lockPath())
+		},
 	}
 	if staged == 0 {
 		c.to, c.staged = e.profile().Current(), false
 	}
 
-	if err := e.apply(cmd, opts, c); err != nil || dryRun {
+	if err := e.apply(cmd, opts, c); err != nil {
 		return err
+	}
+
+	for _, j := range narrowed {
+		reportNarrowed(cmd.ErrOrStderr(), j.got, e.listPath())
+	}
+
+	if dryRun {
+		return errors.Join(unfit...)
 	}
 
 	held := holds(profile.Generation{Packages: pkgs, Files: files, Settings: wantedSettings})
@@ -496,11 +545,70 @@ func reconcile(
 		)))
 	case staged != 0:
 		fmt.Fprintf(out, "profile now holds %s, generation %d, %s\n", held, staged, took)
-	default:
+	case len(unfit) == 0:
 		fmt.Fprintln(out, style.Done("already in sync"))
 	}
 
-	return nil
+	return errors.Join(unfit...)
+}
+
+// unfitError says that sync left out a package on the platforms it has no
+// artifact or build for, and gives the line of oku.toml that says so.
+func (e env) unfitError(l listed, name string, got installed) error {
+	where := "sync left it out there"
+	if slices.Contains(got.unsupported, platform.Host()) {
+		where = "sync did not install it"
+	}
+
+	if len(got.when) == 0 {
+		return fmt.Errorf(
+			"%s has no artifact or build for %s, so %s\n"+
+				"it has none for any platform its when matches, so remove it from the list",
+			name, platformNames(got.unsupported), where,
+		)
+	}
+
+	entry := l.entry
+	entry.When = got.when
+
+	if l.from != "" {
+		return fmt.Errorf(
+			"%s has no artifact or build for %s, so %s\n"+
+				"the list %s declares it, and its entry there needs when = %s",
+			name, platformNames(got.unsupported), where, l.from, got.when.TOML(),
+		)
+	}
+
+	return fmt.Errorf(
+		"%s has no artifact or build for %s, so %s\nchange its line in %s to\n  %s",
+		name, platformNames(got.unsupported), where, e.listPath(), list.Line(name, entry),
+	)
+}
+
+// reportGained names the host and [lock] platforms that the package's when
+// leaves out and that its new version has an artifact or a build for. oku never
+// widens a when, because the user may have narrowed it on purpose.
+func reportGained(
+	w io.Writer,
+	own *list.List,
+	name string,
+	when platform.When,
+	got installed,
+) {
+	var gained []platform.Platform
+
+	for _, p := range append([]platform.Platform{platform.Host()}, own.LockPlatforms...) {
+		if !when.Matches(p) && slices.Contains(got.support, p) && !slices.Contains(gained, p) {
+			gained = append(gained, p)
+		}
+	}
+
+	if len(gained) > 0 {
+		warn(
+			w, "%s %s has an artifact or a build for %s, which its when leaves out",
+			name, got.lock.Version, platformNames(gained),
+		)
+	}
 }
 
 // elapsed rounds a duration for the closing line: to the second, or under a
@@ -633,7 +741,10 @@ func (j *job) row(s ui.Style, host platform.Platform) (kind, version, note strin
 	switch {
 	case j.req.rebuild:
 		return "~", version, "built again"
-	case j.req.lockOnly:
+	case j.got.lockOnly && got.lock.Name == "":
+		// A package that fits no platform has nothing pinned to show.
+		return "", "", ""
+	case j.got.lockOnly:
 		return "·", version, "pinned and not installed on " + host.String()
 	case !j.locksManifest:
 		return "+", version, ""

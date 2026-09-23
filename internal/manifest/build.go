@@ -18,6 +18,10 @@ type Build struct {
 	Deps    []Dep  `toml:"-"`
 	Source  Source `toml:"source"`
 	Steps   []Step `toml:"step"`
+	// RawWhen is "when" as TOML gives it. Parse converts it into When, the
+	// platforms the build applies to.
+	RawWhen any           `toml:"when"`
+	When    platform.When `toml:"-"`
 }
 
 // Source is where the code comes from: a git tag, or an archive with a digest.

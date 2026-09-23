@@ -58,6 +58,16 @@ The keys are `os`, `arch` and `libc`, with the values described in the
 [manifest reference](manifest.md#match-values). A missing key matches anything.
 Any other key is an error.
 
+For several platforms, write an array of tables. The package goes on a machine
+that any of them matches:
+
+```toml
+[packages]
+fd = { ref = "github:you/recipes#fd", when = [{ os = "darwin" }, { os = "linux" }] }
+```
+
+A `[files]` entry takes `when` in the same two forms.
+
 `oku sync` does not install a package whose `when` does not match the machine.
 If the lock already has an entry for it from another machine, that entry stays.
 oku can also pin such a package from your machine, see
@@ -453,9 +463,35 @@ that. The one exception is the vendor digest of your own machine. oku records
 it beside the build in the store, a build from an older oku has none, and only
 a new build gives it.
 
-- A named platform that a package has no artifact and no build for is an
-  error. Limit such a package with `when`, and oku pins it for the platforms
-  that `when` matches.
+- A package may have no artifact and no build for some of the named
+  platforms, such as a macOS app or a tool with no Windows release. `oku add`
+  pins it for the others, writes a `when` that leaves those platforms out, and
+  says so:
+
+  ```
+  rectangle has no artifact or build for linux-amd64-glibc, windows-amd64,
+  so its entry in ~/.config/oku/oku.toml says when = { os = "darwin" }
+  ```
+
+  When your own machine is one of them, `add` pins the package for the others
+  and installs nothing. `add` fails only when the package has nothing for
+  your machine or for any `[lock]` platform.
+- When a new version drops a platform that the entry's `when` matches,
+  `oku update` narrows the `when` the same way. It never widens one, because
+  you may have narrowed it on purpose. When a new version gains a platform
+  that `when` leaves out, it tells you, and you can widen the `when` yourself.
+- `oku sync` never edits `oku.toml`. It installs the rest of the list, does
+  not install or pin the package on the platforms that have no artifact or
+  build, and then fails with the line to write:
+
+  ```
+  rectangle has no artifact or build for linux-amd64-glibc, so sync did not install it
+  change its line in ~/.config/oku/oku.toml to
+    rectangle = { ref = "github:you/recipes#rectangle", when = { os = "darwin" } }
+  ```
+
+  For a package from an included list, it names that list and the `when` its
+  entry needs there.
 - Without `[lock]`, `add` and `update` pin your own platform only, in a
   [project](projects.md) as in the global list. Name the platforms of the
   machines that share the lock, and oku does the work for those and no more.

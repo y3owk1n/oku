@@ -160,7 +160,7 @@ func TestB199AFailedInstallFromAnInferredManifestSaysWhatToTypeInstead(t *testin
 	}
 }
 
-func TestB230AnInferredManifestForOneOSLimitsItsEntryWithWhen(t *testing.T) {
+func TestB271AnInferredManifestForOneOSLimitsItsEntryWithWhen(t *testing.T) {
 	m := newMachine(t)
 	archive, _ := m.archive(t, "release", map[string]string{"tool": script})
 	other := otherPlatform()
@@ -178,15 +178,15 @@ func TestB230AnInferredManifestForOneOSLimitsItsEntryWithWhen(t *testing.T) {
 		t.Fatalf("add should limit the entry instead of failing: %v\n%s", err, out)
 	}
 
-	hostOS := platform.Host().OS
-	if !strings.Contains(out, "has a release for "+hostOS+" only") {
+	if !strings.Contains(out, "has no artifact or build for "+other.String()) {
 		t.Fatalf("add should say why the entry got a when:\n%s", out)
 	}
 
 	own, err := os.ReadFile(filepath.Join(m.config, "oku.toml"))
 	must(t, err)
 
-	if !strings.Contains(string(own), `when = { os = "`+hostOS+`" }`) {
+	hostOS := platform.Host().OS
+	if !strings.Contains(string(own), `when = { os = "`+hostOS+`"`) {
 		t.Fatalf("oku.toml should limit the package to %s:\n%s", hostOS, own)
 	}
 
