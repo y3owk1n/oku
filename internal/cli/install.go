@@ -343,14 +343,19 @@ func (e env) installFrom(
 		)
 	}
 
-	// A pin in the list decides the version. Without one, sync stays on the locked
-	// version, and add and update take the newest.
+	// A version in the list limits the versions oku may pick. sync stays on the
+	// locked version while the list allows it, and add and update take the
+	// newest that it allows.
 	release := resolve.Release{
 		Version: previous.Version, Tag: previous.Tag, Commit: previous.TagCommit,
 	}
 
-	keep := req.keepVersion && previous.Version != "" &&
-		(r.Version == "" || r.Version == previous.Version)
+	allowed, err := resolve.Matches(previous.Version, r.Version)
+	if err != nil {
+		return installed{}, fmt.Errorf("%s: %w", r, err)
+	}
+
+	keep := req.keepVersion && previous.Version != "" && allowed
 	switch {
 	case keep:
 	case r.Version == "" && req.constraint != "":
@@ -901,7 +906,12 @@ func (e env) manifestData(
 	}
 
 	if write := e.inferrerOf(req.ref.Kind); write != nil {
-		text, err := write(ctx, opts, req)
+		text, err := e.inferAt(ctx, opts, req.ref.Version, func(version string) (string, error) {
+			at := req
+			at.ref.Version = version
+
+			return write(ctx, opts, at)
+		})
 
 		return ref.Fetched{Data: []byte(text)}, infer.Inferred{Text: text}, err
 	}
@@ -932,19 +942,71 @@ func (e env) manifestData(
 		return fetched, infer.Inferred{}, err
 	}
 
-	inferred, err := e.inferrer(opts).Manifest(
-		ctx, req.ref.Scheme, req.ref.Location, req.target(), infer.Options{
-			Version:   req.ref.Version,
-			Asset:     req.asset,
-			Bin:       req.bin,
-			Platforms: req.platforms,
-		},
-	)
+	var inferred infer.Inferred
+
+	_, err = e.inferAt(ctx, opts, req.ref.Version, func(version string) (string, error) {
+		var err error
+
+		inferred, err = e.inferrer(opts).Manifest(
+			ctx, req.ref.Scheme, req.ref.Location, req.target(), infer.Options{
+				Version:   version,
+				Asset:     req.asset,
+				Bin:       req.bin,
+				Platforms: req.platforms,
+			},
+		)
+
+		return inferred.Text, err
+	})
 	if err != nil {
 		return ref.Fetched{}, infer.Inferred{}, err
 	}
 
 	return ref.Fetched{Data: []byte(inferred.Text), Commit: fetched.Commit}, inferred, nil
+}
+
+// inferAt infers a manifest with write for the version that want selects. An
+// inferrer reads one exact version, and a forge inferrer falls back to the
+// newest release when no tag matches. inferAt picks the version from the
+// versions of the first manifest, and infers again when the pick differs from
+// the version the first inference read, as it does for a range or a prefix
+// such as "22".
+func (e env) inferAt(
+	ctx context.Context,
+	opts Options,
+	want string,
+	write func(version string) (string, error),
+) (string, error) {
+	if want == "" {
+		return write("")
+	}
+
+	first := want
+	if resolve.IsRange(want) {
+		first = ""
+	}
+
+	text, err := write(first)
+	if errors.Is(err, infer.ErrNoVersion) {
+		first = ""
+		text, err = write(first)
+	}
+
+	if err != nil {
+		return "", err
+	}
+
+	m, err := manifest.Parse([]byte(text), "the inferred manifest")
+	if err != nil {
+		return "", err
+	}
+
+	release, err := e.resolver(opts).Pick(ctx, m.Version, want)
+	if err != nil || release.Version == first {
+		return text, err
+	}
+
+	return write(release.Version)
 }
 
 // isDownload reports whether a URL is the package itself and not a manifest.

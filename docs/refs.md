@@ -49,9 +49,24 @@ that release. An unknown version fails and names the five newest. With a
 manifest that fixes one version, the pin only checks that the manifest provides
 it.
 
-`oku.toml` records the pin as `{ ref = "...", version = "1.4.0" }`, and
-`oku update` leaves a pinned package on its version. Without a pin, `oku add`
-and `oku update` take the newest version.
+A version that no release has exactly is a prefix. `@22` picks the newest 22.x,
+and `@1.26` the newest 1.26.x. A range picks the newest version inside it:
+
+| Range | Allows |
+| --- | --- |
+| `^1.4` | 1.4 and newer, below 2. `^0.4` allows versions below 0.5. |
+| `~1.4` | 1.4 and newer, below 1.5. |
+| `>=1.2, <2` | Every part must hold. A part is `>=`, `>`, `<=`, `<` or `=` and a version. |
+
+Quote a range in the shell, as in `oku add 'npm:prettier@^3'`.
+
+`oku.toml` records the version as `{ ref = "...", version = "^1.4" }`.
+`oku.lock` pins the version oku picked, and `oku sync` keeps it while the
+list's version allows it. `oku update` moves the package to the newest version
+the list allows, so an exact version stays where it is. When you change the
+version in `oku.toml` so that it no longer allows the locked one, `oku sync`
+picks the newest version it allows. Without a version, `oku add` and
+`oku update` take the newest.
 
 ## How each kind is fetched
 

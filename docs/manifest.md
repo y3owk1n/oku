@@ -955,9 +955,10 @@ deps = ["github:someone/recipes#ca-certificates"]
 
 A dep is a ref string, or a table with `ref` and an optional `version`
 constraint. A constraint is one or more comma-separated parts, and all must
-hold. A part is `>=`, `>`, `<=`, `<` or `=` followed by a version, and a bare
-version means `=`. oku picks the newest version that satisfies it. When none
-does, the error names the constraint and the versions it found.
+hold. A part is `>=`, `>`, `<=`, `<`, `=`, `^` or `~` followed by a version,
+and a bare version means `=`. `^` and `~` work as in npm: `^1.4` allows versions
+below 2 and `~1.4` those below 1.5. oku picks the newest version that satisfies
+it. When none does, the error names the constraint and the versions it found.
 
 A relative file ref starts at the directory of the manifest that names it. In a
 manifest that came from a repo it names a file of the same repo, read at the

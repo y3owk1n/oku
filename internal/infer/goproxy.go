@@ -49,7 +49,7 @@ func (inf *Inferrer) FromGo(ctx context.Context, pkg string, opts GoOptions) (st
 		}
 
 		if !slices.Contains(versions, opts.Version) {
-			return "", fmt.Errorf("the Go module %s has no version %s", module, opts.Version)
+			return "", fmt.Errorf("the Go module %s %w %s", module, ErrNoVersion, opts.Version)
 		}
 	}
 

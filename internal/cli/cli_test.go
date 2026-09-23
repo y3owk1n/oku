@@ -2563,6 +2563,16 @@ func TestB113AddAtAVersionInfersFromThatVersionsRelease(t *testing.T) {
 	if got := m.toolOutput(t); got != "1.3.0" {
 		t.Fatalf("add @1.3.0 installed %q, want the file of the 1.3.0 release", got)
 	}
+
+	// A prefix (B265) infers from the release it picks, not from the newest.
+	out, err = m.run(t, "", "add", "github:owner/tool@1.3")
+	if err != nil {
+		t.Fatalf("add @1.3: %v\n%s", err, out)
+	}
+
+	if got := m.toolOutput(t); got != "1.3.0" {
+		t.Fatalf("add @1.3 installed %q, want the file of the 1.3.0 release", got)
+	}
 }
 
 func TestB122ABinTableWritesAProgramThatRunsADepWithArguments(t *testing.T) {

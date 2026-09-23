@@ -28,6 +28,9 @@ type File struct {
 
 var errNoRelease = errors.New("has no release")
 
+// ErrNoVersion reports that a registry has no version the user asked for.
+var ErrNoVersion = errors.New("has no version")
+
 // Inferrer reads releases from a forge.
 type Inferrer struct {
 	Hosts   forge.Hosts
