@@ -265,7 +265,9 @@ others = []
 if os.path.exists(listed):
     with open(listed) as f:
         others = [line.split(",")[0].split("/", 1)[1] for line in f]
-others = [p for p in others if p and "/" not in p and p not in named]
+# On Windows uv writes each console script as its own launcher, such as
+# http.exe, which the program oku writes replaces.
+others = [p for p in others if p and "/" not in p and os.path.splitext(p)[0] not in named]
 if not scripts and not others:
     sys.exit("the Python package " + name + " has no programs")
 
