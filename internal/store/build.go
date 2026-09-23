@@ -663,7 +663,19 @@ func (s *Store) runStep(
 			return err
 		}
 
-		download, _, err := s.fetch(ctx, url, step.Fetch.SHA256)
+		want := step.Fetch.SHA256
+		if want == "" {
+			checksums, err := manifest.Expand(step.Fetch.SHA256URL, vars)
+			if err != nil {
+				return err
+			}
+
+			if want, err = s.publishedSHA256(ctx, checksums, path.Base(url)); err != nil {
+				return err
+			}
+		}
+
+		download, _, err := s.fetch(ctx, url, want)
 		if err != nil {
 			return err
 		}

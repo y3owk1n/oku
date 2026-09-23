@@ -6217,7 +6217,7 @@ func TestB51FetchStepNeedsASha256AndDownloadsWithOne(t *testing.T) {
 	)+build)
 
 	report, err := m.run(t, "", "manifest", "lint", unpinned)
-	if err == nil || !strings.Contains(report, "a fetch step needs sha256") {
+	if err == nil || !strings.Contains(report, "a fetch step needs sha256 or sha256_url") {
 		t.Fatalf("lint accepted a fetch step without sha256:\n%s", report)
 	}
 
@@ -6234,6 +6234,28 @@ func TestB51FetchStepNeedsASha256AndDownloadsWithOne(t *testing.T) {
 
 	if got := m.toolOutput(t); got != "hello from tool" {
 		t.Fatalf("the program built from the fetched file printed %q", got)
+	}
+
+	// A checksum file that upstream publishes beside the file works in place of
+	// sha256, and a digest in it that the download does not match stops the build.
+	for sum, ok := range map[string]bool{hex.EncodeToString(digest[:]): true, strings.Repeat("0", 64): false} {
+		checksums := filepath.Join(t.TempDir(), "tool.sh.sha256")
+		must(t, os.WriteFile(checksums, []byte(sum+"  tool.sh\n"), 0o644))
+
+		published := newMachine(t)
+		must(t, os.WriteFile(filepath.Join(published.fixtures, "tool.sh"), []byte(script), 0o644))
+
+		ref := published.buildManifest(t, false, "", fmt.Sprintf(
+			"[[build.step]]\nfetch = { url = \"file://%s\", sha256_url = \"file://%s\", to = \"tool.sh\" }\n",
+			filepath.Join(published.fixtures, "tool.sh"), checksums,
+		)+build)
+
+		_, err := published.run(t, "", "manifest", "lint", ref)
+		must(t, err)
+
+		if _, err := published.run(t, "", "add", ref, "--yes"); (err == nil) != ok {
+			t.Fatalf("a fetch with a checksum file that names %s: add returned %v", sum, err)
+		}
 	}
 
 	wrong := newMachine(t)

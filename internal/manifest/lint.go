@@ -236,8 +236,11 @@ func lintStep(i int, s Step) []string {
 	}
 
 	if s.Fetch != nil {
-		if s.Fetch.SHA256 == "" {
-			found = append(found, fmt.Sprintf("build.step[%d]: a fetch step needs sha256", i))
+		switch {
+		case s.Fetch.SHA256 == "" && s.Fetch.SHA256URL == "":
+			found = append(found, fmt.Sprintf("build.step[%d]: a fetch step needs sha256 or sha256_url", i))
+		case s.Fetch.SHA256 != "" && s.Fetch.SHA256URL != "":
+			found = append(found, fmt.Sprintf("build.step[%d]: set sha256 or sha256_url, not both", i))
 		}
 	}
 

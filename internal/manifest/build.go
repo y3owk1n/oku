@@ -77,11 +77,14 @@ type Install struct {
 	Font           []string    `toml:"font"`
 }
 
-// Fetch downloads URL to the path To inside the source directory.
+// Fetch downloads URL to the path To inside the source directory. The download
+// must match SHA256, or the digest for its file name in the checksum file at
+// SHA256URL.
 type Fetch struct {
-	URL    string `toml:"url"`
-	SHA256 string `toml:"sha256"`
-	To     string `toml:"to"`
+	URL       string `toml:"url"`
+	SHA256    string `toml:"sha256"`
+	SHA256URL string `toml:"sha256_url"`
+	To        string `toml:"to"`
 }
 
 // Patch applies the unified diff File, which is in the source directory, to the
