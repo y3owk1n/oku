@@ -143,8 +143,8 @@ order step in `prd/product.md`.
   from any host. The entry holds the artifact's URL and its sha256 from the
   manifest, else from `sha256_url`, else from a download that oku hashes,
   never unpacks and reports as a first use. For a platform with no artifact
-  oku pins a build when the manifest has one, and stops with an error
-  otherwise.
+  oku pins a build when the manifest has one for it. B271 to B273 cover a
+  platform with neither.
 - B180 [2] Without `[lock]`, `add` and `update` pin the host alone, in the
   global list and in a project. Another platform gets its entry when a machine
   of that platform syncs (B15).
@@ -187,6 +187,24 @@ order step in `prd/product.md`.
   `remove` refuses a package only an include declares.
 - B17 [2] `sync` does not install an entry whose `when` does not match the
   host, and its lock entry stays for other platforms.
+- B270 [2] `when` in a list is one table or an array of tables, and matches a
+  platform when any of its tables does. A `[files]` entry takes both forms.
+- B271 [2] `add` leaves out the host and each `[lock]` platform that the
+  manifest has no artifact and no build for. It pins the others, writes a
+  `when` on the entry that matches exactly the platforms the manifest has one
+  for, and says which platforms it left out. With the host left out it
+  installs nothing and says so. It fails only when no platform is left, and
+  names the platforms the manifest has.
+- B272 [2] When a new version of a package in the user's own list has no
+  artifact or build for a platform that its `when` matches and oku works for,
+  `update` narrows the `when` in the same way and says so. It never widens a
+  `when`. When a new version gains a platform that the `when` leaves out,
+  `update` names it.
+- B273 [2] `sync` never edits `oku.toml`. When a package has no artifact or
+  build for the host or a `[lock]` platform that its `when` matches, `sync`
+  leaves the package out there and syncs the rest of the list. It then fails
+  with the line of `oku.toml` that leaves those platforms out. For an included
+  package it names the list and the `when` the entry needs there.
 - B18 [2] `oku sync <ref>` on a machine with no global list adopts that list
   and its lock, then syncs. Two machines of the same platform doing so end
   with identical store hashes. On a machine that has a global list it refuses
@@ -321,15 +339,15 @@ order step in `prd/product.md`.
   the error says which asset oku chose for this machine, which other assets
   fit, and the `oku add --asset` command that picks one. With `--verbose` it
   ends with the inferred manifest.
-- B230 [4] When `[lock] platforms` names another OS and the inferred manifest
-  has artifacts for one OS, `add` pins that OS's platforms alone, writes
-  `when = { os = "<os>" }` on the entry in `oku.toml`, and says so.
+- B230 [4] When a release has no asset for the host, `add` and `sync` infer
+  the manifest from the first `[lock]` platform that has one, and oku pins the
+  package without installing it (B271).
 - B223 [4] `add`, `update` and `sync` open an asset for the host and for each
   `[lock]` platform, and for no other. A platform outside the lock gets an
   artifact when its asset has the ending of an opened one, and none
   otherwise. `manifest init` opens one for every platform.
-- B26 [4] Inference that finds no asset for the host fails and lists the asset
-  names it saw.
+- B26 [4] Inference that finds no asset for the host or a `[lock]` platform
+  fails and lists the asset names it saw.
 - B27 [4] `oku manifest init --from <repo>` writes the inferred manifest to a
   file.
 - B112 [4] `oku add --asset <glob>` and `--bin <name>` choose the asset and the
@@ -427,6 +445,8 @@ order step in `prd/product.md`.
   `[build]` steps in order and installs what `install` steps name. The lock
   records the strategy, so `sync` builds on that platform too.
 - B36 [5] A missing `needs` tool fails before any step runs, naming the tool.
+- B274 [5] `[build] when` limits the build to matching platforms, in the forms
+  of a list's `when`. oku neither builds nor pins a build for any other.
 - B208 [5] A `needs` tool is on the build's `PATH` as a link under its own
   name in a directory oku makes for the build. The other programs of the
   tool's directory are not on `PATH`.
