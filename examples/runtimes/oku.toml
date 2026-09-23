@@ -1,0 +1,13 @@
+# A list that installs one package from each registry, each built or run with a
+# toolchain from this directory. None of the toolchains lands on PATH.
+[runtimes]
+node = { ref = "./node.toml", version = "^22" }
+python = "./python.toml"
+go = "./go.toml"
+rust = "./rust.toml"
+
+[packages]
+prettier = "npm:prettier"
+black = "pypi:black"
+gofumpt = "go:mvdan.cc/gofumpt"
+just = "cargo:just"

@@ -1,0 +1,52 @@
+# rust for [runtimes] rust. A cargo: package builds with its cargo and rustc,
+# and rust stays off PATH, since the programs need nothing of it at run time.
+#
+# This manifest runs the standalone installer's install.sh, so it works on
+# macOS and Linux. On Windows a cargo: package uses the cargo on PATH, such as
+# the one rustup installs.
+[package]
+name = "rust"
+description = "Rust compiler, cargo and the standard library"
+homepage = "https://www.rust-lang.org"
+license = "MIT OR Apache-2.0"
+
+[version]
+from = "github-releases"
+repo = "rust-lang/rust"
+
+# The standalone installer keeps rustc, cargo and the standard library in
+# separate directories. rustc cannot find std until install.sh has merged them
+# into one prefix, so this is a build and not an artifact. Each download is
+# checked against the .sha256 file beside it.
+[build]
+
+[[build.step]]
+when = { os = "darwin", arch = "arm64" }
+fetch = { url = "https://static.rust-lang.org/dist/rust-{{version}}-aarch64-apple-darwin.tar.xz", sha256_url = "https://static.rust-lang.org/dist/rust-{{version}}-aarch64-apple-darwin.tar.xz.sha256", to = "rust.tar.xz" }
+
+[[build.step]]
+when = { os = "darwin", arch = "amd64" }
+fetch = { url = "https://static.rust-lang.org/dist/rust-{{version}}-x86_64-apple-darwin.tar.xz", sha256_url = "https://static.rust-lang.org/dist/rust-{{version}}-x86_64-apple-darwin.tar.xz.sha256", to = "rust.tar.xz" }
+
+[[build.step]]
+when = { os = "linux", arch = "arm64" }
+fetch = { url = "https://static.rust-lang.org/dist/rust-{{version}}-aarch64-unknown-linux-gnu.tar.xz", sha256_url = "https://static.rust-lang.org/dist/rust-{{version}}-aarch64-unknown-linux-gnu.tar.xz.sha256", to = "rust.tar.xz" }
+
+[[build.step]]
+when = { os = "linux", arch = "amd64" }
+fetch = { url = "https://static.rust-lang.org/dist/rust-{{version}}-x86_64-unknown-linux-gnu.tar.xz", sha256_url = "https://static.rust-lang.org/dist/rust-{{version}}-x86_64-unknown-linux-gnu.tar.xz.sha256", to = "rust.tar.xz" }
+
+[[build.step]]
+extract = { file = "rust.tar.xz", to = "rust", strip = 1 }
+
+[[build.step]]
+run = "cd rust && ./install.sh --prefix={{prefix}} --disable-ldconfig --components=rustc,cargo,rust-std-$(ls -d rust-std-* | sed 's/^rust-std-//')"
+shell = "sh"
+
+# rust-objcopy, which cargo uses to strip a release binary, looks for
+# libLLVM.dylib in lib/rustlib/<target>/lib. Only the llvm-tools component puts
+# a second copy there, so link to the one rustc installed.
+[[build.step]]
+when = { os = "darwin" }
+run = "cd {{prefix}}/lib/rustlib/*-apple-darwin/lib && ln -s ../../../libLLVM.dylib libLLVM.dylib"
+shell = "sh"

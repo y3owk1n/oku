@@ -166,6 +166,9 @@ The programs need node. Name a package that provides it in `oku.toml`, once:
 node = 'github:you/recipes#node'
 ```
 
+[`examples/runtimes`](../examples/runtimes) has a node manifest to start from,
+and manifests for python, go and rust.
+
 Every npm package then gets that package as a runtime dep, and its programs run
 through it. They do not need node on `PATH`, and node does not appear there. A
 program that starts `node` by name still finds it, because oku puts that node
@@ -239,6 +242,9 @@ The package's programs need python. Name a package that provides `python3` in
 python = "./packages/python.toml"
 ```
 
+[`examples/runtimes/python.toml`](../examples/runtimes/python.toml) is one for
+macOS, Linux and Windows.
+
 The programs then run through that python. They do not need python on `PATH`,
 and python does not appear there. Without `runtimes.python`, the build and the
 programs use the `python3` that the build finds on its `PATH`, which on macOS is
@@ -281,6 +287,9 @@ The build needs the go command. Name a package that provides it in
 go = "./packages/go.toml"
 ```
 
+[`examples/runtimes/go.toml`](../examples/runtimes/go.toml) is one for macOS,
+Linux and Windows.
+
 Without `runtimes.go` the build uses the `go` on your `PATH`, and reads its
 standard library where `go env GOROOT` says it is. A Go program needs nothing at
 run time, so go is only a build dep and stays out of `PATH` either way.
@@ -309,6 +318,9 @@ The build needs cargo and rustc. Name a package that provides them in
 [runtimes]
 rust = "./packages/rust.toml"
 ```
+
+[`examples/runtimes/rust.toml`](../examples/runtimes/rust.toml) is one for
+macOS and Linux.
 
 Without `runtimes.rust` the build uses the `cargo` on your `PATH`, and a cargo
 that rustup manages works there too. rust is only a build dep and stays out of
