@@ -46,10 +46,11 @@ this machine to find the executable, so run it where a release asset exists.`,
 			}
 
 			r, err := ref.Parse(from)
-			if err != nil || r.Kind != ref.Forge && r.Kind != ref.NPM ||
+			if err != nil || r.Kind != ref.Forge && r.Kind != ref.NPM && r.Kind != ref.PyPI ||
 				r.Fragment != "" || r.Version != "" {
 				return fmt.Errorf(
-					"--from %q: want owner/repo or a ref such as codeberg:owner/repo or npm:@scope/name",
+					"--from %q: want owner/repo or a ref such as codeberg:owner/repo, "+
+						"npm:@scope/name or pypi:name",
 					from,
 				)
 			}
@@ -61,14 +62,20 @@ this machine to find the executable, so run it where a release asset exists.`,
 
 			var text string
 
-			if r.Kind == ref.NPM {
+			if r.Kind == ref.NPM || r.Kind == ref.PyPI {
 				all, listErr := e.mergedList(cmd, opts)
 				if listErr != nil {
 					return listErr
 				}
 
 				e.runtimes = all.runtimes
-				text, err = e.inferNPM(cmd.Context(), opts, request{ref: r})
+
+				write := e.inferNPM
+				if r.Kind == ref.PyPI {
+					write = e.inferPyPI
+				}
+
+				text, err = write(cmd.Context(), opts, request{ref: r})
 			} else {
 				// A published manifest serves every platform, so init opens an
 				// asset for each, where add opens them for the lock's.

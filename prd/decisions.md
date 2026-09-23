@@ -1135,3 +1135,29 @@ whose hash it computes again. They named files beside the list on the machine
 that wrote the lock, which here are files of the repo at the list's commit.
 Why: the author's config directory is the repo, and the adopter's is not, so
 the lock as the author wrote it names files that do not exist on this machine.
+
+## D76. A Python package is a uv install into the store, hashed without paths
+
+`pypi:<name>` infers a manifest with `version.from = "pypi"` and one `pip`
+vendor step with `package`. uv installs the package with `--target` into
+`{{prefix}}/lib/python` and `--exclude-newer` one second after the version's
+last upload, with `UV_PYTHON_DOWNLOADS=never`. The python is `[runtimes] python`
+(D75), else the `python3` on the build's `PATH`. uv is a build dep on
+`github:astral-sh/uv`, which oku infers from its releases, and `[runtimes] uv`
+replaces it.
+
+Why a target directory and not a venv: a venv writes this machine's paths into
+`pyvenv.cfg` and every script, so its digest would differ under another home
+directory and `sync --locked` would fail on the next machine. For the same
+reason the scripts that uv writes into `bin`, and their lines in each
+`RECORD`, stay out of the hash. After the hash oku writes its own program for
+each console script of the package, which runs the python by its path, and
+copies the package's other programs, such as ruff's binary. Why uv: pip cannot
+resolve as of a date, so its digest would change whenever a dependency
+releases, where npm has `--before`. Why uv as an inferred build dep: no
+setup for the user, and the lock pins it like any package. Pins for another
+platform pass `--python-platform` to uv, the way npm gets `npm_config_os`.
+
+A prerelease or a yanked version sorts behind every release, as a forge
+prerelease does (D24). Windows is refused for now, because the vendor step runs
+through sh.

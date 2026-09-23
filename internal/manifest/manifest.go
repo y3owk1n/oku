@@ -15,6 +15,7 @@ import (
 	"github.com/pelletier/go-toml/v2"
 
 	"github.com/y3owk1n/oku/internal/platform"
+	"github.com/y3owk1n/oku/internal/pypi"
 )
 
 // Manifest is one TOML file describing one package.
@@ -86,6 +87,8 @@ const (
 	FromGitBranch = "git-branch"
 	// FromNPM reads the versions of a package in the npm registry.
 	FromNPM = "npm"
+	// FromPyPI reads the versions of a package in the Python Package Index.
+	FromPyPI = "pypi"
 )
 
 // Artifact is a prebuilt download for the platforms its selector matches.
@@ -240,14 +243,22 @@ func (m *Manifest) validate() error {
 			}
 
 			switch {
-			case step.Package == "":
+			case step.Package == "" || step.Vendor != nil && *step.Vendor == "pip":
 				if len(step.Scripts) > 0 {
 					errs = append(errs, fmt.Errorf(
 						`build.step[%d]: scripts needs vendor = "npm" with package`, i,
 					))
 				}
+
+				if step.Package != "" && !pypi.ValidName(step.Package) {
+					errs = append(errs, fmt.Errorf(
+						`build.step[%d]: package must be a Python package name such as "black"`, i,
+					))
+				}
 			case step.Vendor == nil || *step.Vendor != "npm":
-				errs = append(errs, fmt.Errorf(`build.step[%d]: package needs vendor = "npm"`, i))
+				errs = append(errs, fmt.Errorf(
+					`build.step[%d]: package needs vendor = "npm" or "pip"`, i,
+				))
 			case !npmNameRe.MatchString(step.Package):
 				errs = append(errs, fmt.Errorf(
 					`build.step[%d]: package must be an npm package name such as "@scope/name"`, i,
@@ -350,6 +361,13 @@ func (m *Manifest) validate() error {
 			errs,
 			errors.New("version.strip_prefix does not apply to npm, which has no tags"),
 		)
+	case m.Version.From == FromPyPI && !pypi.ValidName(m.Version.Repo):
+		errs = append(errs, errors.New(`version.repo must be a package name such as "black" for pypi`))
+	case m.Version.From == FromPyPI && m.Version.StripPrefix != "":
+		errs = append(
+			errs,
+			errors.New("version.strip_prefix does not apply to pypi, which has no tags"),
+		)
 	case m.Version.From == FromGitTags && m.Version.Repo == "":
 		errs = append(errs, errors.New("version.repo must be a git URL for git-tags"))
 	case m.Version.From == FromGitBranch && (m.Version.Repo == "" || m.Version.Branch == ""):
@@ -363,14 +381,14 @@ func (m *Manifest) validate() error {
 	case m.Version.From != "" && !slices.Contains(
 		[]string{
 			FromGitHubReleases, FromGiteaReleases, FromGitLabReleases,
-			FromGitTags, FromGitBranch, FromNPM,
+			FromGitTags, FromGitBranch, FromNPM, FromPyPI,
 		},
 		m.Version.From,
 	):
 		errs = append(errs, fmt.Errorf(
-			"version.from %q must be %q, %q, %q, %q, %q or %q", m.Version.From,
+			"version.from %q must be %q, %q, %q, %q, %q, %q or %q", m.Version.From,
 			FromGitHubReleases, FromGiteaReleases, FromGitLabReleases,
-			FromGitTags, FromGitBranch, FromNPM,
+			FromGitTags, FromGitBranch, FromNPM, FromPyPI,
 		))
 	}
 

@@ -17,6 +17,7 @@ one per package.
 | `gitlab:group/project` | The same on gitlab.com. A project may be in subgroups, as in `gitlab:group/sub/project`. |
 | `gitlab:host/group/project` | The same on a GitLab server of your own. |
 | `npm:name`, `npm:@scope/name` | A package in the npm registry. It has no manifest, so oku always [infers one](#npm-packages). |
+| `pypi:name` | A package in the Python Package Index, installed with uv. oku always [infers its manifest](#python-packages). |
 | `git+https://host/repo` | `oku.pkg.toml` at the root of any git repo. |
 | `git+https://host/repo#name` | `name.toml` at the root, else `packages/name.toml`. A fragment with no `/` and no `.` is a name. |
 | `git+https://host/repo#dir/name.toml` | That file in the repo. |
@@ -187,6 +188,39 @@ on Windows yet, and says so there.
 Without `runtimes.node` there is no npm to run, so oku installs the package's
 own download only. That works when the download bundles its code, and the
 inferred manifest has a comment that says so.
+
+## Python packages
+
+`oku add pypi:black` installs a command-line tool from the Python Package
+Index. oku asks the index for the package's versions and writes a manifest that
+follows them. `@version` picks a version. A prerelease, such as `2.0rc1` or
+`2.0.dev1`, and a yanked version are never the newest, and `@version` still
+takes one. `oku manifest init --from pypi:black` writes the manifest to a file.
+
+The package's programs need python. Name a package that provides `python3` in
+`[runtimes]`, as for node:
+
+```toml
+[runtimes]
+python = "./packages/python.toml"
+```
+
+The programs then run through that python. They do not need python on `PATH`,
+and python does not appear there. Without `runtimes.python`, the build and the
+programs use the `python3` that the build finds on its `PATH`, which on macOS is
+`/usr/bin/python3` from the Command Line Tools. That python may be too old for a
+package. uv then says which python the package needs.
+
+oku installs the package with [uv](https://github.com/astral-sh/uv), which it
+takes from `github:astral-sh/uv` as a build dep, so uv needs no setup and does
+not appear on `PATH`. `[runtimes] uv` names another uv package. uv installs the
+package and its dependencies as they were when that version was uploaded, and
+never downloads a python of its own. `oku.lock` pins a digest of the install,
+which is the same on every machine of a platform. oku writes a program for
+each console script of the package, and copies any other program the package
+ships, such as ruff's binary. The programs of its dependencies are not
+exposed. A build asks for [approval](trust.md#build-commands) once, or takes
+`--yes`. oku cannot install a pypi package on Windows yet, and says so there.
 
 ## Private repos
 

@@ -122,6 +122,7 @@ oku add github:BurntSushi/ripgrep        # no manifest needed
 oku add github:you/tool@1.4.0            # a manifest next to the code, at a version
 oku add gitlab:gitlab-org/cli            # or codeberg:, gitea:host/..., github:host/...
 oku add npm:prettier                     # runs through a node you pin once
+oku add pypi:black                       # a Python tool, installed with uv
 oku add https://example.com/tool.toml    # a manifest at a URL, or ./tool.toml
 oku add https://example.com/tool-1.2.0-linux-amd64.tar.gz
 oku add github:you/recipes#postgres --service   # runs now and at every login

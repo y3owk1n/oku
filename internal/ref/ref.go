@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"github.com/y3owk1n/oku/internal/pypi"
 )
 
 // Kind is the type of place a ref points at.
@@ -24,6 +26,9 @@ const (
 	// NPM is a package in the npm registry. It has no manifest, so oku always
 	// infers one.
 	NPM
+	// PyPI is a package in the Python Package Index. oku always infers its
+	// manifest too.
+	PyPI
 )
 
 // Target is the kind of file Fetch reads a ref as. It sets the file names Fetch
@@ -143,6 +148,13 @@ func ParseIn(dir, s string) (Ref, error) {
 		if !npmRe.MatchString(r.Location) {
 			return Ref{}, fmt.Errorf("%s: want npm:name or npm:@scope/name", s)
 		}
+	case strings.HasPrefix(body, "pypi:"):
+		r.Kind = PyPI
+		r.Location = strings.TrimPrefix(body, "pypi:")
+
+		if !pypi.ValidName(r.Location) {
+			return Ref{}, fmt.Errorf("%s: want pypi:name", s)
+		}
 	case strings.HasPrefix(body, "git+"):
 		r.Kind = Git
 		r.Location, r.Fragment, _ = strings.Cut(strings.TrimPrefix(body, "git+"), "#")
@@ -184,6 +196,8 @@ func (r Ref) String() string {
 		s = "git+" + s
 	case NPM:
 		s = "npm:" + s
+	case PyPI:
+		s = "pypi:" + s
 	}
 
 	if r.Fragment != "" {

@@ -1095,6 +1095,34 @@ install and not what a script downloads, so the build is marked impure, the
 way a `run` step with `network = true` is, and never goes to a cache. Without
 `scripts` no install script runs.
 
+A pip step with `package` works the same for a Python package. It needs uv
+from a dep and `python3` on the build's `PATH`, from a dep or the system:
+
+```toml
+[version]
+from = "pypi"
+repo = "black"
+
+[runtime]
+deps = ["./python.toml"]
+
+[build]
+deps = ["./python.toml", "github:astral-sh/uv"]
+
+[[build.step]]
+vendor = "pip"
+package = "black"
+```
+
+oku runs `uv pip install --target {{prefix}}/lib/python --exclude-newer <time>`,
+where the time is one second after the version's last file was uploaded, so uv
+picks each dependency as it was then. oku hashes `{{prefix}}/lib/python`
+without the programs that uv writes, because those name the python by its path
+on this machine. Then it writes `{{prefix}}/bin/<name>` for each console script
+of the package, and copies the package's other programs there. Those are the
+programs oku links when the build has no `install` step. `oku add pypi:<name>`
+writes this build, see [Python packages](refs.md#python-packages).
+
 The user's `oku.lock` pins one digest for what the vendor steps downloaded.
 `oku sync` runs them again and fails if the digest differs, so a locked build
 cannot get different packages. `oku update` accepts the new digest. What `pip`

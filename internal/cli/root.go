@@ -69,6 +69,8 @@ type Options struct {
 	GitHubRaw string
 	// NPMRegistry replaces the URL of the npm registry when set.
 	NPMRegistry string
+	// PyPIIndex replaces the URL of the Python Package Index when set.
+	PyPIIndex string
 }
 
 // NewRootCmd builds the oku command tree.
@@ -500,7 +502,9 @@ func (e env) fetcher(opts Options) *ref.Fetcher {
 }
 
 func (e env) resolver(opts Options) *resolve.Resolver {
-	return &resolve.Resolver{Hosts: e.fetcher(opts).Hosts, NPM: opts.NPMRegistry}
+	return &resolve.Resolver{
+		Hosts: e.fetcher(opts).Hosts, NPM: opts.NPMRegistry, PyPI: opts.PyPIIndex,
+	}
 }
 
 func (e env) inferrer(opts Options) *infer.Inferrer {
