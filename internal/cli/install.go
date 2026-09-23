@@ -1054,11 +1054,6 @@ func (e env) inferGo(ctx context.Context, opts Options, req request) (string, er
 		)
 	}
 
-	// The build runs the go command through sh.
-	if platform.Host().OS == "windows" {
-		return "", fmt.Errorf("%s: oku cannot build a go package on Windows yet", req.ref)
-	}
-
 	goRef, _, err := e.runtime(ctx, opts, "go")
 	if err != nil {
 		return "", err

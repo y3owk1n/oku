@@ -1165,25 +1165,31 @@ through sh.
 ## D77. A Go program is a go install from a module cache that oku hashed
 
 `go:<package path>` infers a manifest with `version.from = "go"`, the module
-that holds the package as `repo`, and two build steps. A `go` vendor step with
-`package` runs `go mod download` for the module and then in its directory, with
-`GOMODCACHE` inside the source directory, `GOTOOLCHAIN=local`, and `GOPROXY` and
-`GOSUMDB` set. oku hashes `modcache/cache/download` after it deletes `sumdb`,
-the checksum database's tiles. A run step then runs `go install pkg@version`
-with that cache as a `file://` proxy, `GOSUMDB=off`, `CGO_ENABLED=0` and no
-network. The go command is `[runtimes] go` as a build dep (D75), else a `needs`
-on the go of `PATH`, whose GOROOT the sandbox lets the build read.
+that holds the package as `repo`, and one `go` vendor step whose `package` is
+the package path. The step runs `go mod download` for the module and then in
+its directory, with `GOMODCACHE` inside the source directory,
+`GOTOOLCHAIN=local`, and `GOPROXY` and `GOSUMDB` set. oku hashes
+`modcache/cache/download` after it deletes `sumdb`, the checksum database's
+tiles. After the hash the same step runs `go install pkg@version` with that
+cache as a `file://` proxy, `GOSUMDB=off` and `CGO_ENABLED=0`, into
+`{{prefix}}/bin`. On Windows both parts run through PowerShell, since a vendor
+kind may carry a pwsh script beside its sh one. The go command is
+`[runtimes] go` as a build dep (D75), else a `needs` on the go of `PATH`, whose
+GOROOT the sandbox lets the build read.
 
 Why go install and not go build in the module: only go install records the
 module's version in the program, which `gopls version` and others print. Why
-the cache as a proxy: go install reads a module's deprecation from a proxy, and
-`GOPROXY=off` fails. Why oku sets `GOPROXY`: a go reached through a link may not
-find the `go.env` of its GOROOT, which holds the default proxy. Why no sumdb in
-the hash: its tiles change as the database grows, while the downloads do not.
-Why cgo off: a C compiler is a dep the list does not name, and most Go
-programs do not need one.
+the install in the vendor step and not a run step: a run step names one shell,
+and a manifest would need one step per OS. Why the cache as a proxy: go install
+reads a module's deprecation from a proxy, and `GOPROXY=off` fails. Why oku sets
+`GOPROXY`: a go reached through a link may not find the `go.env` of its GOROOT,
+which holds the default proxy. Why no sumdb in the hash: its tiles change as
+the database grows, while the downloads do not. Why cgo off: a C compiler is a
+dep the list does not name, and most Go programs do not need one.
 
-Windows is refused for now, because the vendor step runs through sh.
+A manifest that oku inferred before the install moved into the vendor step
+holds a separate run step and the module as `package`. `oku update <name>`
+infers it again.
 
 ## D78. A crate builds from its .crate file with the digest crates.io publishes
 
