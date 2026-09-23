@@ -550,6 +550,9 @@ order step in `prd/product.md`.
 - B184 [8] oku installs a `[[service]]` with `when` on the platforms that
   `when` matches and on no other. Two services of a package may share a name
   when their `when` tables match different platforms.
+- B276 [8] A `[[service]]` `when` and a build step's `when` take one table or
+  an array of tables, as a list's `when` does, and match a platform when any
+  table does.
 - B185 [8] On a Linux machine that systemd does not run, or without
   `systemctl`, oku installs a package that ships a service, installs no
   service, and says so once with the reason.
