@@ -325,8 +325,9 @@ order step in `prd/product.md`.
   `oku sync <repo>` turns the relative refs of the lock it adopts into files of
   the repo, so the npm packages that lock pins run on the repo's node.
 - B183 [4] The manifest that `oku.lock` stores for an npm package names a
-  `runtimes.node` file inside the config directory relative to that directory,
-  so `sync` installs from the lock under another home directory.
+  `runtimes.node` file inside the list's directory relative to that directory,
+  so `sync` installs from the lock under another home directory, and from a
+  project's lock in another checkout of the project.
 - B129 [4] With `runtimes.node`, an npm package that lists dependencies is
   built by an npm vendor step with `package`. It installs the package with its
   dependencies as of the version's publish time, runs no install scripts, and
