@@ -121,3 +121,41 @@ func TestB255AnAdoptedLockNamesTheNodeOfTheRepo(t *testing.T) {
 		t.Fatalf("tool printed %q", got)
 	}
 }
+
+func TestB183AProjectLockNamesTheNodeRelativeToTheProject(t *testing.T) {
+	m := newMachine(t)
+	npmServer(t, &m, "", "1.1.0")
+
+	node, err := os.ReadFile(m.fakeNode(t))
+	must(t, err)
+
+	project := filepath.Join(m.fixtures, "work", "api")
+	must(t, os.MkdirAll(filepath.Join(project, "packages"), 0o755))
+	must(t, os.WriteFile(filepath.Join(project, "packages", "node.toml"), node, 0o644))
+	must(t, os.WriteFile(filepath.Join(project, "oku.toml"),
+		[]byte("[runtimes]\nnode = \"./packages/node.toml\"\n"), 0o644))
+
+	m.opts.WorkDir = project
+
+	if out, err := m.run(t, "", "add", "npm:@scope/tool"); err != nil {
+		t.Fatalf("add in a project that names its node: %v\n%s", err, out)
+	}
+
+	locked, err := os.ReadFile(filepath.Join(project, "oku.lock"))
+	must(t, err)
+
+	if !strings.Contains(string(locked), `\"./packages/node.toml\"`) || strings.Contains(string(locked), project) {
+		t.Fatalf("the lock does not name the node relative to the project:\n%s", locked)
+	}
+
+	// Another checkout is the same project at another path.
+	moved := filepath.Join(m.fixtures, "elsewhere")
+	must(t, os.Rename(project, moved))
+	must(t, os.RemoveAll(m.data))
+
+	m.opts.WorkDir = moved
+
+	if out, err := m.run(t, "", "sync", "--locked"); err != nil {
+		t.Fatalf("sync --locked in the moved project: %v\n%s", err, out)
+	}
+}
