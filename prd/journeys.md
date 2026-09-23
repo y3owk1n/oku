@@ -80,11 +80,12 @@ built tool-1.2.0-9f3a in throwaway store
 ### Level 3: serve prebuilt results
 
 ```
-$ oku cache push --to s3://you-oku-cache tool
+$ oku cache push ./cache tool
 ```
 
-CI pushes signed results to a static bucket. The developer publishes the
-public key. Users who trust it download instead of compiling (B85 to B87).
+CI packs signed results into a directory and copies it to any static web
+host. The developer publishes the public key. Users who trust it download
+instead of compiling (B85 to B87).
 
 ### Curators
 
@@ -141,8 +142,10 @@ generation 1 active
 ```
 
 Same versions, same bytes (B18). On a Linux server the same list skips
-`rectangle` and the lock gains a `linux-amd64-glibc` entry per package (B15,
-B17), which the user commits back.
+`rectangle` (B17). When the list names `linux-amd64-glibc` in `[lock]
+platforms`, the Mac already pinned every package for it, and
+`oku sync --locked` on the server downloads only what the lock pins (B179,
+B181).
 
 ### Something breaks
 
@@ -158,14 +161,14 @@ Instant, because 0.11.2 never left the store (B22).
 
 ### Trust moments
 
-oku stops and asks in four cases. Everything else is silent because the lock
-already recorded the decision.
+oku stops in four cases. Everything else is silent because the lock already
+recorded the decision.
 
 1. A manifest with `run` steps, the first time. It shows the commands and
    whether any wants network (B41, B53).
 2. A manifest that changed under a locked ref. `sync` refuses until `update`
    (B13).
-3. A signing key that changed (B89).
+3. A signing key that changed. oku refuses until `--accept-key` (B89).
 4. Anything needing elevation, which only happens with `--system` (B75).
 
 ### Leaving
