@@ -922,7 +922,7 @@ Any step may also set:
 | Key | Meaning |
 |---|---|
 | `when = { os, arch, libc }` | The step only runs on a matching machine. |
-| `shell` | For `run`: `sh`, `bash`, `pwsh` or `cmd`. Default `sh`, except on Windows, which has no default. `oku manifest lint` requires `shell` on every `run` step that can reach Windows. |
+| `shell` | For `run`: `sh`, `bash`, `pwsh` or `cmd`. Default `sh`, except on Windows, which has no default. On Windows without PowerShell 7, `pwsh` runs Windows PowerShell 5.1. `oku manifest lint` requires `shell` on every `run` step that can reach Windows. |
 | `env = { KEY = "value" }` | Extra variables for `run`. Values expand template variables. |
 
 `sh` and `bash` run with `-e`, so the step fails at the first failing command.

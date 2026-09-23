@@ -551,6 +551,11 @@ order step in `prd/product.md`.
 - B81 [9] A binary with DLL deps in other store paths, or beside its real file
   in its own download, starts from any working directory, and so does a build
   step that runs such a binary of a dep.
+- B269 [9] On Windows, a build step with `shell = "pwsh"`, and oku's own steps
+  for `npm:`, `pypi:`, `go:` and `cargo:` refs, run PowerShell 7 when it is on
+  `PATH` and the Windows PowerShell 5.1 that Windows ships otherwise. The
+  Windows live test builds a `go:` and a `pypi:` ref with PowerShell 7 off
+  `PATH`.
 - B82 [9] `oku hook pwsh` gives B61 to B68 in PowerShell, on Windows, macOS
   and Linux, and keeps `$LASTEXITCODE` across the prompt.
 

@@ -808,6 +808,22 @@ Oku add $pythonToml
 $version = & "$bin\python.exe" --version
 Check 'a program that loads a DLL beside it in its download runs from its shim' { $version -match '^Python 3\.13' }
 
+# A machine without PowerShell 7 builds registry packages with the Windows
+# PowerShell 5.1 that Windows ships. The runner has PowerShell 7, so its
+# directory leaves PATH for these two builds.
+$pathBefore = $env:PATH
+$env:PATH = (($env:PATH -split ';') | Where-Object { $_ -and -not (Test-Path (Join-Path $_ 'pwsh.exe')) }) -join ';'
+try {
+    Check 'pwsh is off PATH for this case' { -not (Get-Command pwsh -ErrorAction SilentlyContinue) }
+    Oku add --yes go:mvdan.cc/sh/v3/cmd/shfmt pypi:cowsay
+} finally {
+    $env:PATH = $pathBefore
+}
+$shfmt = & "$bin\shfmt.exe" --version
+Check 'a go: ref builds with Windows PowerShell when PowerShell 7 is missing' { $shfmt -match '\d+\.\d+' }
+$moo = (& "$bin\cowsay.exe" -t moo) -join "`n"
+Check 'a pypi: ref builds with Windows PowerShell when PowerShell 7 is missing' { $moo -match 'moo' }
+
 # In this project the go package is also the runtime of a go: package, so one
 # sync downloads the go zip twice at once. Windows refuses to replace the file
 # while the other install unpacks it.

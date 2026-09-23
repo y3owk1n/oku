@@ -188,7 +188,10 @@ on, which a service needs.
 ## Builds
 
 A `run` step that can run on Windows must name its shell, `pwsh` or `cmd`.
-`oku manifest lint` reports a step that does not.
+`oku manifest lint` reports a step that does not. `pwsh` is PowerShell 7 when it
+is installed, and the Windows PowerShell 5.1 that Windows ships otherwise. oku's
+own steps for `npm:`, `pypi:`, `go:` and `cargo:` refs run the same way, so they
+need no PowerShell 7.
 
 Windows has no sandbox that oku can use, so a build can reach the network and
 read your files. oku prints that warning after every build. The build still gets
