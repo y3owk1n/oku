@@ -5,7 +5,7 @@ include = []
 [[package]]
 name = 'go'
 ref = './.oku/go.toml'
-manifest_sha256 = '850dfc0af428be9b5da144c08de9d6c247b2bd41a401c160d99a076a8ce62691'
+manifest_sha256 = '2022b9ea9d9e33afb9ca6a565a6ec9b4655f57311f5c8db4f0a5d6fe81b191ae'
 version = '1.26.4'
 tag = 'go1.26.4'
 
@@ -14,6 +14,16 @@ tag = 'go1.26.4'
 strategy = 'artifact'
 url = 'https://dl.google.com/go/go1.26.4.darwin-arm64.tar.gz'
 sha256 = 'b62ad2b6d7d2464f12a5bcad7ff47f19d08325773b5efd21610e445a05a9bf53'
+
+[package.platform.linux-amd64-glibc]
+strategy = 'artifact'
+url = 'https://dl.google.com/go/go1.26.4.linux-amd64.tar.gz'
+sha256 = '1153d3d50e0ac764b447adfe05c2bcf08e889d42a02e0fe0259bd47f6733ad7f'
+
+[package.platform.windows-amd64]
+strategy = 'artifact'
+url = 'https://dl.google.com/go/go1.26.4.windows-amd64.zip'
+sha256 = '3ca8fb4630b07c419cbdd51f754e31363cfcfb83b3a5354d9e895c90be2cc345'
 
 [[package]]
 name = 'gofumpt'
@@ -31,21 +41,41 @@ strategy = 'artifact'
 url = 'https://github.com/mvdan/gofumpt/releases/download/v0.10.0/gofumpt_v0.10.0_darwin_arm64'
 sha256 = 'ba4b348e729cba915d5c7dc515774e2f2c7cc5c5ad011de20d34be10e5a2f906'
 
+[package.platform.linux-amd64-glibc]
+strategy = 'artifact'
+url = 'https://github.com/mvdan/gofumpt/releases/download/v0.10.0/gofumpt_v0.10.0_linux_amd64'
+sha256 = '48ee398ec72afdaca6accb70f5ed741349d5dcccb52c5bb4c4469d698980b186'
+
+[package.platform.windows-amd64]
+strategy = 'artifact'
+url = 'https://github.com/mvdan/gofumpt/releases/download/v0.10.0/gofumpt_v0.10.0_windows_amd64.exe'
+sha256 = '20872b464435512b74678b1155b75bd75220de5737ad8c075b9151c846543697'
+
 [[package]]
 name = 'goimports'
-ref = './.oku/goimports.toml'
-manifest_sha256 = 'a637ff26206bd97924d98c376892a5dc68693d3b14fae99145e3e0c8010a44a1'
+ref = 'go:golang.org/x/tools/cmd/goimports'
+manifest_sha256 = '48d51ce4be2e6e3709b27f88d03e39a32489bce89ec2f15aae248e03c6524a23'
 version = '0.44.0'
-tag = 'v0.44.0'
+inferred = true
+manifest = "[package]\nname = \"goimports\"\nhomepage = \"https://pkg.go.dev/golang.org/x/tools/cmd/goimports\"\n\n[version]\nfrom = \"go\"\nrepo = \"golang.org/x/tools\"\n\n[build]\ndeps = [{ ref = \"./.oku/go.toml\", version = \"1.26.4\" }]\n\n[[build.step]]\nvendor = \"go\"\npackage = \"golang.org/x/tools/cmd/goimports\"\n"
 
 [package.platform]
 [package.platform.darwin-arm64]
 strategy = 'build'
+vendor_sha256 = '1de51704a23017cd7bc9a3a5c60eabdcade1f0d2b7f327462d78f3a42538bf53'
+
+[package.platform.linux-amd64-glibc]
+strategy = 'build'
+vendor_sha256 = '1de51704a23017cd7bc9a3a5c60eabdcade1f0d2b7f327462d78f3a42538bf53'
+
+[package.platform.windows-amd64]
+strategy = 'build'
+vendor_sha256 = '1de51704a23017cd7bc9a3a5c60eabdcade1f0d2b7f327462d78f3a42538bf53'
 
 [[package.dep]]
 name = 'go'
 ref = './.oku/go.toml'
-manifest_sha256 = '850dfc0af428be9b5da144c08de9d6c247b2bd41a401c160d99a076a8ce62691'
+manifest_sha256 = '2022b9ea9d9e33afb9ca6a565a6ec9b4655f57311f5c8db4f0a5d6fe81b191ae'
 version = '1.26.4'
 tag = 'go1.26.4'
 
@@ -54,6 +84,16 @@ tag = 'go1.26.4'
 strategy = 'artifact'
 url = 'https://dl.google.com/go/go1.26.4.darwin-arm64.tar.gz'
 sha256 = 'b62ad2b6d7d2464f12a5bcad7ff47f19d08325773b5efd21610e445a05a9bf53'
+
+[package.dep.platform.linux-amd64-glibc]
+strategy = 'artifact'
+url = 'https://dl.google.com/go/go1.26.4.linux-amd64.tar.gz'
+sha256 = '1153d3d50e0ac764b447adfe05c2bcf08e889d42a02e0fe0259bd47f6733ad7f'
+
+[package.dep.platform.windows-amd64]
+strategy = 'artifact'
+url = 'https://dl.google.com/go/go1.26.4.windows-amd64.zip'
+sha256 = '3ca8fb4630b07c419cbdd51f754e31363cfcfb83b3a5354d9e895c90be2cc345'
 
 [[package]]
 name = 'golangci-lint'
@@ -71,6 +111,16 @@ strategy = 'artifact'
 url = 'https://github.com/golangci/golangci-lint/releases/download/v2.12.2/golangci-lint-2.12.2-darwin-arm64.tar.gz'
 sha256 = 'a9c54498731b3128f79e090be6110f3e5fffccc617b08142ed244d4126c73f29'
 
+[package.platform.linux-amd64-glibc]
+strategy = 'artifact'
+url = 'https://github.com/golangci/golangci-lint/releases/download/v2.12.2/golangci-lint-2.12.2-linux-amd64.tar.gz'
+sha256 = '8df580d2670fed8fa984aac0507099af8df275e665215f5c7a2ae3943893a553'
+
+[package.platform.windows-amd64]
+strategy = 'artifact'
+url = 'https://github.com/golangci/golangci-lint/releases/download/v2.12.2/golangci-lint-2.12.2-windows-amd64.zip'
+sha256 = 'bd42e3ebc8cb4ececb86941983baaf1dc221bbb04d838e94ce63b49cc91e02bb'
+
 [[package]]
 name = 'golangci-lint-langserver'
 ref = 'github:nametake/golangci-lint-langserver'
@@ -86,6 +136,16 @@ manifest = "[package]\nname = \"golangci-lint-langserver\"\nhomepage = \"https:/
 strategy = 'artifact'
 url = 'https://github.com/nametake/golangci-lint-langserver/releases/download/v0.0.12/golangci-lint-langserver_Darwin_arm64.tar.gz'
 sha256 = 'e630712320bcc1c75a1584f2b46a5c7ee7b15e603bb180b8b42c2932302d2a95'
+
+[package.platform.linux-amd64-glibc]
+strategy = 'artifact'
+url = 'https://github.com/nametake/golangci-lint-langserver/releases/download/v0.0.12/golangci-lint-langserver_Linux_x86_64.tar.gz'
+sha256 = '7c4a200f34af3de4188a792ba676994ce5fdb181dd4731e10cd3cc501e722b28'
+
+[package.platform.windows-amd64]
+strategy = 'artifact'
+url = 'https://github.com/nametake/golangci-lint-langserver/releases/download/v0.0.12/golangci-lint-langserver_Windows_x86_64.zip'
+sha256 = '39b900b6b18bdc0328a9a58539af2bfc0bdaad9c2f217c1afa7921717d11e4d6'
 
 [[package]]
 name = 'golines'
@@ -103,21 +163,41 @@ strategy = 'artifact'
 url = 'https://github.com/golangci/golines/releases/download/v0.15.0/golines-0.15.0-darwin-all.tar.gz'
 sha256 = 'ec0d1b2298552695eeac87cbcbe1dd9d533a4a986a5af791a7486b0ddb65e525'
 
+[package.platform.linux-amd64-glibc]
+strategy = 'artifact'
+url = 'https://github.com/golangci/golines/releases/download/v0.15.0/golines-0.15.0-linux-amd64.tar.gz'
+sha256 = 'c350dbe819d68415039cbbd8c24d4e99367dad36c916fe57c12077030517f8fa'
+
+[package.platform.windows-amd64]
+strategy = 'artifact'
+url = 'https://github.com/golangci/golines/releases/download/v0.15.0/golines-0.15.0-windows-amd64.zip'
+sha256 = '9885510d26a7f75dcae204e12d28f3162dd80a3084fa2a47e818b43a7adc1018'
+
 [[package]]
 name = 'gopls'
-ref = './.oku/gopls.toml'
-manifest_sha256 = 'd69515b9c79c5b4a7f5ea14137ee9cc07355e0dc41ff628cd1565b9484258d17'
+ref = 'go:golang.org/x/tools/gopls'
+manifest_sha256 = 'a4d26532c08689e18d7bc1a465fb6cf0b41d890be7b7ecc6e20e91a1ca38ba3d'
 version = '0.22.0'
-tag = 'gopls/v0.22.0'
+inferred = true
+manifest = "[package]\nname = \"gopls\"\nhomepage = \"https://pkg.go.dev/golang.org/x/tools/gopls\"\n\n[version]\nfrom = \"go\"\nrepo = \"golang.org/x/tools/gopls\"\n\n[build]\ndeps = [{ ref = \"./.oku/go.toml\", version = \"1.26.4\" }]\n\n[[build.step]]\nvendor = \"go\"\npackage = \"golang.org/x/tools/gopls\"\n"
 
 [package.platform]
 [package.platform.darwin-arm64]
 strategy = 'build'
+vendor_sha256 = '8e102499165aefb4e079d43df14a4ce8b5cb5322f9840d8061485bc81f93ec51'
+
+[package.platform.linux-amd64-glibc]
+strategy = 'build'
+vendor_sha256 = '8e102499165aefb4e079d43df14a4ce8b5cb5322f9840d8061485bc81f93ec51'
+
+[package.platform.windows-amd64]
+strategy = 'build'
+vendor_sha256 = '8e102499165aefb4e079d43df14a4ce8b5cb5322f9840d8061485bc81f93ec51'
 
 [[package.dep]]
 name = 'go'
 ref = './.oku/go.toml'
-manifest_sha256 = '850dfc0af428be9b5da144c08de9d6c247b2bd41a401c160d99a076a8ce62691'
+manifest_sha256 = '2022b9ea9d9e33afb9ca6a565a6ec9b4655f57311f5c8db4f0a5d6fe81b191ae'
 version = '1.26.4'
 tag = 'go1.26.4'
 
@@ -126,6 +206,16 @@ tag = 'go1.26.4'
 strategy = 'artifact'
 url = 'https://dl.google.com/go/go1.26.4.darwin-arm64.tar.gz'
 sha256 = 'b62ad2b6d7d2464f12a5bcad7ff47f19d08325773b5efd21610e445a05a9bf53'
+
+[package.dep.platform.linux-amd64-glibc]
+strategy = 'artifact'
+url = 'https://dl.google.com/go/go1.26.4.linux-amd64.tar.gz'
+sha256 = '1153d3d50e0ac764b447adfe05c2bcf08e889d42a02e0fe0259bd47f6733ad7f'
+
+[package.dep.platform.windows-amd64]
+strategy = 'artifact'
+url = 'https://dl.google.com/go/go1.26.4.windows-amd64.zip'
+sha256 = '3ca8fb4630b07c419cbdd51f754e31363cfcfb83b3a5354d9e895c90be2cc345'
 
 [[package]]
 name = 'just'
@@ -142,6 +232,16 @@ strategy = 'artifact'
 url = 'https://github.com/casey/just/releases/download/1.54.0/just-1.54.0-aarch64-apple-darwin.tar.gz'
 sha256 = 'a776fc5015491f84580875bc6dad3de59fa4f47a309ccac49d1287cb55f9b599'
 
+[package.platform.linux-amd64-glibc]
+strategy = 'artifact'
+url = 'https://github.com/casey/just/releases/download/1.54.0/just-1.54.0-x86_64-unknown-linux-musl.tar.gz'
+sha256 = '193e2b04bac8ff3568ff81cf62f8c9db08f8083e16665e28d400dd35bac47ffd'
+
+[package.platform.windows-amd64]
+strategy = 'artifact'
+url = 'https://github.com/casey/just/releases/download/1.54.0/just-1.54.0-x86_64-pc-windows-msvc.zip'
+sha256 = '860e21474e956eaa9879d62f68cc24530254eefe14ac108eaf707c0daf56a6d0'
+
 [[package]]
 name = 'just-lsp'
 ref = 'github:terror/just-lsp'
@@ -156,3 +256,13 @@ manifest = "[package]\nname = \"just-lsp\"\nhomepage = \"https://github.com/terr
 strategy = 'artifact'
 url = 'https://github.com/terror/just-lsp/releases/download/0.4.7/just-lsp-0.4.7-aarch64-apple-darwin.tar.gz'
 sha256 = '7d333c8bc331de851f83acc53670994d58f31a807e76d003c18b37e828fd4f1c'
+
+[package.platform.linux-amd64-glibc]
+strategy = 'artifact'
+url = 'https://github.com/terror/just-lsp/releases/download/0.4.7/just-lsp-0.4.7-x86_64-unknown-linux-gnu.tar.gz'
+sha256 = '3799c7b990058feb4f5444c7a5fcd4aa4b540c224cfe0314ab93c5ea85c44a76'
+
+[package.platform.windows-amd64]
+strategy = 'artifact'
+url = 'https://github.com/terror/just-lsp/releases/download/0.4.7/just-lsp-0.4.7-x86_64-pc-windows-msvc.zip'
+sha256 = '3325cfc2ca4a2adc39a897ff6dbdf7e3d868673faf8db3eadece1a08f3583064'
