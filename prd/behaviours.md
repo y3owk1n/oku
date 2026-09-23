@@ -328,6 +328,13 @@ order step in `prd/product.md`.
   another home directory.
 - B257 [4] A pypi package follows the index's versions. A prerelease and a
   yanked version are never the newest, and `pypi:<name>@<version>` takes one.
+- B258 [4] `oku add go:<package path>` finds the module that holds the
+  package, downloads it with every module it needs through the go command that
+  `[runtimes] go` names, pins a digest of the downloads that leaves out the
+  checksum database's files, and installs the program with `go install`
+  offline. go stays out of the profile.
+- B259 [4] A go program follows the module's tagged versions. A version with a
+  `-` is never the newest, and `go:<path>@<version>` takes one.
 - B212 [4] An npm vendor step with `package` may name dependencies in
   `scripts`. After the install oku runs their install scripts with the network
   on, the approval prompt says so, and `oku.lock` marks the build impure. A
