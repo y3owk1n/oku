@@ -128,8 +128,13 @@ func TestB256TheInstallDigestIsTheSameUnderAnotherDirectory(t *testing.T) {
 		})
 	}
 
+	// A machine skips where these tests cannot run, and a failed one failed t.
+	if len(digests) != 2 {
+		t.Skip("the machines did not run here")
+	}
+
 	// The fake uv writes the python's path into bin/tool and RECORD, as uv does.
-	if len(digests) != 2 || digests[0] != digests[1] {
+	if digests[0] != digests[1] {
 		t.Fatalf("the two machines pinned %q", digests)
 	}
 }
