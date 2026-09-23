@@ -253,8 +253,8 @@ and the go command checks each against the Go checksum database. `oku.lock`
 pins a digest of those downloads, which is the same on every platform. Then
 `go install` runs offline from them, with cgo off, so the program knows its own
 version as a `go install` gives it. A build asks for
-[approval](trust.md#build-commands) once, or takes `--yes`. oku cannot build a
-Go program on Windows yet, and says so there.
+[approval](trust.md#build-commands) once, or takes `--yes`. It works the same on
+Windows, where the steps run through PowerShell.
 
 ## Rust crates
 

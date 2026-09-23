@@ -30,7 +30,7 @@ var majorRe = regexp.MustCompile(`^v[0-9]+$`)
 // FromGo returns manifest TOML for the Go package at pkg. The manifest follows
 // the versions of the module that holds pkg. Its build downloads the module and
 // its dependencies, which the go command checks against the checksum database,
-// and builds the program offline.
+// and installs the program from them with no proxy.
 func (inf *Inferrer) FromGo(ctx context.Context, pkg string, opts GoOptions) (string, error) {
 	module, err := goproxy.Module(ctx, inf.Hosts.HTTP, opts.Proxy, pkg)
 	if errors.Is(err, goproxy.ErrNotFound) {
@@ -71,19 +71,8 @@ func (inf *Inferrer) FromGo(ctx context.Context, pkg string, opts GoOptions) (st
 		b.WriteString("needs = [\"go\"]\n")
 	}
 
-	fmt.Fprintf(&b, "\n[[build.step]]\nvendor = \"go\"\npackage = %q\n", module)
-
-	// The build is offline and installs from the module cache that the vendor
-	// step filled and checked. That cache is a proxy of files, and go install
-	// reads a module's deprecation from a proxy. The build asks no checksum
-	// database, since the vendor step checked every module. The go
-	// command must not fetch a toolchain, and cgo would need a C compiler that
-	// the list does not name.
-	fmt.Fprintf(&b, "\n[[build.step]]\nrun = %q\nshell = \"sh\"\n",
-		"go install -trimpath "+pkg+"@v{{version}}")
-	b.WriteString("env = { GOMODCACHE = \"{{src}}/modcache\", GOBIN = \"{{prefix}}/bin\", " +
-		"GOPROXY = \"file://{{src}}/modcache/cache/download\", GOSUMDB = \"off\", GOFLAGS = \"-mod=mod\", " +
-		"GOTOOLCHAIN = \"local\", CGO_ENABLED = \"0\" }\n")
+	// The step downloads the modules and then installs the package from them.
+	fmt.Fprintf(&b, "\n[[build.step]]\nvendor = \"go\"\npackage = %q\n", pkg)
 
 	return b.String(), nil
 }

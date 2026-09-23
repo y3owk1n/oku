@@ -740,5 +740,11 @@ Check 'a secret that leaves the list is deleted with its copy' {
     (-not (Test-Path $secretTarget)) -and (@(Get-ChildItem $secretStore).Count -eq 0)
 }
 
+# A Go program from the module proxy, built with the go on PATH, which the
+# runner has from setup-go. The vendor step and go install run through pwsh.
+Oku add --yes go:mvdan.cc/gofumpt
+$gofumpt = & "$bin\gofumpt.exe" --version
+Check 'a go: ref builds on Windows and the program knows its version' { $gofumpt -match '^v\d' }
+
 Remove-Item -Recurse -Force $root
 Write-Host 'live test passed'

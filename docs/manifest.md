@@ -1123,11 +1123,13 @@ of the package, and copies the package's other programs there. Those are the
 programs oku links when the build has no `install` step. `oku add pypi:<name>`
 writes this build, see [Python packages](refs.md#python-packages).
 
-A go step with `package` downloads a Go module and every module it needs into
-a module cache in the source directory. The go command checks each against
-the checksum database. oku hashes `modcache/cache/download` without the
-checksum database's own files, which change as it grows, so the digest is the
-same on every platform. A run step then installs from that cache offline:
+A go step with `package` builds that Go package. The go command downloads the
+module that `version.repo` names, and every module it needs, into a module
+cache in the source directory, and checks each against the checksum database.
+oku hashes `modcache/cache/download` without the checksum database's own
+files, which change as it grows, so the digest is the same on every platform.
+Then `go install` builds the package from that cache alone, with cgo off, into
+`{{prefix}}/bin`. On Windows the step runs through PowerShell:
 
 ```toml
 [version]
@@ -1140,11 +1142,6 @@ needs = ["go"]
 [[build.step]]
 vendor = "go"
 package = "golang.org/x/tools/gopls"
-
-[[build.step]]
-run = "go install -trimpath golang.org/x/tools/gopls@v{{version}}"
-shell = "sh"
-env = { GOMODCACHE = "{{src}}/modcache", GOBIN = "{{prefix}}/bin", GOPROXY = "file://{{src}}/modcache/cache/download", GOSUMDB = "off", GOFLAGS = "-mod=mod", GOTOOLCHAIN = "local", CGO_ENABLED = "0" }
 ```
 
 `oku add go:<path>` writes this build, see [Go programs](refs.md#go-programs).

@@ -10,6 +10,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"github.com/y3owk1n/oku/internal/manifest"
@@ -31,6 +32,9 @@ type vendorKind struct {
 	// after runs in the same way once output is hashed, so what it adds is not
 	// in the digest. Empty for most kinds.
 	after string
+	// pwsh and pwshAfter are script and after for Windows, where "$tool" is the
+	// variable $tool. Without them Windows runs the sh scripts.
+	pwsh, pwshAfter string
 	// env is added to the step's environment.
 	env []string
 	// portable reports that the script fills output with the same files on every
@@ -87,13 +91,13 @@ fi`,
 		script: `"$tool" download --disable-pip-version-check -q -r requirements.txt -d vendor/pip`,
 		output: "vendor/pip",
 	},
-	// goPackageKind is a go step with "package". The go command downloads that
-	// module and every module it needs into a module cache in the source
-	// directory, and checks each against the checksum database. oku hashes the
-	// downloads, which are the same files on every platform, and leaves out the
-	// checksum database's own files, which change as it grows. A build step then
-	// runs go install offline from that cache, which records the module's
-	// version in the program, as go install does.
+	// goPackageKind is a go step with "package", the path of the package to
+	// build. The go command downloads the module and every module it needs into
+	// a module cache in the source directory, and checks each against the
+	// checksum database. oku hashes the downloads, which are the same files on
+	// every platform, and leaves out the checksum database's own files, which
+	// change as it grows. Then go install builds the package from that cache
+	// alone, which records the module's version in the program.
 	goPackageKind: {
 		tools: []string{"go"},
 		script: `export GOMODCACHE="$PWD/modcache"
@@ -103,6 +107,24 @@ dir=$(sed -n 's/^[[:space:]]*"Dir": "\(.*\)",$/\1/p' "$TMPDIR/oku-go-module.json
 [ -n "$dir" ] || { echo "go mod download named no directory for $OKU_GO_MODULE" >&2; exit 1; }
 (cd "$dir" && "$tool" mod download)
 rm -rf "$GOMODCACHE/cache/download/sumdb"`,
+		after: `GOMODCACHE="$PWD/modcache" GOPROXY="file://$PWD/modcache/cache/download" GOSUMDB=off \
+  GOBIN="$OKU_PREFIX/bin" CGO_ENABLED=0 "$tool" install -trimpath "$OKU_GO_PACKAGE@v$OKU_GO_VERSION"`,
+		pwsh: `$env:GOMODCACHE = Join-Path (Get-Location) 'modcache'
+$json = & $tool mod download -json "$($env:OKU_GO_MODULE)@v$($env:OKU_GO_VERSION)" | Out-String
+if ($LASTEXITCODE -ne 0) { [Console]::Error.WriteLine($json); exit 1 }
+Push-Location ($json | ConvertFrom-Json).Dir
+& $tool mod download
+if ($LASTEXITCODE -ne 0) { exit 1 }
+Pop-Location
+Remove-Item -Recurse -Force -ErrorAction SilentlyContinue (Join-Path $env:GOMODCACHE 'cache\download\sumdb')`,
+		pwshAfter: `$cache = Join-Path (Get-Location) 'modcache'
+$env:GOMODCACHE = $cache
+$env:GOPROXY = 'file:///' + ((Join-Path $cache 'cache\download') -replace '\\', '/')
+$env:GOSUMDB = 'off'
+$env:GOBIN = Join-Path $env:OKU_PREFIX 'bin'
+$env:CGO_ENABLED = '0'
+& $tool install -trimpath "$($env:OKU_GO_PACKAGE)@v$($env:OKU_GO_VERSION)"
+if ($LASTEXITCODE -ne 0) { exit 1 }`,
 		output: "modcache/cache/download",
 		// A toolchain download would be a second, unhashed download.
 		env:      []string{"GOTOOLCHAIN=local", "GOFLAGS=-mod=mod -modcacherw"},
@@ -424,14 +446,21 @@ func findTool(tools, env []string) (string, error) {
 		}
 	}
 
+	// A Windows program has an extension and no mode that says it runs.
+	names := func(tool string) []string { return []string{tool} }
+	if runtime.GOOS == "windows" {
+		names = func(tool string) []string { return []string{tool + ".exe", tool + ".cmd", tool + ".bat"} }
+	}
+
 	for _, tool := range tools {
 		for _, dir := range dirs {
-			candidate := filepath.Join(dir, tool)
-			if info, err := os.Stat(
-				candidate,
-			); err == nil && !info.IsDir() &&
-				info.Mode()&0o111 != 0 {
-				return candidate, nil
+			for _, name := range names(tool) {
+				candidate := filepath.Join(dir, name)
+
+				info, err := os.Stat(candidate)
+				if err == nil && !info.IsDir() && (runtime.GOOS == "windows" || info.Mode()&0o111 != 0) {
+					return candidate, nil
+				}
 			}
 		}
 	}

@@ -270,11 +270,19 @@ func (s *Store) Build(
 				case "pip":
 					vendorEnv, err = s.pipPackageEnv(ctx, env, step.Package, m.Version.Value, opts.PyPIIndex)
 				case "go":
+					// A manifest that follows the module's versions names the module,
+					// which may hold the package deeper down.
+					module := step.Package
+					if m.Version.From == manifest.FromGo {
+						module = m.Version.Repo
+					}
+
 					// The go command reads its default proxy from the go.env of its
 					// GOROOT, and a toolchain may not have one.
 					vendorEnv = append(
 						slices.Clone(env),
-						"OKU_GO_MODULE="+step.Package, "OKU_GO_VERSION="+m.Version.Value,
+						"OKU_GO_MODULE="+module, "OKU_GO_PACKAGE="+step.Package,
+						"OKU_GO_VERSION="+m.Version.Value,
 						"GOPROXY="+cmp.Or(opts.GoProxy, goproxy.Proxy+",direct"),
 						"GOSUMDB=sum.golang.org",
 					)
@@ -942,9 +950,20 @@ func runVendor(
 
 	env = append(slices.Clone(env), vendor.env...)
 
+	script, after, shell := vendor.script, vendor.after, "sh"
+	if runtime.GOOS == "windows" && vendor.pwsh != "" {
+		script, after, shell = vendor.pwsh, vendor.pwshAfter, "pwsh"
+	}
+
 	run := func(script string) error {
-		script = "tool=" + strconv.Quote(tool) + "\n" + script
-		step := manifest.Step{Run: &script, Shell: "sh", Network: true}
+		if shell == "pwsh" {
+			script = "$ErrorActionPreference = 'Stop'\n$tool = '" +
+				strings.ReplaceAll(tool, "'", "''") + "'\n" + script
+		} else {
+			script = "tool=" + strconv.Quote(tool) + "\n" + script
+		}
+
+		step := manifest.Step{Run: &script, Shell: shell, Network: true}
 
 		var err error
 		unsandboxed, err = runCommand(ctx, step, src, nil, env, box, log)
@@ -952,7 +971,7 @@ func runVendor(
 		return err
 	}
 
-	if err = run(vendor.script); err != nil {
+	if err = run(script); err != nil {
 		return "", unsandboxed, err
 	}
 
@@ -961,11 +980,11 @@ func runVendor(
 		output = filepath.Join(prefix, filepath.FromSlash(vendor.output))
 	}
 
-	if digest, err = hashTree(output); err != nil || vendor.after == "" {
+	if digest, err = hashTree(output); err != nil || after == "" {
 		return digest, unsandboxed, err
 	}
 
-	return digest, unsandboxed, run(vendor.after)
+	return digest, unsandboxed, run(after)
 }
 
 // npmPackageEnv returns env with what an npm step needs to install one package:
