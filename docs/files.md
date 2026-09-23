@@ -40,6 +40,8 @@ export XDG_CACHE_HOME=/tmp/oku-try/cache
       bin/rg -> ../pkg/rg
       share/man/man1/rg.1 -> ../../../pkg/doc/rg.1
       oku-meta.toml            name, version, platform, url, sha256
+    machines-5f3a9c1e2b7d-<hash>/  the files of a repo whose list holds [files],
+                               at one commit
   profiles/
     global/
       gen-1/                   one directory per profile change

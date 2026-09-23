@@ -180,6 +180,10 @@ func (g *gitea) json(ctx context.Context, repo, path string, into any) error {
 	return json.Unmarshal(body, into)
 }
 
+func (g *gitea) Archive(ctx context.Context, repo, commit string) ([]byte, error) {
+	return g.get(ctx, repo, "/archive/"+commit+".tar.gz")
+}
+
 func (g *gitea) get(ctx context.Context, repo, path string) ([]byte, error) {
 	req, err := http.NewRequestWithContext(
 		ctx, http.MethodGet, "https://"+g.host+"/api/v1/repos/"+repo+path, nil,

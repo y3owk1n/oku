@@ -300,6 +300,48 @@ func (f *Fetcher) FetchBeside(
 	return f.Fetch(ctx, r, got.Commit, Target{Default: at})
 }
 
+// Archive returns the files of the repo of r at commit as a tar.gz, and how
+// many directories are above them in it.
+func (f *Fetcher) Archive(ctx context.Context, r Ref, commit string) ([]byte, int, error) {
+	defer status.Start(ctx, "downloading the files of %s", r.Location)()
+
+	switch r.Kind {
+	case Forge:
+		host, repo, err := f.Hosts.Open(r.Scheme, r.Location)
+		if err != nil {
+			return nil, 0, err
+		}
+
+		data, err := host.Archive(ctx, repo, commit)
+		if err != nil {
+			return nil, 0, fmt.Errorf("download the files of %s: %w", r, notFound(err))
+		}
+
+		// A forge puts the files under one directory named after the repo.
+		return data, 1, nil
+	case Git:
+		mu, _ := clones.LoadOrStore(r.Location, &sync.Mutex{})
+		mu.(*sync.Mutex).Lock()
+		defer mu.(*sync.Mutex).Unlock()
+
+		dir, _, err := f.checkout(ctx, r, commit)
+		if err != nil {
+			return nil, 0, err
+		}
+
+		cmd := exec.CommandContext(ctx, "git", "-C", dir, "archive", "--format=tar.gz", "HEAD")
+
+		data, err := cmd.Output()
+		if err != nil {
+			return nil, 0, fmt.Errorf("%s: git archive: %w", r, err)
+		}
+
+		return data, 0, nil
+	default:
+		return nil, 0, fmt.Errorf("%s: only a repo has files oku can download", r)
+	}
+}
+
 // checkout fetches one commit of a git ref into the cache and returns the
 // directory and the commit.
 func (f *Fetcher) checkout(ctx context.Context, r Ref, commit string) (string, string, error) {

@@ -168,6 +168,10 @@ func (g *github) TagCommit(ctx context.Context, repo, tag string) (Commit, error
 	return Commit{SHA: found.SHA, Date: found.Commit.Committer.Date}, err
 }
 
+func (g *github) Archive(ctx context.Context, repo, commit string) ([]byte, error) {
+	return g.get(ctx, g.api+"/repos/"+repo+"/tarball/"+commit, "")
+}
+
 func (g *github) json(ctx context.Context, path string, into any) error {
 	body, err := g.get(ctx, g.api+path, "application/vnd.github+json")
 	if err != nil {

@@ -7,8 +7,10 @@ import (
 	"encoding/hex"
 	"fmt"
 	"maps"
+	"path"
 	"path/filepath"
 	"slices"
+	"strings"
 
 	"github.com/y3owk1n/oku/internal/list"
 	"github.com/y3owk1n/oku/internal/lock"
@@ -278,8 +280,21 @@ func (m *merger) merge(
 		m.packages[name] = listed{entry: entry, ref: r, from: from, commit: commit}
 	}
 
-	if dir == "" && len(l.Files) > 0 {
-		return fmt.Errorf("%s: [files] only works in a list on this machine for now", origin)
+	// A list at a URL has no directory oku can download, only single files.
+	if remote != nil && remote.ref.Kind == ref.HTTP && (len(l.Files) > 0 || len(l.Secrets) > 0) {
+		return fmt.Errorf(
+			"%s: a list at a URL cannot hold [files] or [secrets], put it in a repo", origin,
+		)
+	}
+
+	// A remote list's files come from its repo, so their paths must stay in it.
+	var repoDir string
+	if remote != nil {
+		repoDir = path.Dir(remote.got.Path)
+
+		if err := inRepo(l, repoDir); err != nil {
+			return fmt.Errorf("%s: %w", origin, err)
+		}
 	}
 
 	// A cloned repo must not write into the home directory.
@@ -295,12 +310,10 @@ func (m *merger) merge(
 	case len(l.Secrets) == 0:
 	case m.project != "":
 		return fmt.Errorf("%s has [secrets], and only the global list may hold secrets", origin)
-	case dir == "":
-		return fmt.Errorf("%s: [secrets] only works in a list on this machine for now", origin)
 	}
 
 	for name, s := range l.Secrets {
-		m.secrets[name] = listedSecret{secret: s, dir: dir}
+		m.secrets[name] = listedSecret{secret: s, dir: dir, remote: remote, repoDir: repoDir}
 	}
 
 	if m.project != "" && len(l.Settings) > 0 {
@@ -320,7 +333,42 @@ func (m *merger) merge(
 	}
 
 	for _, file := range l.Files {
-		m.files[fileKey{file.Target, file.When}] = listedFile{file: file, dir: dir}
+		m.files[fileKey{file.Target, file.When}] = listedFile{
+			file: file, dir: dir, remote: remote, repoDir: repoDir,
+		}
+	}
+
+	return nil
+}
+
+// inRepo fails when a path of the [files] or [secrets] of l, a list in the
+// directory dir of a repo, is absolute or leaves the repo.
+func inRepo(l *list.List, dir string) error {
+	check := func(what, p string) error {
+		if p == "" || strings.HasPrefix(p, pkgPrefix) {
+			return nil
+		}
+
+		if filepath.IsAbs(p) || strings.HasPrefix(p, "/") ||
+			!filepath.IsLocal(filepath.FromSlash(path.Join(dir, filepath.ToSlash(p)))) {
+			return fmt.Errorf("%s %s is outside the repository", what, p)
+		}
+
+		return nil
+	}
+
+	for _, f := range l.Files {
+		for _, p := range []string{f.Link, f.Render, f.Secret} {
+			if err := check(fmt.Sprintf("files.%q:", f.Target), p); err != nil {
+				return err
+			}
+		}
+	}
+
+	for name, s := range l.Secrets {
+		if err := check("secrets."+name+":", s.File); err != nil {
+			return err
+		}
 	}
 
 	return nil

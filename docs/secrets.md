@@ -102,7 +102,9 @@ missing, or where a sops file has no `sops` to decrypt it.
 
 ## Limits
 
-- Only the global list may hold `[secrets]` or a `secret` entry, and only a
-  list on this machine, not one that an include reads from a URL or a repo.
+- Only the global list and the lists it includes may hold `[secrets]` or a
+  `secret` entry. An included list at a URL may not. An included list from a
+  repo may, and oku reads its encrypted files from the repo at the pinned
+  commit.
 - oku does not create, edit or re-encrypt a secret. `sops` and `age` do that.
 - An age file holds one value, so `key` with an age file is an error.

@@ -1,12 +1,17 @@
 package cli_test
 
 import (
+	"archive/tar"
+	"bytes"
+	"compress/gzip"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"filippo.io/age"
 )
 
 // machineRepo serves github:me/machines at one commit, with files at the paths
@@ -21,6 +26,30 @@ func machineRepo(t *testing.T, m *machine, commit string, files map[string]strin
 
 		if r.URL.Path == "/api/repos/me/machines/commits/HEAD" {
 			_, _ = w.Write([]byte(commit))
+
+			return
+		}
+
+		// GitHub serves the files of a commit as a tar.gz under one directory.
+		if r.URL.Path == "/api/repos/me/machines/tarball/"+commit {
+			var buf bytes.Buffer
+
+			gz := gzip.NewWriter(&buf)
+			tw := tar.NewWriter(gz)
+
+			for name, body := range files {
+				must(t, tw.WriteHeader(&tar.Header{
+					Name: "me-machines-" + commit[:7] + "/" + name, Mode: 0o644, Size: int64(len(body)),
+				}))
+
+				_, err := tw.Write([]byte(body))
+				must(t, err)
+			}
+
+			must(t, tw.Close())
+			must(t, gz.Close())
+
+			_, _ = w.Write(buf.Bytes())
 
 			return
 		}
@@ -130,5 +159,93 @@ func TestB252ARelativePathInAListAtAURLNamesTheURLBesideIt(t *testing.T) {
 
 	if !exists(m.profile("bin", "tool")) {
 		t.Fatalf("tool is not in the profile:\n%s", out)
+	}
+}
+
+func TestB253ARepoListPlacesItsFilesAndSecretsFromTheSameCommit(t *testing.T) {
+	const commit = "7777777777777777777777777777777777777777"
+
+	m := newMachine(t)
+
+	var cipher bytes.Buffer
+
+	w, err := age.Encrypt(&cipher, m.ageKey(t, "").Recipient())
+	must(t, err)
+	_, err = w.Write([]byte("s3cret"))
+	must(t, err)
+	must(t, w.Close())
+
+	machineRepo(t, &m, commit, map[string]string{
+		"oku.toml": "include = [\"./lists/files.toml\"]\n",
+		"lists/files.toml": "[vars]\nname = \"world\"\n" +
+			"[secrets]\ntoken = { file = \"../secrets/token.age\" }\n" +
+			"[files]\n" +
+			"\"{{home}}/.config/nvim\" = { link = \"../files/nvim\" }\n" +
+			"\"{{home}}/.greeting\" = { render = \"../files/greeting.tmpl\" }\n" +
+			"\"{{home}}/.token\" = { text = \"{{secret.token}}\" }\n",
+		"files/nvim/init.lua": "-- init\n",
+		"files/greeting.tmpl": "hello {{name}}\n",
+		"secrets/token.age":   cipher.String(),
+	})
+
+	out, err := m.run(t, "", "sync", "github:me/machines")
+	if err != nil {
+		t.Fatalf("sync of a repo list with files: %v\n%s", err, out)
+	}
+
+	check := func() {
+		t.Helper()
+
+		for file, want := range map[string]string{
+			home(".config", "nvim", "init.lua"): "-- init\n",
+			home(".greeting"):                   "hello world\n",
+			home(".token"):                      "s3cret",
+		} {
+			if body, _ := os.ReadFile(file); string(body) != want {
+				t.Fatalf("%s holds %q, want %q\n%s", file, body, want, out)
+			}
+		}
+	}
+
+	check()
+
+	// The link leads into the repo's files in the store, which gc keeps.
+	link, err := os.Readlink(home(".config", "nvim"))
+	must(t, err)
+
+	if !strings.HasPrefix(link, filepath.Join(m.data, "store")) {
+		t.Fatalf("the link leads to %s, not into the store", link)
+	}
+
+	_, err = m.run(t, "", "gc")
+	must(t, err)
+
+	check()
+}
+
+func TestB253AFilePathOfARepoListCannotLeaveTheRepo(t *testing.T) {
+	m := newMachine(t)
+
+	machineRepo(t, &m, "8888888888888888888888888888888888888888", map[string]string{
+		"oku.toml": "[files]\n\"{{home}}/.x\" = { link = \"../outside\" }\n",
+	})
+
+	_, err := m.run(t, "", "sync", "github:me/machines")
+	if err == nil || !strings.Contains(err.Error(), "is outside the repository") {
+		t.Fatalf("want a link out of the repo refused, got %v", err)
+	}
+}
+
+func TestB253AListAtAURLCannotHoldFiles(t *testing.T) {
+	m := newMachine(t)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte("[files]\n\"{{home}}/.x\" = { text = \"x\" }\n"))
+	}))
+	t.Cleanup(server.Close)
+
+	_, err := m.run(t, "", "sync", server.URL+"/oku.toml")
+	if err == nil || !strings.Contains(err.Error(), "put it in a repo") {
+		t.Fatalf("want [files] in a list at a URL refused, got %v", err)
 	}
 }
