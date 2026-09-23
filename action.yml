@@ -1,0 +1,107 @@
+name: oku
+description: Install oku and the tools that an oku.toml and its oku.lock pin, and put them on PATH.
+author: y3owk1n
+branding:
+  icon: package
+  color: gray-dark
+
+inputs:
+  version:
+    description: The oku release to install, such as v0.6.0 or nightly. Empty installs the newest release. An oku already on PATH is used as it is.
+    default: ""
+  path:
+    description: The directory that holds the oku.toml to sync. Its lock must pin this runner's platform.
+    default: "."
+  args:
+    description: What oku sync gets besides --yes.
+    default: "--locked"
+  cache:
+    description: Keep the store and the downloads between runs, keyed by the oku.lock.
+    default: "true"
+
+runs:
+  using: composite
+  steps:
+    - name: Install oku
+      if: runner.os != 'Windows'
+      shell: bash
+      env:
+        OKU_VERSION: ${{ inputs.version }}
+      run: |
+        if ! command -v oku >/dev/null 2>&1; then
+          curl -fsSL https://raw.githubusercontent.com/y3owk1n/oku/main/install.sh | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+        fi
+
+    - name: Install oku
+      if: runner.os == 'Windows'
+      shell: pwsh
+      env:
+        OKU_VERSION: ${{ inputs.version }}
+      run: |
+        if (-not (Get-Command oku -ErrorAction SilentlyContinue)) {
+          Invoke-RestMethod https://raw.githubusercontent.com/y3owk1n/oku/main/install.ps1 | Invoke-Expression
+          Join-Path $env:LOCALAPPDATA 'oku\bin' | Out-File -Append -Encoding utf8 $env:GITHUB_PATH
+        }
+
+    # The store only grows, and oku sync checks what it takes from it, so an
+    # older store is a safe start for a newer lock.
+    - name: Cache the store
+      if: inputs.cache == 'true'
+      uses: actions/cache@v6
+      with:
+        path: |
+          ~/.local/share/oku/store
+          ~/.cache/oku/downloads
+          ~/AppData/Local/oku/store
+          ~/AppData/Local/oku/cache/downloads
+        key: oku-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles(format('{0}/oku.lock', inputs.path)) }}
+        restore-keys: oku-${{ runner.os }}-${{ runner.arch }}-
+
+    # The shell hook would put a project's tools on PATH at each prompt. A job
+    # has no prompt, so this step keeps what oku env changes for later steps.
+    - name: Sync
+      if: runner.os != 'Windows'
+      shell: bash
+      working-directory: ${{ inputs.path }}
+      run: |
+        oku="$(command -v oku || echo "$HOME/.local/bin/oku")"
+        # shellcheck disable=SC2086
+        "$oku" sync --yes ${{ inputs.args }}
+        echo "${XDG_DATA_HOME:-$HOME/.local/share}/oku/profiles/global/current/bin" >> "$GITHUB_PATH"
+        [ -f oku.toml ] || exit 0
+        "$oku" allow
+        before="$PATH"
+        env | sort > "$RUNNER_TEMP/oku-env-before"
+        eval "$("$oku" env --shell bash)"
+        IFS=: read -ra entries <<< "$PATH"
+        for entry in "${entries[@]}"; do
+          case ":$before:" in *":$entry:"*) ;; *) echo "$entry" >> "$GITHUB_PATH" ;; esac
+        done
+        env | sort | comm -13 "$RUNNER_TEMP/oku-env-before" - | grep -v '^PATH=' >> "$GITHUB_ENV" || true
+
+    - name: Sync
+      if: runner.os == 'Windows'
+      shell: pwsh
+      working-directory: ${{ inputs.path }}
+      run: |
+        $oku = (Get-Command oku -ErrorAction SilentlyContinue).Source
+        if (-not $oku) { $oku = Join-Path $env:LOCALAPPDATA 'oku\bin\oku.exe' }
+        & $oku sync --yes ${{ inputs.args }}
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        $data = if ($env:XDG_DATA_HOME) { Join-Path $env:XDG_DATA_HOME 'oku' } else { Join-Path $env:LOCALAPPDATA 'oku' }
+        Join-Path $data 'profiles\global\current\bin' | Out-File -Append -Encoding utf8 $env:GITHUB_PATH
+        if (-not (Test-Path oku.toml)) { exit 0 }
+        & $oku allow
+        $before = @{}
+        Get-ChildItem Env: | ForEach-Object { $before[$_.Name] = $_.Value }
+        Invoke-Expression ((& $oku env --shell pwsh) -join [Environment]::NewLine)
+        $had = $before['Path'] -split ';'
+        foreach ($entry in ($env:Path -split ';')) {
+          if ($entry -and $had -notcontains $entry) { $entry | Out-File -Append -Encoding utf8 $env:GITHUB_PATH }
+        }
+        foreach ($var in Get-ChildItem Env:) {
+          if ($var.Name -ne 'Path' -and $before[$var.Name] -ne $var.Value) {
+            "$($var.Name)=$($var.Value)" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
+          }
+        }

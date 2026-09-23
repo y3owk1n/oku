@@ -1,0 +1,7 @@
+# The project that the action job of ci.yml syncs with the action in action.yml.
+# The lock pins fd for the platform of each runner.
+[lock]
+platforms = ["linux-amd64-glibc", "darwin-arm64", "windows-amd64"]
+
+[packages]
+fd = "github:sharkdp/fd"

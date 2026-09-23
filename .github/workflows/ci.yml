@@ -41,6 +41,36 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         run: .github/scripts/live-windows.ps1
 
+  action:
+    # The action in action.yml, with the oku of this commit on PATH, which the
+    # action then uses in place of a release.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Build oku
+        shell: bash
+        run: |
+          exe=oku
+          [ "$RUNNER_OS" = Windows ] && exe=oku.exe
+          go build -o "$RUNNER_TEMP/oku-bin/$exe" ./cmd/oku
+          echo "$RUNNER_TEMP/oku-bin" >> "$GITHUB_PATH"
+      - uses: ./
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        with:
+          path: .github/action-test
+          cache: "false"
+      - name: A later step runs the project's tools
+        shell: bash
+        run: fd --version
+
   lint:
     # Files with a build tag for another OS are only linted under that GOOS, so
     # one run per OS, all on the Linux runner.

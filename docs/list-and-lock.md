@@ -474,6 +474,22 @@ In CI, run `oku sync --locked`. It fails when the lock does not pin a package
 for the runner's platform, and it never changes the lock, see
 [oku sync](commands.md#oku-sync).
 
+In GitHub Actions the action of this repo does that in one step:
+
+```yaml
+- uses: y3owk1n/oku@main
+  with:
+    path: .            # the directory of the oku.toml, the default
+```
+
+It installs the newest oku release, or the one `version` names, unless an oku
+is already on `PATH`. Then it runs `oku sync --yes --locked` in `path`. `args`
+replaces `--locked`. The later steps of the job find the programs of the global
+profile and of the project on `PATH`, and the variables of their `[env]` in the
+environment. It works on Linux, macOS and Windows runners. It keeps the store
+and the downloads in the Actions cache, keyed by `oku.lock`, unless `cache` is
+`"false"`.
+
 Platform entries for a package are cleared when `oku update` accepts a changed
 manifest, because they described the old one. Each machine adds its entry
 again on its next sync.
