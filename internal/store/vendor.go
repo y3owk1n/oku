@@ -10,6 +10,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"github.com/y3owk1n/oku/internal/manifest"
@@ -445,14 +446,21 @@ func findTool(tools, env []string) (string, error) {
 		}
 	}
 
+	// A Windows program has an extension and no mode that says it runs.
+	names := func(tool string) []string { return []string{tool} }
+	if runtime.GOOS == "windows" {
+		names = func(tool string) []string { return []string{tool + ".exe", tool + ".cmd", tool + ".bat"} }
+	}
+
 	for _, tool := range tools {
 		for _, dir := range dirs {
-			candidate := filepath.Join(dir, tool)
-			if info, err := os.Stat(
-				candidate,
-			); err == nil && !info.IsDir() &&
-				info.Mode()&0o111 != 0 {
-				return candidate, nil
+			for _, name := range names(tool) {
+				candidate := filepath.Join(dir, name)
+
+				info, err := os.Stat(candidate)
+				if err == nil && !info.IsDir() && (runtime.GOOS == "windows" || info.Mode()&0o111 != 0) {
+					return candidate, nil
+				}
 			}
 		}
 	}
