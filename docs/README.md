@@ -16,6 +16,7 @@ has the overview.
 | [Windows](windows.md) | Shims, junctions, and what is not verified there |
 | [Trust and checksums](trust.md) | What oku verifies, what it pins, and when it stops |
 | [Files and directories](files.md) | Where oku keeps things on disk |
+| [Runtime examples](../examples/runtimes) | Manifests for the node, python, go and rust that `npm:`, `pypi:`, `go:` and `cargo:` packages use |
 
 | Publishing with oku | |
 |---|---|

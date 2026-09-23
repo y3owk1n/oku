@@ -1,0 +1,72 @@
+# python for [runtimes] python. The programs of a pypi: package run through it,
+# and uv installs the package for this python.
+#
+# python-build-standalone names each download after the python version and the
+# date of its release, so this manifest pins both. To move to a newer python,
+# change the version and the release date together.
+[package]
+name = "python"
+description = "Python interpreter from python-build-standalone"
+homepage = "https://github.com/astral-sh/python-build-standalone"
+license = "PSF-2.0"
+
+[version]
+value = "3.13.15"
+
+[[artifact]]
+match = { os = "darwin", arch = "arm64" }
+url = "https://github.com/astral-sh/python-build-standalone/releases/download/20260901/cpython-{{version}}+20260901-aarch64-apple-darwin-install_only.tar.gz"
+sha256_url = "https://github.com/astral-sh/python-build-standalone/releases/download/20260901/SHA256SUMS"
+strip = 1
+bin = ["bin/python3"]
+
+[[artifact]]
+match = { os = "darwin", arch = "amd64" }
+url = "https://github.com/astral-sh/python-build-standalone/releases/download/20260901/cpython-{{version}}+20260901-x86_64-apple-darwin-install_only.tar.gz"
+sha256_url = "https://github.com/astral-sh/python-build-standalone/releases/download/20260901/SHA256SUMS"
+strip = 1
+bin = ["bin/python3"]
+
+[[artifact]]
+match = { os = "linux", arch = "arm64", libc = "glibc" }
+url = "https://github.com/astral-sh/python-build-standalone/releases/download/20260901/cpython-{{version}}+20260901-aarch64-unknown-linux-gnu-install_only.tar.gz"
+sha256_url = "https://github.com/astral-sh/python-build-standalone/releases/download/20260901/SHA256SUMS"
+strip = 1
+bin = ["bin/python3"]
+
+[[artifact]]
+match = { os = "linux", arch = "amd64", libc = "glibc" }
+url = "https://github.com/astral-sh/python-build-standalone/releases/download/20260901/cpython-{{version}}+20260901-x86_64-unknown-linux-gnu-install_only.tar.gz"
+sha256_url = "https://github.com/astral-sh/python-build-standalone/releases/download/20260901/SHA256SUMS"
+strip = 1
+bin = ["bin/python3"]
+
+[[artifact]]
+match = { os = "linux", arch = "arm64", libc = "musl" }
+url = "https://github.com/astral-sh/python-build-standalone/releases/download/20260901/cpython-{{version}}+20260901-aarch64-unknown-linux-musl-install_only.tar.gz"
+sha256_url = "https://github.com/astral-sh/python-build-standalone/releases/download/20260901/SHA256SUMS"
+strip = 1
+bin = ["bin/python3"]
+
+[[artifact]]
+match = { os = "linux", arch = "amd64", libc = "musl" }
+url = "https://github.com/astral-sh/python-build-standalone/releases/download/20260901/cpython-{{version}}+20260901-x86_64-unknown-linux-musl-install_only.tar.gz"
+sha256_url = "https://github.com/astral-sh/python-build-standalone/releases/download/20260901/SHA256SUMS"
+strip = 1
+bin = ["bin/python3"]
+
+# A Windows build has no python of the system, so a pypi: package there needs
+# this one.
+[[artifact]]
+match = { os = "windows", arch = "amd64" }
+url = "https://github.com/astral-sh/python-build-standalone/releases/download/20260901/cpython-{{version}}+20260901-x86_64-pc-windows-msvc-install_only.tar.gz"
+sha256_url = "https://github.com/astral-sh/python-build-standalone/releases/download/20260901/SHA256SUMS"
+strip = 1
+bin = ["python.exe"]
+
+[[artifact]]
+match = { os = "windows", arch = "arm64" }
+url = "https://github.com/astral-sh/python-build-standalone/releases/download/20260901/cpython-{{version}}+20260901-aarch64-pc-windows-msvc-install_only.tar.gz"
+sha256_url = "https://github.com/astral-sh/python-build-standalone/releases/download/20260901/SHA256SUMS"
+strip = 1
+bin = ["python.exe"]
