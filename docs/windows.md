@@ -31,7 +31,8 @@ have not run on a real machine of the kind they are for:
   is already an administrator and has no desktop.
 - Registering a service task as a standard user. The test machine is an
   administrator.
-- A program that loads a DLL from a dep, see [Shims](#shims).
+- A program that loads a DLL from another package, see [Shims](#shims). One that
+  loads a DLL beside its own file in its download is tested.
 
 Windows has no sandbox that oku can use, so a build from source can reach the
 network and read your files, see [Builds](#builds).
@@ -75,11 +76,14 @@ A program from a [`bin` table](manifest.md#a-program-that-needs-an-interpreter)
 also has one `arg` line for each of its `args`. The shim passes them before the
 arguments it got.
 
-Each `dir` line is the `bin` directory of one of the package's deps. The shim
-puts them at the front of `PATH` for the program, which is how Windows finds the
-DLLs of those deps from any working directory. The live test checks that the
-shim of a built package lists its dep. It has no package that loads a DLL from a
-dep yet.
+The `dir` lines are the `bin` directory of each of the package's deps, then the
+download of the package and of each dep. The shim puts them at the front of
+`PATH` for the program. Windows looks for a program's DLLs beside the file it
+started, which is a link in `bin`, and then on `PATH`, so this is how a program
+finds the DLLs beside its real file and those of its deps, from any working
+directory. A build puts the downloads of its deps on `PATH` too. The live test
+runs a python.exe that loads its DLL from its download, and checks that the
+shim of a built package lists its dep.
 
 Shims are hard links to one copy of oku in `<data>\oku\shims\`, so they take no
 extra space. They do not link to `oku.exe` itself, because Windows refuses to

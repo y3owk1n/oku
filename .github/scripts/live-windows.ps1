@@ -773,5 +773,11 @@ Check 'a pypi: package that ships a binary installs on Windows' { $ruff -match '
 $http = & "$bin\http.exe" --version
 Check 'a console script of a pypi: package runs on Windows through its shim' { $http -match '^\d' }
 
+# python.exe loads python313.dll from beside the real file in its download, and
+# bin in the store holds a link to it, so the shim names the download.
+Oku add $pythonToml
+$version = & "$bin\python.exe" --version
+Check 'a program that loads a DLL beside it in its download runs from its shim' { $version -match '^Python 3\.13' }
+
 Remove-Item -Recurse -Force $root
 Write-Host 'live test passed'
