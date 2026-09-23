@@ -267,6 +267,8 @@ func (s *Store) Build(
 				}
 
 				switch *step.Vendor {
+				case "cargo":
+					// The source is the crate, so the step needs nothing more.
 				case "pip":
 					vendorEnv, err = s.pipPackageEnv(ctx, env, step.Package, m.Version.Value, opts.PyPIIndex)
 				case "go":
@@ -931,6 +933,7 @@ func runVendor(
 	if pkg {
 		kind = map[string]string{
 			"npm": npmPackageKind, "pip": pipPackageKind, "go": goPackageKind,
+			"cargo": cargoPackageKind,
 		}[kind]
 	}
 

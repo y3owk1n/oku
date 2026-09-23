@@ -24,7 +24,7 @@ type CratesOptions struct {
 // FromCrates returns manifest TOML for the crate called name. The manifest
 // follows the crate's versions. Its build downloads the .crate file, which oku
 // checks against the sha256 that crates.io publishes, vendors its dependencies
-// as its Cargo.lock pins them, and installs its programs offline.
+// as its Cargo.lock pins them, and installs its programs from them.
 func (inf *Inferrer) FromCrates(ctx context.Context, name string, opts CratesOptions) (string, error) {
 	c, err := crates.Read(ctx, inf.Hosts.HTTP, opts.API, name)
 	if errors.Is(err, crates.ErrNotFound) {
@@ -76,9 +76,8 @@ func (inf *Inferrer) FromCrates(ctx context.Context, name string, opts CratesOpt
 	// names none.
 	fmt.Fprintf(&b, "source = { url = %q, strip = 1 }\n",
 		crates.URL(opts.Downloads, name, "{{version}}"))
-	b.WriteString("\n[[build.step]]\nvendor = \"cargo\"\n")
-	fmt.Fprintf(&b, "\n[[build.step]]\nrun = %q\nshell = \"sh\"\n",
-		"cargo install --path . --locked --offline --no-track --root {{prefix}}")
+	// The step vendors what Cargo.lock pins and then installs from it.
+	fmt.Fprintf(&b, "\n[[build.step]]\nvendor = \"cargo\"\npackage = %q\n", name)
 
 	return b.String(), nil
 }

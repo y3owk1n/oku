@@ -283,8 +283,8 @@ download on first use. It vendors the dependencies that the crate's
 `Cargo.lock` pins, and `oku.lock` pins a digest of them that is the same on every
 platform. Then `cargo install --locked --offline` builds the programs. A crate
 published without a `Cargo.lock` fails there, with cargo's own message. A build
-asks for [approval](trust.md#build-commands) once, or takes `--yes`. oku cannot
-build a crate on Windows yet, and says so there.
+asks for [approval](trust.md#build-commands) once, or takes `--yes`. It works the
+same on Windows, where the step runs through PowerShell.
 
 ## Private repos
 

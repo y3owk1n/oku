@@ -746,5 +746,11 @@ Oku add --yes go:mvdan.cc/gofumpt
 $gofumpt = & "$bin\gofumpt.exe" --version
 Check 'a go: ref builds on Windows and the program knows its version' { $gofumpt -match '^v\d' }
 
+# A crate from crates.io, built with the cargo on PATH, which the runner has from
+# rustup. The vendor step and cargo install run through pwsh.
+Oku add --yes cargo:hexyl
+$hexyl = & "$bin\hexyl.exe" --version
+Check 'a cargo: ref builds on Windows' { $hexyl -match '^hexyl \d' }
+
 Remove-Item -Recurse -Force $root
 Write-Host 'live test passed'

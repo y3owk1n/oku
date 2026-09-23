@@ -249,6 +249,12 @@ func (m *Manifest) validate() error {
 			}
 
 			switch {
+			case step.Package != "" && step.Vendor != nil && *step.Vendor == "cargo":
+				if !crates.ValidName(step.Package) {
+					errs = append(errs, fmt.Errorf(
+						`build.step[%d]: package must be a crate name such as "ripgrep"`, i,
+					))
+				}
 			case step.Package != "" && step.Vendor != nil && *step.Vendor == "go":
 				if !goproxy.ValidPath(step.Package) {
 					errs = append(errs, fmt.Errorf(
@@ -275,7 +281,7 @@ func (m *Manifest) validate() error {
 				}
 			case step.Vendor == nil || *step.Vendor != "npm":
 				errs = append(errs, fmt.Errorf(
-					`build.step[%d]: package needs vendor = "npm", "pip" or "go"`, i,
+					`build.step[%d]: package needs vendor = "npm", "pip", "go" or "cargo"`, i,
 				))
 			case !npmNameRe.MatchString(step.Package):
 				errs = append(errs, fmt.Errorf(
