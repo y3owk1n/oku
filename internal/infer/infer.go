@@ -31,6 +31,9 @@ var errNoRelease = errors.New("has no release")
 // ErrNoVersion reports that a registry has no version the user asked for.
 var ErrNoVersion = errors.New("has no version")
 
+// ErrNoAsset reports that a release has no asset for the platform asked for.
+var ErrNoAsset = errors.New("no release asset fits")
+
 // Inferrer reads releases from a forge.
 type Inferrer struct {
 	Hosts   forge.Hosts
@@ -165,9 +168,9 @@ func (inf *Inferrer) Manifest(
 		result.Asset, result.Others = chosen[i].asset, chosen[i].others
 	} else {
 		return Inferred{}, fmt.Errorf(
-			"no release asset fits this machine (%s)\nrelease %s of %s has: %s\n"+
+			"%w this machine (%s)\nrelease %s of %s has: %s\n"+
 				"name one with --asset",
-			host, rel.Tag, repo, strings.Join(names, ", "),
+			ErrNoAsset, host, rel.Tag, repo, strings.Join(names, ", "),
 		)
 	}
 

@@ -86,7 +86,8 @@ func TestB179LockPlatformsPinsAnotherPlatformWithoutInstallingIt(t *testing.T) {
 		t.Fatalf("the store holds more than the host's package: %v", m.storeEntries(t))
 	}
 
-	// oku cannot pin a platform that has no artifact and no build.
+	// sync cannot pin a platform that has no artifact and no build. It installs
+	// the package on the host and fails with the when that leaves it out.
 	none := platform.Platform{OS: other.OS, Arch: "arm64"}
 
 	must(t, os.WriteFile(filepath.Join(m.config, "oku.toml"), []byte(fmt.Sprintf(
@@ -94,8 +95,13 @@ func TestB179LockPlatformsPinsAnotherPlatformWithoutInstallingIt(t *testing.T) {
 	)), 0o644))
 
 	_, err = m.run(t, "", "sync")
-	if err == nil || !strings.Contains(err.Error(), "tool has no artifact for "+none.String()) {
-		t.Fatalf("want an error that names %s, got %v", none, err)
+	if err == nil || !strings.Contains(err.Error(), "tool has no artifact or build for "+none.String()) ||
+		!strings.Contains(err.Error(), "when = ") {
+		t.Fatalf("want an error that names %s and the when to write, got %v", none, err)
+	}
+
+	if !exists(m.profile("bin", "tool")) {
+		t.Fatal("sync did not install tool on the host")
 	}
 }
 

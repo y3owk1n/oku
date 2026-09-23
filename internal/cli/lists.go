@@ -38,7 +38,8 @@ type listed struct {
 // fileKey names one [files] entry across the merged lists.
 type fileKey struct {
 	target string
-	when   platform.Selector
+	// when is the entry's when as TOML, since a When is no map key.
+	when string
 }
 
 type merger struct {
@@ -89,7 +90,7 @@ type merged struct {
 // host alone.
 func (e env) lockPlatforms(
 	own *list.List,
-	when platform.Selector,
+	when platform.When,
 ) ([]platform.Platform, bool) {
 	strict := len(own.LockPlatforms) > 0
 
@@ -141,9 +142,7 @@ func (e env) loadList(
 	for _, key := range slices.SortedFunc(maps.Keys(m.files), func(a, b fileKey) int {
 		return cmp.Or(
 			cmp.Compare(a.target, b.target),
-			cmp.Compare(a.when.OS, b.when.OS),
-			cmp.Compare(a.when.Arch, b.when.Arch),
-			cmp.Compare(a.when.Libc, b.when.Libc),
+			cmp.Compare(a.when, b.when),
 		)
 	}) {
 		files = append(files, m.files[key])
@@ -349,7 +348,7 @@ func (m *merger) merge(
 	}
 
 	for _, file := range l.Files {
-		m.files[fileKey{file.Target, file.When}] = listedFile{
+		m.files[fileKey{file.Target, file.When.TOML()}] = listedFile{
 			file: file, dir: dir, remote: remote, repoDir: repoDir,
 		}
 	}
