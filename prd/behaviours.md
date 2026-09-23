@@ -518,8 +518,9 @@ order step in `prd/product.md`.
 
 - B80 [9] Profile `bin` entries are shims that exec the store binary with
   arguments, stdio and exit code passed through.
-- B81 [9] A binary with DLL deps in other store paths starts from any working
-  directory.
+- B81 [9] A binary with DLL deps in other store paths, or beside its real file
+  in its own download, starts from any working directory, and so does a build
+  step that runs such a binary of a dep.
 - B82 [9] `oku hook pwsh` gives B61 to B68 in PowerShell, on Windows, macOS
   and Linux, and keeps `$LASTEXITCODE` across the prompt.
 
