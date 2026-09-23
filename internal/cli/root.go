@@ -103,6 +103,7 @@ func NewRootCmd(opts Options) *cobra.Command {
 		newRemoveCmd(opts),
 		newSyncCmd(opts),
 		newUpdateCmd(opts),
+		newOutdatedCmd(opts),
 		newGenerationsCmd(opts),
 		newRollbackCmd(opts),
 		newGCCmd(),
@@ -162,7 +163,9 @@ func groupCommands(root *cobra.Command) {
 	}{
 		{
 			"Packages",
-			[]string{"add", "remove", "sync", "update", "list", "info", "why", "which", "shell"},
+			[]string{
+				"add", "remove", "sync", "update", "outdated", "list", "info", "why", "which", "shell",
+			},
 		},
 		{"Finding packages", []string{"search", "source"}},
 		{"Generations", []string{"generations", "rollback", "gc"}},

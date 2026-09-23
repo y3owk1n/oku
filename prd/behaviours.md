@@ -216,6 +216,10 @@ order step in `prd/product.md`.
   kept, and a changed answer replaces it.
 - B251 [3] When GitHub answers 429, or 403 with `Retry-After`, oku stops and
   says how many seconds to wait.
+- B262 [3] `oku outdated` lists each package of `oku.lock` whose newest
+  version differs from the locked one, with both versions and its ref, and
+  `--json` gives `name`, `version`, `newest` and `ref`. It changes no lock, no
+  profile and no store path.
 - B123 [3] With `version.from = "npm"`, `add` picks the newest version of the
   package in the npm registry that is no prerelease, and `add <ref>@x` picks x.
 - B124 [3] oku checks a download against the artifact's `integrity`, or against
