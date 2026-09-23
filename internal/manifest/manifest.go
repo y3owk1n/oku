@@ -2,6 +2,7 @@
 package manifest
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
@@ -191,7 +192,9 @@ func Parse(data []byte, origin string) (*Manifest, error) {
 		return nil, fmt.Errorf("invalid manifest %s: %w", origin, err)
 	}
 
-	sum := sha256.Sum256(data)
+	// git on Windows may check a manifest out with CRLF line endings. The digest
+	// reads them as LF, so oku.lock holds one digest on every platform.
+	sum := sha256.Sum256(bytes.ReplaceAll(data, []byte("\r\n"), []byte("\n")))
 	m.SHA256 = hex.EncodeToString(sum[:])
 
 	return &m, nil
