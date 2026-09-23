@@ -1215,3 +1215,14 @@ it before any download, instead of building a crate that installs nothing.
 
 A manifest that oku inferred before the install moved into the vendor step
 holds a separate run step. `oku update <name>` infers it again.
+
+## D79. npm on Windows runs npm's own script with node
+
+On Windows, an npm vendor step with `package` runs through PowerShell. It runs
+npm's own `npm-cli.js` with node. oku finds that script beside the real
+`node.exe` of the node package, which the spec of the node's shim names. A
+vendor kind can name its Windows tool apart from its unix one for that. A `run` of a `bin` table with no
+extension names the `.exe` beside it on Windows when that file exists. Why: the
+`npm.cmd` of a Windows node looks for npm beside itself, and a profile or a
+build sees a copy of it without npm. A `bin` table is written once for every
+OS, and `bin/node` is `bin/node.exe` on Windows.

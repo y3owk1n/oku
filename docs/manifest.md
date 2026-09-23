@@ -283,7 +283,7 @@ bin = [{ name = "gh-actions-language-server", run = "{{dep.node.prefix}}/bin/nod
 | Key | Meaning |
 |---|---|
 | `name` | The program's name in the user's profile. It need not match any file in the download. |
-| `run` | The program to run, as an absolute path. |
+| `run` | The program to run, as an absolute path. On Windows, a path with no extension names the `.exe` beside it when that exists, so `{{dep.node.prefix}}/bin/node` works there too. |
 | `args` | Arguments that go before the user's. Optional. |
 
 `run` and `args` expand the [template variables](#template-variables) and:

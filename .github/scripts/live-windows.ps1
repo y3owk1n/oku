@@ -582,6 +582,12 @@ Oku add npm:prettier
 $prettier = & "$bin\prettier.exe" --version
 Check 'an npm package runs through the configured node' { $prettier -match '^\d+\.\d+' }
 
+# An npm package that lists dependencies. npm installs them with the build, and
+# on Windows it runs as npm's own script beside the node.exe of the node package.
+Oku add --yes npm:cowsay
+$moo = (& "$bin\cowsay.exe" moo) -join "`n"
+Check 'an npm package with dependencies installs and runs on Windows' { $moo -match 'moo' }
+
 # [files]. A normal Windows user cannot create a symlink, so a linked directory
 # is a junction, and a linked file or a text is a copy.
 $listPath = Join-Path $configDir 'oku.toml'
