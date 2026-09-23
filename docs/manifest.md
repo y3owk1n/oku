@@ -301,6 +301,11 @@ The interpreter is a runtime dep, so the user does not need it on `PATH`, and it
 does not appear there either. The package stays a plain download. oku runs no
 build and asks for no approval.
 
+The program oku writes puts the `bin` of each runtime dep first on its own
+`PATH`. prettierd, for example, starts its daemon as `node`, and so gets the
+same node that runs prettierd. A build dep, such as the cargo, go
+or uv that built the package, is never on that `PATH`.
+
 ### A program under another name
 
 A plain `bin` entry keeps the file's own name. A table with `path` instead of

@@ -76,14 +76,15 @@ A program from a [`bin` table](manifest.md#a-program-that-needs-an-interpreter)
 also has one `arg` line for each of its `args`. The shim passes them before the
 arguments it got.
 
-The `dir` lines are the `bin` directory of each of the package's deps, then the
-download of the package and of each dep. The shim puts them at the front of
+The `dir` lines are the `bin` directory of each of the package's runtime deps,
+then the download of the package and of each runtime dep. A build dep, such as
+the go, cargo or uv that built the package, is not among them. The shim puts them at the front of
 `PATH` for the program. Windows looks for a program's DLLs beside the file it
 started, which is a link in `bin`, and then on `PATH`, so this is how a program
 finds the DLLs beside its real file and those of its deps, from any working
 directory. A build puts the downloads of its deps on `PATH` too. The live test
 runs a python.exe that loads its DLL from its download, and checks that the
-shim of a built package lists its dep.
+shim of a built package leaves its build dep out.
 
 Shims are hard links to one copy of oku in `<data>\oku\shims\`, so they take no
 extra space. They do not link to `oku.exe` itself, because Windows refuses to

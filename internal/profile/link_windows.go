@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/y3owk1n/oku/internal/shim"
@@ -94,7 +95,12 @@ func linkEntry(target, dest string, pkg Package) error {
 	// download of the package and of each dep.
 	downloads := []string{filepath.Join(pkg.StorePath, "pkg")}
 
+	// A build dep, such as a compiler, stays off the program's PATH.
 	for _, dep := range pkg.Closure {
+		if slices.Contains(pkg.BuildOnly, dep) {
+			continue
+		}
+
 		spec.Dirs = append(spec.Dirs, filepath.Join(dep, "bin"))
 		downloads = append(downloads, filepath.Join(dep, "pkg"))
 	}

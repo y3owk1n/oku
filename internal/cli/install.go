@@ -476,9 +476,10 @@ func (e env) installFrom(
 
 	// oku installs deps first. A build links against its build deps, and every dep
 	// stays in the closure so that gc keeps it.
-	wanted := m.Runtime.Deps
+	wanted, buildDeps := m.Runtime.Deps, 0
 	if build {
 		wanted = append(slices.Clone(m.Build.Deps), wanted...)
+		buildDeps = len(m.Build.Deps)
 	}
 
 	deps, err := e.installDeps(ctx, opts, req, fetched, wanted)
@@ -572,7 +573,7 @@ func (e env) installFrom(
 			Deps: deps.prefixes, Log: req.log, PinnedVendor: pinnedVendor, Progress: req.progress,
 			NPMRegistry: opts.NPMRegistry, PyPIIndex: opts.PyPIIndex, GoProxy: opts.GoProxy,
 			PinnedSource: pinnedSource, Rebuild: req.rebuild,
-			RuntimeDeps: deps.prefixes[len(m.Build.Deps):],
+			RuntimeDeps: deps.prefixes[buildDeps:],
 		})
 		if err != nil {
 			return installed{}, fmt.Errorf("%s: %w", m.Package.Name, err)
@@ -703,6 +704,7 @@ func (e env) installFrom(
 			Ref:       r.String(),
 			StorePath: realized.Path,
 			Closure:   deps.closure,
+			BuildOnly: deps.buildOnly(buildDeps),
 			Env:       env,
 			Service:   req.service,
 			System:    req.system,
@@ -1494,6 +1496,9 @@ type depSet struct {
 	prefixes []store.Dep
 	locks    []lock.Package
 	closure  []string
+	// runtimes holds, for each dep in the order of prefixes, the dep and the
+	// store paths it needs at run time.
+	runtimes [][]string
 	// substituted, cacheNotes and linkNotes collect what the deps report, see
 	// installed.
 	substituted []string
@@ -1617,7 +1622,36 @@ func (e env) installDeps(
 				set.closure = append(set.closure, path)
 			}
 		}
+
+		var runtime []string
+
+		for _, path := range got.closure {
+			if !slices.Contains(got.profile.BuildOnly, path) {
+				runtime = append(runtime, path)
+			}
+		}
+
+		set.runtimes = append(set.runtimes, runtime)
 	}
 
 	return set, nil
+}
+
+// buildOnly returns the paths of set.closure that no dep from the index first
+// on needs at run time. The deps before first are build deps.
+func (set depSet) buildOnly(first int) []string {
+	var runtime []string
+	for _, paths := range set.runtimes[first:] {
+		runtime = append(runtime, paths...)
+	}
+
+	var only []string
+
+	for _, path := range set.closure {
+		if !slices.Contains(runtime, path) {
+			only = append(only, path)
+		}
+	}
+
+	return only
 }

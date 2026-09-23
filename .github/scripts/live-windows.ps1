@@ -237,8 +237,8 @@ exec = "bin/hello.exe"
 Set-Location $root
 Oku add (Join-Path $fixtures 'hello.toml') --yes --verbose
 $shimSpec = Get-Content "$bin\hello.shim"
-Check 'the shim lists the bin directory of the dep' {
-    ($shimSpec -join "`n") -match 'dir = .*greet-1\.0\.0-.*bin'
+Check 'the shim leaves the build dep off PATH' {
+    ($shimSpec -join "`n") -notmatch 'dir = .*greet-1\.0\.0-'
 }
 
 $greeting = Get-ChildItem "$env:XDG_DATA_HOME\oku\store\greet-*\share\greeting.txt"
@@ -774,6 +774,8 @@ Add-Content (Join-Path $configDir 'config.toml') "`ngo = '$($goToml -replace '\\
 Oku add --yes go:mvdan.cc/gofumpt
 $gofumpt = & "$bin\gofumpt.exe" --version
 Check 'a go: ref builds on Windows and the program knows its version' { $gofumpt -match '^v\d' }
+$gofumptSpec = (Get-Content "$bin\gofumpt.shim") -join "`n"
+Check 'the go that built a go: program stays off its PATH' { $gofumptSpec -notmatch '\\go-1\.26\.4-' }
 
 # A crate from crates.io, built with the cargo on PATH, which the runner has from
 # rustup. The vendor step and cargo install run through pwsh.
@@ -801,6 +803,10 @@ $ruff = & "$bin\ruff.exe" --version
 Check 'a pypi: package that ships a binary installs on Windows' { $ruff -match '^ruff \d' }
 $http = & "$bin\http.exe" --version
 Check 'a console script of a pypi: package runs on Windows through its shim' { $http -match '^\d' }
+$httpSpec = (Get-Content "$bin\http.shim") -join "`n"
+Check 'a pypi: program finds its python on PATH, and not the uv that installed it' {
+    ($httpSpec -match 'dir = .*\\python-3\.13\.15-') -and ($httpSpec -notmatch '\\uv-')
+}
 
 # python.exe loads python313.dll from beside the real file in its download, and
 # bin in the store holds a link to it, so the shim names the download.
