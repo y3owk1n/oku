@@ -150,7 +150,9 @@ func newMachine(t *testing.T) machine {
 	t.Helper()
 
 	if runtime.GOOS == "windows" {
-		t.Skip("step 1 profiles use symlinks, Windows shims come in step 9")
+		// The tests run programs that are sh scripts. The windows-latest job runs
+		// .github/scripts/live-windows.ps1 with the real oku.exe instead.
+		t.Skip("these tests run sh scripts, and live-windows.ps1 covers Windows")
 	}
 
 	root := t.TempDir()
