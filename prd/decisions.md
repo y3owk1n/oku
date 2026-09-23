@@ -1161,3 +1161,26 @@ platform pass `--python-platform` to uv, the way npm gets `npm_config_os`.
 A prerelease or a yanked version sorts behind every release, as a forge
 prerelease does (D24). Windows is refused for now, because the vendor step runs
 through sh.
+
+## D77. A Go program is a go install from a module cache that oku hashed
+
+`go:<package path>` infers a manifest with `version.from = "go"`, the module
+that holds the package as `repo`, and two build steps. A `go` vendor step with
+`package` runs `go mod download` for the module and then in its directory, with
+`GOMODCACHE` inside the source directory, `GOTOOLCHAIN=local`, and `GOPROXY` and
+`GOSUMDB` set. oku hashes `modcache/cache/download` after it deletes `sumdb`,
+the checksum database's tiles. A run step then runs `go install pkg@version`
+with that cache as a `file://` proxy, `GOSUMDB=off`, `CGO_ENABLED=0` and no
+network. The go command is `[runtimes] go` as a build dep (D75), else a `needs`
+on the go of `PATH`, whose GOROOT the sandbox lets the build read.
+
+Why go install and not go build in the module: only go install records the
+module's version in the program, which `gopls version` and others print. Why
+the cache as a proxy: go install reads a module's deprecation from a proxy, and
+`GOPROXY=off` fails. Why oku sets `GOPROXY`: a go reached through a link may not
+find the `go.env` of its GOROOT, which holds the default proxy. Why no sumdb in
+the hash: its tiles change as the database grows, while the downloads do not.
+Why cgo off: a C compiler is a dep the list does not name, and most Go
+programs do not need one.
+
+Windows is refused for now, because the vendor step runs through sh.

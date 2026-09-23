@@ -484,7 +484,7 @@ func (e env) installFrom(
 
 		realized, err = e.store().Build(ctx, m, host, store.BuildOptions{
 			Deps: deps.prefixes, Log: req.log, PinnedVendor: pinnedVendor, Progress: req.progress,
-			NPMRegistry: opts.NPMRegistry, PyPIIndex: opts.PyPIIndex,
+			NPMRegistry: opts.NPMRegistry, PyPIIndex: opts.PyPIIndex, GoProxy: opts.GoProxy,
 			PinnedSource: pinnedSource, Rebuild: req.rebuild,
 			RuntimeDeps: deps.prefixes[len(m.Build.Deps):],
 		})
@@ -604,7 +604,7 @@ func (e env) installFrom(
 
 	firstUseOthers, err := e.lockOthers(ctx, opts, req, m, release, platforms, hostBuild{
 		entry: entry, deps: deps.prefixes, npmRegistry: opts.NPMRegistry,
-		pypiIndex: opts.PyPIIndex, log: req.log,
+		pypiIndex: opts.PyPIIndex, goProxy: opts.GoProxy, log: req.log,
 	})
 	if err != nil {
 		return installed{}, err
@@ -794,6 +794,7 @@ type hostBuild struct {
 	deps        []store.Dep
 	npmRegistry string
 	pypiIndex   string
+	goProxy     string
 	log         io.Writer
 }
 
@@ -835,7 +836,7 @@ func pinFor(
 		case store.CanCrossVendor(m.Build, p):
 			vendored, err := s.Build(ctx, m, p, store.BuildOptions{
 				Deps: host.deps, Log: host.log, NPMRegistry: host.npmRegistry,
-				PyPIIndex: host.pypiIndex, VendorOnly: true,
+				PyPIIndex: host.pypiIndex, GoProxy: host.goProxy, VendorOnly: true,
 			})
 			if err != nil {
 				return lock.Platform{}, false, fmt.Errorf("%s for %s: %w", m.Package.Name, p, err)
@@ -891,12 +892,7 @@ func (e env) manifestData(
 		}, infer.Inferred{}, nil
 	}
 
-	if req.ref.Kind == ref.NPM || req.ref.Kind == ref.PyPI {
-		write := e.inferNPM
-		if req.ref.Kind == ref.PyPI {
-			write = e.inferPyPI
-		}
-
+	if write := e.inferrerOf(req.ref.Kind); write != nil {
 		text, err := write(ctx, opts, req)
 
 		return ref.Fetched{Data: []byte(text)}, infer.Inferred{Text: text}, err
@@ -1003,6 +999,38 @@ func (e env) inferNPM(ctx context.Context, opts Options, req request) (string, e
 	}
 
 	return text, err
+}
+
+// inferrerOf returns what writes the manifest of a ref of a registry, or nil
+// for a ref that points at a manifest.
+func (e env) inferrerOf(kind ref.Kind) func(context.Context, Options, request) (string, error) {
+	return map[ref.Kind]func(context.Context, Options, request) (string, error){
+		ref.NPM: e.inferNPM, ref.PyPI: e.inferPyPI, ref.Go: e.inferGo,
+	}[kind]
+}
+
+// inferGo writes the manifest of a go ref. The build runs the go of the
+// package that [runtimes] names for go, else the go on the user's PATH.
+func (e env) inferGo(ctx context.Context, opts Options, req request) (string, error) {
+	if req.asset != "" || req.bin != "" {
+		return "", fmt.Errorf(
+			"--asset and --bin do not apply, %s names its program", req.ref,
+		)
+	}
+
+	// The build runs the go command through sh.
+	if platform.Host().OS == "windows" {
+		return "", fmt.Errorf("%s: oku cannot build a go package on Windows yet", req.ref)
+	}
+
+	goRef, _, err := e.runtime(ctx, opts, "go")
+	if err != nil {
+		return "", err
+	}
+
+	return e.inferrer(opts).FromGo(ctx, req.ref.Location, infer.GoOptions{
+		Proxy: opts.GoProxy, Version: req.ref.Version, Go: goRef,
+	})
 }
 
 // inferPyPI writes the manifest of a pypi ref. uv installs the package, and the
@@ -1285,8 +1313,8 @@ func (e env) installDeps(
 	switch parent.ref.Kind {
 	case ref.File:
 		base = filepath.Dir(parent.ref.Location)
-	case ref.NPM, ref.PyPI:
-		// inferNPM and inferPyPI name the runtime relative to config.toml.
+	case ref.NPM, ref.PyPI, ref.Go:
+		// These infer a manifest that names its runtime relative to config.toml.
 		base = filepath.Dir(e.configPath())
 	}
 

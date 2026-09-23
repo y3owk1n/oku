@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/y3owk1n/oku/internal/goproxy"
 	"github.com/y3owk1n/oku/internal/pypi"
 )
 
@@ -29,6 +30,9 @@ const (
 	// PyPI is a package in the Python Package Index. oku always infers its
 	// manifest too.
 	PyPI
+	// Go is a Go package that builds a program, such as golang.org/x/tools/gopls.
+	// oku infers its manifest from the module proxy.
+	Go
 )
 
 // Target is the kind of file Fetch reads a ref as. It sets the file names Fetch
@@ -155,6 +159,13 @@ func ParseIn(dir, s string) (Ref, error) {
 		if !pypi.ValidName(r.Location) {
 			return Ref{}, fmt.Errorf("%s: want pypi:name", s)
 		}
+	case strings.HasPrefix(body, "go:"):
+		r.Kind = Go
+		r.Location = strings.TrimPrefix(body, "go:")
+
+		if !goproxy.ValidPath(r.Location) {
+			return Ref{}, fmt.Errorf("%s: want go:host/path, such as go:golang.org/x/tools/gopls", s)
+		}
 	case strings.HasPrefix(body, "git+"):
 		r.Kind = Git
 		r.Location, r.Fragment, _ = strings.Cut(strings.TrimPrefix(body, "git+"), "#")
@@ -198,6 +209,8 @@ func (r Ref) String() string {
 		s = "npm:" + s
 	case PyPI:
 		s = "pypi:" + s
+	case Go:
+		s = "go:" + s
 	}
 
 	if r.Fragment != "" {

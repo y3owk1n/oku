@@ -24,8 +24,10 @@ type vendorKind struct {
 	// script runs in the source directory with the network on. "$tool" is the
 	// tool that was found.
 	script string
-	// output is the directory the script fills. oku hashes it.
-	output string
+	// output is the directory the script fills. oku hashes it. It is in the
+	// prefix with inPrefix, else in the source directory.
+	output   string
+	inPrefix bool
 	// after runs in the same way once output is hashed, so what it adds is not
 	// in the digest. Empty for most kinds.
 	after string
@@ -40,6 +42,7 @@ type vendorKind struct {
 const (
 	npmPackageKind = "npm package"
 	pipPackageKind = "pip package"
+	goPackageKind  = "go package"
 )
 
 var vendorKinds = map[string]vendorKind{
@@ -72,7 +75,8 @@ printf '\n[source.crates-io]\nreplace-with = "vendored-sources"\n\n[source.vendo
 		tools: []string{"npm"},
 		script: `"$tool" install --ignore-scripts --omit=dev --no-audit --no-fund --no-package-lock \
   --before="$OKU_NPM_BEFORE" --prefix "$OKU_PREFIX/lib" "$OKU_NPM_PACKAGE"`,
-		output: "lib/node_modules",
+		output:   "lib/node_modules",
+		inPrefix: true,
 		after: `if [ -n "$OKU_NPM_SCRIPTS" ]; then
   "$tool" rebuild --no-audit --no-fund --prefix "$OKU_PREFIX/lib" $OKU_NPM_SCRIPTS
 fi`,
@@ -82,6 +86,27 @@ fi`,
 		tools:  []string{"pip", "pip3"},
 		script: `"$tool" download --disable-pip-version-check -q -r requirements.txt -d vendor/pip`,
 		output: "vendor/pip",
+	},
+	// goPackageKind is a go step with "package". The go command downloads that
+	// module and every module it needs into a module cache in the source
+	// directory, and checks each against the checksum database. oku hashes the
+	// downloads, which are the same files on every platform, and leaves out the
+	// checksum database's own files, which change as it grows. A build step then
+	// runs go install offline from that cache, which records the module's
+	// version in the program, as go install does.
+	goPackageKind: {
+		tools: []string{"go"},
+		script: `export GOMODCACHE="$PWD/modcache"
+"$tool" mod download -json "$OKU_GO_MODULE@v$OKU_GO_VERSION" > "$TMPDIR/oku-go-module.json" ||
+  { cat "$TMPDIR/oku-go-module.json" >&2; exit 1; }
+dir=$(sed -n 's/^[[:space:]]*"Dir": "\(.*\)",$/\1/p' "$TMPDIR/oku-go-module.json")
+[ -n "$dir" ] || { echo "go mod download named no directory for $OKU_GO_MODULE" >&2; exit 1; }
+(cd "$dir" && "$tool" mod download)
+rm -rf "$GOMODCACHE/cache/download/sumdb"`,
+		output: "modcache/cache/download",
+		// A toolchain download would be a second, unhashed download.
+		env:      []string{"GOTOOLCHAIN=local", "GOFLAGS=-mod=mod -modcacherw"},
+		portable: true,
 	},
 	// pipPackageKind is a pip step with "package". uv installs one package with
 	// its dependencies as they were when that version was uploaded, into a
@@ -100,7 +125,8 @@ rm -rf "$OKU_PREFIX/lib/python-bin"
 if [ -d "$OKU_PREFIX/lib/python/bin" ]; then mv "$OKU_PREFIX/lib/python/bin" "$OKU_PREFIX/lib/python-bin"; fi
 "$python" - "$OKU_PREFIX/lib/python" "$OKU_PREFIX/lib/python-bin" <<'EOF'
 ` + pipRecords + `EOF`,
-		output: "lib/python",
+		output:   "lib/python",
+		inPrefix: true,
 		after: `python=$(command -v python3)
 "$python" - "$OKU_PREFIX" "$OKU_PIP_PACKAGE" "$python" <<'EOF'
 ` + pipWrappers + `EOF`,
