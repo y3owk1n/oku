@@ -157,6 +157,8 @@ func reconcile(
 		return err
 	}
 
+	e.runtimes = all.runtimes
+
 	wanted, includes := all.packages, all.includes
 
 	rebuild, _ := cmd.Flags().GetStringSlice(rebuildFlag)

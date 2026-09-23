@@ -309,6 +309,11 @@ order step in `prd/product.md`.
   the programs run through that package, which stays out of the user's
   profile. A relative path in `runtimes.node` starts at the directory of
   `config.toml`.
+- B255 [4] `[runtimes] node` in `oku.toml` or a list it includes names the
+  node of npm packages before `config.toml` does. A relative ref starts at the
+  list that names it, and in a list from a repo it names the file of that repo.
+  `oku sync <repo>` turns the relative refs of the lock it adopts into files of
+  the repo, so the npm packages that lock pins run on the repo's node.
 - B183 [4] The manifest that `oku.lock` stores for an npm package names a
   `runtimes.node` file inside the config directory relative to that directory,
   so `sync` installs from the lock under another home directory.

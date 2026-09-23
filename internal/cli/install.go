@@ -956,7 +956,8 @@ func isDownload(r ref.Ref, data []byte, err error) bool {
 }
 
 // inferNPM writes the manifest of an npm ref. The programs run through the
-// package that config.toml names for node, or through the node on PATH.
+// package that [runtimes] of the list names for node, else the one config.toml
+// names, else through the node on PATH.
 func (e env) inferNPM(ctx context.Context, opts Options, req request) (string, error) {
 	if req.asset != "" || req.bin != "" {
 		return "", fmt.Errorf(
@@ -971,27 +972,31 @@ func (e env) inferNPM(ctx context.Context, opts Options, req request) (string, e
 
 	npmOpts := infer.NPMOptions{Registry: opts.NPMRegistry, Version: req.ref.Version}
 
-	if node := config.Runtimes["node"]; node != "" {
-		// A relative path in config.toml starts at the directory of config.toml,
-		// not at the working directory.
-		node, err := config.Expand(node)
-		if err != nil {
+	// The list's refs are resolved already. A relative path in config.toml
+	// starts at the directory of config.toml, not at the working directory.
+	node, origin := e.runtimes["node"], e.listPath()
+	if node == "" {
+		if node, err = config.Expand(config.Runtimes["node"]); err != nil {
 			return "", fmt.Errorf("runtimes.node in %s: %w", e.configPath(), err)
 		}
 
+		origin = e.configPath()
+	}
+
+	if node != "" {
 		r, err := ref.ParseIn(filepath.Dir(e.configPath()), node)
 		if err != nil {
-			return "", fmt.Errorf("runtimes.node in %s: %w", e.configPath(), err)
+			return "", fmt.Errorf("runtimes.node in %s: %w", origin, err)
 		}
 
 		fetched, err := e.fetcher(opts).Fetch(ctx, r, "", ref.Manifest)
 		if err != nil {
-			return "", fmt.Errorf("runtimes.node in %s: %w", e.configPath(), err)
+			return "", fmt.Errorf("runtimes.node in %s: %w", origin, err)
 		}
 
 		m, err := manifest.Parse(fetched.Data, r.String())
 		if err != nil {
-			return "", fmt.Errorf("runtimes.node in %s: %w", e.configPath(), err)
+			return "", fmt.Errorf("runtimes.node in %s: %w", origin, err)
 		}
 
 		// The lock stores the manifest, so oku names a node inside the config
@@ -1002,7 +1007,7 @@ func (e env) inferNPM(ctx context.Context, opts Options, req request) (string, e
 		return "", fmt.Errorf(
 			"%s needs node, and Windows cannot run a script through PATH\n"+
 				"set runtimes.node in %s to the ref of a package that provides node",
-			req.ref, e.configPath(),
+			req.ref, e.listPath(),
 		)
 	}
 

@@ -1115,3 +1115,23 @@ machine repo keeps its dotfiles beside its lists. A link into the store points
 at the files of the pinned commit. A clone in the cache would not do, because
 another ref in the same repo checks out another commit there. A list at a URL
 still cannot hold them, because a URL has no directory to download.
+
+## D75. The list names the node of npm packages, config.toml is the fallback
+
+`[runtimes]` may be in `oku.toml` and in the lists it includes. A later list
+overrides an earlier one, and a relative ref resolves like a package ref, so in
+a list from a repo it names that repo's file (D74). When no list names a node,
+oku uses `[runtimes]` in `config.toml`, and then the node on `PATH`. Why: a
+machine that adopts a repo with `oku sync <repo>` has no `config.toml` of the
+repo's, so a list with npm packages was not complete without it. The first run
+of a real machine repo stopped there. `config.toml` stays as a fallback because
+it is where the table lived before, and a machine may keep a node of its own.
+The inferred manifest names a node inside the config directory relative to it,
+as before, so a lock stays the same on every machine.
+
+`oku sync <repo>` rewrites the relative refs of the lock it adopts: the refs of
+packages, deps and includes, and the node that an inferred npm manifest names,
+whose hash it computes again. They named files beside the list on the machine
+that wrote the lock, which here are files of the repo at the list's commit.
+Why: the author's config directory is the repo, and the adopter's is not, so
+the lock as the author wrote it names files that do not exist on this machine.

@@ -141,7 +141,7 @@ checks each download against the sha512 the registry publishes. `@version`
 picks a version, and `oku manifest init --from npm:@scope/name` writes the
 manifest to a file.
 
-The programs need node. Name a package that provides it in `config.toml`, once:
+The programs need node. Name a package that provides it in `oku.toml`, once:
 
 ```toml
 [runtimes]
@@ -150,19 +150,26 @@ node = 'github:you/recipes#node'
 
 Every npm package then gets that package as a runtime dep, and its programs run
 through it. They do not need node on `PATH`, and node does not appear there.
-`oku update` updates that node package too. The ref may be a
-[source alias](#sources), such as `core/node`. A local file works as the ref too, and
-then a list that holds npm packages only works on machines that have that file.
-A relative path starts at the directory of `config.toml`, so
-`node = "./packages/node.toml"` works in a config directory that you keep in
-git, on every machine and for every user name. `oku.lock` stores that relative
-path too. A lock that oku 0.4.0 or older wrote holds the full path from the
-machine that wrote it. Run `oku update <name>` for each npm package to replace
-it.
+`oku update` updates that node package too.
 
-Without `runtimes.node`, the programs run the `node` on `PATH`, and `oku add`
-says so. That does not work on Windows, where `oku add npm:` then fails and
-names the key.
+`[runtimes]` works in the lists that `oku.toml` includes too, and a later list
+overrides an earlier one, as with `[vars]`. A relative path starts at the list
+that names it. In a list from a repo, `node = "./packages/node.toml"` names that
+file of the same repo, so a machine that adopts the repo with
+`oku sync github:you/machines` gets the same node. `oku.lock` stores a node
+inside the config directory relative to it, so the lock works on every machine
+and for every user name.
+
+`config.toml` may hold the same `[runtimes]` table. oku uses it when no list
+names a node, and a relative path there starts at the directory of
+`config.toml`. There the ref may also be a [source alias](#sources), such as
+`core/node`. A lock that oku 0.4.0 or older wrote holds the
+full path from the machine that wrote it. Run `oku update <name>` for each npm
+package to replace it.
+
+Without `runtimes.node` in a list or in `config.toml`, the programs run the
+`node` on `PATH`, and `oku add` says so. That does not work on Windows, where
+`oku add npm:` then fails and names the key.
 
 A package that lists no dependencies is a plain download, such as prettier. For
 a package that lists some, oku installs them too. That covers a tool that ships

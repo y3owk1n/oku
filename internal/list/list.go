@@ -97,6 +97,9 @@ type List struct {
 	// LockPlatforms holds the platforms of [lock], which oku.lock pins every
 	// package for besides the host.
 	LockPlatforms []platform.Platform
+	// Runtimes maps an interpreter, such as "node", to the ref of the package
+	// that provides it, for the packages that run through one.
+	Runtimes map[string]string
 }
 
 // Read parses the list at path. A missing file is an empty list.
@@ -120,17 +123,21 @@ func Parse(data []byte, origin string) (*List, error) {
 		Defaults map[string]any `toml:"defaults"`
 		// ThisMac holds the macOS preferences of this one Mac, which go to the same
 		// store as Defaults with a marked domain.
-		ThisMac  map[string]any `toml:"defaults-currenthost"`
-		Registry map[string]any `toml:"registry"`
-		Dconf    map[string]any `toml:"dconf"`
-		Lock     map[string]any `toml:"lock"`
+		ThisMac  map[string]any    `toml:"defaults-currenthost"`
+		Registry map[string]any    `toml:"registry"`
+		Dconf    map[string]any    `toml:"dconf"`
+		Lock     map[string]any    `toml:"lock"`
+		Runtimes map[string]string `toml:"runtimes"`
 	}
 
 	if err := toml.Unmarshal(data, &raw); err != nil {
 		return nil, fmt.Errorf("parse %s: %w", origin, err)
 	}
 
-	l := &List{Include: raw.Include, Packages: map[string]Entry{}, Vars: map[string]string{}}
+	l := &List{
+		Include: raw.Include, Packages: map[string]Entry{}, Vars: map[string]string{},
+		Runtimes: raw.Runtimes,
+	}
 
 	if err := flattenVars(l.Vars, "", raw.Vars); err != nil {
 		return nil, fmt.Errorf("%s: %w", origin, err)

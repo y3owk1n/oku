@@ -62,6 +62,12 @@ this machine to find the executable, so run it where a release asset exists.`,
 			var text string
 
 			if r.Kind == ref.NPM {
+				all, listErr := e.mergedList(cmd, opts)
+				if listErr != nil {
+					return listErr
+				}
+
+				e.runtimes = all.runtimes
 				text, err = e.inferNPM(cmd.Context(), opts, request{ref: r})
 			} else {
 				// A published manifest serves every platform, so init opens an
