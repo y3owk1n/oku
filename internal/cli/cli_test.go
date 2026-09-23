@@ -6623,24 +6623,28 @@ func TestB105OneHookLineSetsUpPathForOkuAndItsPrograms(t *testing.T) {
 		code, err := m.run(t, "", "hook", shell)
 		must(t, err)
 
-		// The hook is loaded twice, as it is when a startup file is sourced again.
-		cmd := exec.Command(path, "-c", code+"\n"+code+"\n"+show+"; echo; tool")
-		cmd.Env = []string{"PATH=/usr/bin:/bin", "HOME=" + t.TempDir()}
+		// A login shell that tmux starts inherits oku's directories, and puts the
+		// system's in front of them.
+		for _, start := range []string{"/usr/bin:/bin", "/usr/bin:/bin:" + okuDir + ":" + bin} {
+			// The hook is loaded twice, as it is when a startup file is sourced again.
+			cmd := exec.Command(path, "-c", code+"\n"+code+"\n"+show+"; echo; tool")
+			cmd.Env = []string{"PATH=" + start, "HOME=" + t.TempDir()}
 
-		out, err := cmd.CombinedOutput()
-		if err != nil {
-			t.Fatalf("%s: %v\n%s", shell, err, out)
-		}
+			out, err := cmd.CombinedOutput()
+			if err != nil {
+				t.Fatalf("%s: %v\n%s", shell, err, out)
+			}
 
-		lines := strings.Split(strings.TrimSpace(string(out)), "\n")
-		// A system startup file may add directories of its own after these two.
-		if front := bin + ":" + okuDir + ":"; !strings.HasPrefix(lines[0], front) ||
-			strings.Count(lines[0], bin) != 1 {
-			t.Fatalf("%s: PATH should start with %q once, got %q", shell, front, lines[0])
-		}
+			lines := strings.Split(strings.TrimSpace(string(out)), "\n")
+			// A system startup file may add directories of its own after these two.
+			if front := bin + ":" + okuDir + ":"; !strings.HasPrefix(lines[0], front) ||
+				strings.Count(lines[0], bin) != 1 {
+				t.Fatalf("%s from %s: PATH should start with %q once, got %q", shell, start, front, lines[0])
+			}
 
-		if lines[len(lines)-1] != "hello from tool" {
-			t.Fatalf("%s: the installed program does not run by name:\n%s", shell, out)
+			if lines[len(lines)-1] != "hello from tool" {
+				t.Fatalf("%s: the installed program does not run by name:\n%s", shell, out)
+			}
 		}
 	}
 

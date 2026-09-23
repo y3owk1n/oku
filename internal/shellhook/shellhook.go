@@ -144,8 +144,10 @@ end
 	return ""
 }
 
-// pathSetup adds each of dirs to PATH unless it is there already, so loading the
-// hook twice changes nothing.
+// pathSetup removes each of dirs from PATH and puts it in front. A login shell
+// that tmux starts inside another rebuilds PATH with the system's directories
+// before the inherited ones, so a dir already on PATH can sit behind /usr/bin.
+// Loading the hook twice changes nothing.
 func pathSetup(shell string, dirs []string) string {
 	var b strings.Builder
 
@@ -156,15 +158,25 @@ func pathSetup(shell string, dirs []string) string {
 		switch shell {
 		case "fish":
 			fmt.Fprintf(&b, "set -l _oku_dir %s\n"+
-				"contains -- $_oku_dir $PATH; or set -gx PATH $_oku_dir $PATH\n", quote(dir))
+				"while set -l _oku_at (contains -i -- $_oku_dir $PATH); set -e PATH[$_oku_at]; end\n"+
+				"set -gx PATH $_oku_dir $PATH\n", quote(dir))
 		case "pwsh":
 			fmt.Fprintf(&b, "$okuDir = %s\n"+
-				"if (($env:PATH -split [IO.Path]::PathSeparator) -notcontains $okuDir) "+
-				"{ $env:PATH = $okuDir + [IO.Path]::PathSeparator + $env:PATH }\n", quote(dir))
+				"$env:PATH = (@($okuDir) + @($env:PATH -split [IO.Path]::PathSeparator | "+
+				"Where-Object { $_ -and $_ -ne $okuDir })) -join [IO.Path]::PathSeparator\n", quote(dir))
+		case "zsh":
+			fmt.Fprintf(&b, "_oku_dir=%s\n"+
+				"path=(\"$_oku_dir\" \"${(@)path:#$_oku_dir}\")\n"+
+				"export PATH\n", quote(dir))
 		default:
 			fmt.Fprintf(&b, "_oku_dir=%s\n"+
-				"case \":$PATH:\" in *\":$_oku_dir:\"*) ;; *) export PATH=\"$_oku_dir:$PATH\" ;; esac\n",
-				quote(dir))
+				"IFS=: read -ra _oku_parts <<< \"$PATH\"\n"+
+				"PATH=\"$_oku_dir\"\n"+
+				"for _oku_part in \"${_oku_parts[@]}\"; do\n"+
+				"  [ \"$_oku_part\" = \"$_oku_dir\" ] || PATH=\"$PATH:$_oku_part\"\n"+
+				"done\n"+
+				"export PATH\n"+
+				"unset _oku_parts _oku_part\n", quote(dir))
 		}
 	}
 
