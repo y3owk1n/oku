@@ -173,6 +173,31 @@ rm -rf "$OKU_PREFIX/lib/python-bin"
 if [ -d "$OKU_PREFIX/lib/python/bin" ]; then mv "$OKU_PREFIX/lib/python/bin" "$OKU_PREFIX/lib/python-bin"; fi
 "$python" - "$OKU_PREFIX/lib/python" "$OKU_PREFIX/lib/python-bin" <<'EOF'
 ` + pipRecords + `EOF`,
+		pwsh: pwshPython + `
+if (-not $python) { [Console]::Error.WriteLine('a pypi package needs python, name it in [runtimes]'); exit 1 }
+$lib = Join-Path $env:OKU_PREFIX 'lib\python'
+$moved = Join-Path $env:OKU_PREFIX 'lib\python-bin'
+$uv = @('pip', 'install', '--no-config', '--quiet', '--target', $lib, '--python', $python,
+  '--exclude-newer', $env:OKU_PIP_BEFORE)
+if ($env:OKU_PIP_PLATFORM) { $uv += @('--python-platform', $env:OKU_PIP_PLATFORM) }
+& $tool @uv "$($env:OKU_PIP_PACKAGE)==$($env:OKU_PIP_VERSION)"
+if ($LASTEXITCODE -ne 0) { exit 1 }
+Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $moved
+foreach ($dir in 'bin', 'Scripts') {
+  $at = Join-Path $lib $dir
+  if (Test-Path $at) {
+    New-Item -ItemType Directory -Force $moved | Out-Null
+    Get-ChildItem $at | Move-Item -Destination $moved
+    Remove-Item $at
+  }
+}
+@'
+` + pipRecords + `'@ | & $python - $lib $moved
+if ($LASTEXITCODE -ne 0) { exit 1 }`,
+		pwshAfter: pwshPython + `
+@'
+` + pipWrappers + `'@ | & $python - $env:OKU_PREFIX $env:OKU_PIP_PACKAGE $python
+if ($LASTEXITCODE -ne 0) { exit 1 }`,
 		output:   "lib/python",
 		inPrefix: true,
 		after: `python=$(command -v python3)
@@ -183,6 +208,18 @@ if [ -d "$OKU_PREFIX/lib/python/bin" ]; then mv "$OKU_PREFIX/lib/python/bin" "$O
 	},
 }
 
+// pwshPython sets $python to the python of the build. In the store, bin holds
+// a link to python.exe, and Windows looks for python's DLL beside the file it
+// started, so $python is the python.exe in the package's download.
+const pwshPython = `$python = (Get-Command python3, python -CommandType Application -ErrorAction SilentlyContinue |
+  Select-Object -First 1).Source
+if ($python) {
+  $download = Join-Path (Split-Path (Split-Path $python)) 'pkg'
+  $real = Get-ChildItem $download -Recurse -File -Filter (Split-Path $python -Leaf) -ErrorAction SilentlyContinue |
+    Select-Object -First 1
+  if ($real) { $python = $real.FullName }
+}`
+
 // pipRecords moves the lines for bin out of each RECORD of the install, next
 // to the programs they name. Those programs hold the python's path, so their
 // hashes in RECORD would differ from one machine to the next.
@@ -192,14 +229,14 @@ lib, moved = sys.argv[1:]
 for record in glob.glob(os.path.join(lib, "*.dist-info", "RECORD")):
     with open(record) as f:
         lines = f.read().splitlines(True)
-    programs = [line for line in lines if line.startswith("bin/")]
+    programs = [line for line in lines if line.startswith(("bin/", "Scripts/"))]
     if not programs:
         continue
     os.makedirs(moved, exist_ok=True)
     with open(os.path.join(moved, os.path.basename(os.path.dirname(record)) + ".programs"), "w") as f:
         f.writelines(programs)
     with open(record, "w") as f:
-        f.writelines(line for line in lines if not line.startswith("bin/"))
+        f.writelines(line for line in lines if not line.startswith(("bin/", "Scripts/")))
 `
 
 // pipWrappers puts the package's programs into bin. For a console script it
@@ -227,8 +264,10 @@ listed = os.path.join(moved, info + ".programs")
 others = []
 if os.path.exists(listed):
     with open(listed) as f:
-        others = [line.split(",")[0][len("bin/"):] for line in f]
-others = [p for p in others if p and "/" not in p and p not in named]
+        others = [line.split(",")[0].split("/", 1)[1] for line in f]
+# On Windows uv writes each console script as its own launcher, such as
+# http.exe, which the program oku writes replaces.
+others = [p for p in others if p and "/" not in p and os.path.splitext(p)[0] not in named]
 if not scripts and not others:
     sys.exit("the Python package " + name + " has no programs")
 
@@ -241,14 +280,16 @@ def quote(s):
 for e in scripts:
     module, _, attr = e.value.partition(":")
     attr = attr.split("[")[0].strip()
-    code = ("import importlib, sys\n"
-            "sys.dont_write_bytecode = True\n"
-            "sys.path.insert(0, %r)\n"
-            "sys.argv[0] = %r\n"
-            "f = importlib.import_module(%r)\n"
-            "for part in %r.split('.') if %r else []:\n"
-            "    f = getattr(f, part)\n"
-            "sys.exit(f())\n") % (lib, e.name, module.strip(), attr, attr)
+    # One line, because a Windows shim keeps one argument per line.
+    code = ("import functools, importlib, sys; sys.dont_write_bytecode = True; "
+            "sys.path.insert(0, %r); sys.argv[0] = %r; "
+            "sys.exit(functools.reduce(getattr, %r, importlib.import_module(%r))())"
+            ) % (lib, e.name, attr.split(".") if attr else [], module.strip())
+    if os.name == "nt":
+        # oku turns a spec into a program when it links the package.
+        with open(os.path.join(bin, e.name + ".shim"), "w") as out:
+            out.write("path = " + python + "\narg = -c\narg = " + code + "\n")
+        continue
     path = os.path.join(bin, e.name)
     with open(path, "w") as out:
         out.write("#!/bin/sh\nexec " + quote(python) + " -c " + quote(code) + ' "$@"\n')

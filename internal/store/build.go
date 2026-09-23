@@ -206,7 +206,7 @@ func (s *Store) Build(
 	systemPC := writeSystemPkgConfig(filepath.Join(work, "pkgconfig"))
 
 	env := append(append(linkEnv(deps, systemPC), hostVars...), []string{
-		"PATH=" + joinPaths(append(append(depDirs(deps, "bin"), toolBin...), systemDirs...)),
+		"PATH=" + joinPaths(append(append(append(depDirs(deps, "bin"), dllDirs(deps)...), toolBin...), systemDirs...)),
 		"OKU_PREFIX=" + prefix, "OKU_SRC=" + src, "OKU_JOBS=" + vars["jobs"],
 	}...)
 
@@ -1099,6 +1099,17 @@ func linkEnv(deps []Dep, systemPC string) []string {
 		"LD_RUN_PATH=" + joinPaths(lib),
 		"CMAKE_PREFIX_PATH=" + joinPaths(depDirs(deps, "")),
 	}
+}
+
+// dllDirs returns the downloads of the deps on Windows, and nothing elsewhere.
+// A dep's bin holds links to its programs, and Windows looks for a program's
+// DLLs beside the file it started and then on PATH.
+func dllDirs(deps []Dep) []string {
+	if runtime.GOOS != "windows" {
+		return nil
+	}
+
+	return depDirs(deps, "pkg")
 }
 
 func depDirs(deps []Dep, sub string) []string {

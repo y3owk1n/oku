@@ -89,8 +89,20 @@ func linkEntry(target, dest string, pkg Package) error {
 		}
 	}
 
+	// Windows looks for a program's DLLs beside the file it started, which is
+	// a link in bin, and then on PATH. The DLLs sit beside the real files in the
+	// download of the package and of each dep.
+	downloads := []string{filepath.Join(pkg.StorePath, "pkg")}
+
 	for _, dep := range pkg.Closure {
 		spec.Dirs = append(spec.Dirs, filepath.Join(dep, "bin"))
+		downloads = append(downloads, filepath.Join(dep, "pkg"))
+	}
+
+	for _, dir := range downloads {
+		if info, err := os.Stat(dir); err == nil && info.IsDir() {
+			spec.Dirs = append(spec.Dirs, dir)
+		}
 	}
 
 	return shim.Write(dest, spec)

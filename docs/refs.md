@@ -222,7 +222,12 @@ which is the same on every machine of a platform. oku writes a program for
 each console script of the package, and copies any other program the package
 ships, such as ruff's binary. The programs of its dependencies are not
 exposed. A build asks for [approval](trust.md#build-commands) once, or takes
-`--yes`. oku cannot install a pypi package on Windows yet, and says so there.
+`--yes`.
+
+On Windows the build runs through PowerShell, and each console script becomes
+a shim, like any program in a profile there. A Windows build has no python of
+the system, so a pypi package on Windows needs `runtimes.python`, such as a
+python-build-standalone download, and the build says so without one.
 
 ## Go programs
 
