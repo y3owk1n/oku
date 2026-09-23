@@ -123,6 +123,13 @@ func Lint(data []byte) Report {
 		}
 	}
 
+	// With github-releases oku takes the sha256 from the GitHub API, which only
+	// knows the files of that repo's releases.
+	fromRelease := "https://github.com/" + full.Version.Repo + "/releases/download/"
+	if host, repo := forge.Split(full.Version.Repo); host != "" {
+		fromRelease = "https://" + host + "/" + repo + "/releases/download/"
+	}
+
 	for i, a := range full.Artifacts {
 		for _, text := range []string{a.URL, a.SHA256URL} {
 			for _, name := range unknownVars(text, artifactVars) {
@@ -130,13 +137,6 @@ func Lint(data []byte) Report {
 					"artifact[%d]: unknown template variable {{%s}}", i, name,
 				))
 			}
-		}
-
-		// With github-releases oku takes the sha256 from the GitHub API, which
-		// only knows the files of that repo's releases.
-		fromRelease := "https://github.com/" + full.Version.Repo + "/releases/download/"
-		if host, repo := forge.Split(full.Version.Repo); host != "" {
-			fromRelease = "https://" + host + "/" + repo + "/releases/download/"
 		}
 
 		switch {
@@ -162,8 +162,10 @@ func Lint(data []byte) Report {
 	switch source := full.Build.Source; {
 	case source.SHA256 != "" && source.SHA256URL != "":
 		report.Errors = append(report.Errors, "build.source: set sha256 or sha256_url, not both")
-	// crates.io publishes the sha256 of each version's .crate file.
+	// GitHub reports the sha256 of a file of the repo's release, and crates.io
+	// publishes one for each version's .crate file.
 	case source.URL != "" && source.SHA256 == "" && source.SHA256URL == "" &&
+		(full.Version.From != FromGitHubReleases || !strings.HasPrefix(source.URL, fromRelease)) &&
 		(full.Version.From != FromCrates || source.URL != crates.URL("", full.Version.Repo, "{{version}}")):
 		report.Warnings = append(report.Warnings,
 			"build.source: no sha256 or sha256_url, so users trust the first download")
