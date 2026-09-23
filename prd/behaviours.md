@@ -323,6 +323,9 @@ order step in `prd/product.md`.
   asset's OS and arch, then one that names its OS or arch alone, then a generic
   one such as `checksums.txt` or `SHA256SUMS`, and never one that names another
   OS or arch.
+- B275 [4] When GitHub reports a digest for an asset, inference skips a
+  checksum file that states another digest for it, and oku checks the
+  download against GitHub's digest.
 - B198 [4] With several assets that fit a platform equally, inference skips
   one whose name says `desktop`, `app`, `gui`, `installer` or `setup`,
   and takes the smaller of the rest when the host reports sizes. A comment
