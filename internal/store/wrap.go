@@ -73,6 +73,13 @@ func writeWraps(bin string, wraps []manifest.Wrapper, vars map[string]string, go
 		dest := filepath.Join(bin, w.Name)
 
 		if goos == "windows" {
+			// A table written for every OS names node where Windows has node.exe.
+			if filepath.Ext(words[0]) == "" {
+				if _, statErr := os.Stat(words[0] + ".exe"); statErr == nil {
+					words[0] += ".exe"
+				}
+			}
+
 			err = shim.Write(dest+".exe", shim.Spec{Target: words[0], Args: words[1:]})
 		} else {
 			err = writeScript(dest, words)

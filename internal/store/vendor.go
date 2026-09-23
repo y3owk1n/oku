@@ -33,8 +33,10 @@ type vendorKind struct {
 	// in the digest. Empty for most kinds.
 	after string
 	// pwsh and pwshAfter are script and after for Windows, where "$tool" is the
-	// variable $tool. Without them Windows runs the sh scripts.
+	// variable $tool. Without them Windows runs the sh scripts. pwshTools
+	// replaces tools for them when it is set.
 	pwsh, pwshAfter string
+	pwshTools       []string
 	// env is added to the step's environment.
 	env []string
 	// portable reports that the script fills output with the same files on every
@@ -110,6 +112,17 @@ var vendorKinds = map[string]vendorKind{
 		after: `if [ -n "$OKU_NPM_SCRIPTS" ]; then
   "$tool" rebuild --no-audit --no-fund --prefix "$OKU_PREFIX/lib" $OKU_NPM_SCRIPTS
 fi`,
+		// The npm.cmd of a Windows node finds npm beside itself, and the store's
+		// bin holds a copy of it without npm. So Windows runs npm's own script
+		// with node, from beside the node.exe that node's shim runs.
+		pwshTools: []string{"node"},
+		pwsh: npmCLI + `& $tool $npm install --ignore-scripts --omit=dev --no-audit --no-fund --no-package-lock ` +
+			"`\n" + `  "--before=$($env:OKU_NPM_BEFORE)" --prefix (Join-Path $env:OKU_PREFIX 'lib') $env:OKU_NPM_PACKAGE
+if ($LASTEXITCODE -ne 0) { exit 1 }`,
+		pwshAfter: npmCLI + `if ($env:OKU_NPM_SCRIPTS) {
+  & $tool $npm rebuild --no-audit --no-fund --prefix (Join-Path $env:OKU_PREFIX 'lib') ($env:OKU_NPM_SCRIPTS -split ' ')
+  if ($LASTEXITCODE -ne 0) { exit 1 }
+}`,
 		env: []string{"npm_config_update_notifier=false"},
 	},
 	"pip": {
@@ -219,6 +232,22 @@ if ($python) {
     Select-Object -First 1
   if ($real) { $python = $real.FullName }
 }`
+
+// npmCLI sets $npm to npm's own script beside the node that $tool runs. $tool
+// may be a shim, whose spec names the real node, or a store link, whose real
+// node is in the package's download.
+const npmCLI = `$node = $tool
+$spec = [IO.Path]::ChangeExtension($tool, '.shim')
+if (Test-Path $spec) {
+  $node = (Get-Content $spec | Where-Object { $_ -like 'path = *' } | Select-Object -First 1) -replace '^path = ', ''
+} else {
+  $real = Get-ChildItem (Join-Path (Split-Path (Split-Path $tool)) 'pkg') -Recurse -File -Filter node.exe -ErrorAction SilentlyContinue |
+    Select-Object -First 1
+  if ($real) { $node = $real.FullName }
+}
+$npm = Join-Path (Split-Path $node) 'node_modules\npm\bin\npm-cli.js'
+if (-not (Test-Path $npm)) { [Console]::Error.WriteLine("no npm beside $node"); exit 1 }
+`
 
 // pipRecords moves the lines for bin out of each RECORD of the install, next
 // to the programs they name. Those programs hold the python's path, so their

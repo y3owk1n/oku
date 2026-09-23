@@ -946,7 +946,12 @@ func runVendor(
 		)
 	}
 
-	tool, err := findTool(vendor.tools, env)
+	tools := vendor.tools
+	if runtime.GOOS == "windows" && vendor.pwshTools != nil {
+		tools = vendor.pwshTools
+	}
+
+	tool, err := findTool(tools, env)
 	if err != nil {
 		return "", "", fmt.Errorf("vendor %q %w", kind, err)
 	}

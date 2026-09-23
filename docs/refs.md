@@ -184,8 +184,9 @@ as it was when the version was published and runs no install scripts, and
 needs its install script, because that script downloads a native binary, takes
 a manifest of your own that names it in
 [`scripts`](manifest.md#vendoring). A build asks for
-[approval](trust.md#build-commands) once, or takes `--yes`. oku cannot do this
-on Windows yet, and says so there.
+[approval](trust.md#build-commands) once, or takes `--yes`. On Windows the
+build runs through PowerShell. It runs npm's own `npm-cli.js` with the node of
+your node package, so that package needs only `node.exe` in its `bin`.
 
 Without `runtimes.node` there is no npm to run, so oku installs the package's
 own download only. That works when the download bundles its code, and the
