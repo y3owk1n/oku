@@ -399,6 +399,7 @@ Keys of a `[[package]]` entry:
 | `tag` | The upstream tag of that version, when it differs, such as `v10.2.0`. |
 | `tag_commit` | The full commit a [moving tag](manifest.md#a-moving-tag) pointed at for that version. |
 | `inferred`, `manifest` | Set for a package whose repo has no manifest. `manifest` holds the full text oku inferred. |
+| `asset`, `bin` | The `--asset` and `--bin` an inferred package was added with, so `oku update` infers its next version the same way. |
 | `platform.<name>` | One entry per platform that has resolved this package. |
 | `dep` | The packages this one depends on, pinned the same way. |
 

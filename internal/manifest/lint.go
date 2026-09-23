@@ -28,22 +28,21 @@ type schema struct {
 	} `toml:"package"`
 	Version   Version `toml:"version"`
 	Artifacts []struct {
-		Match        platform.Selector `toml:"match"`
-		URL          string            `toml:"url"`
-		SHA256       string            `toml:"sha256"`
-		SHA256URL    string            `toml:"sha256_url"`
-		Integrity    string            `toml:"integrity"`
-		SignatureURL string            `toml:"signature_url"`
-		Strip        int               `toml:"strip"`
-		Bin          []any             `toml:"bin"`
-		Lib          []string          `toml:"lib"`
-		Include      []string          `toml:"include"`
-		Man          []string          `toml:"man"`
-		Completions  any               `toml:"completions"`
-		Share        []string          `toml:"share"`
-		App          []string          `toml:"app"`
-		Font         []string          `toml:"font"`
-		Data         bool              `toml:"data"`
+		Match       platform.Selector `toml:"match"`
+		URL         string            `toml:"url"`
+		SHA256      string            `toml:"sha256"`
+		SHA256URL   string            `toml:"sha256_url"`
+		Integrity   string            `toml:"integrity"`
+		Strip       int               `toml:"strip"`
+		Bin         []any             `toml:"bin"`
+		Lib         []string          `toml:"lib"`
+		Include     []string          `toml:"include"`
+		Man         []string          `toml:"man"`
+		Completions any               `toml:"completions"`
+		Share       []string          `toml:"share"`
+		App         []string          `toml:"app"`
+		Font        []string          `toml:"font"`
+		Data        bool              `toml:"data"`
 	} `toml:"artifact"`
 	Build    Build             `toml:"build"`
 	Runtime  Runtime           `toml:"runtime"`

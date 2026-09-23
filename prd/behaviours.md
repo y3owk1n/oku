@@ -358,6 +358,11 @@ order step in `prd/product.md`.
 - B112 [4] `oku add --asset <glob>` and `--bin <name>` choose the asset and the
   program of an inferred manifest. When inference fails, the error names the
   flag to pass.
+- B278 [4] An inferred manifest also exposes each executable beside its
+  program whose name starts with the program's name and a `-`, such as
+  `age-keygen` beside `age`. Other executables stay out.
+- B279 [4] `--bin` may be given once per program. `oku update` infers a
+  package's next version with the `--asset` and `--bin` it was added with.
 - B113 [4] `oku add github:owner/repo@version` on a repo with no manifest infers
   from that version's release, not from the newest one.
 - B126 [4] `oku add npm:@scope/name` infers a manifest from the npm registry

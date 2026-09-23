@@ -64,6 +64,10 @@ type Package struct {
 	// manifest oku wrote for it, so sync installs from the same text.
 	Inferred bool   `toml:"inferred,omitempty"`
 	Manifest string `toml:"manifest,omitempty"`
+	// Asset and Bins are the "--asset" and "--bin" an inferred manifest was
+	// made with, so "oku update" infers the next version the same way.
+	Asset string   `toml:"asset,omitempty"`
+	Bins  []string `toml:"bin,omitempty"`
 	// Platforms is keyed by platform.Platform.String(), such as "linux-amd64-musl".
 	Platforms map[string]Platform `toml:"platform"`
 	// Deps pins the packages this one depends on. Each package pins its own, so

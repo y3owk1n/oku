@@ -3191,6 +3191,63 @@ func TestB112AddAssetAndBinChooseWhatInferenceUses(t *testing.T) {
 	}
 }
 
+func TestB278AnInferredPackageExposesTheProgramsNamedAfterItsOwn(t *testing.T) {
+	m := newMachine(t)
+	archive, _ := m.archive(t, strings.TrimSuffix(hostAssetName(), ".tar.gz"), map[string]string{
+		"tool-1.4.0/tool":        "#!/bin/sh\necho tool\n",
+		"tool-1.4.0/tool-keygen": "#!/bin/sh\necho keygen\n",
+		"tool-1.4.0/install.sh":  "#!/bin/sh\n",
+	})
+
+	inferServer(t, &m, map[string]string{hostAssetName(): archive})
+
+	if out, err := m.run(t, "", "add", "github:owner/tool"); err != nil {
+		t.Fatalf("add: %v\n%s", err, out)
+	}
+
+	got, err := exec.Command(m.profile("bin", "tool-keygen")).Output()
+	must(t, err)
+
+	if strings.TrimSpace(string(got)) != "keygen" {
+		t.Fatalf("tool-keygen printed %q", got)
+	}
+
+	if _, err := os.Stat(m.profile("bin", "install.sh")); err == nil {
+		t.Fatal("an executable not named after the program became a program")
+	}
+}
+
+func TestB279UpdateInfersWithTheAssetAndBinsTheAddUsed(t *testing.T) {
+	m := newMachine(t)
+	archive, _ := m.archive(t, "odd", map[string]string{
+		"main":   "#!/bin/sh\necho main\n",
+		"helper": "#!/bin/sh\necho helper\n",
+	})
+
+	inferServer(t, &m, map[string]string{"tool-v1.4.0-odd.tar.gz": archive})
+
+	out, err := m.run(
+		t, "", "add", "github:owner/tool", "--asset", "*-odd.*", "--bin", "main", "--bin", "helper",
+	)
+	if err != nil {
+		t.Fatalf("add: %v\n%s", err, out)
+	}
+
+	// update infers the manifest again, where sync reuses the one in the lock.
+	if out, err := m.run(t, "", "update", "tool"); err != nil {
+		t.Fatalf("update: %v\n%s", err, out)
+	}
+
+	for _, name := range []string{"main", "helper"} {
+		got, err := exec.Command(m.profile("bin", name)).Output()
+		must(t, err)
+
+		if strings.TrimSpace(string(got)) != name {
+			t.Fatalf("%s printed %q after the update", name, got)
+		}
+	}
+}
+
 func TestB121AddInfersFromACompressedSingleBinary(t *testing.T) {
 	m := newMachine(t)
 
