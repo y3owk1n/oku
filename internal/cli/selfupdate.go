@@ -203,7 +203,7 @@ func runSelfUpdate(cmd *cobra.Command, opts Options, check, nightly, release boo
 		if errors.Is(err, store.ErrSignature) {
 			return fmt.Errorf(
 				"release %s: %w\nif oku's release key was rotated, run the install script again, "+
-					"see https://github.com/%s/blob/main/docs/releasing.md",
+					"see https://github.com/%s/blob/main/CONTRIBUTING.md#rotate-the-signing-key",
 				found.Tag, err, repo,
 			)
 		}

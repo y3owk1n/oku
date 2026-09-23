@@ -1,0 +1,422 @@
+# oku.toml and config.toml
+
+This page lists every key of the two files you write by hand. `oku.toml` is a
+[list](../how-oku-works.md#list): what a machine or a project should have.
+`config.toml` holds your settings for oku itself. oku writes `oku.lock`, which
+has [its own page](lock.md).
+
+The global `oku.toml` and `config.toml` live in the config directory,
+`~/.config/oku/` on macOS and Linux, see [paths](paths.md). A
+[project](../how-oku-works.md#project) keeps its own `oku.toml` at its root.
+
+## oku.toml
+
+```toml
+include = ["github:you/machines#base"]
+
+[lock]
+platforms = ["darwin-arm64", "linux-amd64-glibc"]
+
+[runtimes]
+node = "./packages/node.toml"
+
+[packages]
+ripgrep = "github:BurntSushi/ripgrep"
+fd = { ref = "github:sharkdp/fd", version = "^10" }
+prettier = "npm:prettier"
+rectangle = { ref = "github:you/recipes#rectangle", when = { os = "darwin" } }
+
+[vars]
+email = "me@example.com"
+
+[files]
+"{{home}}/.config/nvim" = { link = "./files/nvim" }
+"{{home}}/.ssh/allowed_signers" = { text = "{{email}} ssh-ed25519 AAAA\n", mode = "0600" }
+
+[defaults."com.apple.dock"]
+autohide = true
+```
+
+| Key | Type | Page section |
+|---|---|---|
+| `include` | array of refs | [include](#include) |
+| `[packages]` | table | [\[packages\]](#packages) |
+| `[lock]` | table | [\[lock\]](#lock) |
+| `[runtimes]` | table | [\[runtimes\]](#runtimes) |
+| `[vars]` | table | [\[vars\]](#vars) |
+| `[files]` | table | [\[files\]](#files) |
+| `[secrets]` | table | [\[secrets\]](#secrets) |
+| `[defaults]`, `[defaults-currenthost]`, `[registry]`, `[dconf]` | tables | [Settings tables](#settings-tables) |
+
+oku ignores a key it does not know at the top of the file and inside a
+`[packages]` table. `when`, `[lock]`, `[runtimes]`, `[files]` and `[secrets]`
+reject a key they do not know.
+
+### How oku edits the file
+
+- `oku add` and `oku remove` edit `[packages]` as text. Your comments, the
+  order of entries and every other table stay as you wrote them. A new
+  package goes at the end of `[packages]`.
+- A package written as its own table, `[packages.fd]`, makes `oku add fd` and
+  `oku remove fd` stop and ask you to edit it by hand. `oku sync` reads it.
+- `oku add` and `oku remove` carry `[files]`, `[vars]`, `[secrets]` and the
+  settings tables over unchanged. Only `oku sync` and `oku update` read them
+  again.
+- You can edit the file by hand and run `oku sync`.
+
+### [packages]
+
+Each key is a package name, and it must equal the `name` in the manifest that
+the [ref](refs.md) points at. A name that contains `.` needs quotes, as in
+`"node.js" = "..."`.
+
+The value is a ref:
+
+```toml
+[packages]
+ripgrep = "github:BurntSushi/ripgrep"
+```
+
+or a table:
+
+| Key | Type | Meaning |
+|---|---|---|
+| `ref` | string | Required. The [ref](refs.md), without `@version`. |
+| `version` | string | An exact version, a prefix such as `"22"`, or a range such as `"^1.4"`. See [Pin a version](refs.md#pin-a-version). `oku add <ref>@<version>` writes it. |
+| `when` | table or array of tables | Installs the package only on matching machines. See [when](#when). |
+| `service` | boolean | `true` runs the package's services now and at every login. `oku add --service` writes it. See [Services](../guides/services.md). |
+| `system` | boolean | `true` puts the package's apps, fonts and services in [system scope](../how-oku-works.md#system-scope). A plain `oku sync` lists those files and skips them, and `oku sync --system` applies them. `oku add --system` writes it. See [System-wide](../guides/system-wide.md). |
+
+```toml
+[packages]
+fd = { ref = "github:sharkdp/fd", version = "10.2.0" }
+postgres = { ref = "github:you/recipes#postgres", service = true, system = true }
+```
+
+A relative file ref, such as `"./recipes/fd.toml"`, starts at the directory of
+the list that holds it, not at your working directory. `oku add` writes a
+file inside the list's directory this way, and any other file as its absolute
+path. In a list that oku read from a repo or a URL, a relative path names a
+file beside the list there, see [relative paths](refs.md#relative-paths-in-a-remote-list).
+
+### when
+
+`when` limits a package or a `[files]` entry to some machines.
+
+| Key | Values |
+|---|---|
+| `os` | `darwin`, `linux`, `windows` |
+| `arch` | `amd64`, `arm64` |
+| `libc` | `glibc`, `musl`. Linux only. oku reports `musl` when `/lib/ld-musl-*.so.1` exists. |
+
+- A missing key matches anything. Any other key is an error, and so is a
+  value that is not a string.
+- An array of tables matches a machine that any of them matches. An empty
+  array is an error, because it matches nothing.
+
+```toml
+[packages]
+rectangle = { ref = "github:you/recipes#rectangle", when = { os = "darwin" } }
+patchelf = { ref = "github:you/recipes#patchelf", when = { os = "linux", libc = "glibc" } }
+fd = { ref = "github:sharkdp/fd", when = [{ os = "darwin" }, { os = "linux" }] }
+```
+
+`oku sync` does not install a package whose `when` does not match the
+machine. It pins it for the platforms of [`[lock]`](#lock) that `when` matches,
+and prints `patchelf 0.18.0, pinned and not installed on darwin-arm64`.
+`oku add` and `oku update` may write or narrow a `when`, see
+[platform entries](lock.md#platform-entries).
+
+### include
+
+`include` merges other lists under this one. Each item is a ref to a list:
+
+| Item | Reads |
+|---|---|
+| `./work.toml` | That file, relative to the including list. |
+| `https://host/base.toml` | That URL. |
+| `github:you/machines` | `oku.toml` at the root of the repo. |
+| `github:you/machines#base` | `base.toml` at the root, else `lists/base.toml`. |
+| `github:you/machines#dir/base.toml` | That file in the repo. |
+| `git+https://host/repo` | `oku.toml` at the root of the repo. |
+| `git+https://host/repo#dir/base.toml` | That file in the repo. |
+
+Every forge of [refs](refs.md#ref-forms) works the same way. A list ref takes
+no `@version`.
+
+```toml
+include = [
+  "github:you/machines#base",
+  "./work.toml",
+]
+```
+
+Rules:
+
+- Includes merge in order, so a later include overrides an earlier one. Your
+  own `[packages]`, `[vars]`, `[runtimes]` and settings override every include.
+- An included list may include others, up to 8 levels deep. A list included
+  twice, or one that includes itself, is an error.
+- oku never edits an included list, and `oku remove` refuses a package that
+  only an include declares.
+- oku uses only the `oku.lock` beside your own `oku.toml`, and ignores a lock
+  beside an included list. It pins a list from a repo or a URL at a commit and
+  a sha256, and does not pin a local file, see [the lock](lock.md#include-entries).
+- A relative path in a list from a repo names a file of the same repo at the
+  same commit. An absolute path, or one that leaves the repo, is an error.
+
+### [lock]
+
+Names the platforms that `oku.lock` pins every package for, besides the
+machine you run on.
+
+| Key | Type | Meaning |
+|---|---|---|
+| `platforms` | array of strings | Platform names: `darwin-amd64`, `darwin-arm64`, `linux-amd64-glibc`, `linux-amd64-musl`, `linux-arm64-glibc`, `linux-arm64-musl`, `windows-amd64`, `windows-arm64`. |
+
+```toml
+[lock]
+platforms = ["darwin-arm64", "linux-amd64-glibc", "linux-arm64-glibc"]
+```
+
+Any other key is an error. Only the `[lock]` of your own `oku.toml` counts,
+not one in an included list. Without it `add` and `update` pin your own
+platform only. What oku writes for another platform is in
+[platform entries](lock.md#platform-entries).
+
+### [runtimes]
+
+Names the package that provides an interpreter or a toolchain, for the
+packages of registry refs.
+
+| Key | Used by | Without it |
+|---|---|---|
+| `node` | `npm:` packages run through it. For an npm package with dependencies oku runs this package's `npm`, so on macOS and Linux it lists `bin/npm` beside `bin/node`. | The programs run the `node` on `PATH`, and `oku add` says so. On Windows `oku add npm:` fails and names the key. |
+| `python` | `pypi:` packages build and run with it. The package provides `python3`. | The `python3` the build finds on its `PATH`. A Windows build fails without it. |
+| `uv` | Installs `pypi:` packages. | `github:astral-sh/uv`, as a build dep. |
+| `go` | Builds `go:` packages. | The `go` on `PATH`. |
+| `rust` | Builds `cargo:` packages. It provides `cargo` and `rustc`. | The `cargo` on `PATH`, rustup included. |
+
+The value is a ref, or a table:
+
+| Key | Type | Meaning |
+|---|---|---|
+| `ref` | string | Required. The package's ref. |
+| `version` | string | A constraint, written like the constraint of a [dep](manifest.md). oku picks the newest version it allows, when it adds a package and at `oku update`. |
+
+```toml
+[runtimes]
+node = "./packages/node.toml"
+go = { ref = "./packages/go.toml", version = "1.26" }
+```
+
+- Each package that uses the runtime gets it as a runtime dep, or a build dep
+  for `go`, `rust` and `uv`. A runtime dep does not appear on your `PATH`, and
+  a program still finds it first on its own `PATH`.
+- `oku.lock` pins the version oku picked, and copies the constraint into the
+  manifest of each package that uses it. After you change a runtime, run
+  `oku update <name>` for those packages.
+- An included list may set `[runtimes]`, and a later list overrides an
+  earlier one. A relative path starts at the list that names it.
+- `oku.lock` stores a runtime inside the list's directory relative to it, so
+  the lock works in another checkout.
+- [`examples/runtimes`](../../examples/runtimes) has manifests for node,
+  python, go and rust.
+
+How each registry uses its runtime is in
+[npm, PyPI, Go and cargo](../guides/npm-pypi-go-cargo.md).
+
+### [vars]
+
+`[vars]` holds values that you name yourself, for `[files]` paths, `text`
+entries and templates. Each one is available as `{{name}}`.
+
+```toml
+[vars]
+font = "JetBrainsMono Nerd Font Propo"
+email = "me@example.com"
+
+[vars.theme]
+base00 = "0c1410"
+base05 = "c2d6ba"
+```
+
+- A value is a string. A table under `[vars]` gives names joined by a dot,
+  such as `{{theme.base00}}`. Any other type is an error.
+- A name may hold letters, digits, `_`, `-` and `.`.
+- `{{ name }}` with spaces is the same as `{{name}}`.
+- The locations of [`[files]`](#files), such as `{{home}}`, are variables too,
+  and so is `{{secret.<name>}}` for a [secret](#secrets).
+- A name that is not set stops the sync before it changes anything. The error
+  gives the template and the line.
+- `\{{` writes the two braces themselves.
+- There are no conditionals and no loops. oku writes every other byte of a
+  template as it is.
+- An included list may set `[vars]`. A later include overrides an earlier one,
+  and your own list overrides them all.
+- Changing a variable and running `oku sync` writes every file that uses it
+  again, in one generation.
+
+See [Dotfiles](../guides/dotfiles.md) for templates in use.
+
+### [files]
+
+Places files in your home directory. Each key is the path to write, and it
+starts with a location:
+
+| Location | Path |
+|---|---|
+| `{{home}}` | Your home directory. |
+| `{{config}}` | `$XDG_CONFIG_HOME`, else `~/.config`. `%APPDATA%` on Windows. |
+| `{{data}}` | `$XDG_DATA_HOME`, else `~/.local/share`. `%LOCALAPPDATA%` on Windows. |
+| `{{appdata}}`, `{{localappdata}}` | Windows only. An entry that uses one needs `when = { os = "windows" }`. |
+
+Each value is a table with exactly one of `link`, `text`, `render` and
+`secret`:
+
+| Key | Type | Meaning |
+|---|---|---|
+| `link` | string | The path becomes a symlink to this file or directory. A relative source starts at the directory of the list. `{{pkg.<name>}}/...` links into a package of the list, and follows it to a new version after `oku update`. |
+| `text` | string | The path gets this content. oku keeps it in the generation, read-only, and the path links to it. |
+| `render` | string | Like `text`, with the content from a template file beside the list. See [\[vars\]](#vars). |
+| `secret` | string | The path gets a value decrypted from a sops or an age file. See [\[secrets\]](#secrets). |
+| `key` | string | With `secret` only. The path of one value in a sops file, with `/` between its parts, such as `ssh/id_ed25519`. Without it the whole decrypted file is the value. |
+| `mode` | string | The permission of a `text`, `render` or `secret` file, such as `"0600"`, or `"0755"` for a script, up to `"0777"`. Without it the file is read-only, and a secret is `0600`. An error on a `link`. |
+| `vars` | table of strings | Overrides `[vars]` for this `text` or `render` entry, such as `vars = { font-size = "13" }`. An error on `link` and `secret`. |
+| `when` | table or array | As for [packages](#when). |
+
+```toml
+[files]
+"{{home}}/.config/nvim" = { link = "./files/nvim" }
+"{{home}}/.config/ghostty/config" = { render = "./files/ghostty.tmpl" }
+"{{home}}/.claude/skills/deslop" = { link = "{{pkg.cursor-plugins}}/skills/deslop" }
+"{{home}}/.ssh/id_ed25519" = { secret = "./secrets/secrets.yaml", key = "ssh/id_ed25519" }
+```
+
+Rules:
+
+- oku refuses a path that exists and that it did not write. It names the
+  path and changes nothing.
+- The next `oku sync` removes a path whose entry left the list. A file of
+  your own that replaced oku's link stays.
+- A `mode` of `"0600"` or tighter, or a `secret`, makes a directory that oku
+  has to create `0700`. Other entries get `0755`. A directory that exists
+  keeps its mode.
+- `oku rollback` brings back the bytes of that generation.
+- On Windows a linked directory is a junction, and a linked file or a `text`
+  is a copy, see [Windows](../guides/windows.md).
+
+### [secrets]
+
+Gives a decrypted value a name, for `{{secret.<name>}}` in a `text` or a
+template.
+
+| Key | Type | Meaning |
+|---|---|---|
+| `file` | string | Required. A sops file (YAML, JSON, dotenv or INI) or an age file, relative to the list. |
+| `key` | string | The path of one value in a sops file. An age file holds one value, so `key` with it is an error. |
+
+```toml
+[secrets]
+github_token = { file = "./secrets/secrets.yaml", key = "github/token" }
+```
+
+A name that `[secrets]` lacks is an error. oku finds the age key in
+`SOPS_AGE_KEY_FILE`, else `sops/age/keys.txt` in your config directory, see
+[paths](paths.md#environment-variables). For the whole setup, see
+[Secrets](../guides/secrets.md).
+
+### Settings tables
+
+Each table writes per-user settings through the mechanism of one OS. oku
+skips the tables of another OS, so one list works on every machine.
+
+| Table | OS | Writes through |
+|---|---|---|
+| `[defaults."<domain>"]` | macOS | `/usr/bin/defaults`. |
+| `[defaults-currenthost."<domain>"]` | macOS | `defaults -currentHost`, for a setting of this one Mac in `~/Library/Preferences/ByHost/`. oku prints it as `currentHost:<domain> <key>`. |
+| `[registry.'HKCU\...']` | Windows | `reg.exe`. A key outside `HKCU` is an error on every OS. |
+| `[dconf."<path>"]` | Linux | The `dconf` tool. The table name is the directory of its keys, without slashes at the ends. |
+
+```toml
+[defaults."com.apple.dock"]
+autohide = true
+tilesize = 48
+autohide-delay = 0.0
+
+[defaults."com.apple.Safari".NSUserKeyEquivalents]
+"Show Next Tab" = "^l"
+
+[defaults-currenthost."com.apple.controlcenter"]
+BatteryShowPercentage = true
+
+[registry.'HKCU\Control Panel\Keyboard']
+KeyboardDelay = "0"
+
+[dconf."org/gnome/desktop/interface"]
+color-scheme = "prefer-dark"
+```
+
+- Quote a domain that has a dot. `[defaults.com.apple.dock]` without quotes is
+  a table `com` that holds a table `apple`.
+- Write a registry key in single quotes, so TOML keeps its backslashes.
+- On Linux oku skips `[dconf]` when the `dconf` tool is not installed, and
+  prints `[dconf] is skipped, because the dconf tool is not on PATH`.
+
+The type comes from the TOML value:
+
+| TOML | macOS | Windows | Linux |
+|---|---|---|---|
+| `true`, `false` | boolean | `REG_DWORD` 1 or 0 | boolean |
+| `48` | integer | `REG_DWORD`, or `REG_QWORD` above 4294967295. A negative number is an error. | `int32`, or `int64` outside its range |
+| `0.5` | float. Write `0.0`, not `0`, for a float setting. | An error. | double |
+| `"left"` | string | `REG_SZ` | string |
+| `["a", "b"]` | array | `REG_MULTI_SZ`, of strings that are not empty | An array of one type. An empty array is an error. |
+| a table | dictionary, which oku owns and writes whole | An error. Write the subkey as its own table. | An error. |
+
+Before oku first writes a key it records the value the key had, or that it had
+none. When a key leaves the list, oku writes that value back with its type,
+or deletes the key again. `oku rollback` and `oku self uninstall` do the same. What
+happens after a write, such as the Dock restart, is in
+[OS settings](../guides/os-settings.md).
+
+### What each kind of list may hold
+
+| Table | Global list | Included list, file or repo | Included list at a URL | Project list |
+|---|---|---|---|---|
+| `[packages]`, `include`, `[runtimes]` | yes | yes | yes | yes |
+| `[lock]` | yes | ignored | ignored | yes |
+| `[vars]`, settings tables | yes | yes | yes | error |
+| `[files]`, `[secrets]` | yes | yes | error | error |
+
+For a list from a repo, oku puts the repo's files at the pinned commit in the
+store, and a `link` points there, read-only. A `link`, `render` or `secret` path of
+such a list must stay inside the repo.
+
+## config.toml
+
+`config.toml` sits beside the global `oku.toml`. oku commands write most of it,
+and you may edit it by hand.
+
+| Key | Type | Written by | Meaning |
+|---|---|---|---|
+| `[sources]` | table of strings | `oku source add`, `oku source remove` | Aliases for manifest collections, `alias = "ref"`. See [sources](refs.md#sources-and-aliases). |
+| `caches` | array of strings | `oku cache add`, `oku cache remove` | Directories and http(s) URLs of [build caches](../guides/build-caches.md), in the order oku tries them. |
+| `trusted_keys` | array of strings | `oku key trust`, `oku key revoke` | minisign public keys whose cache entries oku accepts. |
+| `[runtimes]` | table | by hand | The same table as in [oku.toml](#runtimes). oku uses it when no list names that runtime. A relative path starts at the directory of `config.toml`, and a ref may be a source alias such as `core/node`. |
+| `store_root` | string | `oku setup --system` | The shared store root, such as `/opt/oku`. Delete the line to go back to the store in the data directory, then run `oku sync`. |
+
+```toml
+store_root = '/opt/oku'
+caches = ['https://example.com/oku-cache']
+trusted_keys = ['RWRICenwB0kA6NZY/uo0EqhV0q1L4PIRu5svVTC7aZKX8n3URx0QbjmF']
+
+[sources]
+core = 'github:you/recipes'
+
+[runtimes]
+node = 'core/node'
+```
+
+`signing.key`, the secret key of `oku cache push`, is a separate file beside
+it.
