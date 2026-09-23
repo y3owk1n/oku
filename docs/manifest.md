@@ -715,7 +715,7 @@ How inference reads a release:
   manifest lists them, and so does the error when oku cannot find the program
   in the asset it chose.
 - An installer's format names its OS, so `Tool1.2.dmg` is a macOS asset with
-  no OS word. One that names no arch fits amd64 and arm64 of that OS. oku can
+  no OS word, and `tool-aarch64.AppImage` is a Linux one. One that names no arch fits amd64 and arm64 of that OS. oku can
   open a `.dmg` or `.pkg` on macOS and an `.msi` on Windows only, so run
   inference for those on that OS. oku cannot unpack a Windows `-setup.exe`
   without running it, so it takes none.
@@ -728,8 +728,12 @@ How inference reads a release:
   `tool-mac-checksums.txt` or `tool-linux-arm64-checksums.txt`, oku takes the
   one that names the asset's OS and arch, then one that names its OS or arch
   alone, then a generic file such as `checksums.txt` or `SHA256SUMS`. It never
-  takes a file that names another OS or arch. With none, the package is
-  [trusted on first use](trust.md#trust-on-first-use).
+  takes a file that names another OS or arch. When GitHub reports a digest for
+  the asset, oku reads the checksum file and skips it if it states another
+  digest. zellij's files do that, because they hash the program inside the
+  archive. oku then checks the download against GitHub's digest. With no
+  checksum file and no digest, oku
+  [trusts the package on first use](trust.md#trust-on-first-use).
 - When the install from an inferred manifest fails, the error says which
   asset oku chose for your machine, which other assets fit, and the
   `oku add --asset` command that picks one. `--verbose` adds the manifest oku

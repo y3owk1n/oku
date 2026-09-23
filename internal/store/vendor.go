@@ -464,7 +464,7 @@ func (s *Store) PinBuild(
 			return pin, err
 		}
 
-		pin.SHA256, err = s.publishedSHA256(ctx, checksums, path.Base(pin.SourceURL))
+		pin.SHA256, err = s.PublishedSHA256(ctx, checksums, path.Base(pin.SourceURL))
 	case pinned.SHA256 != "" && pinned.SourceURL == pin.SourceURL:
 		pin.SHA256 = pinned.SHA256
 	default:

@@ -162,7 +162,7 @@ func (s *Store) Realize(
 
 	want := a.SHA256
 	if want == "" && a.SHA256URL != "" {
-		published, err := s.publishedSHA256(ctx, a.SHA256URL, path.Base(a.URL))
+		published, err := s.PublishedSHA256(ctx, a.SHA256URL, path.Base(a.URL))
 		if err != nil {
 			return Realized{}, err
 		}
@@ -342,7 +342,7 @@ func (s *Store) Pin(
 	}
 
 	if a.SHA256URL != "" {
-		published, err := s.publishedSHA256(ctx, a.SHA256URL, path.Base(a.URL))
+		published, err := s.PublishedSHA256(ctx, a.SHA256URL, path.Base(a.URL))
 
 		return published, false, err
 	}

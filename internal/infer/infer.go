@@ -38,6 +38,8 @@ var ErrNoAsset = errors.New("no release asset fits")
 type Inferrer struct {
 	Hosts   forge.Hosts
 	Inspect Inspector
+	// Checksum reads the sha256 of fileName from the checksum file at url.
+	Checksum func(ctx context.Context, url, fileName string, auth forge.Auth) (string, error)
 }
 
 // Options set the release, the asset and the program Manifest uses. With the
@@ -150,11 +152,13 @@ func (inf *Inferrer) Manifest(
 	names := make([]string, len(rel.Assets))
 	urls := map[string]string{}
 	sizes := map[string]int64{}
+	digests := map[string]string{}
 
 	for i, asset := range rel.Assets {
 		names[i] = asset.Name
 		urls[asset.Name] = asset.URL
 		sizes[asset.Name] = asset.Size
+		digests[asset.Name] = asset.Digest
 	}
 
 	chosen, err := choose(names, sizes, host, opts.Asset)
@@ -263,7 +267,7 @@ func (inf *Inferrer) Manifest(
 		fmt.Fprintf(&b, "[[artifact]]\nmatch = %s\n", selectorTOML(c.Selector))
 		fmt.Fprintf(&b, "url = %q\n", template(urls[c.asset], rel.Tag, version))
 
-		if sums := checksumAsset(names, c.asset); sums != "" {
+		if sums := inf.checksumFile(ctx, server.Auth(), names, urls, digests[c.asset], c.asset); sums != "" {
 			fmt.Fprintf(&b, "sha256_url = %q\n", template(urls[sums], rel.Tag, version))
 		}
 
@@ -503,15 +507,16 @@ func pick(names []string, sizes map[string]int64, t target) []string {
 	return fits
 }
 
-// installerOS returns the OS an installer format runs on, or "" for any other
-// file.
+// installerOS returns the OS an installer format or an AppImage runs on, or
+// "" for any other file.
 func installerOS(name string) string {
 	switch {
 	case strings.HasSuffix(name, ".dmg"), strings.HasSuffix(name, ".pkg"):
 		return "darwin"
 	case strings.HasSuffix(name, ".msi"):
 		return "windows"
-	case strings.HasSuffix(name, ".deb"), strings.HasSuffix(name, ".rpm"):
+	case strings.HasSuffix(name, ".deb"), strings.HasSuffix(name, ".rpm"),
+		strings.HasSuffix(name, ".appimage"):
 		return "linux"
 	default:
 		return ""
@@ -637,6 +642,31 @@ func hasAnySuffix(s string, suffixes []string) bool {
 	}
 
 	return false
+}
+
+// checksumFile returns the asset that holds asset's sha256, as checksumAsset
+// picks it. When the host reports digest for asset, oku skips a checksum file
+// that states another digest, such as one that hashes the program inside the
+// archive. oku then checks the download against the host's digest.
+func (inf *Inferrer) checksumFile(
+	ctx context.Context,
+	auth forge.Auth,
+	names []string,
+	urls map[string]string,
+	digest, asset string,
+) string {
+	for {
+		sums := checksumAsset(names, asset)
+		if sums == "" || digest == "" {
+			return sums
+		}
+
+		if got, err := inf.Checksum(ctx, urls[sums], asset, auth); err == nil && got == digest {
+			return sums
+		}
+
+		names = slices.DeleteFunc(slices.Clone(names), func(n string) bool { return n == sums })
+	}
 }
 
 // checksumAsset returns the asset that holds asset's sha256: "<asset>.sha256"

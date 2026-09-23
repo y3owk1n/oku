@@ -126,3 +126,76 @@ func TestB268LintDoesNotWarnWhenGitHubOrCratesIOReportTheDigest(t *testing.T) {
 		t.Fatalf("lint did not warn about a file that no host reports a digest for:\n%s", out)
 	}
 }
+
+// digestInferServer fakes GitHub for owner/tool with no manifest, whose release
+// v1.4.0 lists files with the digests the API reports for them.
+func digestInferServer(t *testing.T, m *machine, files, digests map[string]string) {
+	t.Helper()
+
+	var items []string
+	for name, file := range files {
+		items = append(items, fmt.Sprintf(
+			`{"name": %q, "browser_download_url": "file://%s", "digest": "sha256:%s"}`,
+			name, file, digests[name],
+		))
+	}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/repos/owner/tool/releases/latest":
+			fmt.Fprintf(w, `{"tag_name": "v1.4.0", "assets": [%s]}`, strings.Join(items, ","))
+		case "/api/repos/owner/tool/releases":
+			fmt.Fprintf(w, `[{"tag_name": "v1.4.0", "assets": [%s]}]`, strings.Join(items, ","))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(server.Close)
+
+	m.opts.GitHubAPI = server.URL + "/api"
+	m.opts.GitHubRaw = server.URL + "/raw"
+}
+
+func TestB275InferenceSkipsAChecksumFileThatDisagreesWithGitHub(t *testing.T) {
+	for _, tc := range []struct {
+		name, sums string
+		kept       bool
+	}{
+		// zellij's file hashes the program inside the archive.
+		{"of the program inside", strings.Repeat("a", 64) + "  target/release/tool\n", false},
+		{"of the archive", "", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m := newMachine(t)
+			archive, sum := m.archive(t, "release", map[string]string{"tool": script})
+
+			sums := tc.sums
+			if sums == "" {
+				sums = sum + "  " + hostAssetName() + "\n"
+			}
+
+			sumsName := strings.TrimSuffix(hostAssetName(), ".tar.gz") + ".sha256sum"
+			sumsFile := filepath.Join(m.fixtures, sumsName)
+			must(t, os.WriteFile(sumsFile, []byte(sums), 0o644))
+
+			digestInferServer(
+				t, &m,
+				map[string]string{hostAssetName(): archive, sumsName: sumsFile},
+				map[string]string{hostAssetName(): sum},
+			)
+
+			out, err := m.run(t, "", "add", "--verbose", "github:owner/tool")
+			if err != nil {
+				t.Fatalf("add: %v\n%s", err, out)
+			}
+
+			if strings.Contains(out, "sha256_url") != tc.kept {
+				t.Fatalf("want sha256_url in the manifest %v:\n%s", tc.kept, out)
+			}
+
+			if strings.Contains(out, "trusted this download") {
+				t.Fatalf("oku trusted a file whose digest GitHub reports:\n%s", out)
+			}
+		})
+	}
+}
