@@ -89,7 +89,6 @@ strip_prefix = "v"
 match = { os = "linux", arch = "amd64", libc = "musl" }
 url = "https://.../ripgrep-{{version}}-x86_64-unknown-linux-musl.tar.gz"
 sha256 = ""                 # or sha256_url, or neither (pinned on first use)
-signature_url = ""
 strip = 1
 bin = ["rg"]
 lib = []
