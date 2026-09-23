@@ -4,7 +4,7 @@
 |---|---|
 | Install and remove | [`add`](#oku-add) · [`remove`](#oku-remove) · [`shell`](#oku-shell) |
 | See what is installed | [`list`](#oku-list) · [`info`](#oku-info) · [`why`](#oku-why) · [`which`](#oku-which) |
-| Follow the list and the lock | [`sync`](#oku-sync) · [`update`](#oku-update) |
+| Follow the list and the lock | [`sync`](#oku-sync) · [`update`](#oku-update) · [`outdated`](#oku-outdated) |
 | Go back, and free space | [`generations`](#oku-generations) · [`rollback`](#oku-rollback) · [`gc`](#oku-gc) |
 | Find packages | [`source`](#oku-source) · [`search`](#oku-search) |
 | Work in a project | [`hook`](#oku-hook) · [`env`](#oku-env) · [`allow`, `deny`](#oku-allow-oku-deny) |
@@ -72,6 +72,7 @@ place of text. Messages and errors still go to stderr as text.
 | `oku which <program>` | `program`, `package`, `version`, `path`, `shadowed_by` |
 | `oku generations` | a list of `number`, `current`, `created`, `packages` |
 | `oku search <term>` | a list of `ref`, `description` |
+| `oku outdated` | a list of `name`, `version`, `newest`, `ref`, for each package with a newer version |
 | `oku source list` | a list of `alias`, `ref` |
 | `oku cache list` | a list of locations |
 | `oku key list` | `yours` and `trusted` |
@@ -485,6 +486,32 @@ gained are installed and packages they lost are dropped. With names, includes
 stay pinned.
 
 A name that is in neither `oku.toml` nor its includes fails.
+
+## oku outdated
+
+```
+oku outdated [--json]
+```
+
+Lists the packages that have a newer version than `oku.lock` pins, with the
+locked version, the newest version and the ref:
+
+```
+$ oku outdated
+name      locked   newest   ref
+freebuff  0.0.183  0.0.184  ./packages/freebuff.toml
+`oku update` takes the newest versions, `oku update <name>` one package
+```
+
+oku asks each package's version source which version is the newest, as
+`oku update` would pick it. It downloads no package and changes nothing. A
+manifest that oku inferred is read from `oku.lock`, and any other manifest from
+its ref. When every package is at its newest version, oku says so. When a
+version source cannot answer, oku lists the rest and ends with an error that
+names the package.
+
+`--json` suits a bot that opens a pull request for new versions. It prints
+nothing but the packages that have a newer version.
 
 ## oku service
 
