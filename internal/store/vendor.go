@@ -234,11 +234,16 @@ if ($python) {
 }`
 
 // npmCLI sets $npm to npm's own script beside the node that $tool runs. $tool
-// may be a shim, whose spec names the real node.
+// may be a shim, whose spec names the real node, or a store link, whose real
+// node is in the package's download.
 const npmCLI = `$node = $tool
 $spec = [IO.Path]::ChangeExtension($tool, '.shim')
 if (Test-Path $spec) {
   $node = (Get-Content $spec | Where-Object { $_ -like 'path = *' } | Select-Object -First 1) -replace '^path = ', ''
+} else {
+  $real = Get-ChildItem (Join-Path (Split-Path (Split-Path $tool)) 'pkg') -Recurse -File -Filter node.exe -ErrorAction SilentlyContinue |
+    Select-Object -First 1
+  if ($real) { $node = $real.FullName }
 }
 $npm = Join-Path (Split-Path $node) 'node_modules\npm\bin\npm-cli.js'
 if (-not (Test-Path $npm)) { [Console]::Error.WriteLine("no npm beside $node"); exit 1 }
