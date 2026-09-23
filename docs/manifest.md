@@ -62,7 +62,7 @@ needs no manifest change.
 | `value` | The one version this manifest installs. |
 | `from` | `github-releases`, `gitea-releases`, `gitlab-releases`, `git-tags`, `git-branch` or `npm`. Not together with `value`. |
 | `repo` | `owner/repo` for `github-releases`, or `host/owner/repo` on a GitHub Enterprise Server. `host/owner/repo` for `gitea-releases`, such as `codeberg.org/owner/repo`. `group/project` for `gitlab-releases`, or `host/group/project` on a GitLab server of your own. A git URL for `git-tags` and `git-branch`. A package name for `npm`, such as `@scope/name`. Required with `from`. |
-| `strip_prefix` | Text cut off the front of a tag to get the version, such as `"v"`. A tag without the prefix is ignored. |
+| `strip_prefix` | Text cut off the front of a tag to get the version, such as `"v"`. oku ignores a tag without the prefix. A `v` is the exception. With `"v"` a tag `1.2.0` counts too, and without a prefix `v1.2.0` counts. |
 | `tag` | One tag that upstream moves, such as `"nightly"`. Only with `github-releases`, `gitea-releases` or `gitlab-releases`, and not together with `strip_prefix`. See [A moving tag](#a-moving-tag). |
 | `branch` | The branch that `git-branch` follows, such as `"main"`. See [A branch](#a-branch). |
 
@@ -88,6 +88,9 @@ How oku turns tags into versions:
   `git ls-remote`, so it needs `git` on `PATH`.
 - After `strip_prefix`, a tag that does not start with a digit is ignored. That
   drops tags such as `nightly`.
+- Many repos switched once between tags such as `1.2.0` and `v1.2.0`, so a `v`
+  is optional either way, and older releases stay visible. When both tags of a
+  version exist, oku downloads from the one in the form `strip_prefix` names.
 - The newest version is the highest by its dot-separated numbers, so `1.10.0` is
   newer than `1.9.0`. A version with a `-` suffix, such as `2.0.0-rc1`, is older
   than `2.0.0`. A number in the suffix counts as a number, so `7.1.2-31` is newer

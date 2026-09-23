@@ -226,6 +226,10 @@ order step in `prd/product.md`.
   version that its `version` in the list allows differs from the locked one, with both versions and its ref, and
   `--json` gives `name`, `version`, `newest` and `ref`. It changes no lock, no
   profile and no store path.
+- B266 [3] A version source reads a tag with or without a `v` in front, whatever
+  `strip_prefix` says, so the releases from before a repo changed its tag style
+  stay visible. When both forms of a version exist, the tag in the declared form
+  is the one oku downloads from.
 - B265 [3] A list's `version`, and `@version` in `add`, may be a range such as
   `^1.4`, `~1.4` or `>=1.2, <2`, or a prefix such as `22` that no release has
   exactly. `add` and `update` take the newest version it allows, and an

@@ -122,3 +122,30 @@ func TestB265AnInferredPackageTakesTheNewestVersionInTheRange(t *testing.T) {
 		t.Fatalf("add @1 took %s, want 1.2.0, the newest 1.x", got)
 	}
 }
+
+func TestB266ATagWithOrWithoutAVIsAVersion(t *testing.T) {
+	m := newMachine(t)
+	server := newReleaseServer(t, "v1.4.0", "1.3.0", "1.2.0", "v1.2.0")
+	m.opts.GitHubAPI = server.URL + "/api"
+
+	data := m.dataDep(t)
+
+	out, err := m.run(t, "", "add", data+"@1.3.0", "--yes")
+	if err != nil {
+		t.Fatalf("add a version whose tag has no v: %v\n%s", err, out)
+	}
+
+	if got := m.lockedVersion(t, "data"); got != "1.3.0" {
+		t.Fatalf("add @1.3.0 took %s", got)
+	}
+
+	_, err = m.run(t, "", "add", data+"@1.2.0", "--yes")
+	must(t, err)
+
+	locked, err := lock.Read(filepath.Join(m.config, "oku.lock"))
+	must(t, err)
+
+	if pkg, _ := locked.Find("data"); pkg.Tag != "v1.2.0" {
+		t.Fatalf("1.2.0 came from the tag %q, want v1.2.0, the form strip_prefix names", pkg.Tag)
+	}
+}

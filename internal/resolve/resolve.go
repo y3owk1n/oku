@@ -319,12 +319,34 @@ func (r *Resolver) List(ctx context.Context, v manifest.Version) ([]Release, err
 
 	var releases []Release
 
+	// Many repos switched once between tags such as 1.2.0 and v1.2.0, so a "v"
+	// is optional either way. When a version has both tags, oku keeps the one in
+	// the declared form.
+	at := map[string]int{}
+
 	for _, tag := range tags {
 		version, ok := strings.CutPrefix(tag, v.StripPrefix)
+
+		declared := ok
+		if !ok && v.StripPrefix == "v" {
+			version, ok = tag, true
+		} else if ok && v.StripPrefix == "" && strings.HasPrefix(tag, "v") {
+			version, declared = tag[1:], false
+		}
+
 		if !ok || version == "" || !unicode.IsDigit(rune(version[0])) {
 			continue
 		}
 
+		if i, seen := at[version]; seen {
+			if declared {
+				releases[i].Tag = tag
+			}
+
+			continue
+		}
+
+		at[version] = len(releases)
 		releases = append(releases, Release{Version: version, Tag: tag})
 	}
 
