@@ -61,7 +61,9 @@ has no checksum to read, so oku always trusts that download on first use.
 oku sends a token to the host it is for and to no other: `GITHUB_TOKEN`,
 `GH_ENTERPRISE_TOKEN`, `GITLAB_TOKEN`, `GITLAB_SERVER_TOKEN`, `CODEBERG_TOKEN`
 and `GITEA_TOKEN`. [Refs](refs.md#how-each-kind-is-fetched) lists the host
-of each one.
+of each one. When `GITHUB_TOKEN` or `GH_ENTERPRISE_TOKEN` is not set and the
+`gh` CLI is on `PATH`, oku runs `gh auth token --hostname <host>` and sends
+that login to the same host only.
 
 ## Build commands
 

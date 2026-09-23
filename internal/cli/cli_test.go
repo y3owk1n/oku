@@ -181,6 +181,12 @@ func newMachine(t *testing.T) machine {
 	t.Setenv("XDG_DATA_HOME", filepath.Join(root, "data"))
 	t.Setenv("XDG_CACHE_HOME", filepath.Join(root, "cache"))
 
+	// oku asks gh for a GitHub token, and the user's own login must not reach
+	// the test servers.
+	t.Setenv("GH_CONFIG_DIR", filepath.Join(root, "gh"))
+	t.Setenv("GH_TOKEN", "")
+	t.Setenv("GITHUB_TOKEN", "")
+
 	must(t, os.MkdirAll(m.fixtures, 0o755))
 	must(t, os.WriteFile(m.exe, []byte("binary"), 0o755))
 
@@ -1545,6 +1551,35 @@ func TestB251AddSaysHowLongToWaitWhenGitHubAsksOkuToSlowDown(t *testing.T) {
 	_, err := m.run(t, "", "add", m.discoveredManifest(t, "1.0.0"))
 	if err == nil || !strings.Contains(err.Error(), "try again in 42 seconds") {
 		t.Fatalf("want an error that says to wait 42 seconds, got %v", err)
+	}
+}
+
+func TestB254WithoutGITHUB_TOKENOkuAsksGhForItsLogin(t *testing.T) {
+	m := newMachine(t)
+
+	// A gh on PATH that is logged in to github.com only.
+	bin := filepath.Join(m.fixtures, "gh-bin")
+	must(t, os.MkdirAll(bin, 0o755))
+	must(t, os.WriteFile(filepath.Join(bin, "gh"), []byte(
+		"#!/bin/sh\n[ \"$*\" = \"auth token --hostname github.com\" ] && echo from-gh\n",
+	), 0o755))
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	var seen []string
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		seen = append(seen, r.Header.Get("Authorization"))
+		_, _ = w.Write([]byte(`[{"tag_name": "v1.0.0"}]`))
+	}))
+	t.Cleanup(server.Close)
+
+	m.opts.GitHubAPI = server.URL + "/api"
+
+	_, err := m.run(t, "", "add", m.discoveredManifest(t, "1.0.0"))
+	must(t, err)
+
+	if len(seen) == 0 || seen[0] != "Bearer from-gh" {
+		t.Fatalf("GitHub got %q, want the token of gh", seen)
 	}
 }
 

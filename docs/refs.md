@@ -58,7 +58,9 @@ the default branch, then reads the manifest at that exact commit from
 reads that same commit again.
 
 GitHub allows 60 unauthenticated API requests per hour. Set `GITHUB_TOKEN` to
-raise the limit. oku sends the token to the GitHub API only.
+raise the limit, or log in with the `gh` CLI. Without the variable, oku runs
+`gh auth token --hostname github.com` once per run and uses that token. oku
+sends the token to the GitHub API only.
 
 oku keeps each API answer in its cache, and the next time asks GitHub only
 whether it changed. With `GITHUB_TOKEN` set, GitHub does not count an

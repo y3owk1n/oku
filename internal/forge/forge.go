@@ -8,7 +8,9 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"os/exec"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -110,7 +112,8 @@ type Hosts struct {
 
 // GitHub returns github.com for an empty host, else the GitHub Enterprise
 // Server at host. oku sends GITHUB_TOKEN to github.com only, and
-// GH_ENTERPRISE_TOKEN to an Enterprise Server only.
+// GH_ENTERPRISE_TOKEN to an Enterprise Server only. When the variable is not
+// set, oku asks the gh CLI for its login to that host.
 func (h Hosts) GitHub(host string) Forge {
 	if host != "" {
 		return &github{
@@ -118,7 +121,7 @@ func (h Hosts) GitHub(host string) Forge {
 			host:  host,
 			web:   "https://" + host,
 			api:   "https://" + host + "/api/v3",
-			token: os.Getenv("GH_ENTERPRISE_TOKEN"),
+			token: tokenFor("GH_ENTERPRISE_TOKEN", host),
 			env:   "GH_ENTERPRISE_TOKEN",
 		}
 	}
@@ -128,7 +131,7 @@ func (h Hosts) GitHub(host string) Forge {
 		web:   "https://github.com",
 		api:   "https://api.github.com",
 		raw:   "https://raw.githubusercontent.com",
-		token: os.Getenv("GITHUB_TOKEN"),
+		token: tokenFor("GITHUB_TOKEN", "github.com"),
 		env:   "GITHUB_TOKEN",
 	}
 
@@ -141,6 +144,38 @@ func (h Hosts) GitHub(host string) Forge {
 	}
 
 	return g
+}
+
+// ghTokens holds what "gh auth token" printed for each host and PATH, so oku
+// runs gh once per host.
+var ghTokens sync.Map
+
+// tokenFor returns the variable env, or else the token that the gh CLI holds
+// for host, or "". Many users log in with gh and set no variable, and GitHub
+// counts every request without a token against a limit of 60 an hour.
+func tokenFor(env, host string) string {
+	if token := os.Getenv(env); token != "" {
+		return token
+	}
+
+	key := host + "\x00" + os.Getenv("PATH")
+	if token, done := ghTokens.Load(key); done {
+		return token.(string)
+	}
+
+	token := ""
+
+	// gh picks its default host without --hostname, which may be another one.
+	if gh, err := exec.LookPath("gh"); err == nil {
+		out, err := exec.Command(gh, "auth", "token", "--hostname", host).Output()
+		if err == nil {
+			token = strings.TrimSpace(string(out))
+		}
+	}
+
+	ghTokens.Store(key, token)
+
+	return token
 }
 
 // Open returns the forge that a ref's scheme and location name, and the repo
