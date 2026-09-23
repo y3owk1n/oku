@@ -2637,6 +2637,53 @@ bin = [{ name = "tool", run = "{{dep.interp.prefix}}/bin/interp", args = ["{{pkg
 	}
 }
 
+func TestB277AProgramFromABinTableFindsItsRuntimeDepsOnPathAndNotItsBuildDeps(t *testing.T) {
+	m := newMachine(t)
+
+	// interp stands in for node, whose programs start "node" by name. It prints
+	// where PATH finds itself and the build dep's program.
+	m.manifest(t, "interp", map[string]string{
+		"interp": "#!/bin/sh\necho \"$(command -v interp) $(command -v okucc)\"\n",
+	}, `bin = ["interp"]`)
+	m.manifest(t, "compiler", map[string]string{"okucc": "#!/bin/sh\n"}, `bin = ["okucc"]`)
+
+	archive, sum := m.archive(t, "script", map[string]string{"main.js": "// the script"})
+	wrap := `bin = [{ name = "%s", run = "{{dep.interp.prefix}}/bin/interp" }]`
+	m.rawManifest(t, "tool", fmt.Sprintf(
+		"[runtime]\ndeps = [\"./interp.toml\"]\n[[artifact]]\nurl = \"file://%s\"\nsha256 = %q\n"+wrap+"\n",
+		archive,
+		sum,
+		"tool",
+	))
+	m.rawManifest(t, "built", "[runtime]\ndeps = [\"./interp.toml\"]\n"+
+		"[build]\ndeps = [\"./compiler.toml\"]\n[[build.step]]\ninstall = { "+
+		fmt.Sprintf(wrap, "built")+" }\n")
+
+	for _, name := range []string{"tool", "built"} {
+		if out, err := m.run(
+			t,
+			"",
+			"add",
+			"--yes",
+			filepath.Join(m.fixtures, name+".toml"),
+		); err != nil {
+			t.Fatalf("add %s: %v\n%s", name, err, out)
+		}
+
+		cmd := exec.Command(m.profile("bin", name))
+		cmd.Env = append(os.Environ(), "PATH=/usr/bin:/bin")
+
+		got, err := cmd.Output()
+		must(t, err)
+
+		found := strings.Fields(string(got))
+		if len(found) != 1 ||
+			!strings.HasPrefix(found[0], filepath.Join(m.data, "store", "interp-")) {
+			t.Fatalf("%s found %q on its PATH, want only the interp of the store", name, got)
+		}
+	}
+}
+
 // npmServer fakes the npm registry for the package @scope/tool. Each version's
 // download is a tar archive whose program prints the version. A version in
 // tampered gets an integrity that does not fit its download.

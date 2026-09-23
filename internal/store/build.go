@@ -53,6 +53,14 @@ func (s *Store) BuildPath(m *manifest.Manifest, p platform.Platform, deps []Dep)
 		extra = append(extra, "root", s.dir)
 	}
 
+	// A wrapper that puts its runtime deps on PATH differs from the ones older
+	// oku wrote, so it gets a store path of its own.
+	if len(m.Runtime.Deps) > 0 && slices.ContainsFunc(m.Build.Steps, func(step manifest.Step) bool {
+		return step.Install != nil && len(step.Install.Wrap) > 0
+	}) {
+		extra = append(extra, "path")
+	}
+
 	return s.pathFor(m, p, extra...)
 }
 
@@ -312,7 +320,7 @@ func (s *Store) Build(
 
 			vendored = append(vendored, digest)
 		default:
-			err = s.runStep(ctx, step, src, prefix, vars)
+			err = s.runStep(ctx, step, src, prefix, vars, opts.RuntimeDeps)
 
 			// The completions command runs the program the step just installed.
 			if err == nil && step.Generates() {
@@ -641,6 +649,7 @@ func (s *Store) runStep(
 	step manifest.Step,
 	src, prefix string,
 	vars map[string]string,
+	runtimeDeps []Dep,
 ) error {
 	switch {
 	case step.Install != nil:
@@ -652,7 +661,9 @@ func (s *Store) runStep(
 		wrapVars := maps.Clone(vars)
 		wrapVars["pkg"] = prefix
 
-		return writeWraps(filepath.Join(prefix, "bin"), step.Install.Wrap, wrapVars, vars["os"])
+		return writeWraps(
+			filepath.Join(prefix, "bin"), step.Install.Wrap, wrapVars, vars["os"], depDirs(runtimeDeps, "bin"),
+		)
 	case step.Copy != nil:
 		return copyInto(src, step.Copy.From, prefix, step.Copy.To, 0)
 	case step.Patch != nil:

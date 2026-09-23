@@ -131,6 +131,11 @@ func (s *Store) artifactPath(
 		for _, dep := range deps {
 			extra = append(extra, filepath.Base(dep.Prefix))
 		}
+
+		// See BuildPath.
+		if len(deps) > 0 {
+			extra = append(extra, "path")
+		}
 	}
 
 	return s.pathFor(m, p, extra...)

@@ -36,6 +36,9 @@ type Package struct {
 	// Closure holds the store paths of every package this one depends on. They
 	// are not linked into the profile, and they keep gc from deleting them.
 	Closure []string `toml:"closure,omitempty"`
+	// BuildOnly holds the paths of Closure that only a build needed, such as a
+	// compiler. A program of the package never finds them on its PATH.
+	BuildOnly []string `toml:"build_only,omitempty"`
 	// Env holds the package's [env] with its values expanded. The shell hook
 	// reads it from here, so it never has to open a manifest.
 	Env map[string]string `toml:"env,omitempty"`
@@ -364,6 +367,7 @@ func (p *Profile) Replace(
 	same := func(a, b Package) bool {
 		return a.Name == b.Name && a.Version == b.Version && a.Ref == b.Ref &&
 			a.StorePath == b.StorePath && slices.Equal(a.Closure, b.Closure) &&
+			slices.Equal(a.BuildOnly, b.BuildOnly) &&
 			maps.Equal(a.Env, b.Env) && a.Service == b.Service && a.System == b.System
 	}
 

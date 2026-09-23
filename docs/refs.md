@@ -167,7 +167,9 @@ node = 'github:you/recipes#node'
 ```
 
 Every npm package then gets that package as a runtime dep, and its programs run
-through it. They do not need node on `PATH`, and node does not appear there.
+through it. They do not need node on `PATH`, and node does not appear there. A
+program that starts `node` by name still finds it, because oku puts that node
+first on the program's own `PATH`.
 `oku update` updates that node package too.
 
 `[runtimes]` works in the lists that `oku.toml` includes too, and a later list

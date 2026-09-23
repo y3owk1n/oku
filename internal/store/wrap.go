@@ -17,6 +17,11 @@ import (
 // A wrapper is a shell script that ends in "exec". A Windows script cannot pass
 // arguments and signals through unchanged. There the wrapper is the spec file
 // of a shim, and the profile puts the shim beside it.
+//
+// deps are the runtime deps. Their bin directories go first on the PATH of a
+// unix wrapper, so a program that starts "node" by name gets the node it runs
+// on, and node need not be on the user's PATH. A Windows shim gets them from
+// the profile.
 func writeWrappers(
 	tmp, final string,
 	m *manifest.Manifest,
@@ -36,12 +41,19 @@ func writeWrappers(
 		vars["dep."+dep.Name+".prefix"] = dep.Prefix
 	}
 
-	return writeWraps(filepath.Join(tmp, "bin"), a.Wrap, vars, p.OS)
+	return writeWraps(filepath.Join(tmp, "bin"), a.Wrap, vars, p.OS, depDirs(deps, "bin"))
 }
 
 // writeWraps writes wraps into the directory bin. vars are what their run and
 // args expand, and goos decides between a shell script and a shim's spec file.
-func writeWraps(bin string, wraps []manifest.Wrapper, vars map[string]string, goos string) error {
+// path goes first on the PATH of a shell script.
+func writeWraps(
+	bin string,
+	wraps []manifest.Wrapper,
+	vars map[string]string,
+	goos string,
+	path []string,
+) error {
 	if len(wraps) == 0 {
 		return nil
 	}
@@ -82,7 +94,7 @@ func writeWraps(bin string, wraps []manifest.Wrapper, vars map[string]string, go
 
 			err = shim.Write(dest+".exe", shim.Spec{Target: words[0], Args: words[1:]})
 		} else {
-			err = writeScript(dest, words)
+			err = writeScript(dest, words, path)
 		}
 
 		if os.IsExist(err) {
@@ -98,14 +110,20 @@ func writeWraps(bin string, wraps []manifest.Wrapper, vars map[string]string, go
 }
 
 // writeScript writes a shell script that replaces itself with words and the
-// arguments it got.
-func writeScript(dest string, words []string) error {
+// arguments it got, with path first on PATH.
+func writeScript(dest string, words, path []string) error {
 	quoted := make([]string, len(words))
 	for i, word := range words {
-		quoted[i] = "'" + strings.ReplaceAll(word, "'", `'\''`) + "'"
+		quoted[i] = shellQuote(word)
 	}
 
-	script := "#!/bin/sh\nexec " + strings.Join(quoted, " ") + ` "$@"` + "\n"
+	script := "#!/bin/sh\n"
+	if len(path) > 0 {
+		script += "PATH=" + shellQuote(strings.Join(path, ":")) + `"${PATH:+:$PATH}"` +
+			"\nexport PATH\n"
+	}
+
+	script += "exec " + strings.Join(quoted, " ") + ` "$@"` + "\n"
 
 	f, err := os.OpenFile(dest, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o755)
 	if err != nil {
@@ -119,4 +137,8 @@ func writeScript(dest string, words []string) error {
 	}
 
 	return f.Close()
+}
+
+func shellQuote(word string) string {
+	return "'" + strings.ReplaceAll(word, "'", `'\''`) + "'"
 }
