@@ -97,9 +97,9 @@ func (f *Fetcher) Fetch(ctx context.Context, r Ref, commit string, t Target) (Fe
 		return Fetched{Data: data, Path: r.Location}, nil
 	case Forge:
 		return f.fetchForge(ctx, r, commit, t)
-	case NPM:
+	case NPM, PyPI:
 		return Fetched{}, fmt.Errorf(
-			"%s: an npm package holds no %s: %w",
+			"%s: a package of a registry holds no %s: %w",
 			r,
 			t.Default,
 			ErrNotFound,

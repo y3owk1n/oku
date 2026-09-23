@@ -40,9 +40,9 @@ type Step struct {
 	Copy    *Copy    `toml:"copy"`
 	// Vendor downloads a language's packages: "cargo", "go", "npm" or "pip".
 	Vendor *string `toml:"vendor"`
-	// Package makes an npm vendor step install that package from the registry,
-	// with its dependencies, into the package's lib directory. Without it the
-	// step installs what the source's lockfile lists.
+	// Package makes an npm or a pip vendor step install that package from its
+	// registry, with its dependencies, into the package's lib directory. Without
+	// it the step installs what the source's lockfile or requirements.txt lists.
 	Package string `toml:"package"`
 	// Scripts names the packages of an npm step with Package whose install
 	// scripts run after the install. A script that downloads or builds a binary

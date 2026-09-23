@@ -79,8 +79,8 @@ func runShell(
 			return err
 		}
 
-		// An npm package runs through the node that the list names.
-		if r.Kind == ref.NPM && e.runtimes == nil {
+		// An npm or a pypi package runs through the interpreter that the list names.
+		if (r.Kind == ref.NPM || r.Kind == ref.PyPI) && e.runtimes == nil {
 			all, err := e.mergedList(cmd, opts)
 			if err != nil {
 				return err

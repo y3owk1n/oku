@@ -321,6 +321,13 @@ order step in `prd/product.md`.
   built by an npm vendor step with `package`. It installs the package with its
   dependencies as of the version's publish time, runs no install scripts, and
   `oku.lock` pins a digest of what it installed.
+- B256 [4] `oku add pypi:<name>` installs a Python package with uv, with its
+  dependencies as they were one second after the version's upload, and runs
+  its console scripts through `[runtimes] python`, which stays out of the
+  profile. `oku.lock` pins a digest of the install that is the same under
+  another home directory.
+- B257 [4] A pypi package follows the index's versions. A prerelease and a
+  yanked version are never the newest, and `pypi:<name>@<version>` takes one.
 - B212 [4] An npm vendor step with `package` may name dependencies in
   `scripts`. After the install oku runs their install scripts with the network
   on, the approval prompt says so, and `oku.lock` marks the build impure. A

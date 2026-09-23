@@ -37,7 +37,10 @@ type vendorKind struct {
 	portable bool
 }
 
-const npmPackageKind = "npm package"
+const (
+	npmPackageKind = "npm package"
+	pipPackageKind = "pip package"
+)
 
 var vendorKinds = map[string]vendorKind{
 	"go": {
@@ -80,7 +83,108 @@ fi`,
 		script: `"$tool" download --disable-pip-version-check -q -r requirements.txt -d vendor/pip`,
 		output: "vendor/pip",
 	},
+	// pipPackageKind is a pip step with "package". uv installs one package with
+	// its dependencies as they were when that version was uploaded, into a
+	// directory and not a venv, whose files would hold this machine's paths.
+	// The programs that uv writes into bin name the python by its path too, so
+	// they move out of what oku hashes. Once the install is hashed, oku writes
+	// its own program for each console script of the package, and copies the
+	// package's other programs, such as a binary in the wheel's data scripts.
+	pipPackageKind: {
+		tools: []string{"uv"},
+		script: `python=$(command -v python3) || { echo "a pypi package needs python3" >&2; exit 1; }
+"$tool" pip install --no-config --quiet --target "$OKU_PREFIX/lib/python" --python "$python" \
+  --exclude-newer "$OKU_PIP_BEFORE" ${OKU_PIP_PLATFORM:+--python-platform "$OKU_PIP_PLATFORM"} \
+  "$OKU_PIP_PACKAGE==$OKU_PIP_VERSION"
+rm -rf "$OKU_PREFIX/lib/python-bin"
+if [ -d "$OKU_PREFIX/lib/python/bin" ]; then mv "$OKU_PREFIX/lib/python/bin" "$OKU_PREFIX/lib/python-bin"; fi
+"$python" - "$OKU_PREFIX/lib/python" "$OKU_PREFIX/lib/python-bin" <<'EOF'
+` + pipRecords + `EOF`,
+		output: "lib/python",
+		after: `python=$(command -v python3)
+"$python" - "$OKU_PREFIX" "$OKU_PIP_PACKAGE" "$python" <<'EOF'
+` + pipWrappers + `EOF`,
+		// uv must not download a python of its own, which the lock would not pin.
+		env: []string{"UV_PYTHON_DOWNLOADS=never", "UV_NO_PROGRESS=1"},
+	},
 }
+
+// pipRecords moves the lines for bin out of each RECORD of the install, next
+// to the programs they name. Those programs hold the python's path, so their
+// hashes in RECORD would differ from one machine to the next.
+const pipRecords = `import glob, os, sys
+
+lib, moved = sys.argv[1:]
+for record in glob.glob(os.path.join(lib, "*.dist-info", "RECORD")):
+    with open(record) as f:
+        lines = f.read().splitlines(True)
+    programs = [line for line in lines if line.startswith("bin/")]
+    if not programs:
+        continue
+    os.makedirs(moved, exist_ok=True)
+    with open(os.path.join(moved, os.path.basename(os.path.dirname(record)) + ".programs"), "w") as f:
+        f.writelines(programs)
+    with open(record, "w") as f:
+        f.writelines(line for line in lines if not line.startswith("bin/"))
+`
+
+// pipWrappers puts the package's programs into bin. For a console script it
+// writes a program the way pip would, but one that names the installed files
+// and the python directly. Any other program of the package, such as a binary
+// in its data scripts, is copied from where uv put it. The programs of the
+// package's dependencies are not the package's.
+const pipWrappers = `import importlib.metadata, os, re, shutil, sys
+
+prefix, name, python = sys.argv[1:]
+lib = os.path.join(prefix, "lib", "python")
+moved = os.path.join(prefix, "lib", "python-bin")
+want = re.sub(r"[-_.]+", "-", name).lower()
+
+found = [d for d in importlib.metadata.distributions(path=[lib])
+         if re.sub(r"[-_.]+", "-", d.metadata["Name"]).lower() == want]
+if not found:
+    sys.exit("uv installed no package called " + name)
+
+dist = found[0]
+scripts = [e for e in dist.entry_points if e.group == "console_scripts"]
+named = {e.name for e in scripts}
+info = [p.parent.name for p in (dist.files or []) if p.name == "METADATA"][0]
+listed = os.path.join(moved, info + ".programs")
+others = []
+if os.path.exists(listed):
+    with open(listed) as f:
+        others = [line.split(",")[0][len("bin/"):] for line in f]
+others = [p for p in others if p and "/" not in p and p not in named]
+if not scripts and not others:
+    sys.exit("the Python package " + name + " has no programs")
+
+bin = os.path.join(prefix, "bin")
+os.makedirs(bin, exist_ok=True)
+
+def quote(s):
+    return "'" + s.replace("'", "'\\''") + "'"
+
+for e in scripts:
+    module, _, attr = e.value.partition(":")
+    attr = attr.split("[")[0].strip()
+    code = ("import importlib, sys\n"
+            "sys.dont_write_bytecode = True\n"
+            "sys.path.insert(0, %r)\n"
+            "sys.argv[0] = %r\n"
+            "f = importlib.import_module(%r)\n"
+            "for part in %r.split('.') if %r else []:\n"
+            "    f = getattr(f, part)\n"
+            "sys.exit(f())\n") % (lib, e.name, module.strip(), attr, attr)
+    path = os.path.join(bin, e.name)
+    with open(path, "w") as out:
+        out.write("#!/bin/sh\nexec " + quote(python) + " -c " + quote(code) + ' "$@"\n')
+    os.chmod(path, 0o755)
+
+for program in others:
+    shutil.copy2(os.path.join(moved, program), os.path.join(bin, program))
+
+shutil.rmtree(moved, ignore_errors=True)
+`
 
 // VendorPortable reports whether the digest of what b vendors is the same on
 // every platform. That needs a vendor step, and each one must run on every
@@ -104,15 +208,16 @@ func VendorPortable(b *manifest.Build) bool {
 }
 
 // CanCrossVendor reports whether oku can download what b vendors for platform
-// p on a machine of another platform. That needs npm vendor steps alone, since
-// npm installs for the platform it is told, and no command of the manifest
-// before them, because a command for p may not run here.
+// p on a machine of another platform. That needs npm vendor steps and pip
+// steps with a package alone, since npm and uv install for the platform they
+// are told, and no command of the manifest before them, because a command for p
+// may not run here.
 func CanCrossVendor(b *manifest.Build, p platform.Platform) bool {
 	last := -1
 
 	for i, step := range b.Steps {
 		if step.Vendor != nil && step.When.Matches(p) {
-			if *step.Vendor != "npm" {
+			if *step.Vendor != "npm" && (*step.Vendor != "pip" || step.Package == "") {
 				return false
 			}
 
@@ -127,6 +232,22 @@ func CanCrossVendor(b *manifest.Build, p platform.Platform) bool {
 	}
 
 	return last >= 0
+}
+
+// vendorTarget returns the variables that make npm and uv install the packages
+// of platform p and not those of the host.
+func vendorTarget(p platform.Platform) []string {
+	cpu := map[string]string{"amd64": "x86_64", "arm64": "aarch64"}[p.Arch]
+
+	triple := map[string]string{
+		"darwin": cpu + "-apple-darwin", "windows": cpu + "-pc-windows-msvc",
+		"linux": cpu + "-unknown-linux-gnu",
+	}[p.OS]
+	if p.Libc == "musl" {
+		triple = cpu + "-unknown-linux-musl"
+	}
+
+	return append(npmTarget(p), "OKU_PIP_PLATFORM="+triple)
 }
 
 // npmTarget returns the variables that make npm install the optional packages

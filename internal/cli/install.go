@@ -484,7 +484,8 @@ func (e env) installFrom(
 
 		realized, err = e.store().Build(ctx, m, host, store.BuildOptions{
 			Deps: deps.prefixes, Log: req.log, PinnedVendor: pinnedVendor, Progress: req.progress,
-			NPMRegistry: opts.NPMRegistry, PinnedSource: pinnedSource, Rebuild: req.rebuild,
+			NPMRegistry: opts.NPMRegistry, PyPIIndex: opts.PyPIIndex,
+			PinnedSource: pinnedSource, Rebuild: req.rebuild,
 			RuntimeDeps: deps.prefixes[len(m.Build.Deps):],
 		})
 		if err != nil {
@@ -602,7 +603,8 @@ func (e env) installFrom(
 	platforms[host.String()] = entry
 
 	firstUseOthers, err := e.lockOthers(ctx, opts, req, m, release, platforms, hostBuild{
-		entry: entry, deps: deps.prefixes, npmRegistry: opts.NPMRegistry, log: req.log,
+		entry: entry, deps: deps.prefixes, npmRegistry: opts.NPMRegistry,
+		pypiIndex: opts.PyPIIndex, log: req.log,
 	})
 	if err != nil {
 		return installed{}, err
@@ -791,6 +793,7 @@ type hostBuild struct {
 	entry       lock.Platform
 	deps        []store.Dep
 	npmRegistry string
+	pypiIndex   string
 	log         io.Writer
 }
 
@@ -831,7 +834,8 @@ func pinFor(
 			entry.VendorSHA256 = host.entry.VendorSHA256
 		case store.CanCrossVendor(m.Build, p):
 			vendored, err := s.Build(ctx, m, p, store.BuildOptions{
-				Deps: host.deps, Log: host.log, NPMRegistry: host.npmRegistry, VendorOnly: true,
+				Deps: host.deps, Log: host.log, NPMRegistry: host.npmRegistry,
+				PyPIIndex: host.pypiIndex, VendorOnly: true,
 			})
 			if err != nil {
 				return lock.Platform{}, false, fmt.Errorf("%s for %s: %w", m.Package.Name, p, err)
@@ -887,8 +891,13 @@ func (e env) manifestData(
 		}, infer.Inferred{}, nil
 	}
 
-	if req.ref.Kind == ref.NPM {
-		text, err := e.inferNPM(ctx, opts, req)
+	if req.ref.Kind == ref.NPM || req.ref.Kind == ref.PyPI {
+		write := e.inferNPM
+		if req.ref.Kind == ref.PyPI {
+			write = e.inferPyPI
+		}
+
+		text, err := write(ctx, opts, req)
 
 		return ref.Fetched{Data: []byte(text)}, infer.Inferred{Text: text}, err
 	}
@@ -965,45 +974,16 @@ func (e env) inferNPM(ctx context.Context, opts Options, req request) (string, e
 		)
 	}
 
-	config, err := source.Read(e.configPath())
+	npmOpts := infer.NPMOptions{Registry: opts.NPMRegistry, Version: req.ref.Version}
+
+	var err error
+
+	npmOpts.Node, npmOpts.NodeName, err = e.runtime(ctx, opts, "node")
 	if err != nil {
 		return "", err
 	}
 
-	npmOpts := infer.NPMOptions{Registry: opts.NPMRegistry, Version: req.ref.Version}
-
-	// The list's refs are resolved already. A relative path in config.toml
-	// starts at the directory of config.toml, not at the working directory.
-	node, origin := e.runtimes["node"], e.listPath()
-	if node == "" {
-		if node, err = config.Expand(config.Runtimes["node"]); err != nil {
-			return "", fmt.Errorf("runtimes.node in %s: %w", e.configPath(), err)
-		}
-
-		origin = e.configPath()
-	}
-
-	if node != "" {
-		r, err := ref.ParseIn(filepath.Dir(e.configPath()), node)
-		if err != nil {
-			return "", fmt.Errorf("runtimes.node in %s: %w", origin, err)
-		}
-
-		fetched, err := e.fetcher(opts).Fetch(ctx, r, "", ref.Manifest)
-		if err != nil {
-			return "", fmt.Errorf("runtimes.node in %s: %w", origin, err)
-		}
-
-		m, err := manifest.Parse(fetched.Data, r.String())
-		if err != nil {
-			return "", fmt.Errorf("runtimes.node in %s: %w", origin, err)
-		}
-
-		// The lock stores the manifest, so oku names a node inside the config
-		// directory relative to it, and the lock works under another home directory.
-		npmOpts.Node = ref.InDir(filepath.Dir(e.configPath()), r.String())
-		npmOpts.NodeName = m.Package.Name
-	} else if platform.Host().OS == "windows" {
+	if npmOpts.Node == "" && platform.Host().OS == "windows" {
 		return "", fmt.Errorf(
 			"%s needs node, and Windows cannot run a script through PATH\n"+
 				"set runtimes.node in %s to the ref of a package that provides node",
@@ -1023,6 +1003,80 @@ func (e env) inferNPM(ctx context.Context, opts Options, req request) (string, e
 	}
 
 	return text, err
+}
+
+// inferPyPI writes the manifest of a pypi ref. uv installs the package, and the
+// programs run through the package that [runtimes] names for python, else
+// through the python3 on the build's PATH.
+func (e env) inferPyPI(ctx context.Context, opts Options, req request) (string, error) {
+	if req.asset != "" || req.bin != "" {
+		return "", fmt.Errorf(
+			"--asset and --bin do not apply, %s lists its download and its programs", req.ref,
+		)
+	}
+
+	// The build runs uv and python through sh.
+	if platform.Host().OS == "windows" {
+		return "", fmt.Errorf("%s: oku cannot install a pypi package on Windows yet", req.ref)
+	}
+
+	python, _, err := e.runtime(ctx, opts, "python")
+	if err != nil {
+		return "", err
+	}
+
+	uv, _, err := e.runtime(ctx, opts, "uv")
+	if err != nil {
+		return "", err
+	}
+
+	return e.inferrer(opts).FromPyPI(ctx, req.ref.Location, infer.PyPIOptions{
+		Index: opts.PyPIIndex, Version: req.ref.Version, Python: python, UV: uv,
+	})
+}
+
+// runtime returns the ref of the package that [runtimes] names for the
+// interpreter name, in the list or else in config.toml, and that package's name.
+// Both are empty when neither names one. The lock stores the manifest that
+// holds the ref, so a package inside the config directory is named relative to
+// it, and the lock works under another home directory.
+func (e env) runtime(ctx context.Context, opts Options, name string) (string, string, error) {
+	// The list's refs are resolved already. A relative path in config.toml
+	// starts at the directory of config.toml, not at the working directory.
+	at, origin := e.runtimes[name], e.listPath()
+	if at == "" {
+		config, err := source.Read(e.configPath())
+		if err != nil {
+			return "", "", err
+		}
+
+		if at, err = config.Expand(config.Runtimes[name]); err != nil {
+			return "", "", fmt.Errorf("runtimes.%s in %s: %w", name, e.configPath(), err)
+		}
+
+		origin = e.configPath()
+	}
+
+	if at == "" {
+		return "", "", nil
+	}
+
+	r, err := ref.ParseIn(filepath.Dir(e.configPath()), at)
+	if err != nil {
+		return "", "", fmt.Errorf("runtimes.%s in %s: %w", name, origin, err)
+	}
+
+	fetched, err := e.fetcher(opts).Fetch(ctx, r, "", ref.Manifest)
+	if err != nil {
+		return "", "", fmt.Errorf("runtimes.%s in %s: %w", name, origin, err)
+	}
+
+	m, err := manifest.Parse(fetched.Data, r.String())
+	if err != nil {
+		return "", "", fmt.Errorf("runtimes.%s in %s: %w", name, origin, err)
+	}
+
+	return ref.InDir(filepath.Dir(e.configPath()), r.String()), m.Package.Name, nil
 }
 
 func inferredText(inferred string, req request) string {
@@ -1231,8 +1285,8 @@ func (e env) installDeps(
 	switch parent.ref.Kind {
 	case ref.File:
 		base = filepath.Dir(parent.ref.Location)
-	case ref.NPM:
-		// inferNPM names the node of an npm ref relative to config.toml.
+	case ref.NPM, ref.PyPI:
+		// inferNPM and inferPyPI name the runtime relative to config.toml.
 		base = filepath.Dir(e.configPath())
 	}
 

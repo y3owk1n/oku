@@ -26,6 +26,7 @@ import (
 	"github.com/y3owk1n/oku/internal/manifest"
 	"github.com/y3owk1n/oku/internal/npm"
 	"github.com/y3owk1n/oku/internal/platform"
+	"github.com/y3owk1n/oku/internal/pypi"
 	"github.com/y3owk1n/oku/internal/sandbox"
 	"github.com/y3owk1n/oku/internal/status"
 )
@@ -258,18 +259,22 @@ func (s *Store) Build(
 					scripts = nil
 				}
 
-				vendorEnv, err = s.npmPackageEnv(
-					ctx,
-					env,
-					step.Package,
-					m.Version.Value,
-					opts.NPMRegistry,
-					scripts,
-				)
+				if *step.Vendor == "pip" {
+					vendorEnv, err = s.pipPackageEnv(ctx, env, step.Package, m.Version.Value, opts.PyPIIndex)
+				} else {
+					vendorEnv, err = s.npmPackageEnv(
+						ctx,
+						env,
+						step.Package,
+						m.Version.Value,
+						opts.NPMRegistry,
+						scripts,
+					)
+				}
 			}
 
 			if opts.VendorOnly {
-				vendorEnv = append(slices.Clone(vendorEnv), npmTarget(p)...)
+				vendorEnv = append(slices.Clone(vendorEnv), vendorTarget(p)...)
 			}
 
 			if err == nil {
@@ -837,6 +842,8 @@ type BuildOptions struct {
 	PinnedSource string
 	// NPMRegistry replaces the URL of the npm registry when set, which tests do.
 	NPMRegistry string
+	// PyPIIndex replaces the URL of the Python Package Index when set.
+	PyPIIndex string
 	// Progress is called after each step that ran, with its position, the number
 	// of steps, its kind and its error. It may be nil.
 	Progress func(step, total int, kind string, err error)
@@ -868,7 +875,7 @@ func runVendor(
 	log io.Writer,
 ) (digest, unsandboxed string, err error) {
 	if pkg {
-		kind = npmPackageKind
+		kind = map[string]string{"npm": npmPackageKind, "pip": pipPackageKind}[kind]
 	}
 
 	vendor, ok := vendorKinds[kind]
@@ -946,6 +953,40 @@ func (s *Store) npmPackageEnv(
 
 	if registry != "" {
 		env = append(env, "npm_config_registry="+registry)
+	}
+
+	return env, nil
+}
+
+// pipPackageEnv returns env with what a pip step needs to install one package:
+// its name, its version and the time that version was uploaded. uv resolves
+// dependencies as of that time, so a later install gets the same packages.
+func (s *Store) pipPackageEnv(
+	ctx context.Context,
+	env []string,
+	name, version, index string,
+) ([]string, error) {
+	pkg, err := pypi.Read(ctx, s.http, index, name)
+	if err != nil {
+		return nil, fmt.Errorf("read when %s %s was uploaded: %w", name, version, err)
+	}
+
+	uploaded, ok := pkg.Versions[version]
+	if !ok {
+		return nil, fmt.Errorf("the Python package %s has no version %s", name, version)
+	}
+
+	// uv takes what was uploaded before the time, and the version's own files
+	// were uploaded up to it.
+	env = append(
+		slices.Clone(env),
+		"OKU_PIP_PACKAGE="+name,
+		"OKU_PIP_VERSION="+version,
+		"OKU_PIP_BEFORE="+uploaded.Uploaded.Add(time.Second).UTC().Format(time.RFC3339),
+	)
+
+	if index != "" {
+		env = append(env, "UV_DEFAULT_INDEX="+strings.TrimRight(index, "/")+"/simple")
 	}
 
 	return env, nil
