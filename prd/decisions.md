@@ -1184,3 +1184,23 @@ Why cgo off: a C compiler is a dep the list does not name, and most Go
 programs do not need one.
 
 Windows is refused for now, because the vendor step runs through sh.
+
+## D78. A crate builds from its .crate file with the digest crates.io publishes
+
+`cargo:<name>` infers a manifest with `version.from = "crates"`, a `source` that
+is the version's `.crate` file on static.crates.io with no sha256, a `cargo`
+vendor step, and `cargo install --path . --locked --offline --no-track --root
+{{prefix}}`. The resolver keeps the sha256 that crates.io lists for each
+version's download as that release's digest, and the build takes a source's
+sha256 from the release when the manifest states none. The rust is
+`[runtimes] rust` as a build dep (D75), else a `needs` on the cargo of `PATH`.
+
+Why the registry's digest: a manifest that follows versions cannot state the
+digest of each one, and without it every version would be trusted on first
+use. Why the existing cargo vendor step: every crate with programs publishes
+its `Cargo.lock`, so `cargo vendor --locked` pins the same dependencies that
+`cargo install --locked` would build, with a digest that is the same on every
+platform. Why the `bin_names` of crates.io: a library has none, so oku refuses
+it before any download, instead of building a crate that installs nothing.
+
+Windows is refused for now, because the build runs through sh.

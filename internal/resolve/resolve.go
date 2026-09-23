@@ -29,6 +29,9 @@ type Resolver struct {
 	PyPI string
 	// GoProxy replaces the URL of the Go module proxy when set.
 	GoProxy string
+	// Crates and CrateDownloads replace the URLs of the crates.io API and of
+	// its downloads when set.
+	Crates, CrateDownloads string
 }
 
 // Release is one installable version and the upstream tag it came from.
@@ -191,6 +194,10 @@ func (r *Resolver) List(ctx context.Context, v manifest.Version) ([]Release, err
 
 	if v.From == manifest.FromGo {
 		return r.goVersions(ctx, v.Repo)
+	}
+
+	if v.From == manifest.FromCrates {
+		return r.crateVersions(ctx, v.Repo)
 	}
 
 	if v.From == manifest.FromGitBranch {

@@ -19,6 +19,7 @@ one per package.
 | `npm:name`, `npm:@scope/name` | A package in the npm registry. It has no manifest, so oku always [infers one](#npm-packages). |
 | `pypi:name` | A package in the Python Package Index, installed with uv. oku always [infers its manifest](#python-packages). |
 | `go:host/path` | A Go program, such as `go:golang.org/x/tools/gopls`, built the way `go install` builds it. oku always [infers its manifest](#go-programs). |
+| `cargo:name` | A crate on crates.io, built the way `cargo install --locked` builds it. oku always [infers its manifest](#rust-crates). |
 | `git+https://host/repo` | `oku.pkg.toml` at the root of any git repo. |
 | `git+https://host/repo#name` | `name.toml` at the root, else `packages/name.toml`. A fragment with no `/` and no `.` is a name. |
 | `git+https://host/repo#dir/name.toml` | That file in the repo. |
@@ -254,6 +255,36 @@ pins a digest of those downloads, which is the same on every platform. Then
 version as a `go install` gives it. A build asks for
 [approval](trust.md#build-commands) once, or takes `--yes`. oku cannot build a
 Go program on Windows yet, and says so there.
+
+## Rust crates
+
+`oku add cargo:just` builds a crate from crates.io the way
+`cargo install --locked just` does. oku asks crates.io for the crate's versions
+and writes a manifest that follows them. A yanked version and a version with a
+`-`, such as `2.0.0-beta.1`, are never the newest, and `@version` takes one. A
+crate with no programs, a library, fails with a message that says so.
+`oku manifest init --from cargo:<name>` writes the manifest to a file.
+
+The build needs cargo and rustc. Name a package that provides them in
+`[runtimes]`:
+
+```toml
+[runtimes]
+rust = "./packages/rust.toml"
+```
+
+Without `runtimes.rust` the build uses the `cargo` on your `PATH`, and a cargo
+that rustup manages works there too. rust is only a build dep and stays out of
+`PATH`.
+
+The build downloads the crate's `.crate` file from crates.io and checks it
+against the sha256 that crates.io publishes for that version, so oku trusts no
+download on first use. It vendors the dependencies that the crate's
+`Cargo.lock` pins, and `oku.lock` pins a digest of them that is the same on every
+platform. Then `cargo install --locked --offline` builds the programs. A crate
+published without a `Cargo.lock` fails there, with cargo's own message. A build
+asks for [approval](trust.md#build-commands) once, or takes `--yes`. oku cannot
+build a crate on Windows yet, and says so there.
 
 ## Private repos
 

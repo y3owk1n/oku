@@ -124,6 +124,7 @@ oku add gitlab:gitlab-org/cli            # or codeberg:, gitea:host/..., github:
 oku add npm:prettier                     # runs through a node you pin once
 oku add pypi:black                       # a Python tool, installed with uv
 oku add go:golang.org/x/tools/gopls      # a Go program, as go install builds it
+oku add cargo:just                       # a crate from crates.io, as cargo install builds it
 oku add https://example.com/tool.toml    # a manifest at a URL, or ./tool.toml
 oku add https://example.com/tool-1.2.0-linux-amd64.tar.gz
 oku add github:you/recipes#postgres --service   # runs now and at every login

@@ -482,6 +482,14 @@ func (e env) installFrom(
 			return installed{}, err
 		}
 
+		// A registry such as crates.io publishes the digest of each version's
+		// source, which the manifest cannot state for every version.
+		if src := &m.Build.Source; src.URL != "" && src.SHA256 == "" && src.SHA256URL == "" {
+			if at, err := manifest.Expand(src.URL, map[string]string{"version": m.Version.Value}); err == nil {
+				src.SHA256 = release.Digests[at]
+			}
+		}
+
 		realized, err = e.store().Build(ctx, m, host, store.BuildOptions{
 			Deps: deps.prefixes, Log: req.log, PinnedVendor: pinnedVendor, Progress: req.progress,
 			NPMRegistry: opts.NPMRegistry, PyPIIndex: opts.PyPIIndex, GoProxy: opts.GoProxy,
@@ -1001,12 +1009,40 @@ func (e env) inferNPM(ctx context.Context, opts Options, req request) (string, e
 	return text, err
 }
 
+// fromRegistry reports whether a ref of kind names a package of a registry,
+// whose manifest oku always infers.
+func fromRegistry(kind ref.Kind) bool {
+	return slices.Contains([]ref.Kind{ref.NPM, ref.PyPI, ref.Go, ref.Cargo}, kind)
+}
+
 // inferrerOf returns what writes the manifest of a ref of a registry, or nil
 // for a ref that points at a manifest.
 func (e env) inferrerOf(kind ref.Kind) func(context.Context, Options, request) (string, error) {
 	return map[ref.Kind]func(context.Context, Options, request) (string, error){
-		ref.NPM: e.inferNPM, ref.PyPI: e.inferPyPI, ref.Go: e.inferGo,
+		ref.NPM: e.inferNPM, ref.PyPI: e.inferPyPI, ref.Go: e.inferGo, ref.Cargo: e.inferCargo,
 	}[kind]
+}
+
+// inferCargo writes the manifest of a cargo ref. The build runs the cargo of
+// the package that [runtimes] names for rust, else the cargo on the user's PATH.
+func (e env) inferCargo(ctx context.Context, opts Options, req request) (string, error) {
+	if req.asset != "" || req.bin != "" {
+		return "", fmt.Errorf("--asset and --bin do not apply, %s names its programs", req.ref)
+	}
+
+	// The build runs cargo through sh.
+	if platform.Host().OS == "windows" {
+		return "", fmt.Errorf("%s: oku cannot build a crate on Windows yet", req.ref)
+	}
+
+	rust, _, err := e.runtime(ctx, opts, "rust")
+	if err != nil {
+		return "", err
+	}
+
+	return e.inferrer(opts).FromCrates(ctx, req.ref.Location, infer.CratesOptions{
+		API: opts.CratesAPI, Downloads: opts.CrateDownloads, Version: req.ref.Version, Rust: rust,
+	})
 }
 
 // inferGo writes the manifest of a go ref. The build runs the go of the
@@ -1313,7 +1349,7 @@ func (e env) installDeps(
 	switch parent.ref.Kind {
 	case ref.File:
 		base = filepath.Dir(parent.ref.Location)
-	case ref.NPM, ref.PyPI, ref.Go:
+	case ref.NPM, ref.PyPI, ref.Go, ref.Cargo:
 		// These infer a manifest that names its runtime relative to config.toml.
 		base = filepath.Dir(e.configPath())
 	}

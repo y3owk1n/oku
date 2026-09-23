@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/y3owk1n/oku/internal/crates"
 	"github.com/y3owk1n/oku/internal/goproxy"
 	"github.com/y3owk1n/oku/internal/pypi"
 )
@@ -33,6 +34,9 @@ const (
 	// Go is a Go package that builds a program, such as golang.org/x/tools/gopls.
 	// oku infers its manifest from the module proxy.
 	Go
+	// Cargo is a crate on crates.io that builds programs. oku infers its
+	// manifest too.
+	Cargo
 )
 
 // Target is the kind of file Fetch reads a ref as. It sets the file names Fetch
@@ -166,6 +170,13 @@ func ParseIn(dir, s string) (Ref, error) {
 		if !goproxy.ValidPath(r.Location) {
 			return Ref{}, fmt.Errorf("%s: want go:host/path, such as go:golang.org/x/tools/gopls", s)
 		}
+	case strings.HasPrefix(body, "cargo:"):
+		r.Kind = Cargo
+		r.Location = strings.TrimPrefix(body, "cargo:")
+
+		if !crates.ValidName(r.Location) {
+			return Ref{}, fmt.Errorf("%s: want cargo:name, such as cargo:ripgrep", s)
+		}
 	case strings.HasPrefix(body, "git+"):
 		r.Kind = Git
 		r.Location, r.Fragment, _ = strings.Cut(strings.TrimPrefix(body, "git+"), "#")
@@ -211,6 +222,8 @@ func (r Ref) String() string {
 		s = "pypi:" + s
 	case Go:
 		s = "go:" + s
+	case Cargo:
+		s = "cargo:" + s
 	}
 
 	if r.Fragment != "" {
