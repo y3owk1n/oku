@@ -226,6 +226,11 @@ order step in `prd/product.md`.
   version that its `version` in the list allows differs from the locked one, with both versions and its ref, and
   `--json` gives `name`, `version`, `newest` and `ref`. It changes no lock, no
   profile and no store path.
+- B268 [3] With `version.from = "github-releases"`, `add` and `update` check a
+  file of the repo's release that has no `sha256` or `sha256_url` against the
+  sha256 GitHub reports for it, and do not trust it on first use. oku refuses
+  a file that differs. `manifest lint` does not warn about such an artifact,
+  nor about a `crates` source that is the crate's `.crate` file.
 - B267 [3] `oku exec <command>` runs the command with the global profile's
   `bin` on `PATH` and its packages' `[env]`, and in a project with the
   project's `bin` and `[env]` first, without `oku allow`. Flags after the
