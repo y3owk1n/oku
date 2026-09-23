@@ -403,7 +403,7 @@ order step in `prd/product.md`.
 - B28 [4] `oku manifest lint` rejects: unknown keys, a step with zero or
   several type keys, a windows-reachable `run` without `shell`, unknown
   template variables, an artifact with no output keys, a `fetch` step without
-  sha256. A missing checksum source and an empty description are warnings and
+  sha256 or sha256_url, or with both. A missing checksum source and an empty description are warnings and
   do not fail it.
 - B218 [4] `manifest lint` rejects shell paths together with `generate`, `name`
   without `generate`, and an unknown template variable in `generate`.
@@ -463,7 +463,9 @@ order step in `prd/product.md`.
   another package in the store, and not to a directory the user can write to.
 - B249 [6] On Linux a `run` step sees no `/run/user`. On macOS it cannot run
   `launchctl` or open an app.
-- B51 [6] A `fetch` step without sha256 fails lint. With one, it may download.
+- B51 [6] A `fetch` step without sha256 or sha256_url fails lint. With one, it
+  may download, and the file must match that sha256, or the digest that the
+  checksum file at sha256_url gives for the file's name.
 - B52 [6] A `vendor` step's output hash is pinned in the lock. A later
   mismatch fails the build and keeps nothing in the store. `update` accepts
   the new hash.

@@ -887,7 +887,7 @@ one of these keys:
 | `install = { bin, lib, include, man, share, completions, app, font }` | Copies files from the source directory into the package. `bin` files become executable. A `bin` entry may be a [table](#a-program-that-needs-an-interpreter) too, and there `{{pkg}}` equals `{{prefix}}`. `man` and `completions` go where an artifact's would, and `completions` takes the same [three forms](#completions). With `generate`, the command runs in the source directory after the files are copied, with the package's `bin` first on PATH, and the step appears in the approval prompt. |
 | `copy = { from, to }` | Copies one file. `from` is relative to the source directory and `to` to the package. |
 | `patch = { file, strip }` | Applies a unified diff to the source, see below. |
-| `fetch = { url, sha256, to }` | Downloads a file into the source directory. `sha256` is required. |
+| `fetch = { url, sha256, to }` | Downloads a file into the source directory. It needs `sha256`, or `sha256_url` in its place for a checksum file that upstream publishes, such as the `.sha256` file beside the download. oku reads that file on each build, and `oku.lock` pins no digest for a fetched file. |
 | `extract = { file, to, strip }` | Unpacks an archive that is in the source directory. |
 | `vendor = "go"` | Downloads the language's packages with the network on, see [Vendoring](#vendoring). |
 
