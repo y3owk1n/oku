@@ -746,8 +746,21 @@ Check 'a secret that leaves the list is deleted with its copy' {
     (-not (Test-Path $secretTarget)) -and (@(Get-ChildItem $secretStore).Count -eq 0)
 }
 
-# A Go program from the module proxy, built with the go on PATH, which the
-# runner has from setup-go. The vendor step and go install run through pwsh.
+# A Go program from the module proxy, built with the go that config.toml names
+# in [runtimes]. The vendor step and go install run through pwsh.
+$goToml = Join-Path $fixtures 'go.toml'
+Set-Content $goToml @'
+[package]
+name = "go"
+[version]
+value = "1.26.4"
+[[artifact]]
+url = "https://dl.google.com/go/go{{version}}.{{os}}-{{arch}}.zip"
+sha256_url = "https://dl.google.com/go/go{{version}}.{{os}}-{{arch}}.zip.sha256"
+strip = 1
+bin = ["bin/go.exe", "bin/gofmt.exe"]
+'@
+Add-Content (Join-Path $configDir 'config.toml') "`ngo = '$($goToml -replace '\\', '/')'"
 Oku add --yes go:mvdan.cc/gofumpt
 $gofumpt = & "$bin\gofumpt.exe" --version
 Check 'a go: ref builds on Windows and the program knows its version' { $gofumpt -match '^v\d' }
