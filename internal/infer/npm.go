@@ -133,7 +133,8 @@ func npmBuild(name string, opts NPMOptions, programs []string, bin map[string]st
 	fmt.Fprintf(&b, "\n[build]\ndeps = [%s]\n", opts.Node.TOML())
 	fmt.Fprintf(&b, "\n[[build.step]]\nvendor = \"npm\"\npackage = %q\n", name)
 
-	// oku cannot run this build on Windows yet, so the programs are for unix.
+	// run names node without an extension, which on Windows is the node.exe
+	// beside it, so the same programs work on every OS.
 	b.WriteString("\n[[build.step]]\ninstall = { bin = [")
 
 	for _, program := range programs {
