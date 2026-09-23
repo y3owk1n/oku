@@ -7,7 +7,7 @@
 | Follow the list and the lock | [`sync`](#oku-sync) · [`update`](#oku-update) · [`outdated`](#oku-outdated) |
 | Go back, and free space | [`generations`](#oku-generations) · [`rollback`](#oku-rollback) · [`gc`](#oku-gc) |
 | Find packages | [`source`](#oku-source) · [`search`](#oku-search) |
-| Work in a project | [`hook`](#oku-hook) · [`env`](#oku-env) · [`allow`, `deny`](#oku-allow-oku-deny) |
+| Work in a project | [`hook`](#oku-hook) · [`env`](#oku-env) · [`exec`](#oku-exec) · [`allow`, `deny`](#oku-allow-oku-deny) |
 | Run services | [`service`](#oku-service) |
 | Publish a package | [`manifest init`](#oku-manifest-init) · [`lint`](#oku-manifest-lint) · [`test`](#oku-manifest-test) · [`bump`](#oku-manifest-bump) |
 | Share builds | [`cache`, `key`](#oku-cache-oku-key) |
@@ -572,6 +572,30 @@ Outside a project it exports the `[env]` of your global packages. Inside an
 allowed project whose profile matches its lock, it also puts the project's `bin`
 first on `PATH` and exports its packages' `[env]`. Otherwise it prints a one-line
 hint that names `oku allow` or `oku sync`.
+
+## oku exec
+
+```
+oku exec <command> [args...]
+```
+
+Runs a command with the programs of the directory you are in on `PATH`, for an
+editor or a script that does not run the shell hook:
+
+```
+$ oku exec gopls version
+golang.org/x/tools/gopls v0.22.0
+```
+
+oku puts the global profile's `bin` on `PATH` and sets the `[env]` of its
+packages. Inside a project it puts the project's `bin` first and sets its
+packages' `[env]` too, so a project program runs instead of a global one with
+the same name. Flags after the command go to the command, and oku exits with
+the command's exit code.
+
+A project needs no `oku allow` here, because you name the command yourself.
+Its profile must match its `oku.lock`, or `exec` fails and names `oku sync`.
+`--global` leaves the project out.
 
 ## oku allow, oku deny
 

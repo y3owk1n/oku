@@ -111,6 +111,9 @@ $env:PATH = "$root;$env:PATH"
 Set-Location $project
 Oku sync
 Oku allow
+# exec finds fd.exe in the project's bin, with no hook in this shell yet.
+$fdVersion = & $oku exec fd --version
+Check 'exec runs a program of the project by its name without .exe' { $fdVersion -match '^fd \d' }
 Set-Location $root
 
 Invoke-Expression ((& oku hook pwsh) -join [Environment]::NewLine)
