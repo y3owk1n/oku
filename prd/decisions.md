@@ -743,8 +743,8 @@ oku refuses a target that exists and is not in the ledger. `file` is one more
 ledger kind, so `remove`, `rollback` and `self uninstall` handle it like an
 app or a font.
 
-Out of scope for now: `[files]` in a list that an `include` reads from a URL
-or a repo.
+`[files]` in a list from a repo came later, in D74. A list at a URL still
+cannot hold them.
 
 Why: the table is keyed by target so that two entries for one path are a TOML
 error. Content in the generation makes rollback restore the exact bytes with
@@ -861,9 +861,8 @@ encrypted files of the generation it returns to. Removing the entry, and
 secrets on a machine that has no identity file, or no `sops` for a sops file.
 
 No generation, ledger entry, output or error holds decrypted bytes. An error
-names the encrypted file and the `key`. Only the global list may hold
-`[secrets]` or a `secret` entry, and only a list on this machine, as for
-`[files]`.
+names the encrypted file and the `key`. Only the global list and its includes
+may hold `[secrets]` or a `secret` entry, as for `[files]`.
 
 Creating and editing secrets is not oku's job and will not become one. `sops`
 and `age` own recipients, key rotation and the editor, and a second tool that
@@ -1107,5 +1106,12 @@ list's, so one lock pin covers files that were written together. A package
 keeps its own commit in the lock after that, so `oku update <name>` can move it
 alone.
 
-`[files]` and `[secrets]` in a remote list are still refused. They need the
-repo's files on this machine, which oku does not fetch yet.
+`[files]` and `[secrets]` in a list from a repo work too. `oku sync` downloads
+the repo's files at the list's commit as one archive into the store, once per
+repo and commit, and the paths of the entries start there. A `link` leads into
+that store path, and `gc` keeps a store path while a generation links into it.
+A path that leaves the repo is an error, and so is an absolute one. Why: a
+machine repo keeps its dotfiles beside its lists. A link into the store points
+at the files of the pinned commit. A clone in the cache would not do, because
+another ref in the same repo checks out another commit there. A list at a URL
+still cannot hold them, because a URL has no directory to download.

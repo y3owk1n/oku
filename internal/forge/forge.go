@@ -46,6 +46,8 @@ type Forge interface {
 	Releases(ctx context.Context, repo string) ([]Release, error)
 	// TagCommit returns the commit that tag points at.
 	TagCommit(ctx context.Context, repo, tag string) (Commit, error)
+	// Archive returns the files of commit as a tar.gz with one top directory.
+	Archive(ctx context.Context, repo, commit string) ([]byte, error)
 }
 
 // Release is a release with its downloads.

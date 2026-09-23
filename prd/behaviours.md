@@ -191,6 +191,10 @@ order step in `prd/product.md`.
   manifest, and `oku.lock` stores it as `<repo ref>#<path>`. In one read from a
   URL it names the URL beside it. A relative path that leaves the repo is an
   error.
+- B253 [2] A list from a repo may hold `[files]` and `[secrets]`. `sync` places
+  them from the repo's files at the list's commit, a `link` leads into the
+  store, and `gc` keeps what a generation links to. A path that leaves the repo
+  is an error, and a list at a URL with `[files]` or `[secrets]` is an error.
 
 ## Versions and generations
 

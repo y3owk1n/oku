@@ -199,6 +199,12 @@ func (g *gitlab) TagCommit(ctx context.Context, repo, tag string) (Commit, error
 	return Commit{SHA: found.ID, Date: found.Date}, err
 }
 
+func (g *gitlab) Archive(ctx context.Context, repo, commit string) ([]byte, error) {
+	body, _, err := g.get(ctx, g.project(repo)+"/repository/archive.tar.gz?sha="+url.QueryEscape(commit))
+
+	return body, err
+}
+
 // json decodes the answer for at into into and returns the URL of the next
 // page, or "".
 func (g *gitlab) json(ctx context.Context, at string, into any) (string, error) {

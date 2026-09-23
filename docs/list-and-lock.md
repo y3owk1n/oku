@@ -319,8 +319,12 @@ Limits for now:
 - Only the global list may hold `[files]`, `[vars]`, `[secrets]` and settings
   tables. A project list with `[files]` is an
   error, so that a cloned repo cannot write into your home directory.
-- An included list may hold `[files]` when it is a file on this machine, not
-  when it comes from a URL or a repo.
+- An included list may hold `[files]` when it is a file on this machine or
+  comes from a repo, not when it is at a URL.
+- For a list from a repo, oku puts the repo's files at the pinned commit in the
+  store, and a `link` leads there. The linked file is read-only, and it changes
+  when the list's commit changes. A `link`, `render` or `secret` path of such a
+  list must stay inside the repo.
 
 On Windows a normal user cannot create a symlink. A linked directory is a
 junction there, and a linked file or a `text` is a copy, see

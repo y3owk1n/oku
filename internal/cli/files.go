@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
@@ -8,6 +9,7 @@ import (
 	"io/fs"
 	"maps"
 	"os"
+	"path"
 	"path/filepath"
 	"runtime"
 	"slices"
@@ -26,6 +28,10 @@ type listedFile struct {
 	// dir is the directory of the list that declares the entry, where a relative
 	// link source starts.
 	dir string
+	// remote is where a list from a repo was read, and repoDir its directory in
+	// the repo. dir is empty for it until placeTrees puts the repo in the store.
+	remote  *remoteList
+	repoDir string
 }
 
 // pkgPrefix starts a link source inside a package of the list.
@@ -317,4 +323,71 @@ func (e env) resolveFiles(
 	}
 
 	return files, nil
+}
+
+// placeTrees puts the files of each repo whose list holds [files] or [secrets]
+// in the store, at the commit oku read the list at, and points the entries at
+// them. A link then leads into the store, which gc keeps while a generation
+// holds it.
+func (e env) placeTrees(
+	ctx context.Context,
+	opts Options,
+	files []listedFile,
+	secrets map[string]listedSecret,
+) error {
+	trees := map[string]string{}
+
+	tree := func(remote *remoteList) (string, error) {
+		key := remote.ref.String() + "@" + remote.got.Commit
+		if dir, done := trees[key]; done {
+			return dir, nil
+		}
+
+		repo := remote.ref
+		repo.Fragment = ""
+
+		sum := sha256.Sum256([]byte(repo.String() + "@" + remote.got.Commit))
+		name := path.Base(repo.Location) + "-" + remote.got.Commit[:min(12, len(remote.got.Commit))] +
+			"-" + hex.EncodeToString(sum[:])[:16]
+
+		dir, err := e.store().Tree(name, func() ([]byte, int, error) {
+			return e.fetcher(opts).Archive(ctx, remote.ref, remote.got.Commit)
+		})
+		if err != nil {
+			return "", err
+		}
+
+		trees[key] = dir
+
+		return dir, nil
+	}
+
+	for i, f := range files {
+		if f.remote == nil {
+			continue
+		}
+
+		dir, err := tree(f.remote)
+		if err != nil {
+			return fmt.Errorf("files.%q: %w", f.file.Target, err)
+		}
+
+		files[i].dir = filepath.Join(dir, filepath.FromSlash(f.repoDir))
+	}
+
+	for name, s := range secrets {
+		if s.remote == nil {
+			continue
+		}
+
+		dir, err := tree(s.remote)
+		if err != nil {
+			return fmt.Errorf("secrets.%s: %w", name, err)
+		}
+
+		s.dir = filepath.Join(dir, filepath.FromSlash(s.repoDir))
+		secrets[name] = s
+	}
+
+	return nil
 }

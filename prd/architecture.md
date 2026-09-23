@@ -60,8 +60,9 @@ A ref is read as a manifest or as a list. The kind sets the file names.
 - A `github:` repo with no manifest is inferred from releases (D13).
 - `alias/name` expands the alias from `config.toml`, then as above.
 - The lock beside a list has the list's name with `.lock`.
-- A relative file ref inside a list starts at that list's directory. A list
-  that came from a URL or a repo may not name local paths.
+- A relative file ref inside a list starts at that list's directory. In a list
+  from a URL or a repo it names the file beside the list there (D74), and an
+  absolute path is an error.
 - Includes merge in order, the including list's own packages win, nesting
   stops at 8 levels, and a list included twice is an error.
 

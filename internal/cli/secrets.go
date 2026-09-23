@@ -31,8 +31,10 @@ const inline = ""
 type listedSecret struct {
 	secret list.Secret
 	// dir is the directory of the list that declares the entry, where a relative
-	// file starts.
-	dir string
+	// file starts. remote and repoDir are as in listedFile.
+	dir     string
+	remote  *remoteList
+	repoDir string
 }
 
 // placeholder marks the place in a generation's content where the value of a

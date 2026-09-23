@@ -107,6 +107,16 @@ func runGC(cmd *cobra.Command, keep int, dryRun bool) error {
 					used[dep] = true
 				}
 			}
+
+			// A link of [files] from a remote list leads into the repo's files in
+			// the store.
+			for _, file := range gen.Files {
+				for _, st := range e.stores() {
+					if at, in := st.Holding(file.Link); in {
+						used[at] = true
+					}
+				}
+			}
 		}
 	}
 

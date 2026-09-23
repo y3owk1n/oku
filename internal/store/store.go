@@ -789,6 +789,65 @@ func (s *Store) Unreferenced(keep map[string]bool) (map[string]int64, error) {
 	return found, nil
 }
 
+// Tree unpacks the tar.gz of a repo's files that download returns into the
+// store path name, and returns that path. It drops strip directories from each
+// entry. A path that the store holds already is used as it is, with no
+// download, because name is unique to the repo and the commit.
+func (s *Store) Tree(name string, download func() ([]byte, int, error)) (string, error) {
+	final := filepath.Join(s.dir, name)
+	if exists(final) {
+		return final, nil
+	}
+
+	archive, strip, err := download()
+	if err != nil {
+		return "", err
+	}
+
+	if err := os.MkdirAll(s.dir, 0o755); err != nil {
+		return "", fmt.Errorf("create store: %w", err)
+	}
+
+	tmp, err := os.MkdirTemp(s.dir, ".tmp-")
+	if err != nil {
+		return "", err
+	}
+	defer os.RemoveAll(tmp)
+
+	src := filepath.Join(tmp, "archive.tar.gz")
+	if err := os.WriteFile(src, archive, 0o600); err != nil {
+		return "", err
+	}
+
+	files := filepath.Join(tmp, "files")
+	if err := os.Mkdir(files, 0o755); err != nil {
+		return "", err
+	}
+
+	if err := extract(src, files, strip); err != nil {
+		return "", fmt.Errorf("unpack the files of %s: %w", name, err)
+	}
+
+	if err := os.Rename(files, final); err != nil {
+		return "", err
+	}
+
+	return final, nil
+}
+
+// Holding returns the store path that file is in, or false for a file outside
+// the store.
+func (s *Store) Holding(file string) (string, bool) {
+	rel, err := filepath.Rel(s.dir, file)
+	if err != nil || !filepath.IsLocal(rel) {
+		return "", false
+	}
+
+	top, _, _ := strings.Cut(filepath.ToSlash(rel), "/")
+
+	return filepath.Join(s.dir, top), true
+}
+
 // Remove deletes one store path. It refuses a path outside the store.
 func (s *Store) Remove(path string) error {
 	if filepath.Dir(path) != s.dir {

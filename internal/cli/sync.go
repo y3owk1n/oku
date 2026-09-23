@@ -442,6 +442,10 @@ func reconcile(
 		}
 	}
 
+	if err := e.placeTrees(cmd.Context(), opts, all.files, all.secrets); err != nil {
+		return err
+	}
+
 	files, err := e.resolveFiles(all.files, all.vars, all.secrets, pkgs)
 	if err != nil {
 		return err
