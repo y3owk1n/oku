@@ -167,14 +167,3 @@ A manifest's `run` step that can run on Windows must name its shell, `pwsh` or
 Windows refuses to delete a running program. So `oku self uninstall` renames
 `oku.exe` to `oku.exe.uninstalled` and starts a hidden `cmd` that deletes it
 about four seconds later. Nothing is left after those seconds.
-
-## What is not verified
-
-oku has code for these parts, but it has not run on a real machine of the kind
-it is for:
-
-- The consent prompt for system scope, in a terminal that does not run as
-  administrator.
-- Registering a service task as a standard user.
-- A program that loads a DLL from another package. One that loads a DLL from
-  its own download works.

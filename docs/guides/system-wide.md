@@ -183,9 +183,3 @@ remove it with: sudo rmdir /opt/oku
 
 Answering no still deletes everything inside `/opt/oku`, because your user owns
 it. Only the empty directory stays.
-
-## What was tested
-
-The Linux paths are tested against real systemd as a normal user with `sudo`.
-On macOS only the paths that do not elevate are tested on a real machine. The
-LaunchDaemon code is the LaunchAgent code with the `system` domain.
