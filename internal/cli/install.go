@@ -99,9 +99,10 @@ type request struct {
 	// keepVersion installs the version in previous without listing versions
 	// again. "oku sync" sets it.
 	keepVersion bool
-	// asset and bin name the asset and the program for an inferred manifest.
+	// asset and bins name the asset and the programs for an inferred manifest.
 	// "--asset" and "--bin" set them.
-	asset, bin string
+	asset string
+	bins  []string
 	// verbose adds the inferred manifest to an error from it.
 	verbose bool
 	// service enables the package's services.
@@ -781,6 +782,8 @@ func lockEntry(
 		TagCommit:      m.TagCommit,
 		Inferred:       inferred != "" || req.previous.Inferred && req.keepVersion,
 		Manifest:       inferredText(inferred, req),
+		Asset:          inferredAs(inferred, req, req.inferAsset()),
+		Bins:           inferredAs(inferred, req, req.inferBins()),
 		Platforms:      platforms,
 		Deps:           deps,
 	}
@@ -998,7 +1001,7 @@ func (e env) manifestData(
 			return fetched, infer.Inferred{}, fmt.Errorf("--asset does not apply, %s is the asset", req.ref)
 		}
 
-		text, err := e.inferrer(opts).FromURL(ctx, req.ref.Location, req.target(), req.bin)
+		text, err := e.inferrer(opts).FromURL(ctx, req.ref.Location, req.target(), req.inferBins())
 		if err != nil {
 			return ref.Fetched{}, infer.Inferred{}, err
 		}
@@ -1006,7 +1009,7 @@ func (e env) manifestData(
 		return ref.Fetched{Data: []byte(text)}, infer.Inferred{Text: text}, nil
 	}
 
-	if err == nil && (req.asset != "" || req.bin != "") {
+	if err == nil && (req.asset != "" || len(req.bins) > 0) {
 		return fetched, infer.Inferred{}, fmt.Errorf(
 			"--asset and --bin apply when oku infers a manifest, and %s has one", req.ref,
 		)
@@ -1036,8 +1039,8 @@ func (e env) manifestData(
 			inferred, err = e.inferrer(opts).Manifest(
 				ctx, req.ref.Scheme, req.ref.Location, target, infer.Options{
 					Version:   version,
-					Asset:     req.asset,
-					Bin:       req.bin,
+					Asset:     req.inferAsset(),
+					Bins:      req.inferBins(),
 					Platforms: req.platforms,
 				},
 			)
@@ -1136,7 +1139,7 @@ func isDownload(r ref.Ref, data []byte, err error) bool {
 // package that [runtimes] of the list names for node, else the one config.toml
 // names, else through the node on PATH.
 func (e env) inferNPM(ctx context.Context, opts Options, req request) (string, error) {
-	if req.asset != "" || req.bin != "" {
+	if req.asset != "" || len(req.bins) > 0 {
 		return "", fmt.Errorf(
 			"--asset and --bin do not apply, %s lists its download and its programs", req.ref,
 		)
@@ -1181,7 +1184,7 @@ func (e env) inferrerOf(kind ref.Kind) func(context.Context, Options, request) (
 // inferCargo writes the manifest of a cargo ref. The build runs the cargo of
 // the package that [runtimes] names for rust, else the cargo on the user's PATH.
 func (e env) inferCargo(ctx context.Context, opts Options, req request) (string, error) {
-	if req.asset != "" || req.bin != "" {
+	if req.asset != "" || len(req.bins) > 0 {
 		return "", fmt.Errorf("--asset and --bin do not apply, %s names its programs", req.ref)
 	}
 
@@ -1198,7 +1201,7 @@ func (e env) inferCargo(ctx context.Context, opts Options, req request) (string,
 // inferGo writes the manifest of a go ref. The build runs the go of the
 // package that [runtimes] names for go, else the go on the user's PATH.
 func (e env) inferGo(ctx context.Context, opts Options, req request) (string, error) {
-	if req.asset != "" || req.bin != "" {
+	if req.asset != "" || len(req.bins) > 0 {
 		return "", fmt.Errorf(
 			"--asset and --bin do not apply, %s names its program", req.ref,
 		)
@@ -1218,7 +1221,7 @@ func (e env) inferGo(ctx context.Context, opts Options, req request) (string, er
 // programs run through the package that [runtimes] names for python, else
 // through the python3 on the build's PATH.
 func (e env) inferPyPI(ctx context.Context, opts Options, req request) (string, error) {
-	if req.asset != "" || req.bin != "" {
+	if req.asset != "" || len(req.bins) > 0 {
 		return "", fmt.Errorf(
 			"--asset and --bin do not apply, %s lists its download and its programs", req.ref,
 		)
@@ -1290,6 +1293,36 @@ func (e env) runtime(ctx context.Context, opts Options, name string) (manifest.D
 	d.Ref = ref.InDir(e.listDir(), r.String())
 
 	return d, m.Package.Name, nil
+}
+
+// inferAsset and inferBins are the asset and the programs to infer with. A
+// flag wins, and without one an update infers the way the lock recorded.
+func (r request) inferAsset() string {
+	if r.asset != "" {
+		return r.asset
+	}
+
+	return r.previous.Asset
+}
+
+func (r request) inferBins() []string {
+	if len(r.bins) > 0 {
+		return r.bins
+	}
+
+	return r.previous.Bins
+}
+
+// inferredAs returns v for the lock entry of an inferred manifest, and the zero
+// value for any other.
+func inferredAs[T any](inferred string, req request, v T) T {
+	if inferred != "" || req.previous.Inferred && req.keepVersion {
+		return v
+	}
+
+	var zero T
+
+	return zero
 }
 
 func inferredText(inferred string, req request) string {

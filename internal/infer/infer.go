@@ -49,8 +49,9 @@ type Options struct {
 	Version string
 	// Asset is a glob that names the asset for the host.
 	Asset string
-	// Bin is the file name of the program inside the assets.
-	Bin string
+	// Bins are the file names of the programs inside the assets, or none to let
+	// Manifest find them.
+	Bins []string
 	// Platforms are the ones the lock pins besides host. Manifest opens an asset
 	// for those and for host, and for no other platform.
 	Platforms []platform.Platform
@@ -218,7 +219,7 @@ func (inf *Inferrer) Manifest(
 			continue
 		}
 
-		l, err := inf.layoutOf(ctx, server.Auth(), urls[c.asset], c.asset, name, opts.Bin)
+		l, err := inf.layoutOf(ctx, server.Auth(), urls[c.asset], c.asset, name, opts.Bins)
 
 		switch {
 		case err != nil && isHost && len(c.others) > 0:
@@ -287,13 +288,15 @@ func (l layout) toml(os string) string {
 		fmt.Fprintf(&b, "strip = %d\n", l.strip)
 	}
 
-	if l.bin != "" {
-		bin := l.bin
+	if len(l.bins) > 0 {
+		bins := slices.Clone(l.bins)
 		if os == "windows" {
-			bin += ".exe"
+			for i := range bins {
+				bins[i] += ".exe"
+			}
 		}
 
-		fmt.Fprintf(&b, "bin = [%q]\n", bin)
+		fmt.Fprintf(&b, "bin = [%s]\n", quoteAll(bins))
 	}
 
 	if len(l.app) > 0 {
@@ -310,14 +313,15 @@ func (l layout) toml(os string) string {
 func (inf *Inferrer) layoutOf(
 	ctx context.Context,
 	auth forge.Auth,
-	url, asset, name, bin string,
+	url, asset, name string,
+	bins []string,
 ) (layout, error) {
 	files, err := inf.Inspect(ctx, url, auth)
 	if err != nil {
 		return layout{}, fmt.Errorf("inspect it: %w", err)
 	}
 
-	return findLayout(files, name, bin, isArchive(asset))
+	return findLayout(files, name, bins, isArchive(asset))
 }
 
 // choose lists the artifacts to write, in the order of targets. sizes holds the
@@ -782,21 +786,33 @@ const maxManPages = 8
 
 type layout struct {
 	strip int
-	bin   string
-	app   []string
-	man   []string
+	// bins are the programs. The first is the package's own, whose man page
+	// stays when there are too many.
+	bins []string
+	app  []string
+	man  []string
 }
 
-// findLayout locates the program among files. That is the file called want, or
-// without a want the executable called name, or the only executable there is.
-// A macOS app bundle becomes an app, and the files inside it are no program.
-func findLayout(files []File, name, want string, archive bool) (layout, error) {
-	if want != "" {
-		name = strings.ToLower(strings.TrimSuffix(want, ".exe"))
+// findLayout locates the programs among files. Each of wants names one.
+// Without wants the program is the executable called name, or the only
+// executable there is, and an executable beside it whose name starts with
+// "<name>-", such as age-keygen beside age, is a program too. A macOS app
+// bundle becomes an app, and the files inside it are no program.
+func findLayout(files []File, name string, named []string, archive bool) (layout, error) {
+	wants := make([]string, len(named))
+	for i, want := range named {
+		wants[i] = strings.ToLower(strings.TrimSuffix(want, ".exe"))
 	}
 
 	if !archive {
-		return layout{bin: name}, nil
+		switch len(wants) {
+		case 0:
+			return layout{bins: []string{name}}, nil
+		case 1:
+			return layout{bins: wants}, nil
+		default:
+			return layout{}, errors.New("the download is a single program, so --bin names one")
+		}
 	}
 
 	var l layout
@@ -828,13 +844,11 @@ func findLayout(files []File, name, want string, archive bool) (layout, error) {
 		return p
 	}
 
-	// plain are the files called name that are not executable. A zip made on
-	// Windows keeps no modes, so its program is one of them.
+	// plain are the files that are not executable. A zip made on Windows keeps
+	// no modes, so its programs are among them.
 	var executables, plain []string
 
 	for _, f := range files {
-		base := strings.ToLower(strings.TrimSuffix(path.Base(f.Path), ".exe"))
-
 		// Some archives mark every file executable, so a man page is recognised by
 		// its name first.
 		switch bundle := bundleOf(inside(f.Path)); {
@@ -844,49 +858,118 @@ func findLayout(files []File, name, want string, archive bool) (layout, error) {
 			}
 		case strings.HasSuffix(f.Path, ".1"):
 			l.man = append(l.man, inside(f.Path))
-		case f.Executable && base == name:
-			l.bin = inside(f.Path)
 		case f.Executable:
 			executables = append(executables, inside(f.Path))
-		case base == name:
+		default:
 			plain = append(plain, inside(f.Path))
 		}
 	}
 
 	slices.Sort(l.app)
 
-	switch {
-	case l.bin != "":
-	case len(plain) == 1 && (want != "" || len(executables) == 0):
-		l.bin = plain[0]
-	case want != "":
-		return l, fmt.Errorf("no file in it is called %s", want)
-	case len(executables) == 1:
-		l.bin = executables[0]
-	case len(l.app) > 0:
-		// An app with helpers beside it is still an app.
-		return l, nil
-	case len(executables) == 0:
-		return l, errors.New("no file in it is executable\nwrite a manifest for it")
-	default:
-		return l, fmt.Errorf(
-			"cannot tell which file is the program, executables found: %s\n"+
-				"name it with --bin, or write a manifest for it",
-			strings.Join(executables, ", "),
-		)
+	// find returns the program called want. A plain file counts when it is the
+	// only one of that name and the user named it, or nothing is executable.
+	find := func(want string, named bool) string {
+		for _, p := range executables {
+			if program(p) == want {
+				return p
+			}
+		}
+
+		var found []string
+
+		for _, p := range plain {
+			if program(p) == want {
+				found = append(found, p)
+			}
+		}
+
+		if len(found) == 1 && (named || len(executables) == 0) {
+			return found[0]
+		}
+
+		return ""
 	}
 
-	l.bin = strings.TrimSuffix(l.bin, ".exe")
+	for _, want := range wants {
+		p := find(want, true)
+		if p == "" {
+			return l, fmt.Errorf("no file in it is called %s", want)
+		}
+
+		l.bins = append(l.bins, p)
+	}
+
+	if len(wants) == 0 {
+		main := find(name, false)
+
+		switch {
+		case main != "":
+		case len(executables) == 1:
+			main = executables[0]
+		case len(l.app) > 0:
+			// An app with helpers beside it is still an app.
+			return l, nil
+		case len(executables) == 0:
+			return l, errors.New("no file in it is executable\nwrite a manifest for it")
+		default:
+			return l, fmt.Errorf(
+				"cannot tell which file is the program, executables found: %s\n"+
+					"name it with --bin, or write a manifest for it",
+				strings.Join(executables, ", "),
+			)
+		}
+
+		l.bins = append(l.bins, main)
+		l.bins = append(l.bins, siblings(main, executables, plain)...)
+	}
+
+	for i, bin := range l.bins {
+		l.bins[i] = strings.TrimSuffix(bin, ".exe")
+	}
+
 	slices.Sort(l.man)
 
 	// A tool with one page per subcommand would fill the manifest, so past
 	// maxManPages only the program's own page stays.
 	if len(l.man) > maxManPages {
-		own := path.Base(l.bin) + ".1"
+		own := path.Base(l.bins[0]) + ".1"
 		l.man = slices.DeleteFunc(l.man, func(p string) bool { return path.Base(p) != own })
 	}
 
 	return l, nil
+}
+
+// siblings returns the programs in the directory of main whose names start
+// with main's name and a "-". An .exe counts without a mode, since a zip made
+// on Windows keeps none.
+func siblings(main string, executables, plain []string) []string {
+	prefix := program(main) + "-"
+
+	var found []string
+
+	for _, p := range executables {
+		if p != main && path.Dir(p) == path.Dir(main) && strings.HasPrefix(program(p), prefix) {
+			found = append(found, p)
+		}
+	}
+
+	for _, p := range plain {
+		if path.Dir(p) == path.Dir(main) && strings.HasSuffix(strings.ToLower(p), ".exe") &&
+			strings.HasPrefix(program(p), prefix) {
+			found = append(found, p)
+		}
+	}
+
+	slices.Sort(found)
+
+	return found
+}
+
+// program returns the name a file runs as: its base name in lower case,
+// without ".exe".
+func program(p string) string {
+	return strings.ToLower(strings.TrimSuffix(path.Base(p), ".exe"))
 }
 
 // bundleOf returns the outermost macOS app bundle that holds p, such as

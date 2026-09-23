@@ -25,7 +25,7 @@ func newAddCmd(opts Options) *cobra.Command {
 		enable     bool
 		system     bool
 		asset      string
-		bin        string
+		bins       []string
 	)
 
 	cmd := &cobra.Command{
@@ -48,14 +48,14 @@ one of:
   alias/name                          a package in a source, see "oku source"`,
 		Args: minArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if len(args) > 1 && (asset != "" || bin != "") {
+			if len(args) > 1 && (asset != "" || len(bins) > 0) {
 				return errors.New("--asset and --bin describe one download, so add that ref on its own")
 			}
 
 			programs := 0
 
 			for _, arg := range args {
-				ran, err := runAdd(cmd, opts, arg, &flags, fromSource, enable, system, asset, bin)
+				ran, err := runAdd(cmd, opts, arg, &flags, fromSource, enable, system, asset, bins)
 				if err != nil {
 					return err
 				}
@@ -90,7 +90,7 @@ one of:
 	cmd.Flags().
 		StringVar(&asset, "asset", "", "with no manifest, the release asset for this machine, as a glob")
 	cmd.Flags().
-		StringVar(&bin, "bin", "", "with no manifest, the file name of the program in the asset")
+		StringArrayVar(&bins, "bin", nil, "with no manifest, the file name of a program in the asset, once per program")
 
 	return cmd
 }
@@ -118,7 +118,8 @@ func runAdd(
 	arg string,
 	flags *buildFlags,
 	fromSource, enable, system bool,
-	asset, bin string,
+	asset string,
+	bins []string,
 ) (bool, error) {
 	e, err := scopedEnv(cmd, opts)
 	if err != nil {
@@ -174,7 +175,7 @@ func runAdd(
 		fit:             fitNarrow,
 		fromSource:      fromSource,
 		asset:           asset,
-		bin:             bin,
+		bins:            bins,
 		service:         enable,
 		acceptKey:       flags.acceptKey,
 		system:          system,

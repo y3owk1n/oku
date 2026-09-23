@@ -762,7 +762,11 @@ How inference reads a release:
   published manifest serves them all. The program is
   the executable named after the repo, else the only executable. In an archive
   with no executable files, which is what a zip made on Windows is, it is the
-  file named after the repo. A single top-level
+  file named after the repo. An executable next to the program is a program
+  too when its name starts with the program's name and a `-`, such as
+  `age-keygen` next to `age`. In a Windows zip an `.exe` of such a name
+  counts. With `--bin`, the programs are the files it names instead. A single
+  top-level
   directory becomes `strip = 1`. Files ending in `.1` become `man`, and with
   more than 8 of them only the program's own page is kept.
 

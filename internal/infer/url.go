@@ -41,12 +41,13 @@ func platformless(stem string) string {
 
 // FromURL returns manifest TOML for a download that is the package itself. The
 // manifest has one artifact, for host, because one URL is a download for one
-// platform. bin is the file name of the program, or "" to let FromURL find it.
+// platform. bins are the file names of the programs, or none to let FromURL
+// find them.
 func (inf *Inferrer) FromURL(
 	ctx context.Context,
 	at string,
 	host platform.Platform,
-	bin string,
+	bins []string,
 ) (string, error) {
 	parsed, err := url.Parse(at)
 	if err != nil {
@@ -79,7 +80,7 @@ func (inf *Inferrer) FromURL(
 		return "", fmt.Errorf("inspect %s: %w", asset, err)
 	}
 
-	l, err := findLayout(files, name, bin, isArchive(asset))
+	l, err := findLayout(files, name, bins, isArchive(asset))
 	if err != nil {
 		return "", fmt.Errorf("%s: %w", asset, err)
 	}
