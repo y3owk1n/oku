@@ -49,10 +49,11 @@ func TestB262OutdatedListsWhatHasANewerVersionAndChangesNothing(t *testing.T) {
 
 	out = m.stdout(t, "outdated", "--json")
 
-	var rows []struct{ Name, Version, Newest, Ref string }
+	var rows []struct{ Name, Version, Newest, Latest, Ref string }
 	must(t, json.Unmarshal([]byte(out), &rows))
 
-	if len(rows) != 1 || rows[0].Name != "tool" || rows[0].Version != "1.0.0" || rows[0].Newest != "1.1.0" {
+	if len(rows) != 1 || rows[0].Name != "tool" || rows[0].Version != "1.0.0" ||
+		rows[0].Newest != "1.1.0" || rows[0].Latest != "1.1.0" {
 		t.Fatalf("outdated --json gave %+v", rows)
 	}
 
@@ -61,5 +62,17 @@ func TestB262OutdatedListsWhatHasANewerVersionAndChangesNothing(t *testing.T) {
 
 	if string(lockAfter) != string(lockBefore) || m.toolOutput(t) != "1.0.0" {
 		t.Fatal("outdated changed the lock or the profile")
+	}
+
+	// An exact version in the list holds update back, and the latest release
+	// still shows.
+	ref := m.discoveredManifest(t, "1.0.0", "1.1.0")
+
+	_, err = m.run(t, "", "add", ref+"@1.0.0")
+	must(t, err)
+
+	out, err = m.run(t, "", "outdated")
+	if err != nil || !strings.Contains(out, "1.0.0") || !strings.Contains(out, "1.1.0") || !strings.Contains(out, "latest") {
+		t.Fatalf("outdated with tool pinned to 1.0.0 and 1.1.0 released:\n%s", out)
 	}
 }

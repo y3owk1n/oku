@@ -72,7 +72,7 @@ place of text. Messages and errors still go to stderr as text.
 | `oku which <program>` | `program`, `package`, `version`, `path`, `shadowed_by` |
 | `oku generations` | a list of `number`, `current`, `created`, `packages` |
 | `oku search <term>` | a list of `ref`, `description` |
-| `oku outdated` | a list of `name`, `version`, `newest`, `ref`, for each package with a newer version |
+| `oku outdated` | a list of `name`, `version`, `newest`, `latest`, `ref`, for each package with a newer version |
 | `oku source list` | a list of `alias`, `ref` |
 | `oku cache list` | a list of locations |
 | `oku key list` | `yours` and `trusted` |
@@ -499,17 +499,21 @@ oku outdated [--json]
 ```
 
 Lists the packages that have a newer version than `oku.lock` pins, with the
-locked version, the newest version and the ref:
+locked version, the newest version, the latest release and the ref:
 
 ```
 $ oku outdated
-name      locked   newest   ref
-freebuff  0.0.183  0.0.184  ./packages/freebuff.toml
-`oku update` takes the newest versions, `oku update <name>` one package
+name           locked  newest  latest  ref
+freebuff       0.0.183 0.0.184 0.0.184 ./packages/freebuff.toml
+golangci-lint  2.13.2  2.13.2  3.0.0   github:golangci/golangci-lint
+`oku update` takes the newest versions. To take a latest beyond them, change its version in oku.toml
 ```
 
-oku asks each package's version source which version is the newest that the
-package's `version` in `oku.toml` allows, as `oku update` would pick it. It downloads no package and changes nothing. A
+The newest version is the newest that the package's `version` in `oku.toml`
+allows, and `oku update` takes it. The latest is the newest release. They
+differ when the `version` in `oku.toml` leaves out the latest release, as
+`^2` leaves out 3.0.0 above. A package shows up when either is newer than the
+lock. oku downloads no package and changes nothing. A
 manifest that oku inferred is read from `oku.lock`, and any other manifest from
 its ref. When every package is at its newest version, oku says so. When a
 version source cannot answer, oku lists the rest and ends with an error that

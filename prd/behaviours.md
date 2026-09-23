@@ -223,9 +223,10 @@ order step in `prd/product.md`.
 - B251 [3] When GitHub answers 429, or 403 with `Retry-After`, oku stops and
   says how many seconds to wait.
 - B262 [3] `oku outdated` lists each package of `oku.lock` whose newest
-  version that its `version` in the list allows differs from the locked one, with both versions and its ref, and
-  `--json` gives `name`, `version`, `newest` and `ref`. It changes no lock, no
-  profile and no store path.
+  version that its `version` in the list allows, or whose latest release,
+  differs from the locked one, with the three versions and its ref, and
+  `--json` gives `name`, `version`, `newest`, `latest` and `ref`. It changes no
+  lock, no profile and no store path.
 - B268 [3] With `version.from = "github-releases"`, `add` and `update` check a
   file of the repo's release that has no `sha256` or `sha256_url` against the
   sha256 GitHub reports for it, and do not trust it on first use. The same
