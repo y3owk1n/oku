@@ -1,10 +1,10 @@
 package cli_test
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/y3owk1n/oku/internal/lock"
@@ -58,9 +58,12 @@ func TestB265AListVersionIsARangeOrAPrefixThatSyncAndUpdateFollow(t *testing.T) 
 		t.Fatalf("update took %s, want 1.6.0, the newest below 2", got)
 	}
 
-	// 2.0.0 is newer, but the range does not allow it.
-	if out := m.stdout(t, "outdated", "--json"); strings.TrimSpace(out) != "[]" {
-		t.Fatalf("outdated with ^1.4 at 1.6.0 lists a package:\n%s", out)
+	// 2.0.0 is the latest, but the range does not allow it, so update stays.
+	var rows []struct{ Name, Version, Newest, Latest string }
+	must(t, json.Unmarshal([]byte(m.stdout(t, "outdated", "--json")), &rows))
+
+	if len(rows) != 1 || rows[0].Version != "1.6.0" || rows[0].Newest != "1.6.0" || rows[0].Latest != "2.0.0" {
+		t.Fatalf("outdated with ^1.4 at 1.6.0 gave %+v, want newest 1.6.0 and latest 2.0.0", rows)
 	}
 
 	// A range that no longer allows the locked version makes sync pick again.

@@ -22,9 +22,10 @@ func newOutdatedCmd(opts Options) *cobra.Command {
 		Short: "List the packages that have a newer version than oku.lock pins",
 		Long: `List the packages that have a newer version than oku.lock pins.
 
-For each package, oku asks its version source which version is the newest
-that the version in oku.toml allows. It downloads no package and changes
-nothing. oku update takes the new versions.`,
+For each package, oku asks its version source for two versions. The newest is
+the newest that the version in oku.toml allows, and oku update takes it. The
+latest is the newest release. To take a latest beyond the newest, change the
+version in oku.toml. oku downloads no package and changes nothing.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			e, err := scopedEnv(cmd, opts)
@@ -37,11 +38,12 @@ nothing. oku update takes the new versions.`,
 	}
 }
 
-// staleness is one package of the lock and the newest version of it.
+// staleness is one package of the lock, the newest version that the list
+// allows, and the latest release.
 type staleness struct {
-	pkg    lock.Package
-	newest string
-	err    error
+	pkg            lock.Package
+	newest, latest string
+	err            error
 }
 
 func (e env) outdated(cmd *cobra.Command, opts Options) error {
@@ -68,8 +70,8 @@ func (e env) outdated(cmd *cobra.Command, opts Options) error {
 			limit <- struct{}{}
 			defer func() { <-limit }()
 
-			newest, err := e.newest(cmd.Context(), opts, pkg, all.packages[pkg.Name].ref.Version)
-			found[i] = staleness{pkg: pkg, newest: newest, err: err}
+			newest, latest, err := e.newest(cmd.Context(), opts, pkg, all.packages[pkg.Name].ref.Version)
+			found[i] = staleness{pkg: pkg, newest: newest, latest: latest, err: err}
 		})
 	}
 
@@ -86,7 +88,7 @@ func (e env) outdated(cmd *cobra.Command, opts Options) error {
 		switch {
 		case f.err != nil:
 			failed = append(failed, fmt.Errorf("%s: %w", f.pkg.Name, f.err))
-		case f.newest != f.pkg.Version:
+		case f.newest != f.pkg.Version || f.latest != f.pkg.Version:
 			stale = append(stale, f)
 		}
 	}
@@ -99,11 +101,11 @@ func (e env) outdated(cmd *cobra.Command, opts Options) error {
 }
 
 // newest returns the newest version of pkg that want allows, as oku update
-// would pick it.
-func (e env) newest(ctx context.Context, opts Options, pkg lock.Package, want string) (string, error) {
+// would pick it, and the latest release.
+func (e env) newest(ctx context.Context, opts Options, pkg lock.Package, want string) (string, string, error) {
 	r, err := ref.ParseIn(e.listDir(), pkg.Ref)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 
 	// oku wrote an inferred manifest, and the lock holds its text. Inferring it
@@ -112,7 +114,7 @@ func (e env) newest(ctx context.Context, opts Options, pkg lock.Package, want st
 	if !pkg.Inferred || pkg.Manifest == "" {
 		fetched, err := e.fetcher(opts).Fetch(ctx, r, "", ref.Manifest)
 		if err != nil {
-			return "", err
+			return "", "", err
 		}
 
 		text = fetched.Data
@@ -120,15 +122,20 @@ func (e env) newest(ctx context.Context, opts Options, pkg lock.Package, want st
 
 	m, err := manifest.Parse(text, r.String())
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 
-	release, err := e.resolver(opts).Pick(ctx, m.Version, want)
+	latest, err := e.resolver(opts).Pick(ctx, m.Version, "")
+	if err != nil || want == "" {
+		return latest.Version, latest.Version, err
+	}
+
+	newest, err := e.resolver(opts).Pick(ctx, m.Version, want)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 
-	return release.Version, nil
+	return newest.Version, latest.Version, nil
 }
 
 func printStale(cmd *cobra.Command, stale []staleness, all int) error {
@@ -137,12 +144,13 @@ func printStale(cmd *cobra.Command, stale []staleness, all int) error {
 			Name    string `json:"name"`
 			Version string `json:"version"`
 			Newest  string `json:"newest"`
+			Latest  string `json:"latest"`
 			Ref     string `json:"ref"`
 		}
 
 		rows := []row{}
 		for _, f := range stale {
-			rows = append(rows, row{f.pkg.Name, f.pkg.Version, f.newest, f.pkg.Ref})
+			rows = append(rows, row{f.pkg.Name, f.pkg.Version, f.newest, f.latest, f.pkg.Ref})
 		}
 
 		return printJSON(cmd, rows)
@@ -157,16 +165,16 @@ func printStale(cmd *cobra.Command, stale []staleness, all int) error {
 		return nil
 	}
 
-	tab := s.Table("name", "locked", "newest", "ref")
+	tab := s.Table("name", "locked", "newest", "latest", "ref")
 	for _, f := range stale {
-		tab.Styled([]string{f.pkg.Name, f.pkg.Version, f.newest, s.Home(f.pkg.Ref)}, s.Bold, s.Dim, nil, s.Dim)
+		tab.Styled([]string{f.pkg.Name, f.pkg.Version, f.newest, f.latest, s.Home(f.pkg.Ref)}, s.Bold, s.Dim, nil, nil, s.Dim)
 	}
 
 	if err := tab.Write(out); err != nil {
 		return err
 	}
 
-	hint(out, "`oku update` takes the newest versions, `oku update <name>` one package")
+	hint(out, "`oku update` takes the newest versions. To take a latest beyond them, change its version in oku.toml")
 
 	return nil
 }
