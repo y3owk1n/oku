@@ -353,6 +353,10 @@ order step in `prd/product.md`.
 - B261 [4] A crate follows crates.io's versions. A yanked version and one with
   a `-` are never the newest, and `cargo:<name>@<version>` takes one. A crate
   with no programs fails and says it is a library.
+- B264 [4] A `[runtimes]` entry may be a table with `ref` and a `version`
+  constraint, in a list or in `config.toml`. `add` and `update` then build and
+  run with the newest version of that package that the constraint allows, and
+  `oku.lock` pins it.
 - B212 [4] An npm vendor step with `package` may name dependencies in
   `scripts`. After the install oku runs their install scripts with the network
   on, the approval prompt says so, and `oku.lock` marks the build impure. A
