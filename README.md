@@ -26,10 +26,13 @@ One `oku.toml` names the tools, dotfiles, secrets and OS settings of your accoun
 ```toml
 # oku.toml
 [packages]
-ripgrep = "github:BurntSushi/ripgrep"                     # a repo with no manifest at all
-prettier = "npm:prettier"                                  # a tool from the npm registry
-rectangle = { ref = "mine/rectangle", when = { os = "darwin" } }
-postgres = { ref = "mine/postgres", service = true }
+ripgrep = "github:BurntSushi/ripgrep"                        # a repo with no manifest at all
+rectangle = { ref = "github:rxhanson/Rectangle", when = { os = "darwin" } }   # a macOS app
+prettier = { ref = "npm:prettier", version = "^3" }          # npm, PyPI, Go and crates.io too
+atuin = { ref = "github:y3owk1n/oku-config#atuin", service = true }           # a daemon
+
+[runtimes]
+node = { ref = "github:y3owk1n/oku-config#node", version = "22" }             # what npm tools run on
 
 [vars]
 font = "JetBrainsMono Nerd Font Propo"
@@ -65,7 +68,8 @@ Tools like Nix with home-manager and nix-darwin can describe a whole machine in 
 - **One list, one lock, one rollback.** Packages, home files, secrets and settings change together. Every change is a generation. `oku rollback` reverts all of it, with no download.
 - **Same input, same machine.** `oku.lock` pins the commit, the manifest hash and every download's sha256. Two machines with the same two files get the same store paths.
 - **One list for every OS.** `include` and per-platform `when` let one list describe a Mac laptop, a Linux server and a Windows desktop. oku skips the tables of another OS.
-- **No registry.** A package is a TOML manifest in the author's repo, a URL, a local file, or a repo with no manifest at all. oku ships no package list of its own.
+- **No registry.** A package is a TOML manifest in the author's repo, a URL, a local file, a repo with no manifest at all, or a package of npm, PyPI, Go or crates.io. oku ships no package list of its own.
+- **Checked downloads.** oku checks each download against a sha256 from the manifest, from upstream's checksum file, or from GitHub, npm or crates.io, and pins it in the lock.
 - **TOML, not a language.** A manifest has a fixed set of keys and seven build step types. `oku manifest lint` checks all of it.
 - **No root.** Everything lives in a private store under your home. `oku self uninstall` removes every file oku wrote.
 - **All or nothing.** `add`, `remove`, `sync`, `update` and `rollback` check everything before the first step and undo a change that fails partway.
@@ -109,26 +113,49 @@ fd --version
 oku doctor                     # checks PATH, the hook, the sandbox and the profiles
 ```
 
-`oku add` writes to `oku.toml` and `oku.lock` for you, so a list grows one command at a time. [Getting started](docs/getting-started.md) · [A real list that replaced nix-darwin](https://github.com/y3owk1n/oku-config)
+`oku add` writes to `oku.toml` and `oku.lock` for you, so a list grows one command at a time. For the GitHub API oku uses `GITHUB_TOKEN`, or the login of `gh` when it is installed. Without either, GitHub allows 60 requests an hour, which a first list of a dozen packages can use up. [Getting started](docs/getting-started.md) · [A real list that replaced nix-darwin](https://github.com/y3owk1n/oku-config)
 
 ---
 
 ## The list
 
-**Packages.** A ref is enough. For a repo on GitHub, GitLab, Codeberg, or any Gitea or Forgejo server, oku reads the newest release, matches the files to your OS and CPU, finds the published checksums, and shows you the manifest it wrote before it installs. A URL of the download itself works the same way, and so does a command-line tool from the npm registry. When oku picks the wrong file, `--asset` and `--bin` name the right one.
+**Packages.** A ref is enough. For a repo on GitHub, GitLab, Codeberg, or any Gitea or Forgejo server, oku reads the newest release, matches the files to your OS and CPU, finds the checksums, and shows you the manifest it wrote before it installs. Every line below installs a real package:
 
 ```bash
-oku add github:BurntSushi/ripgrep        # no manifest needed
-oku add github:you/tool@1.4.0            # a manifest next to the code, at a version
-oku add gitlab:gitlab-org/cli            # or codeberg:, gitea:host/..., github:host/...
-oku add npm:prettier                     # runs through a node you pin once
-oku add pypi:black                       # a Python tool, installed with uv
-oku add go:golang.org/x/tools/gopls      # a Go program, as go install builds it
-oku add cargo:just                       # a crate from crates.io, as cargo install builds it
-oku add https://example.com/tool.toml    # a manifest at a URL, or ./tool.toml
-oku add https://example.com/tool-1.2.0-linux-amd64.tar.gz
-oku add github:you/recipes#postgres --service   # runs now and at every login
+# A repo with no manifest. oku infers one from the release.
+oku add github:BurntSushi/ripgrep
+oku add gitlab:gitlab-org/cli                     # the glab CLI
+oku add codeberg:mergiraf/mergiraf
+oku add gitea:gitea.com/gitea/tea                 # any Gitea or Forgejo server
+oku add github:rxhanson/Rectangle                 # a macOS app, copied to ~/Applications
+
+# A manifest in a repo, by name or by path, or in any git repo.
+oku add github:y3owk1n/oku-config#bat             # bat.toml or packages/bat.toml
+oku add github:y3owk1n/oku-config#packages/zoxide.toml
+oku add git+https://github.com/y3owk1n/oku-config#lazygit
+
+# A manifest at a URL or on disk, or a download itself, here the one for macOS arm64.
+oku add https://raw.githubusercontent.com/y3owk1n/oku-config/main/packages/starship.toml
+oku add ./gh.toml
+oku add https://github.com/sharkdp/hyperfine/releases/download/v1.19.0/hyperfine-v1.19.0-aarch64-apple-darwin.tar.gz
+
+# A registry package, built or run with the toolchain that [runtimes] names.
+oku add npm:prettier                              # runs on node
+oku add pypi:ruff                                 # installed with uv
+oku add go:mvdan.cc/gofumpt                       # built as go install does
+oku add cargo:hexyl                               # built as cargo install --locked does
+
+# A version: exact, the newest of a line, or a range.
+oku add github:BurntSushi/ripgrep@14.1.1
+oku add github:BurntSushi/ripgrep@14
+oku add 'npm:prettier@^3'
+
+# A short name for a repo of manifests.
+oku source add kyle github:y3owk1n/oku-config
+oku add kyle/sesh
 ```
+
+When oku picks the wrong file of a release, `--asset` and `--bin` name the right one. `--service` starts a package's daemon now and at every login. A version in `oku.toml` names what `oku update` may move to, and `oku.lock` pins the exact build. `oku outdated` lists what is behind, with the newest version the list allows and the latest release.
 
 A package can be a prebuilt download in tar, zip, 7z, `.deb`, `.rpm`, AppImage, `.dmg`, `.pkg` or `.msi`, or a build from source with dependencies between packages. It can ship a desktop app, fonts, a service, a library that other builds link against, a script oku wraps with its interpreter, or only files, such as agent skills or a colour scheme. A version can follow releases, an npm package, a branch, or a moving tag such as `nightly`.
 
@@ -144,6 +171,15 @@ oku shell github:cli/cli -- gh --version   # try a package without installing it
 oku exec gopls                             # run a project's tool where no hook runs, as in an editor
 ```
 
+**CI.** The action in this repo installs oku and the tools that a project's lock pins, on Linux, macOS and Windows, and puts them on `PATH` for the later steps:
+
+```yaml
+- uses: y3owk1n/oku@main   # oku sync --yes --locked, with the store cached by oku.lock
+- run: golangci-lint run
+```
+
+`oku outdated --json` lists each package with a newer version, for a bot that opens pull requests.
+
 **History.** Every change is a generation, and it covers packages, files and settings.
 
 ```bash
@@ -155,7 +191,7 @@ oku list --json | jq -r '.[].name'   # every command that prints data takes --js
 
 **Sharing builds.** A signed cache is any directory or static web host. oku takes a built package from it only when a key you trust signed it, and builds it itself otherwise.
 
-[List and lock](docs/list-and-lock.md) · [Refs](docs/refs.md) · [Secrets](docs/secrets.md) · [Projects](docs/projects.md) · [Commands](docs/commands.md)
+[List and lock](docs/list-and-lock.md) · [Refs](docs/refs.md) · [Secrets](docs/secrets.md) · [Projects](docs/projects.md) · [Commands](docs/commands.md) · [The action](docs/list-and-lock.md#one-lock-for-several-machines)
 
 ---
 
@@ -206,7 +242,7 @@ oku covers what a package manager, a dotfile manager and a settings script do se
 
 | Setup | Tools from | Home files | Secrets | OS settings | Lock with hashes | Rollback | Root | You write |
 | :-- | :-- | :-- | :-- | :-- | :-- | :-- | :-- | :-- |
-| **oku** | Any repo, URL, file or npm package. No registry of its own | Links, text, templates | sops and age files | macOS defaults, Windows registry, dconf | Always, every download | Packages, files and settings, in one generation | Only for [system scope](docs/system-scope.md) | TOML, or nothing |
+| **oku** | Any repo, URL or file, and npm, PyPI, Go and crates.io packages. No registry of its own | Links, text, templates | sops and age files | macOS defaults, Windows registry, dconf | Always, every download | Packages, files and settings, in one generation | Only for [system scope](docs/system-scope.md) | TOML, or nothing |
 | [Nix](https://nixos.org) + [home-manager](https://github.com/nix-community/home-manager) + [nix-darwin](https://github.com/nix-darwin/nix-darwin) | nixpkgs, plus flakes | Yes | Separate projects, sops-nix or agenix | macOS defaults, dconf | `flake.lock` pins inputs, nixpkgs pins each source | Per tool, each with its own generations | To create `/nix` | The Nix language |
 | [Homebrew](https://brew.sh) + [chezmoi](https://www.chezmoi.io) | homebrew-core, plus taps | Templates | Password managers, age, gpg | Scripts you write | No. A Brewfile pins nothing | No. Revert the source in git and apply again | Homebrew, to install on macOS | Ruby, Go templates, shell |
 | [mise](https://mise.jdx.dev) | A registry, plus backends such as `github:owner/repo` | Links, copies, templates | Environment variables | macOS defaults | Optional, `mise.lock` | Files only. Tools and packages are not restored | For packages and files outside your home | TOML |
@@ -220,8 +256,9 @@ oku fits if you want a machine you can rebuild and roll back without learning Ni
 ```
 oku sync
   -> read the list             oku.toml, its includes, and the tables for this OS
-  -> resolve each package      a manifest from a file, a URL, a forge or the npm registry,
-                               or one inferred from a release, at the version the lock pins
+  -> resolve each package      a manifest from a file, a URL or a forge, or one inferred
+                               from a release or from npm, PyPI, Go or crates.io, at the
+                               version the lock pins
   -> realize in the store      <data>/oku/store/<name>-<version>-<hash>/
   -> check everything          downloads, checksums, targets, secrets, before the first change
   -> new profile generation    a directory of links, swapped in with one rename
