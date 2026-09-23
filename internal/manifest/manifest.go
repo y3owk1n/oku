@@ -14,6 +14,7 @@ import (
 
 	"github.com/pelletier/go-toml/v2"
 
+	"github.com/y3owk1n/oku/internal/crates"
 	"github.com/y3owk1n/oku/internal/goproxy"
 	"github.com/y3owk1n/oku/internal/platform"
 	"github.com/y3owk1n/oku/internal/pypi"
@@ -92,6 +93,8 @@ const (
 	FromPyPI = "pypi"
 	// FromGo reads the versions of a Go module from the module proxy.
 	FromGo = "go"
+	// FromCrates reads the versions of a crate from crates.io.
+	FromCrates = "crates"
 )
 
 // Artifact is a prebuilt download for the platforms its selector matches.
@@ -382,10 +385,13 @@ func (m *Manifest) validate() error {
 		errs = append(errs, errors.New(
 			`version.repo must be a module path such as "golang.org/x/tools/gopls" for go`,
 		))
-	case (m.Version.From == FromPyPI || m.Version.From == FromGo) && m.Version.StripPrefix != "":
+	case m.Version.From == FromCrates && !crates.ValidName(m.Version.Repo):
+		errs = append(errs, errors.New(`version.repo must be a crate name such as "ripgrep" for crates`))
+	case (m.Version.From == FromPyPI || m.Version.From == FromGo || m.Version.From == FromCrates) &&
+		m.Version.StripPrefix != "":
 		errs = append(
 			errs,
-			errors.New("version.strip_prefix does not apply to pypi or go, which list versions"),
+			errors.New("version.strip_prefix does not apply to pypi, go or crates, which list versions"),
 		)
 	case m.Version.From == FromGitTags && m.Version.Repo == "":
 		errs = append(errs, errors.New("version.repo must be a git URL for git-tags"))
@@ -400,14 +406,14 @@ func (m *Manifest) validate() error {
 	case m.Version.From != "" && !slices.Contains(
 		[]string{
 			FromGitHubReleases, FromGiteaReleases, FromGitLabReleases,
-			FromGitTags, FromGitBranch, FromNPM, FromPyPI, FromGo,
+			FromGitTags, FromGitBranch, FromNPM, FromPyPI, FromGo, FromCrates,
 		},
 		m.Version.From,
 	):
 		errs = append(errs, fmt.Errorf(
-			"version.from %q must be %q, %q, %q, %q, %q, %q, %q or %q", m.Version.From,
+			"version.from %q must be %q, %q, %q, %q, %q, %q, %q, %q or %q", m.Version.From,
 			FromGitHubReleases, FromGiteaReleases, FromGitLabReleases,
-			FromGitTags, FromGitBranch, FromNPM, FromPyPI, FromGo,
+			FromGitTags, FromGitBranch, FromNPM, FromPyPI, FromGo, FromCrates,
 		))
 	}
 

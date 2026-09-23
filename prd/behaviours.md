@@ -335,6 +335,13 @@ order step in `prd/product.md`.
   offline. go stays out of the profile.
 - B259 [4] A go program follows the module's tagged versions. A version with a
   `-` is never the newest, and `go:<path>@<version>` takes one.
+- B260 [4] `oku add cargo:<name>` downloads the crate's `.crate` file, checks
+  it against the sha256 that crates.io publishes and refuses one that differs,
+  vendors its dependencies, and builds its programs with the cargo that
+  `[runtimes] rust` names. rust stays out of the profile.
+- B261 [4] A crate follows crates.io's versions. A yanked version and one with
+  a `-` are never the newest, and `cargo:<name>@<version>` takes one. A crate
+  with no programs fails and says it is a library.
 - B212 [4] An npm vendor step with `package` may name dependencies in
   `scripts`. After the install oku runs their install scripts with the network
   on, the approval prompt says so, and `oku.lock` marks the build impure. A

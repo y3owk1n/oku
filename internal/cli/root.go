@@ -73,6 +73,9 @@ type Options struct {
 	PyPIIndex string
 	// GoProxy replaces the URL of the Go module proxy when set.
 	GoProxy string
+	// CratesAPI and CrateDownloads replace the URLs of the crates.io API and of
+	// its downloads when set.
+	CratesAPI, CrateDownloads string
 }
 
 // NewRootCmd builds the oku command tree.
@@ -506,7 +509,7 @@ func (e env) fetcher(opts Options) *ref.Fetcher {
 func (e env) resolver(opts Options) *resolve.Resolver {
 	return &resolve.Resolver{
 		Hosts: e.fetcher(opts).Hosts, NPM: opts.NPMRegistry, PyPI: opts.PyPIIndex,
-		GoProxy: opts.GoProxy,
+		GoProxy: opts.GoProxy, Crates: opts.CratesAPI, CrateDownloads: opts.CrateDownloads,
 	}
 }
 
