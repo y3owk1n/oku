@@ -4,15 +4,14 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
 	"github.com/spf13/cobra"
 )
 
-// ExitError holds the exit code of the program that "oku shell" ran, so that
-// oku exits with the same code and prints nothing more.
+// ExitError holds the exit code of the program that "oku shell" or "oku exec"
+// ran, so that oku exits with the same code and prints nothing more.
 type ExitError struct{ Code int }
 
 func (e ExitError) Error() string { return fmt.Sprintf("exit status %d", e.Code) }
@@ -139,28 +138,5 @@ func runShell(
 		)
 	}
 
-	// The command is looked up on the new PATH, so "-- rg" finds the package's rg.
-	program := command[0]
-	if !strings.ContainsRune(program, filepath.Separator) {
-		for _, dir := range filepath.SplitList(path) {
-			if info, err := os.Stat(filepath.Join(dir, program)); err == nil && !info.IsDir() {
-				program = filepath.Join(dir, program)
-
-				break
-			}
-		}
-	}
-
-	child := exec.CommandContext(cmd.Context(), program, command[1:]...)
-	child.Env = environ
-	child.Stdin, child.Stdout, child.Stderr = cmd.InOrStdin(), cmd.OutOrStdout(), cmd.ErrOrStderr()
-
-	var exit *exec.ExitError
-	if err := child.Run(); errors.As(err, &exit) {
-		return ExitError{Code: exit.ExitCode()}
-	} else if err != nil {
-		return fmt.Errorf("run %s: %w", command[0], err)
-	}
-
-	return nil
+	return runCommand(cmd, command, path, environ)
 }

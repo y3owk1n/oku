@@ -226,6 +226,11 @@ order step in `prd/product.md`.
   version that its `version` in the list allows differs from the locked one, with both versions and its ref, and
   `--json` gives `name`, `version`, `newest` and `ref`. It changes no lock, no
   profile and no store path.
+- B267 [3] `oku exec <command>` runs the command with the global profile's
+  `bin` on `PATH` and its packages' `[env]`, and in a project with the
+  project's `bin` and `[env]` first, without `oku allow`. Flags after the
+  command go to the command, and oku exits with its exit code. oku refuses a
+  project whose profile is behind its lock and names `oku sync`.
 - B266 [3] A version source reads a tag with or without a `v` in front, whatever
   `strip_prefix` says, so the releases from before a repo changed its tag style
   stay visible. When both forms of a version exist, the tag in the declared form

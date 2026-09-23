@@ -141,6 +141,7 @@ A package can be a prebuilt download in tar, zip, 7z, `.deb`, `.rpm`, AppImage, 
 ```bash
 cd ~/work/api && oku allow                 # once per repo
 oku shell github:cli/cli -- gh --version   # try a package without installing it
+oku exec gopls                             # run a project's tool where no hook runs, as in an editor
 ```
 
 **History.** Every change is a generation, and it covers packages, files and settings.

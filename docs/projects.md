@@ -123,6 +123,13 @@ If you use direnv, `oku env` prints what the hook would apply:
 eval "$(oku env --shell bash)"
 ```
 
+### Editors and scripts
+
+An editor or a script does not run the shell hook. `oku exec` gives a command
+the same `PATH` and `[env]` as the hook would, without `oku allow`, so an editor
+can start its language server as `oku exec gopls`. See
+[`oku exec`](commands.md#oku-exec).
+
 ## A teammate's first run
 
 ```
