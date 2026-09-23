@@ -55,7 +55,10 @@ type Step struct {
 	Scripts []string `toml:"scripts"`
 	Patch   *Patch   `toml:"patch"`
 
-	When    platform.Selector `toml:"when"`
+	// RawWhen is "when" as TOML gives it. Parse converts it into When, the
+	// platforms the step runs on.
+	RawWhen any               `toml:"when"`
+	When    platform.When     `toml:"-"`
 	Shell   string            `toml:"shell"`
 	Env     map[string]string `toml:"env"`
 	Network bool              `toml:"network"`

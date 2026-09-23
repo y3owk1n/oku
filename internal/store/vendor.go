@@ -341,7 +341,7 @@ func VendorPortable(b *manifest.Build) bool {
 			continue
 		}
 
-		if step.When != (platform.Selector{}) || !vendorKinds[*step.Vendor].portable {
+		if len(step.When) > 0 || !vendorKinds[*step.Vendor].portable {
 			return false
 		}
 

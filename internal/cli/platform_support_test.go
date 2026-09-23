@@ -269,3 +269,43 @@ func TestB222AnAppImageFitsLinuxAlone(t *testing.T) {
 		t.Fatalf("an AppImage should limit the package to Linux:\n%s", own)
 	}
 }
+
+func TestB276AServiceAndABuildStepTakeAnArrayOfWhenTables(t *testing.T) {
+	m := newMachine(t)
+	host := platform.Host().OS
+
+	ref := m.manifest(t, "food", map[string]string{"food": script}, fmt.Sprintf(
+		"bin = [\"food\"]\n"+
+			"[[service]]\nname = \"food\"\ncommand = \"Food.app/food\"\nwhen = [{ os = \"plan9\" }, { os = %q }]\n"+
+			"[[service]]\nname = \"food\"\ncommand = \"bin/food\"\nwhen = [{ os = \"plan9\" }, { os = %q }]\n",
+		otherPlatform().OS, host,
+	))
+
+	if out, err := m.run(t, "", "add", ref, "--service"); err != nil {
+		t.Fatalf("add: %v\n%s", err, out)
+	}
+
+	if got := m.services.state["food"]; !strings.HasSuffix(got.def.Program, "/bin/food") ||
+		len(m.services.state) != 1 {
+		t.Fatalf("the service whose when matches this platform is not the one that runs: %v", m.services.state)
+	}
+
+	skipped := m.buildManifest(
+		t, false, "",
+		"[[build.step]]\nrun = \"exit 7\"\nshell = \"sh\"\nwhen = [{ os = \"plan9\" }, { os = \"aix\" }]\n"+
+			writeTool+installTool,
+	)
+
+	if out, err := m.run(t, "", "add", skipped, "--yes"); err != nil {
+		t.Fatalf("a step for other platforms ran: %v\n%s", err, out)
+	}
+
+	ran := m.buildManifest(t, false, "", fmt.Sprintf(
+		"[[build.step]]\nrun = \"exit 7\"\nshell = \"sh\"\nwhen = [{ os = \"plan9\" }, { os = %q }]\n",
+		host,
+	)+writeTool+installTool)
+
+	if _, err := m.run(t, "", "add", ran, "--yes"); err == nil || !strings.Contains(err.Error(), "exit status 7") {
+		t.Fatalf("want the step whose when matches this platform to run and fail, got %v", err)
+	}
+}
