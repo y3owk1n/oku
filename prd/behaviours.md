@@ -568,6 +568,8 @@ order step in `prd/product.md`.
 - B327 [4] A download URL whose file names no version takes the version of
   the nearest folder that names one, such as `jq-1.8.1` or `v1.19.0`, and
   version `0` without one.
+- B329 [4] oku unpacks an xz file whose filter chain puts a BCJ filter (x86,
+  ARM, ARM-Thumb, PowerPC, IA-64, SPARC) or the Delta filter before LZMA2.
 - B120 [4] Inference takes a macOS universal build for both darwin arches and a
   `windows-gnu` asset for Windows, and never reads a signature file as the
   checksum file.

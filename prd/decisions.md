@@ -1375,3 +1375,14 @@ The allow covers every overlay that git tracks, not only the one `OKU_ENV`
 names, so switching environments needs no new allow and a pull that changes
 any of them does. `local` and `pkg` name no environment, since
 `oku.local.toml` loads anyway and `oku.pkg.toml` is a manifest.
+
+## D87. oku keeps a copy of XZ Embedded's Go port for xz filter chains
+
+`internal/xz` is a copy of the decoder of `github.com/therootcompany/xz`
+v1.0.1, the Go translation of XZ Embedded, under CC0. oku reads an xz file
+with `github.com/ulikunitz/xz`, and with the copy when the first block uses
+more than one filter. Why: ulikunitz reads LZMA2 alone and fails with
+"unsupported filter count" on a BCJ chain, which 7-Zip's own Linux releases
+use. The Go port is the only pure-Go decoder with BCJ and Delta, and it has
+not changed since 2020, so oku keeps a copy it can patch in place of a module
+nobody maintains. It has no ARM64 or RISC-V BCJ filter.
