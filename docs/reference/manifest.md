@@ -1014,7 +1014,9 @@ app: bin/app loads greet, which is not in runtime.deps, so it breaks after `oku 
 ```
 
 The install still succeeds. The check reads the linked paths from the files
-themselves, so it needs no `otool` or `ldd`. It runs for builds only, never for
+themselves, so it needs no `otool` or `ldd`. On macOS it counts every library a
+file loads, including weak (`-weak-l`), re-exported, lazy and upward links, since
+a weak link that `oku gc` removes changes what the program does. It runs for builds only, never for
 a download, and not on Windows.
 
 ### Vendoring
