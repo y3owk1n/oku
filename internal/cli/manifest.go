@@ -17,6 +17,7 @@ import (
 	"github.com/y3owk1n/oku/internal/manifest"
 	"github.com/y3owk1n/oku/internal/platform"
 	"github.com/y3owk1n/oku/internal/ref"
+	"github.com/y3owk1n/oku/internal/tempdir"
 )
 
 func newManifestCmd(opts Options) *cobra.Command {
@@ -503,7 +504,7 @@ func runManifestTest(
 		return err
 	}
 
-	scratch, err := os.MkdirTemp("", "oku-test-")
+	scratch, err := tempdir.Dir("test")
 	if err != nil {
 		return err
 	}

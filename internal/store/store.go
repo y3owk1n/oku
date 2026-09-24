@@ -27,6 +27,7 @@ import (
 	"github.com/y3owk1n/oku/internal/platform"
 	"github.com/y3owk1n/oku/internal/sandbox"
 	"github.com/y3owk1n/oku/internal/status"
+	"github.com/y3owk1n/oku/internal/tempdir"
 )
 
 // metaFile is the description oku writes into every store path.
@@ -282,7 +283,7 @@ func (s *Store) generateArtifactCompletions(
 	a manifest.Artifact,
 	tmp string,
 ) (string, error) {
-	work, err := os.MkdirTemp("", "oku-completions-")
+	work, err := tempdir.Dir("completions")
 	if err != nil {
 		return "", err
 	}
@@ -871,7 +872,7 @@ func (s *Store) Inspect(ctx context.Context, url string) ([]infer.File, error) {
 		return nil, err
 	}
 
-	tmp, err := os.MkdirTemp("", "oku-inspect-")
+	tmp, err := tempdir.Dir("inspect")
 	if err != nil {
 		return nil, err
 	}

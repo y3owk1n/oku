@@ -577,6 +577,9 @@ order step in `prd/product.md`.
   `remove` and `rollback` take it away again.
 - B72 [8] oku unpacks dmg, pkg, deb, rpm and AppImage downloads without
   executing anything inside them. `.msi` follows in step 9.
+- B287 [8] A disk image that a killed oku process left mounted does not stop
+  the next install of it. That install detaches it and unpacks the image, and
+  `oku gc` detaches it too.
 - B73 [8] A package with `service = true` in `oku.toml` is running after
   `sync` and after the next login. Without it, the service is installed and
   stopped.
@@ -610,6 +613,8 @@ order step in `prd/product.md`.
 - B81 [9] A binary with DLL deps in other store paths, or beside its real file
   in its own download, starts from any working directory, and so does a build
   step that runs such a binary of a dep.
+- B288 [9] On Windows, two `.msi` downloads in one sync both unpack, one
+  after the other.
 - B269 [9] On Windows, a build step with `shell = "pwsh"`, and oku's own steps
   for `npm:`, `pypi:`, `go:` and `cargo:` refs, run PowerShell 7 when it is on
   `PATH` and the Windows PowerShell 5.1 that Windows ships otherwise. The
@@ -690,6 +695,9 @@ order step in `prd/product.md`.
   wait.
 - B244 [12] `oku gc` deletes a temporary directory that a killed install left
   in the store.
+- B286 [12] `oku gc` deletes the `oku-*` entries in the system's temporary
+  directory whose oku process has ended, and keeps those of a process that
+  runs. `--dry-run` names them and deletes nothing.
 
 ## Files
 

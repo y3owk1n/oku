@@ -18,6 +18,7 @@ import (
 	"github.com/y3owk1n/oku/internal/forge"
 	"github.com/y3owk1n/oku/internal/manifest"
 	"github.com/y3owk1n/oku/internal/status"
+	"github.com/y3owk1n/oku/internal/tempdir"
 )
 
 // Resolver lists versions.
@@ -487,7 +488,7 @@ func branchHead(ctx context.Context, v manifest.Version) (Release, error) {
 
 	what := "read the branch " + v.Branch + " of " + v.Repo
 
-	dir, err := os.MkdirTemp("", "oku-branch-")
+	dir, err := tempdir.Dir("branch")
 	if err != nil {
 		return Release{}, err
 	}

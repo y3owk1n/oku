@@ -323,6 +323,19 @@ Only one oku changes the machine at a time. The command goes on when the other
 one ends. Commands that only read, such as `list`, `generations` and `doctor`,
 never wait. A killed oku leaves no stale lock, because the OS releases it.
 
+## A disk image is mounted
+
+```
+oku: tool: unpack https://...: the disk image ... is mounted at /Volumes/Tool, eject it and try again
+```
+
+oku mounts a `.dmg` to copy its files, and macOS mounts a file at one place at
+a time. When a killed oku process left an image mounted, the next install that
+needs the image detaches it, and so does `oku gc`. oku leaves any other mount
+alone, such as one you opened in Finder, so eject it and run the command again.
+When another oku process is copying the same image, run the command again once
+that process ends.
+
 ## npm programs cannot find node
 
 Without `[runtimes] node`, an `npm:` program runs the `node` on your `PATH`,
@@ -343,5 +356,9 @@ See [npm, PyPI, Go and cargo packages](guides/npm-pypi-go-cargo.md).
   the file, and run the command again.
 - A build has no sandbox, and oku says so after every build.
 - `oku self uninstall` removes `oku.exe` a few seconds after it returns.
+- Windows Installer runs one installation at a time. oku unpacks one `.msi` at
+  a time, and waits up to 3 minutes while another program, such as Windows
+  Update, installs something. After that it stops with `another installation
+  is still running`, so run the command again later.
 
 See [Windows](guides/windows.md) for what else differs.
