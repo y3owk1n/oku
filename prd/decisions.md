@@ -1226,3 +1226,49 @@ extension names the `.exe` beside it on Windows when that file exists. Why: the
 `npm.cmd` of a Windows node looks for npm beside itself, and a profile or a
 build sees a copy of it without npm. A `bin` table is written once for every
 OS, and `bin/node` is `bin/node.exe` on Windows.
+
+## D80. Another package manager's recipe is translated, never installed from
+
+`cask:<token>` and `scoop:<name>` read the recipe of a Homebrew cask or a Scoop
+manifest once and write an oku manifest from it: the vendor's download as a
+`{{version}}` template, an artifact per platform, the outputs, and a
+`version.from` that is the recipe's own update rule in oku's terms. oku never
+runs the other package manager and never downloads its mirrors or bottles. `update` follows the translated source, not the recipe. The goal
+is to translate as many recipes as the store allows.
+
+oku reads the Ruby of a cask as text and never runs it. A URL template counts
+only when it gives back the recipe's own download for the recipe's version on
+each platform. An interpolation other than `#{version}` takes the value it has
+in that download, such as the `arm64` of `#{arch}`. A rule oku cannot
+translate, such as a livecheck block that runs Ruby, gives a manifest that pins
+the recipe's version with the recipe's sha256 digests. So does a download
+whose files are named after the version, since the paths would break on the
+next one. A pinned manifest still updates, because `update` translates the
+recipe again.
+
+The recipe's own rule comes before the GitHub releases of its download. Why:
+a vendor may publish a GitHub release before its desktop download exists, and
+the recipe's livecheck is what the recipe's maintainers found to be correct.
+Sparkle feeds get a version source of their own, `from = "sparkle"`, that
+takes the highest version off a channel, because a feed need not list the
+newest first and most macOS apps publish one.
+
+Scripts follow D16. oku runs none. oku leaves out a script that only sets up
+the app, such as a `postflight`, a `persist` or a PATH entry of the user's, and
+names it in the manifest, because the download works without it. oku refuses a
+script that makes the files, such as an installer, and a Scoop script that
+unpacks with Scoop's helpers, since it cannot know what the script makes. oku
+unpacks a `.pkg` as D16 says and opens it to find what it installs. It refuses
+a kernel extension, since one cannot work from a folder.
+
+Why translate: a recipe holds what oku needs to follow a vendor, and the
+manifest keeps "same input, same machine" true, since `oku.lock` stores its
+text (D25). Why not bottles: they are built for a Homebrew prefix and a
+Homebrew dependency graph. Why no digest check of the template: the template
+reproduces the recipe's URL exactly, and `oku.lock` pins the download of any
+version on first use, or oku checks it against GitHub's digest.
+
+Out of scope for now: merging the recipes of several package managers into one
+manifest, winget, the aqua registry, finding the upstream repo of a Homebrew
+formula, third-party taps and buckets, a `.pkg` inside a `.dmg`, and a version
+whose parts a URL uses one by one, such as Homebrew's `version.csv`.
