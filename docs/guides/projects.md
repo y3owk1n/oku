@@ -147,6 +147,29 @@ allowed /home/you/work/api
   git does not track /home/you/work/api/.env.deploy, so it is yours to change
 ```
 
+### Keep secrets out of the shell
+
+You may encrypt a `.env` file in the repo with [sops or age](secrets.md).
+`secret = true` makes oku decrypt it. `scope = "exec"` loads a file for
+`oku exec` only, so its values never reach your shell, its history or a
+program you start there:
+
+```toml
+[[env.file]]
+path = "deploy.sops.env"
+secret = true
+scope = "exec"
+```
+
+```
+$ echo $DEPLOY_TOKEN
+
+$ oku exec ./deploy.sh
+```
+
+`sops encrypt deploy.env > deploy.sops.env` makes such a file. Commit the
+encrypted one and gitignore the other.
+
 The file syntax is in
 [the \[\[env.file\]\] reference](../reference/oku-toml.md#envfile).
 

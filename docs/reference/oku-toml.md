@@ -290,6 +290,8 @@ unless = ["CLAUDECODE", "CI"]
 | `path` | string | The file. A relative path starts at the directory of the `oku.toml`. |
 | `optional` | bool | `true` lets the file be missing. Without it, a missing file prints a hint and `oku exec` refuses to run. |
 | `unless` | array of names | oku skips the file while one of these variables is set and not empty. |
+| `secret` | bool | `true` says the file is encrypted. oku decrypts an age file itself and a sops file with `sops`, then reads the `.env` text inside. |
+| `scope` | `"shell"` or `"exec"` | `"exec"` loads the file for `oku exec` only. The shell and `oku env` never get its variables. Default `"shell"`. |
 
 - oku loads the files in order, and a later file wins. The values of `[env]`
   win over every file and may read a file's variables as `${NAME}`.
@@ -304,6 +306,13 @@ unless = ["CLAUDECODE", "CI"]
 - oku refuses a file that sets a variable a list may not set, such as `PATH`
   or `LD_PRELOAD`, and sets none of its variables.
 - The hook reads the files at each prompt, so an edit applies at the next one.
+  It decrypts a `secret` file of scope `"shell"` at each prompt too, which
+  takes about 10 ms with an age key. A sops file encrypted to a cloud key
+  service would call that service before each prompt, so give such a file
+  `scope = "exec"`.
+- oku finds `sops` in your global profile, then on `PATH`, and the age key
+  where [the secrets guide](../guides/secrets.md#create-an-age-key) puts it.
+  A file that does not decrypt prints a hint and makes `oku exec` refuse.
 - In a project, `oku allow` covers each file that git tracks, and a change to
   one needs a new allow. A file that git does not track, such as a
   gitignored `.env.local`, is yours to change without one. See

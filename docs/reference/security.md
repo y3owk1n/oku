@@ -222,6 +222,9 @@ list's sha256.
   others.
 - A list's `[env]` sets values and reads variables as `${NAME}`. It runs no
   command, and neither does a `.env` file it loads.
+- oku decrypts a `secret = true` `.env` file in memory and writes no
+  decrypted copy. A file of `scope = "exec"` loads for `oku exec` only, never
+  for the shell.
 - The allow covers each `.env` file of the project that git tracks, so a pull
   that changes one stops the hook until a new `oku allow`. oku asks git about
   a file that git did not track only when the file changes.

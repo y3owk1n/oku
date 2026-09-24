@@ -226,7 +226,7 @@ func (e env) dirEnv(project string, state hookState) (map[string]*string, map[st
 		active, why = e.projectActive()
 	}
 
-	want, problems := e.wantedEnv(project, active, state.base)
+	want, problems := e.wantedEnv(project, active, false, state.base)
 	if why != "" {
 		problems = append([]string{why}, problems...)
 	}

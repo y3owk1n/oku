@@ -205,10 +205,18 @@ Failed to get the data key required to decrypt the SOPS file.
 
 sops prints more lines after these that say which key it tried.
 
+## Give a project's commands a secret
+
+A project list may load an encrypted `.env` file with `[[env.file]]` and
+`secret = true`, and load it for `oku exec` only with `scope = "exec"`. oku
+decrypts it in memory each time and writes no decrypted file. See
+[Keep secrets out of the shell](projects.md#keep-secrets-out-of-the-shell).
+
 ## What secrets cannot do
 
 - Only the global list and the lists it includes may hold `[secrets]` or a
-  `secret` entry. A [project](projects.md) list may not.
+  `secret` entry of `[files]`. A [project](projects.md) list may not, and
+  loads an encrypted `.env` file with `[[env.file]]` instead.
 - An included list at a URL may not hold them. An included list from a repo
   may, and oku reads its encrypted files from the repo at the pinned commit.
 - oku does not create, edit or re-encrypt a secret. `sops` and `age` do that.

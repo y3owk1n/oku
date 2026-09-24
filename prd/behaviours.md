@@ -700,6 +700,11 @@ order step in `prd/product.md`.
   allow. The hook applies an untracked file's changes at the next prompt.
 - B319 [7] oku refuses a whole `.env` file that sets a variable a list may
   not set, such as `LD_PRELOAD`, with a hint.
+- B320 [7] `secret = true` decrypts an `[[env.file]]` with age or with sops
+  before oku reads it as a `.env` file. A file that does not decrypt prints
+  the reason as a hint and makes `oku exec` refuse.
+- B321 [7] An `[[env.file]]` with `scope = "exec"` loads for `oku exec`
+  alone. The hook and `oku env` leave its variables out.
 - B67 [7] Project packages shadow global ones on PATH while active.
 - B68 [7] The hook exports `[env]` of global packages in every shell.
 - B219 [7] The hook loads the completions under the global profile
