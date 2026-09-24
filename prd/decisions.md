@@ -1423,3 +1423,17 @@ author picks the version for each platform, so no platform changes version
 without someone writing it down. An automatic fallback to an older version
 where the newest has nothing would let platforms drift apart unseen.
 `[runtimes]` takes no `when`, since it names one package per interpreter.
+
+## D90. oku downloads a private GitHub release file through the API
+
+When a download from `https://github.com/<owner>/<repo>/releases/download/`
+answers 404 and a GitHub token is set, oku reads the release of that tag
+through the API, finds the asset by name, and downloads its API address with
+`Accept: application/octet-stream` and the token. It follows the redirect to
+GitHub's signed storage without the token. Why: GitHub serves the files of a
+private repo's release only from the API, and the download link answers 404
+even with a token. The manifest and `oku.lock` keep the download link, which
+is the same for a public and a private repo, so a repo that turns private or
+public needs no new lock. oku tries the link first because it needs no API
+request, which counts against the rate limit. An Enterprise Server is left
+out, since oku cannot tell its download links from any other host's.

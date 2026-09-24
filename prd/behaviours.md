@@ -177,6 +177,10 @@ order step in `prd/product.md`.
   range, is inferred from the release that the range picks, so an older
   release that names its files another way installs, and a release with
   nothing for the platform says so.
+- B335 [4] A github.com release download that answers 404, such as one of
+  a private repo, is downloaded through the API with `GITHUB_TOKEN` when
+  the token is set. The token never goes to the host that the API
+  redirects to, and without a token the 404 stands.
 - B182 [2] oku pins a package whose `when` leaves out the host, with its deps,
   for the lock platforms that `when` matches, and installs nothing of it.
   `sync` does that when the lock has no entry for its ref, or with `[lock]`
