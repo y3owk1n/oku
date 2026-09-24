@@ -85,7 +85,7 @@ type recipeBin struct {
 
 // follow is a translated [version] table.
 type follow struct {
-	from, repo, regex, stripPrefix string
+	from, repo, regex, join, stripPrefix string
 }
 
 // versionPattern stands for a version inside a regex that oku builds.
@@ -280,6 +280,10 @@ func (f follow) toml(sep string) string {
 
 	if f.regex != "" {
 		fmt.Fprintf(&b, "regex = %q%s", f.regex, sep)
+	}
+
+	if f.join != "" {
+		fmt.Fprintf(&b, "join = %q%s", f.join, sep)
 	}
 
 	if f.stripPrefix != "" {

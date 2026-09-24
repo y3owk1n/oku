@@ -85,6 +85,7 @@ manifest change.
 | `tag` | no | One tag that upstream moves, such as `"nightly"`. Only with `github-releases`, `gitea-releases` or `gitlab-releases`, and not with `strip_prefix`. See [Follow a moving tag](#follow-a-moving-tag). |
 | `branch` | with `git-branch` | The branch to follow, such as `"main"`. See [Follow a branch](#follow-a-branch). |
 | `regex` | with `redirect` or `page` | Finds the version, see [Follow a download URL](#follow-a-download-url). Not with `sparkle`. |
+| `join` | no | What joins the groups of `regex` into the version, `.` by default. `+` keeps the parts apart for [`{{version_part1}}`](#template-variables) and the rest. With `sparkle` it joins the short version and the build. One of `.`, `+`, `-` and `_`. |
 
 | `from` | `repo` | Reads |
 |---|---|---|
@@ -249,7 +250,9 @@ regex = '"host_version":\[(\d+),(\d+),(\d+)\]'
   version, such as `.../installers/latest`, is fine. `page` applies `regex`
   to the first 8 MiB of text at `repo`.
 - The first match counts. Its groups joined with `.` are the version, so the
-  `page` example reads `[0,0,413]` as `0.0.413`. oku leaves out a group that
+  `page` example reads `[0,0,413]` as `0.0.413`. `join = "+"` joins them with
+  `+` instead, such as `1.2.3+45`, and `{{version_part1}}` and
+  `{{version_part2}}` give each in the URL. oku leaves out a group that
   matched nothing. `regex` needs at least one group, in
   [Go syntax](https://pkg.go.dev/regexp/syntax).
 - A version starts with a digit, and holds only letters, digits, `.`, `_`,
@@ -283,6 +286,10 @@ app = ["IINA.app"]
 - The version is the highest `sparkle:shortVersionString` among the items of
   the feed, whether an element or an attribute of the enclosure. The order of
   the items does not matter.
+- oku reads a short version such as `1.165.1 (87405)` up to its space.
+- With `join = "+"` the version is the short version and the item's
+  `sparkle:version`, the build, such as `1.165.1+87405`. `{{version_part1}}`
+  and `{{version_part2}}` give each in the URL.
 - oku skips an item with a `sparkle:channel`, such as `beta`, and an item
   whose `sparkle:os` names another system, as a feed shared with WinSparkle
   on Windows has. Sparkle is for macOS, so give other platforms their own
@@ -1264,6 +1271,9 @@ error, and `oku manifest lint` reports it.
 |---|---|
 | `{{version}}` | The version being installed, such as `10.2.0`. |
 | `{{tag}}` | The upstream tag of that version, such as `v10.2.0`. With a fixed version it equals `{{version}}`. |
+| `{{version_major}}`, `{{version_minor}}`, `{{version_patch}}` | The numbers of the version, before any `+`. `1` of `1.2.3+45`. A URL that needs a number the version lacks fails, and the error names it. |
+| `{{version_nodots}}`, `{{version_underscores}}`, `{{version_dashes}}` | The version without its dots, or with `_` or `-` for them. `123` of `1.2.3`. |
+| `{{version_part1}}`, `{{version_part2}}`, ... | The pieces of the version between `+`, such as `45` for part 2 of `1.2.3+45`. See `join` in [[version]](#version). |
 | `{{os}}`, `{{arch}}`, `{{libc}}` | The machine, with the values of [`match`](#match-and-when). |
 | `{{pkg}}` | The directory that holds the package's files. For an artifact that is the unpacked download, `{{prefix}}/pkg`. For a build it equals `{{prefix}}`. |
 | `{{prefix}}` | The package's directory in the store. In a build, pass it to `make install PREFIX={{prefix}}` or `./configure --prefix={{prefix}}`. |
@@ -1272,6 +1282,8 @@ error, and `oku manifest lint` reports it.
 | `{{dep.<name>.prefix}}` | The store directory of a dep, by its package name. A dep's programs are in its `bin`. |
 | `{{shell}}` | `fish`, `zsh` or `bash`, in `completions.generate` only. |
 | `{{home}}`, `{{config}}`, `{{data}}` | The user's home, config and data directories, in a service only. |
+
+The variables derived from the version work wherever `{{version}}` does.
 
 Where each one works:
 
@@ -1477,6 +1489,9 @@ which translates it again.
 | One that matches a regex at a URL, or reads one JSON key there | `from = "page"` with a `regex` |
 | One that reads a Sparkle feed for its short version | `from = "sparkle"` |
 | No rule at all, and a download from GitHub releases | `from = "github-releases"` of that repo |
+| A cask's `#{version.csv.first}`, `#{version.major}`, `#{version.no_dots}` and the like | `{{version_part1}}`, `{{version_major}}`, `{{version_nodots}}` and the like. A cask's version `1.2.3,45` becomes `1.2.3+45`. |
+| A livecheck that joins its regex's groups with commas, or Sparkle's version with no block | `join = "+"` |
+| Scoop's `$cleanVersion`, `$majorVersion`, `$minorVersion`, `$patchVersion`, `$underscoreVersion`, `$dashVersion` | `{{version_nodots}}`, `{{version_major}}` and the like |
 
 `oku add aqua:owner/repo` translates the repo's entry in the
 [aqua registry](https://github.com/aquaproj/aqua-registry), which names the
