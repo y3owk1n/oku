@@ -542,14 +542,20 @@ func (inf *Inferrer) openCask(ctx context.Context, token string, a *recipeArtifa
 
 		app := f.Path[:i+len(".app")]
 		inSuite := slices.ContainsFunc(a.suites, func(s string) bool { return path.Dir(app) == s })
+		// A package installs its apps into Applications, which is either where
+		// its payload goes or a folder in it. Other apps are its helpers.
+		inApplications := slices.Contains([]string{"Payload", "Applications"}, path.Base(path.Dir(app)))
 
-		if (a.pkg || inSuite) && !slices.Contains(apps, app) {
+		if (a.pkg && inApplications || inSuite) && !slices.Contains(apps, app) {
 			apps = append(apps, app)
 		}
 	}
 
-	if len(a.apps)+len(a.bins) == 0 {
-		a.apps = apps
+	// A package or a suite installs its apps beside what the cask links.
+	for _, app := range apps {
+		if !slices.Contains(a.apps, app) {
+			a.apps = append(a.apps, app)
+		}
 	}
 
 	// A package with no app, such as a JDK, installs the programs of its bin

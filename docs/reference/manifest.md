@@ -400,7 +400,7 @@ oku recognises a download by its content, not by its file name.
 | 7z | An archive made on Windows has no unix file modes. Its programs still run, because oku marks every `bin` as executable. |
 | `.deb` | oku unpacks only the data archive. Its files are at `usr/bin/...`. |
 | `.rpm` | oku unpacks only the file payload. Its files are at `usr/bin/...`. |
-| `.dmg` | macOS only. oku mounts the image read-only, copies it, and unmounts it. |
+| `.dmg` | macOS only. oku mounts the image read-only, copies it, and unmounts it. An image that holds a `.pkg` and no app at its top only carries the package, so oku expands each package into a folder of its name. Its files are then at `<package>.pkg/<component>.pkg/Payload/...`. |
 | `.pkg` | macOS only. Its files are at `<component>.pkg/Payload/...`. |
 | `.msi` | Windows only. oku runs `msiexec /a`, the administrative install. It copies the files out and skips the install sequence, so it writes no registry entries, services or shortcuts. Its files are at paths such as `Program Files/<product>/...`. |
 | anything else | The executable itself. This covers a plain binary and an AppImage. |
@@ -1464,7 +1464,7 @@ which translates it again.
 | A download for each platform. For a cask, macOS arm64 and Intel, and Linux when it has a Linux build. For Scoop, each arch. | One `[[artifact]]` per platform, with a `match` |
 | A URL with the version in it, `#{version}` or `$version` | `url` with `{{version}}` |
 | A cask's `app`, `binary`, `font`, `manpage`, `app_image` | `app`, `bin`, `font`, `man`, and `bin` for an AppImage |
-| A cask's `.pkg` or `suite` | The apps in it, the programs the cask links from where the package puts them, or else the programs under its `bin` folders, or else the one program named after the cask. oku opens the download to find them, on macOS only. |
+| A cask's `.pkg` or `suite` | The apps that the package installs into Applications, or the apps in the suite. The programs the cask links, found where the package puts them. With no app and no such program, the programs under its `bin` folders, or else the one program named after the cask. oku opens the download to find them, on macOS only. |
 | A cask's `artifact` that moves a folder | The folder in the download, for a `binary` inside it |
 | Scoop's `bin`, `extract_dir`, `shortcuts` | `bin`, `strip`, and a program with an [`[[app]]`](#apps-and-fonts) launcher for each shortcut |
 | Scoop's `bin` with arguments | A [`bin` table](#run-a-program-through-an-interpreter) with `run` and `args` |
