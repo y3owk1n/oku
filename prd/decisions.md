@@ -1449,3 +1449,17 @@ casks alone, and a tap has no other description of its casks. Running the
 Ruby would run code of the tap on the user's machine. A cask that computes a
 value with `if`, `case` or a method call is refused, since reading only one
 branch would install the wrong file.
+
+## D92. A page source reads fields of a feed, and livecheck blocks translate into it
+
+`from = "page"` takes `json`, paths into a JSON answer or an XML property
+list. Their values are the version, or the text that `regex` reads, and a `*`
+takes the newest version of a list. The cask translation reads a livecheck
+block that only fetches fields, loops over a list, matches the livecheck's
+regex over a field, or reads plist keys, and writes those paths. Why: Cursor,
+Claude, Alfred and IntelliJ build their versions from two fields of a vendor
+feed, and a single regex over the raw text depends on the order of keys, which
+Alfred's feed does not keep. Paths name the fields themselves. A property
+list is read as the same tree, so one key serves both formats. oku reads the
+Ruby of the block and runs none, and a block with any other statement keeps
+the version pinned.
