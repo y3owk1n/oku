@@ -231,6 +231,7 @@ oku add cask:visual-studio-code
 oku add cask:nikitabobko/tap/aerospace
 oku add scoop:ripgrep
 oku add scoop:extras/vlc
+oku add scoop:chawyehsu/dorado/aapt2
 oku add winget:jqlang.jq
 ```
 

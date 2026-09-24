@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"path"
 	"regexp"
 	"slices"
@@ -32,10 +33,19 @@ var scoopBuckets = map[string]string{
 	"games":        "Calinou/scoop-games",
 }
 
-var scoopNameRe = regexp.MustCompile(`^([a-z-]+/)?[A-Za-z0-9][A-Za-z0-9._+-]*$`)
+var (
+	scoopNameRe = regexp.MustCompile(`^([a-z-]+/)?[A-Za-z0-9][A-Za-z0-9._+-]*$`)
+	// scoopRepoRe is a bucket in a GitHub repo of its own: owner/repo/name.
+	scoopRepoRe = regexp.MustCompile(`^[A-Za-z0-9-]+/[A-Za-z0-9._-]+/[A-Za-z0-9][A-Za-z0-9._+-]*$`)
+)
 
-// ValidScoop reports whether s is "name" or "bucket/name" of a known bucket.
+// ValidScoop reports whether s is "name", "bucket/name" of a known bucket, or
+// "owner/repo/name" of a bucket on GitHub.
 func ValidScoop(s string) bool {
+	if scoopRepoRe.MatchString(s) {
+		return true
+	}
+
 	bucket, _, found := strings.Cut(s, "/")
 
 	return scoopNameRe.MatchString(s) && (!found || scoopBuckets[bucket] != "")
@@ -65,10 +75,16 @@ type scoopJSON struct {
 }
 
 // FromScoop returns manifest TOML translated from the Scoop manifest name, which
-// may start with its bucket.
+// may start with its bucket, by name or as the owner/repo of its GitHub repo.
 func (inf *Inferrer) FromScoop(ctx context.Context, name string) (string, error) {
 	buckets := []string{"main", "extras"}
-	if bucket, rest, found := strings.Cut(name, "/"); found {
+	repos := map[string]string{}
+	maps.Copy(repos, scoopBuckets)
+
+	if parts := strings.Split(name, "/"); len(parts) == 3 {
+		bucket := parts[0] + "/" + parts[1]
+		buckets, name, repos[bucket] = []string{bucket}, parts[2], bucket
+	} else if bucket, rest, found := strings.Cut(name, "/"); found {
 		buckets, name = []string{bucket}, rest
 	}
 
@@ -80,8 +96,14 @@ func (inf *Inferrer) FromScoop(ctx context.Context, name string) (string, error)
 
 	for _, bucket := range buckets {
 		from = bucket
-		data, err = inf.Hosts.GitHub("").
-			File(ctx, scoopBuckets[bucket], "HEAD", "bucket/"+name+".json")
+
+		// A bucket keeps its manifests in bucket/, and a few at the top.
+		for _, path := range []string{"bucket/" + name + ".json", name + ".json"} {
+			data, err = inf.Hosts.GitHub("").File(ctx, repos[bucket], "HEAD", path)
+			if !errors.Is(err, forge.ErrNotFound) {
+				break
+			}
+		}
 
 		if !errors.Is(err, forge.ErrNotFound) {
 			break

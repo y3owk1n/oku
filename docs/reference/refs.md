@@ -29,7 +29,7 @@ refs to lists.
 | `cask:name`, `cask:owner/tap/name` | A Homebrew cask, which oku translates into a manifest. `owner/tap` names another tap, the GitHub repo `owner/homebrew-tap`. An `@` is part of the name, as in `cask:temurin@21`, so a cask ref takes no version. |
 | `aqua:owner/repo` | The GitHub repo's entry in the aqua registry, which oku translates into a manifest. |
 | `winget:Publisher.Package` | The newest version of a package of winget's community manifests, which oku translates into a manifest. |
-| `scoop:name`, `scoop:bucket/name` | A Scoop manifest, which oku translates into a manifest. oku looks up a bare name in the `main` bucket, then `extras`. |
+| `scoop:name`, `scoop:bucket/name`, `scoop:owner/repo/name` | A Scoop manifest, which oku translates into a manifest. oku looks up a bare name in the `main` bucket, then `extras`. `owner/repo` names a bucket on GitHub. |
 | `core/ripgrep` | The package `ripgrep` in your source `core`, see [Sources and aliases](#sources-and-aliases). |
 
 The registry refs `npm:`, `pypi:`, `go:` and `cargo:` have no manifest, so oku
@@ -43,7 +43,8 @@ None needs brew, scoop, aqua or winget on the machine. `aqua:owner/repo` and
 `github:owner/repo` are separate sources, and oku reads only the one the ref
 names. `scoop:<bucket>/name` takes any
 bucket that Scoop knows by name, such as `extras`, `versions` or `java`, except
-`nonportable`.
+`nonportable`. `scoop:owner/repo/name` reads any bucket in a GitHub repo, from
+its `bucket/` folder or its top.
 
 A ref to a [list](oku-toml.md#include) has the same forms. It reads
 `oku.toml` in place of `oku.pkg.toml`, and a `#name` reads `name.toml` at the
