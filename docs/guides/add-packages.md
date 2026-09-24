@@ -228,6 +228,7 @@ Scoop manifest or a winget manifest. oku can read those recipes:
 
 ```sh
 oku add cask:visual-studio-code
+oku add cask:nikitabobko/tap/aerospace
 oku add scoop:ripgrep
 oku add scoop:extras/vlc
 oku add winget:jqlang.jq

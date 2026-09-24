@@ -30,9 +30,10 @@ const maxRecipe = 4 << 20
 
 var caskTokenRe = regexp.MustCompile(`^[a-z0-9][a-z0-9@._+-]*$`)
 
-// ValidCask reports whether token is the name of a Homebrew cask.
+// ValidCask reports whether token is the name of a Homebrew cask, or
+// owner/tap/token of a cask of another tap.
 func ValidCask(token string) bool {
-	return caskTokenRe.MatchString(token)
+	return caskTokenRe.MatchString(token) || caskTapRe.MatchString(token)
 }
 
 // caskJSON is what the Homebrew API says about one cask, or about one platform
@@ -392,6 +393,11 @@ func (a *recipeArtifact) caskOutputs(artifacts []map[string]any) error {
 		case "suite":
 			a.suites = append(a.suites, st.first)
 		case "binary":
+			// A file that goes to a folder of shell completions is no program.
+			if completionTarget(st.target) {
+				continue
+			}
+
 			bin, err := caskBinary(st.first, st.target, moved)
 			if err != nil {
 				return err
@@ -455,6 +461,21 @@ func (a *recipeArtifact) caskUninstall(entry any) error {
 	}
 
 	return nil
+}
+
+// completionTarget reports whether target is in a folder that a shell reads
+// completions from.
+func completionTarget(target string) bool {
+	for _, dir := range []string{
+		"/share/zsh/site-functions/", "/etc/bash_completion.d/",
+		"/share/bash-completion/completions/", "/share/fish/vendor_completions.d/",
+	} {
+		if strings.Contains(target, dir) {
+			return true
+		}
+	}
+
+	return false
 }
 
 // caskBinary is a program of a cask. Its path starts at the app folder or in
