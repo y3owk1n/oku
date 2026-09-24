@@ -502,6 +502,12 @@ order step in `prd/product.md`.
   file name the entry gives it, `bin` from `files`, and `sha256_url` from the
   checksum. An entry whose template oku cannot translate fails and names the
   template. A `github:` ref never reads the registry.
+- B303 [4] `oku add winget:Publisher.Package` translates the newest version
+  of a package of winget's community manifests into a manifest for Windows,
+  one artifact per arch. A portable program, a zip of them, or an MSI whose
+  programs oku finds on Windows becomes `bin`. oku refuses a setup program.
+  The manifest follows the GitHub releases of its download, or else pins the
+  version with its sha256.
 - B264 [4] A `[runtimes]` entry may be a table with `ref` and a `version`
   constraint, in a list or in `config.toml`. `add` and `update` then build and
   run with the newest version of that package that the constraint allows, and

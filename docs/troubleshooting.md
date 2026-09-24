@@ -117,6 +117,8 @@ with `--bin`. See [Fix a wrong pick](guides/add-packages.md#fix-a-wrong-pick-wit
 | `open <url> to find what it installs` | oku opens a `.pkg` on macOS only. Translate the cask on a Mac, or write a manifest. |
 | `the aqua registry has no entry for it` | The registry lists the repo under another name, or not at all. Try `github:owner/repo`. |
 | `oku has no match for {{...}}` | The aqua entry uses a template function oku cannot translate. Write a manifest for it. |
+| `winget has no such package` | Check the identifier, as `winget search` shows it, such as `jqlang.jq`. |
+| `its <type> installer runs when it installs` | Every installer of the winget package for that arch is a setup program. Try `scoop:` or write a manifest. |
 | `no bucket of main or extras has it` | Name the bucket, as in `scoop:versions/<name>`. |
 | `<ref> has no manifest and no release to infer one from` | The repo has neither. Write a manifest, or point at one elsewhere. |
 

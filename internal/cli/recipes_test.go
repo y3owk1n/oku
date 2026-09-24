@@ -29,6 +29,9 @@ type recipeServer struct {
 	// aqua is the aqua registry's entry for owner/tool. The server's GitHub API
 	// lists versions as releases of owner/tool, with a "v" in their tags.
 	aqua string
+	// winget maps a version of the winget package Owner.Tool to the text of its
+	// installer manifest.
+	winget map[string]string
 }
 
 // start serves s for m and returns the server's URL.
@@ -72,6 +75,28 @@ func (s recipeServer) start(t *testing.T, m *machine) string {
 			}
 
 			_, _ = fmt.Fprintf(w, "[%s]", strings.Join(releases, ","))
+		case r.URL.Path == "/api/repos/microsoft/winget-pkgs/contents/manifests/o/Owner/Tool" && s.winget != nil:
+			var entries []string
+			for v := range s.winget {
+				entries = append(entries, fmt.Sprintf(`{"name": %q, "type": "dir"}`, v))
+			}
+
+			_, _ = fmt.Fprintf(w, "[%s]", strings.Join(entries, ","))
+		case strings.HasPrefix(r.URL.Path, "/raw/microsoft/winget-pkgs/HEAD/manifests/o/Owner/Tool/"):
+			version, file, _ := strings.Cut(strings.TrimPrefix(r.URL.Path, "/raw/microsoft/winget-pkgs/HEAD/manifests/o/Owner/Tool/"), "/")
+
+			switch installer, ok := s.winget[version]; {
+			case !ok:
+				http.NotFound(w, r)
+			case file == "Owner.Tool.installer.yaml":
+				_, _ = fmt.Fprint(w, fill(installer))
+			case file == "Owner.Tool.yaml":
+				_, _ = fmt.Fprint(w, "PackageIdentifier: Owner.Tool\nDefaultLocale: en-US\n")
+			case file == "Owner.Tool.locale.en-US.yaml":
+				_, _ = fmt.Fprint(w, "ShortDescription: A tool\nPackageUrl: https://tool.example\n")
+			default:
+				http.NotFound(w, r)
+			}
 		case r.URL.Path == "/appcast.xml":
 			_, _ = fmt.Fprint(w, s.appcast)
 		case r.URL.Path == "/latest.json":
@@ -650,5 +675,117 @@ func TestB302AnAquaEntryOkuCannotReadIsRefused(t *testing.T) {
 	_, err = m.run(t, "", "add", "aqua:owner/none", "--yes")
 	if err == nil || !strings.Contains(err.Error(), "the aqua registry has no entry for it") {
 		t.Fatalf("want a missing entry named, got %v", err)
+	}
+}
+
+// wingetZip is the installer manifest of Owner.Tool at version 1.10.0, a zip of
+// the program in a folder named after the version, for two arches.
+const wingetZip = `PackageIdentifier: Owner.Tool
+PackageVersion: 1.10.0
+InstallerType: zip
+NestedInstallerType: portable
+NestedInstallerFiles:
+- RelativeFilePath: tool-1.10.0\bin\tool.exe
+  PortableCommandAlias: tl
+Installers:
+- Architecture: x64
+  InstallerUrl: https://github.com/owner/tool/releases/download/v1.10.0/tool-1.10.0-x64.zip
+  InstallerSha256: 71B2FEF860ABE467217A538FF31DE02F5258807C0129F771846F87BD029AAFC5
+- Architecture: arm64
+  InstallerUrl: https://github.com/owner/tool/releases/download/v1.10.0/tool-1.10.0-arm64.zip
+  InstallerSha256: E4ABCA10C3A64EBEA742667DD7009449D49403DB5460DD6873E389FA2945360F
+- Architecture: x86
+  InstallerType: nullsoft
+  InstallerUrl: https://example.com/tool-setup.exe
+  InstallerSha256: 9BF73BDB3FDA9AD4B0235E1295B02C717031C986AFA4D7C05DD0AF8B74010A95
+`
+
+func TestB303AWingetPackageTranslatesItsNewestVersion(t *testing.T) {
+	m := newMachine(t)
+	recipeServer{winget: map[string]string{
+		"1.9.0":  strings.ReplaceAll(wingetZip, "1.10.0", "1.9.0"),
+		"1.10.0": wingetZip,
+		// A package whose identifier continues this one's keeps its folder here.
+		"Beta": wingetZip,
+	}}.start(t, &m)
+
+	out, err := m.run(t, "", "manifest", "init", "--from", "winget:Owner.Tool", "-o", "-")
+	if err != nil {
+		t.Fatalf("init: %v\n%s", err, out)
+	}
+
+	release := "https://github.com/owner/tool/releases/download/v{{version}}/"
+	for _, want := range []string{
+		"# Translated from the winget package Owner.Tool 1.10.0.",
+		"name = \"tool\"\ndescription = \"A tool\"\nhomepage = \"https://tool.example\"",
+		"[version]\nfrom = \"github-releases\"\nrepo = \"owner/tool\"\n",
+		"match = { os = \"windows\", arch = \"amd64\" }\nurl = \"" + release + "tool-{{version}}-x64.zip\"",
+		"match = { os = \"windows\", arch = \"arm64\" }",
+		"strip = 1\nbin = [{ name = \"tl.exe\", path = \"bin/tool.exe\" }]",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("the manifest lacks %q:\n%s", want, out)
+		}
+	}
+
+	// The x86 build is a setup program, which oku does not run.
+	if strings.Contains(out, "386") || strings.Contains(out, "tool-setup") {
+		t.Fatalf("the manifest has the setup program:\n%s", out)
+	}
+}
+
+func TestB303AWingetPackageOffGitHubPinsItsVersionAndDigest(t *testing.T) {
+	m := newMachine(t)
+	recipeServer{winget: map[string]string{
+		"2.0.0": `PackageIdentifier: Owner.Tool
+PackageVersion: 2.0.0
+InstallerType: portable
+Commands:
+- tool
+Installers:
+- Architecture: x64
+  InstallerUrl: https://example.com/2.0.0/tool.exe
+  InstallerSha256: 71B2FEF860ABE467217A538FF31DE02F5258807C0129F771846F87BD029AAFC5
+`,
+	}}.start(t, &m)
+
+	out, err := m.run(t, "", "manifest", "init", "--from", "winget:Owner.Tool", "-o", "-")
+	if err != nil {
+		t.Fatalf("init: %v\n%s", err, out)
+	}
+
+	for _, want := range []string{
+		"[version]\nvalue = \"2.0.0\"",
+		"url = \"https://example.com/2.0.0/tool.exe\"",
+		"sha256 = \"71b2fef860abe467217a538ff31de02f5258807c0129f771846f87bd029aafc5\"",
+		"bin = [\"tool.exe\"]",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("the manifest lacks %q:\n%s", want, out)
+		}
+	}
+}
+
+func TestB303AWingetPackageThatOnlyHasASetupProgramIsRefused(t *testing.T) {
+	m := newMachine(t)
+	recipeServer{winget: map[string]string{
+		"1.0.0": `PackageIdentifier: Owner.Tool
+PackageVersion: 1.0.0
+InstallerType: inno
+Installers:
+- Architecture: x64
+  InstallerUrl: https://example.com/tool-setup.exe
+  InstallerSha256: 71B2FEF860ABE467217A538FF31DE02F5258807C0129F771846F87BD029AAFC5
+`,
+	}}.start(t, &m)
+
+	_, err := m.run(t, "", "add", "winget:Owner.Tool", "--yes")
+	if err == nil || !strings.Contains(err.Error(), "its inno installer runs when it installs") {
+		t.Fatalf("want a refusal that names the installer, got %v", err)
+	}
+
+	_, err = m.run(t, "", "add", "winget:Owner.None", "--yes")
+	if err == nil || !strings.Contains(err.Error(), "winget has no such package") {
+		t.Fatalf("want a missing package named, got %v", err)
 	}
 }

@@ -46,6 +46,9 @@ const (
 	// Aqua is a GitHub repo's entry in the aqua registry, translated the same
 	// way.
 	Aqua
+	// Winget is a package of winget's community manifests, translated the same
+	// way.
+	Winget
 )
 
 // Target is the kind of file Fetch reads a ref as. It sets the file names Fetch
@@ -211,6 +214,13 @@ func ParseIn(dir, s string) (Ref, error) {
 		if !codebergRe.MatchString(r.Location) {
 			return Ref{}, fmt.Errorf("%s: want aqua:owner/repo, such as aqua:BurntSushi/ripgrep", s)
 		}
+	case strings.HasPrefix(body, "winget:"):
+		r.Kind = Winget
+		r.Location = strings.TrimPrefix(body, "winget:")
+
+		if !infer.ValidWinget(r.Location) {
+			return Ref{}, fmt.Errorf("%s: want winget:Publisher.Package, such as winget:jqlang.jq", s)
+		}
 	case strings.HasPrefix(body, "git+"):
 		r.Kind = Git
 		r.Location, r.Fragment, _ = strings.Cut(strings.TrimPrefix(body, "git+"), "#")
@@ -264,6 +274,8 @@ func (r Ref) String() string {
 		s = "scoop:" + s
 	case Aqua:
 		s = "aqua:" + s
+	case Winget:
+		s = "winget:" + s
 	}
 
 	if r.Fragment != "" {
