@@ -113,6 +113,24 @@ gh run view --log
 The runner is an administrator with no desktop, so the consent prompt of system
 scope and a service task of a standard user are not covered.
 
+### The sources oku reads
+
+`.github/workflows/sources.yml` runs `.github/scripts/sources.sh` once a day on
+the `macos-latest` runner. The script builds oku from `main` and asks each
+outside source that oku reads for one real package: the releases of GitHub,
+GitLab and Gitea, the aqua registry, the Homebrew API and the feeds of three
+casks, npm, PyPI, crates.io, the Go module proxy, Scoop and winget. A failure
+means a source changed its format or its address, or is down. The run then
+opens an issue titled "A source that oku reads has changed", or comments on the
+open one. The run log shows each failure with oku's error.
+
+To check the sources now, run the workflow by hand, or run the script:
+
+```sh
+gh workflow run sources.yml
+.github/scripts/sources.sh
+```
+
 ## Releasing
 
 This section is for the maintainer.
