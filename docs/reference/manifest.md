@@ -84,6 +84,7 @@ manifest change.
 | `strip_prefix` | no | Text cut off the front of a tag to get the version, such as `"v"`. oku ignores a tag without the prefix, except for `v`, see [How oku reads tags](#how-oku-reads-tags). Not for `npm`, `pypi`, `go`, `crates` or `git-branch`. |
 | `tag` | no | One tag that upstream moves, such as `"nightly"`. Only with `github-releases`, `gitea-releases` or `gitlab-releases`, and not with `strip_prefix`. See [Follow a moving tag](#follow-a-moving-tag). |
 | `branch` | with `git-branch` | The branch to follow, such as `"main"`. See [Follow a branch](#follow-a-branch). |
+| `regex` | with `redirect` or `page` | Finds the version, see [Follow a download URL](#follow-a-download-url). |
 
 | `from` | `repo` | Reads |
 |---|---|---|
@@ -96,6 +97,8 @@ manifest change.
 | `pypi` | a package name, such as `black` | Every version in the Python Package Index. |
 | `go` | a module path, such as `golang.org/x/tools/gopls` | The tagged versions of the module from the Go module proxy. A module with no tags has one version, the pseudo-version of its newest commit. |
 | `crates` | a crate name, such as `ripgrep` | Every version of the crate on crates.io. |
+| `redirect` | an http(s) URL | One version, from the URL it redirects to. |
+| `page` | an http(s) URL | One version, from the text at the URL. |
 
 ```toml
 [version]
@@ -212,6 +215,91 @@ source = { git = "https://github.com/someone/tool", tag = "{{tag}}" }
   whose `url` has no `{{version}}` would install one download under every
   version.
 
+### Follow a download URL
+
+Many apps publish one URL that always leads to their newest download, such as
+`https://discord.com/api/download?platform=osx`. That URL redirects to a file
+whose path holds the version:
+
+```toml
+[version]
+from = "redirect"
+repo = "https://discord.com/api/download?platform=osx"
+regex = '/osx/([0-9.]+)/'
+
+[[artifact]]
+match = { os = "darwin" }
+url = "https://stable.dl2.discordapp.net/apps/osx/{{version}}/Discord.dmg"
+app = ["Discord.app"]
+```
+
+`page` reads the text at the URL instead, such as an update feed or a download
+page:
+
+```toml
+[version]
+from = "page"
+repo = "https://updates.discord.com/distributions/app/manifests/latest?channel=stable&platform=osx&arch=x64"
+regex = '"host_version":\[(\d+),(\d+),(\d+)\]'
+```
+
+- `redirect` follows up to 10 redirects of `repo` and stops at the first URL
+  that `regex` matches, so oku downloads nothing from it. A hop without the
+  version, such as `.../installers/latest`, is fine. `page` applies `regex`
+  to the first 8 MiB of text at `repo`.
+- The first match counts. Its groups joined with `.` are the version, so the
+  `page` example reads `[0,0,413]` as `0.0.413`. oku leaves out a group that
+  matched nothing. `regex` needs at least one group, in
+  [Go syntax](https://pkg.go.dev/regexp/syntax).
+- A version starts with a digit, and holds only letters, digits, `.`, `_`,
+  `+` and `-`. `oku add` and `oku update` fail when `regex` matches nothing or
+  the groups do not make such a version, and change nothing.
+- Upstream shows only its newest version, so `oku add <ref>@1.2.0` works only
+  while upstream is at `1.2.0`. `oku sync` installs the locked version and asks
+  `repo` nothing, so it works while upstream still serves that version's
+  download. Use `{{version}}` in `url`, not `repo` itself, or every version
+  would get the same download.
+- oku has no checksum for the download, so the user trusts the first download
+  of each version, and `oku manifest lint` warns.
+- `strip_prefix`, `tag` and `branch` do not apply.
+
+### A version for each platform
+
+Some vendors keep each platform at its own version. Discord's macOS download is
+`0.0.413` while its Linux one is `1.0.159`. Give each artifact a `version`
+table instead of `[version]`, with the same `from`, `repo` and `regex`:
+
+```toml
+[package]
+name = "discord"
+
+[[artifact]]
+match = { os = "darwin" }
+version = { from = "redirect", repo = "https://discord.com/api/download?platform=osx", regex = '/osx/([0-9.]+)/' }
+url = "https://stable.dl2.discordapp.net/apps/osx/{{version}}/Discord.dmg"
+app = ["Discord.app"]
+
+[[artifact]]
+match = { os = "linux", arch = "amd64" }
+version = { from = "redirect", repo = "https://discord.com/api/download?platform=linux&format=tar.gz", regex = '/linux/([0-9.]+)/' }
+url = "https://stable.dl2.discordapp.net/apps/linux/{{version}}/discord-{{version}}.tar.gz"
+strip = 1
+bin = ["discord"]
+```
+
+- `from` is `redirect` or `page`. Every artifact then needs a `version`, and
+  the manifest cannot have `[version]` or `[build]`.
+- `{{version}}` and `{{tag}}` in an artifact are its own version.
+  `oku add` and `oku update` find the version of this machine and of each
+  platform of [`[lock] platforms`](oku-toml.md#lock), and `oku.lock` keeps each
+  one in its [platform entry](lock.md#platform-entries). oku asks upstream
+  once for artifacts that share a `version` table.
+- `oku update` moves only the platforms whose version changed. `oku sync`
+  installs the version locked for this machine and asks upstream nothing.
+- `oku list` and `oku outdated` show the version of this machine.
+- You cannot pick a version for the package, so `oku add <ref>@1.2.0` and a
+  `version` in `oku.toml` fail. `oku manifest bump` refuses the manifest.
+
 ## [[artifact]]
 
 One table per prebuilt download. oku uses the first one whose `match` fits the
@@ -223,6 +311,7 @@ machine, so put specific entries before general ones.
 | `url` | yes | Where the download is. `https://`, `http://` or `file://`. Expands [template variables](#template-variables). |
 | `sha256` | no | The download's digest, 64 lowercase hex characters. Not with `sha256_url`. |
 | `sha256_url` | no | The URL of a checksum file, see [Checksums](#checksums). Not with `sha256`. |
+| `version` | no | Where this artifact's own version comes from, see [A version for each platform](#a-version-for-each-platform). |
 | `integrity` | no | A sha512 digest the way npm publishes it, `sha512-` and the digest in base64. |
 | `strip` | no | How many leading path components to drop when unpacking. Default 0. |
 | `bin` | see below | Executables inside the download. An entry may be a table, see [bin entries](#bin-entries). |
@@ -1325,7 +1414,8 @@ does not parse as one or is larger than 1 MiB.
   first `1.2.3` in the file name. A file name with no version gives the version
   `0`.
 - The version is fixed, so `oku update` never changes it. To get a newer
-  version, add that version's URL.
+  version, add that version's URL, or write a manifest that
+  [follows a download URL](#follow-a-download-url).
 - oku finds the program the way it does in a release asset, and `--bin` names
   it when that fails. `--asset` does not apply.
 - A URL on its own has no checksum, so oku trusts the download on first use and

@@ -320,6 +320,10 @@ func runBump(cmd *cobra.Command, opts Options, file, repo, prefix, to string) er
 		)
 	}
 
+	if m.PerArtifact() {
+		return fmt.Errorf("each artifact of %s finds its own version, so there is nothing to bump", file)
+	}
+
 	text := string(data)
 	old := m.Version.Value
 

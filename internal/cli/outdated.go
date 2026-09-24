@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"slices"
 	"strings"
 	"sync"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/y3owk1n/oku/internal/lock"
 	"github.com/y3owk1n/oku/internal/manifest"
+	"github.com/y3owk1n/oku/internal/platform"
 	"github.com/y3owk1n/oku/internal/ref"
 	"github.com/y3owk1n/oku/internal/ui"
 )
@@ -65,7 +67,13 @@ func (e env) outdated(cmd *cobra.Command, opts Options) error {
 
 	limit := make(chan struct{}, 8)
 
+	host := platform.Host().String()
+
 	for i, pkg := range locked.Packages {
+		// A package whose artifacts find their own versions is at the version of
+		// this machine's platform.
+		pkg.Version = pkg.VersionOn(host)
+
 		wg.Go(func() {
 			limit <- struct{}{}
 			defer func() { <-limit }()
@@ -125,12 +133,36 @@ func (e env) newest(ctx context.Context, opts Options, pkg lock.Package, want st
 		return "", "", err
 	}
 
-	latest, err := e.resolver(opts).Pick(ctx, m.Version, "")
+	source := m.Version
+
+	if m.PerArtifact() {
+		// The version of a package pinned only for other platforms is that of the
+		// first one, as VersionOn gives it.
+		at := platform.Host()
+		if pkg.Platforms[at.String()].Version == "" {
+			for _, key := range slices.Sorted(maps.Keys(pkg.Platforms)) {
+				if p, err := platform.Parse(key); err == nil && pkg.Platforms[key].Version != "" {
+					at = p
+
+					break
+				}
+			}
+		}
+
+		i := slices.IndexFunc(m.Artifacts, func(a manifest.Artifact) bool { return a.Match.Matches(at) })
+		if i < 0 {
+			return "", "", fmt.Errorf("%s has no artifact for %s", m.Package.Name, at)
+		}
+
+		source = *m.Artifacts[i].Version
+	}
+
+	latest, err := e.resolver(opts).Pick(ctx, source, "")
 	if err != nil || want == "" {
 		return latest.Version, latest.Version, err
 	}
 
-	newest, err := e.resolver(opts).Pick(ctx, m.Version, want)
+	newest, err := e.resolver(opts).Pick(ctx, source, want)
 	if err != nil {
 		return "", "", err
 	}

@@ -29,6 +29,7 @@ type schema struct {
 	Version   Version `toml:"version"`
 	Artifacts []struct {
 		Match       platform.Selector `toml:"match"`
+		Version     *Version          `toml:"version"`
 		URL         string            `toml:"url"`
 		SHA256      string            `toml:"sha256"`
 		SHA256URL   string            `toml:"sha256_url"`

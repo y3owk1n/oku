@@ -43,6 +43,9 @@ type Manifest struct {
 	// TagCommit is the commit a moving tag pointed at when the version was
 	// chosen.
 	TagCommit string `toml:"-"`
+	// Versions holds the version of each platform, keyed by
+	// platform.Platform.String(), for artifacts that find their own version.
+	Versions map[string]string `toml:"-"`
 }
 
 type Package struct {
@@ -62,7 +65,8 @@ type Package struct {
 type Version struct {
 	Value string `toml:"value"`
 	// From is FromGitHubReleases, FromGiteaReleases, FromGitLabReleases,
-	// FromGitTags, FromGitBranch or FromNPM.
+	// FromGitTags, FromGitBranch, FromNPM, FromPyPI, FromGo, FromCrates,
+	// FromRedirect or FromPage.
 	From string `toml:"from"`
 	// Repo is "owner/repo" or "host/owner/repo" for GitHub releases,
 	// "host/owner/repo" for Gitea releases, and a git URL for git tags.
@@ -75,6 +79,18 @@ type Version struct {
 	Tag string `toml:"tag"`
 	// Branch names the branch that FromGitBranch follows, such as "main".
 	Branch string `toml:"branch"`
+	// Regex finds the version for FromRedirect and FromPage. Its groups, joined
+	// with ".", are the version.
+	Regex string `toml:"regex"`
+}
+
+// UnmarshalText refuses a version given as a string, which TOML would
+// otherwise report as a type mismatch deep in the decoder.
+func (v *Version) UnmarshalText([]byte) error {
+	return errors.New(
+		`version must be a table: [version] with value = "1.2.3" or from, ` +
+			`or version = { from, repo, regex } in an artifact`,
+	)
 }
 
 const (
@@ -96,6 +112,10 @@ const (
 	FromGo = "go"
 	// FromCrates reads the versions of a crate from crates.io.
 	FromCrates = "crates"
+	// FromRedirect reads one version from where a URL redirects to.
+	FromRedirect = "redirect"
+	// FromPage reads one version from the body of a URL.
+	FromPage = "page"
 )
 
 // Artifact is a prebuilt download for the platforms its selector matches.
@@ -104,6 +124,9 @@ type Artifact struct {
 	URL       string            `toml:"url"`
 	SHA256    string            `toml:"sha256"`
 	SHA256URL string            `toml:"sha256_url"`
+	// Version finds the version of this artifact alone, for a vendor whose
+	// platforms are at different versions. Only FromRedirect and FromPage.
+	Version *Version `toml:"version"`
 	// Integrity is a sha512 digest the way npm publishes it, "sha512-" and the
 	// digest in base64.
 	Integrity string `toml:"integrity"`
@@ -384,6 +407,8 @@ func (m *Manifest) validate() error {
 	}
 
 	switch {
+	case m.PerArtifact():
+		errs = append(errs, perArtifactErrors(m)...)
 	case m.Version.From == "" && m.Version.Value == "":
 		errs = append(errs, errors.New("set version.value or version.from"))
 	case m.Version.From != "" && m.Version.Value != "":
@@ -437,18 +462,24 @@ func (m *Manifest) validate() error {
 		errs = append(errs, errors.New(
 			"version.strip_prefix does not apply to git-branch, which reads no tags",
 		))
+	case m.Version.From == FromRedirect || m.Version.From == FromPage:
+		errs = append(errs, scrapeErrors(m.Version, "version")...)
 	case m.Version.From != "" && !slices.Contains(
 		[]string{
-			FromGitHubReleases, FromGiteaReleases, FromGitLabReleases,
-			FromGitTags, FromGitBranch, FromNPM, FromPyPI, FromGo, FromCrates,
+			FromGitHubReleases, FromGiteaReleases, FromGitLabReleases, FromGitTags,
+			FromGitBranch, FromNPM, FromPyPI, FromGo, FromCrates, FromRedirect, FromPage,
 		},
 		m.Version.From,
 	):
 		errs = append(errs, fmt.Errorf(
-			"version.from %q must be %q, %q, %q, %q, %q, %q, %q, %q or %q", m.Version.From,
-			FromGitHubReleases, FromGiteaReleases, FromGitLabReleases,
-			FromGitTags, FromGitBranch, FromNPM, FromPyPI, FromGo, FromCrates,
+			"version.from %q must be %q, %q, %q, %q, %q, %q, %q, %q, %q, %q or %q", m.Version.From,
+			FromGitHubReleases, FromGiteaReleases, FromGitLabReleases, FromGitTags,
+			FromGitBranch, FromNPM, FromPyPI, FromGo, FromCrates, FromRedirect, FromPage,
 		))
+	}
+
+	if m.Version.Regex != "" && m.Version.From != FromRedirect && m.Version.From != FromPage {
+		errs = append(errs, errors.New(`version.regex needs version.from = "redirect" or "page"`))
 	}
 
 	if m.Version.Branch != "" && m.Version.From != FromGitBranch {
@@ -536,6 +567,70 @@ func (m *Manifest) ServicesFor(p platform.Platform) []Service {
 	return services
 }
 
+// PerArtifact reports whether the artifacts find their own versions.
+func (m *Manifest) PerArtifact() bool {
+	return slices.ContainsFunc(m.Artifacts, func(a Artifact) bool { return a.Version != nil })
+}
+
+// perArtifactErrors checks a manifest whose artifacts find their own versions.
+func perArtifactErrors(m *Manifest) []error {
+	var errs []error
+
+	if m.Version != (Version{}) {
+		errs = append(errs, errors.New("set [version] or a version in each artifact, not both"))
+	}
+
+	if m.Build != nil {
+		errs = append(errs, errors.New("a [build] needs [version], not a version in each artifact"))
+	}
+
+	for i, a := range m.Artifacts {
+		key := fmt.Sprintf("artifact[%d].version", i)
+
+		switch v := a.Version; {
+		case v == nil:
+			errs = append(errs, fmt.Errorf("artifact[%d]: version is required when another artifact has one", i))
+		case v.From != FromRedirect && v.From != FromPage:
+			errs = append(errs, fmt.Errorf(`%s.from must be "redirect" or "page"`, key))
+		case v.Value != "" || v.Tag != "" || v.Branch != "":
+			errs = append(errs, fmt.Errorf("%s takes from, repo and regex only", key))
+		default:
+			errs = append(errs, scrapeErrors(*v, key)...)
+		}
+	}
+
+	return errs
+}
+
+// scrapeErrors checks a version that FromRedirect or FromPage finds. key names
+// it in the errors.
+func scrapeErrors(v Version, key string) []error {
+	var errs []error
+
+	if !strings.HasPrefix(v.Repo, "https://") && !strings.HasPrefix(v.Repo, "http://") {
+		errs = append(errs, fmt.Errorf("%s.repo must be an http(s) URL for %s", key, v.From))
+	}
+
+	if v.StripPrefix != "" {
+		errs = append(errs, fmt.Errorf(
+			"%s.strip_prefix does not apply to %s, whose regex finds the version", key, v.From,
+		))
+	}
+
+	switch re, err := regexp.Compile(v.Regex); {
+	case v.Regex == "":
+		errs = append(errs, fmt.Errorf("%s.regex is required for %s", key, v.From))
+	case err != nil:
+		errs = append(errs, fmt.Errorf("%s.regex: %w", key, err))
+	case re.NumSubexp() == 0:
+		errs = append(errs, fmt.Errorf(
+			"%s.regex needs a group, such as ([0-9.]+), around the version", key,
+		))
+	}
+
+	return errs
+}
+
 // HasBuild reports whether the manifest declares a source build.
 func (m *Manifest) HasBuild() bool {
 	return m.Build != nil && len(m.Build.Steps) > 0
@@ -561,9 +656,19 @@ func (m *Manifest) Select(p platform.Platform) (Artifact, bool, error) {
 			continue
 		}
 
+		version, tag := m.Version.Value, m.Tag
+		if a.Version != nil {
+			version = m.Versions[p.String()]
+			tag = version
+
+			if version == "" {
+				return Artifact{}, false, fmt.Errorf("no version was found for %s", p)
+			}
+		}
+
 		vars := map[string]string{
-			"version": m.Version.Value,
-			"tag":     m.Tag,
+			"version": version,
+			"tag":     tag,
 			"os":      p.OS,
 			"arch":    p.Arch,
 			"libc":    p.Libc,

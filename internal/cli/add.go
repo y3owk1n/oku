@@ -256,7 +256,9 @@ func runAdd(
 		return false, nil
 	}
 
-	fmt.Fprintln(cmd.OutOrStdout(), s.Done("added "+s.Bold(got.lock.Name)+" "+got.lock.Version))
+	fmt.Fprintln(cmd.OutOrStdout(), s.Done(
+		"added "+s.Bold(got.lock.Name)+" "+got.lock.VersionOn(platform.Host().String()),
+	))
 
 	programs, _ := filepath.Glob(filepath.Join(got.profile.StorePath, "bin", "*"))
 

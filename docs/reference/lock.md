@@ -61,7 +61,7 @@ One `[[package]]` per package of the list, sorted by name.
 | `ref` | The ref from `oku.toml`, without `@version`. |
 | `commit` | The commit the manifest was read at. Only for `github:`, `codeberg:`, `gitea:`, `gitlab:` and `git+` refs. |
 | `manifest_sha256` | Digest of the manifest file. |
-| `version` | The version installed. |
+| `version` | The version installed. When each artifact finds its own version, this is the version of the platform entry whose name sorts first, so every machine writes the same value. |
 | `signing_key` | The manifest's minisign key, when it has one. |
 | `tag` | The upstream tag of that version, when it differs, such as `v10.2.0`. |
 | `tag_commit` | The full commit a moving tag pointed at for that version. |
@@ -85,6 +85,7 @@ A platform name is `os-arch`, plus `-glibc` or `-musl` on Linux:
 | `commands` | `true` when the manifest runs the download to generate its completions. |
 | `vendor_sha256` | A build's digest of what its vendor steps downloaded. |
 | `impure` | `true` when a `run` step of the build used `network = true`. |
+| `version` | The version of this platform, when each artifact of the manifest [finds its own version](manifest.md#a-version-for-each-platform). |
 
 oku keeps `vendor_sha256` and `impure` beside the build in the store, so
 `oku update` of a build that did not change writes the same lock.
