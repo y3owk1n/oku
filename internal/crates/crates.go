@@ -10,6 +10,8 @@ import (
 	"net/http"
 	"regexp"
 	"strings"
+
+	"github.com/y3owk1n/oku/internal/shape"
 )
 
 // API is where crates.io answers questions about crates.
@@ -118,11 +120,22 @@ func Read(ctx context.Context, client *http.Client, api, name string) (Crate, er
 
 	c := Crate{Name: found.Crate.Name, Description: strings.TrimSpace(found.Crate.Description)}
 
+	numbered, summed := true, true
+
 	for _, v := range found.Versions {
+		numbered = numbered && v.Number != ""
+		summed = summed && v.Checksum != ""
 		c.Versions = append(c.Versions, Version{
 			Number: v.Number, SHA256: v.Checksum, Yanked: v.Yanked, Programs: v.Bins,
 		})
 	}
 
-	return c, nil
+	// crates.io calls this API experimental, so oku checks what it reads.
+	return c, shape.Check(
+		"crates.io's answer for "+name,
+		shape.Field{Name: "the name", Has: c.Name != ""},
+		shape.Field{Name: "the versions", Has: len(c.Versions) > 0},
+		shape.Field{Name: "a version's number", Has: numbered},
+		shape.Field{Name: "a version's checksum", Has: summed},
+	)
 }

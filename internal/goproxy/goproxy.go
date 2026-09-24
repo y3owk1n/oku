@@ -12,6 +12,8 @@ import (
 	"regexp"
 	"strings"
 	"unicode"
+
+	"github.com/y3owk1n/oku/internal/shape"
 )
 
 // Proxy is the module proxy that the go command uses by default.
@@ -92,6 +94,11 @@ func Versions(ctx context.Context, client *http.Client, proxy, module string) ([
 	var latest struct{ Version string }
 	if err := json.Unmarshal(body, &latest); err != nil {
 		return nil, fmt.Errorf("read the proxy's answer for %s: %w", module, err)
+	}
+
+	if err := shape.Check("the Go proxy's answer for "+module,
+		shape.Field{Name: "the version", Has: latest.Version != ""}); err != nil {
+		return nil, err
 	}
 
 	return []string{strings.TrimPrefix(latest.Version, "v")}, nil

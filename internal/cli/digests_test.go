@@ -199,3 +199,33 @@ func TestB275InferenceSkipsAChecksumFileThatDisagreesWithGitHub(t *testing.T) {
 		})
 	}
 }
+
+func TestB307OkuAsksGitHubForOneVersionOfItsAPIAndNamesItWhenRetired(t *testing.T) {
+	m := newMachine(t)
+
+	var asked string
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		asked = r.Header.Get("X-GitHub-Api-Version")
+
+		http.Error(w, "gone", http.StatusGone)
+	}))
+	t.Cleanup(server.Close)
+
+	m.opts.GitHubAPI = server.URL + "/api"
+
+	path := filepath.Join(m.fixtures, "tool.toml")
+	must(t, os.WriteFile(path, []byte(
+		"[package]\nname = \"tool\"\n[version]\nfrom = \"github-releases\"\nrepo = \"owner/tool\"\n"+
+			"[[artifact]]\nurl = \"https://github.com/owner/tool/releases/download/{{tag}}/tool.tar.gz\"\nbin = [\"tool\"]\n",
+	), 0o644))
+
+	_, err := m.run(t, "", "add", path, "--yes")
+	if err == nil || !strings.Contains(err.Error(), "GitHub no longer serves version 2026-03-10 of its API") {
+		t.Fatalf("want the retired version named, got %v", err)
+	}
+
+	if asked != "2026-03-10" {
+		t.Fatalf("oku asked for version %q of GitHub's API", asked)
+	}
+}

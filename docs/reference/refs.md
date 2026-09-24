@@ -147,6 +147,24 @@ against the rate limit. oku reads a repo's GitHub releases 100 at a time, up
 to 1000. When GitHub says oku sent too many requests too fast, oku stops and
 says how many seconds to wait.
 
+## When a source changes its format
+
+oku checks each answer from a registry, a forge or a recipe for the fields it
+needs, and fails `add` or `update` with the source's name when one is missing.
+Where a source versions its format, oku asks for one version:
+
+| Source | Version oku reads |
+|---|---|
+| GitHub's REST API | `2026-03-10`, sent as `X-GitHub-Api-Version` to github.com |
+| PyPI | The Simple API in JSON, major version 1, for versions and files |
+| winget manifests | `ManifestVersion` 1.x |
+| aqua registry | The newest release tagged `v4.x` |
+
+A newer format fails with a message that says to update oku. `oku sync`
+installs what `oku.lock` pins without reading these sources again, so a
+machine can still be set up while you wait for an oku that reads the new
+format.
+
 ## Tokens per host
 
 oku sends each token to its own host only, over https, and not when the server

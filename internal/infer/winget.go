@@ -15,6 +15,7 @@ import (
 	"github.com/y3owk1n/oku/internal/forge"
 	"github.com/y3owk1n/oku/internal/platform"
 	"github.com/y3owk1n/oku/internal/resolve"
+	"github.com/y3owk1n/oku/internal/shape"
 )
 
 // wingetRepo is the repo of winget's community manifests.
@@ -105,10 +106,31 @@ func (inf *Inferrer) FromWinget(ctx context.Context, id string) (string, error) 
 	var installers struct {
 		wingetInstaller `yaml:",inline"`
 
-		Installers []wingetInstaller `yaml:"Installers"`
+		ManifestVersion string            `yaml:"ManifestVersion"`
+		Installers      []wingetInstaller `yaml:"Installers"`
 	}
 
 	if err := read(id+".installer.yaml", &installers); err != nil {
+		return "", err
+	}
+
+	// winget's own client refuses a manifest of a major version above 1, and so
+	// does oku.
+	major, _, _ := strings.Cut(installers.ManifestVersion, ".")
+	linked, typed := true, true
+
+	for _, i := range installers.Installers {
+		linked = linked && i.InstallerURL != ""
+		typed = typed && cmp.Or(i.InstallerType, installers.InstallerType) != ""
+	}
+
+	if err := shape.Check(
+		"the winget manifest of "+id+" "+version,
+		shape.Field{Name: "ManifestVersion 1", Has: major == "1"},
+		shape.Field{Name: "Installers", Has: len(installers.Installers) > 0},
+		shape.Field{Name: "an InstallerUrl", Has: linked},
+		shape.Field{Name: "an InstallerType", Has: typed},
+	); err != nil {
 		return "", err
 	}
 

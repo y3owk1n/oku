@@ -119,6 +119,9 @@ with `--bin`. See [Fix a wrong pick](guides/add-packages.md#fix-a-wrong-pick-wit
 | `oku has no match for {{...}}` | The aqua entry uses a template function oku cannot translate. Write a manifest for it. |
 | `winget has no such package` | Check the identifier, as `winget search` shows it, such as `jqlang.jq`. |
 | `its <type> installer runs when it installs` | Every installer of the winget package for that arch is a setup program. Try `scoop:` or write a manifest. |
+| `<source>'s answer ... lacks <field>, which oku needs, and its format may have changed` | The source changed its format, and this oku reads the old one. Update oku. What `oku.lock` pins still installs. |
+| `GitHub no longer serves version <date> of its API` | GitHub retired the API version this oku asks for. Update oku. |
+| `the aqua registry is at <tag>, whose format this oku does not read` | The registry moved to a new major. Update oku. |
 | `no bucket of main or extras has it` | Name the bucket, as in `scoop:versions/<name>`. |
 | `<ref> has no manifest and no release to infer one from` | The repo has neither. Write a manifest, or point at one elsewhere. |
 
