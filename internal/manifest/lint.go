@@ -267,7 +267,7 @@ func unknownVars(text string, known []string) []string {
 
 	for _, match := range templateRe.FindAllStringSubmatch(text, -1) {
 		name := match[1]
-		if slices.Contains(known, name) ||
+		if slices.Contains(known, name) || slices.Contains(known, "version") && IsVersionVar(name) ||
 			strings.HasPrefix(name, "dep.") && strings.HasSuffix(name, ".prefix") {
 			continue
 		}

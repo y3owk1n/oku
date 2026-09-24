@@ -85,8 +85,12 @@ type Version struct {
 	// Branch names the branch that FromGitBranch follows, such as "main".
 	Branch string `toml:"branch"`
 	// Regex finds the version for FromRedirect and FromPage. Its groups, joined
-	// with ".", are the version.
+	// with Join, are the version.
 	Regex string `toml:"regex"`
+	// Join is what joins the groups of Regex, "." when it is empty. A "+" keeps
+	// the parts apart for {{version_part1}} and the like. With FromSparkle it
+	// joins the short version and the build.
+	Join string `toml:"join"`
 }
 
 // UnmarshalText refuses a version given as a string, which TOML would
@@ -492,6 +496,10 @@ func (m *Manifest) validate() error {
 		errs = append(errs, errors.New(`version.regex needs version.from = "redirect" or "page"`))
 	}
 
+	if m.Version.Join != "" && m.Version.Regex == "" && m.Version.From != FromSparkle {
+		errs = append(errs, errors.New("version.join needs version.regex, whose groups it joins"))
+	}
+
 	if m.Version.Branch != "" && m.Version.From != FromGitBranch {
 		errs = append(errs, errors.New(`version.branch needs version.from = "git-branch"`))
 	}
@@ -603,7 +611,7 @@ func perArtifactErrors(m *Manifest) []error {
 		case !slices.Contains(artifactSources, v.From):
 			errs = append(errs, fmt.Errorf("%s.from must be %s", key, oneOf(artifactSources)))
 		case v.Value != "" || v.Tag != "" || v.Branch != "":
-			errs = append(errs, fmt.Errorf("%s takes from, repo, regex and strip_prefix only", key))
+			errs = append(errs, fmt.Errorf("%s takes from, repo, regex, join and strip_prefix only", key))
 		case v.From == FromRedirect || v.From == FromPage || v.From == FromSparkle:
 			errs = append(errs, scrapeErrors(*v, key)...)
 		default:
@@ -654,8 +662,8 @@ func releaseErrors(v Version, key string) []error {
 		errs = append(errs, fmt.Errorf("%s.repo must be a git URL for git-tags", key))
 	}
 
-	if v.Regex != "" {
-		errs = append(errs, fmt.Errorf(`%s.regex needs from = "redirect" or "page"`, key))
+	if v.Regex != "" || v.Join != "" {
+		errs = append(errs, fmt.Errorf(`%s.regex and %s.join need from = "redirect" or "page"`, key, key))
 	}
 
 	return errs
@@ -692,6 +700,10 @@ func scrapeErrors(v Version, key string) []error {
 		errs = append(errs, fmt.Errorf(
 			"%s.regex needs a group, such as ([0-9.]+), around the version", key,
 		))
+	}
+
+	if v.Join != "" && !slices.Contains([]string{".", "+", "-", "_"}, v.Join) {
+		errs = append(errs, fmt.Errorf(`%s.join must be ".", "+", "-" or "_", which a version may hold`, key))
 	}
 
 	return errs
@@ -856,14 +868,28 @@ func splitBin(raw []any) ([]string, []Wrapper, error) {
 	return paths, wraps, nil
 }
 
-// Expand replaces {{name}} with vars[name] and fails on an unknown name.
+// Expand replaces {{name}} with vars[name] and fails on an unknown name. Where
+// vars has a version, the variables derived from it, such as
+// {{version_major}}, expand too.
 func Expand(s string, vars map[string]string) (string, error) {
-	var unknown []string
+	var (
+		unknown []string
+		failed  error
+	)
 
 	out := templateRe.ReplaceAllStringFunc(s, func(match string) string {
 		name := templateRe.FindStringSubmatch(match)[1]
 
 		v, ok := vars[name]
+		if version, has := vars["version"]; !ok && has && IsVersionVar(name) {
+			var err error
+			if v, err = versionVar(name, version); err != nil {
+				failed = cmp.Or(failed, err)
+			}
+
+			ok = true
+		}
+
 		if !ok {
 			unknown = append(unknown, name)
 		}
@@ -871,9 +897,60 @@ func Expand(s string, vars map[string]string) (string, error) {
 		return v
 	})
 
-	if len(unknown) > 0 {
+	switch {
+	case len(unknown) > 0:
 		return "", fmt.Errorf("unknown template variable %q", unknown)
+	case failed != nil:
+		return "", failed
 	}
 
 	return out, nil
+}
+
+var (
+	versionVars = []string{
+		"version_major", "version_minor", "version_patch",
+		"version_nodots", "version_underscores", "version_dashes",
+	}
+	versionPartRe = regexp.MustCompile(`^version_part([1-9][0-9]*)$`)
+)
+
+// IsVersionVar reports whether name is a variable derived from {{version}}.
+func IsVersionVar(name string) bool {
+	return slices.Contains(versionVars, name) || versionPartRe.MatchString(name)
+}
+
+// versionVar returns the variable name derived from version. The major, minor
+// and patch are the numbers before the first "+", and a part is a piece
+// between "+", as a version source with join = "+" writes them.
+func versionVar(name, version string) (string, error) {
+	base, _, _ := strings.Cut(version, "+")
+	numbers := strings.Split(base, ".")
+
+	nth := func(pieces []string, i int, what string) (string, error) {
+		if i >= len(pieces) || pieces[i] == "" {
+			return "", fmt.Errorf("{{%s}}: the version %s has no %s", name, version, what)
+		}
+
+		return pieces[i], nil
+	}
+
+	switch name {
+	case "version_major":
+		return nth(numbers, 0, "major number")
+	case "version_minor":
+		return nth(numbers, 1, "minor number")
+	case "version_patch":
+		return nth(numbers, 2, "patch number")
+	case "version_nodots":
+		return strings.ReplaceAll(version, ".", ""), nil
+	case "version_underscores":
+		return strings.ReplaceAll(version, ".", "_"), nil
+	case "version_dashes":
+		return strings.ReplaceAll(version, ".", "-"), nil
+	}
+
+	i, _ := strconv.Atoi(versionPartRe.FindStringSubmatch(name)[1])
+
+	return nth(strings.Split(version, "+"), i-1, fmt.Sprintf("part %d", i))
 }

@@ -789,3 +789,80 @@ Installers:
 		t.Fatalf("want a missing package named, got %v", err)
 	}
 }
+
+func TestB305ACaskWithVersionPartsFollowsTheirSource(t *testing.T) {
+	json := strings.NewReplacer(
+		`"version": "1.2.0"`, `"version": "1.2.0,45"`,
+		"/dl/1.2.0/", "/dl/45/",
+	).Replace(caskJSON)
+
+	for name, tc := range map[string]struct{ livecheck, want string }{
+		// A block that joins the regex's groups with commas, and nothing else.
+		"page": {
+			livecheck: `  livecheck do
+    url "SERVER/latest.html"
+    regex(/tool-(\d+(?:\.\d+)+)-(\d+)\.tar/i)
+    strategy :page_match do |page, regex|
+      page.scan(regex).map { |match| "#{match[0]},#{match[1]}" }
+    end
+  end`,
+			want: "[version]\nfrom = \"page\"\nrepo = \"SERVER/latest.html\"\nregex = \"(?i)tool-(\\\\d+(?:\\\\.\\\\d+)+)-(\\\\d+)\\\\.tar\"\njoin = \"+\"\n",
+		},
+		// Sparkle's version without a block is the short version and the build.
+		"sparkle": {
+			livecheck: `  livecheck do
+    url "SERVER/appcast.xml"
+    strategy :sparkle
+  end`,
+			want: "[version]\nfrom = \"sparkle\"\nrepo = \"SERVER/appcast.xml\"\njoin = \"+\"\n",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			m := newMachine(t)
+			ruby := strings.NewReplacer(
+				"#{version}/#{os}", "#{version.csv.second}/#{os}",
+				`  livecheck do
+    url "SERVER/latest.json"
+    strategy :json do |json|
+      json["version"]
+    end
+  end`, tc.livecheck,
+			).Replace(caskRuby)
+			url := recipeServer{casks: map[string][2]string{"tool": {json, ruby}}}.start(t, &m)
+
+			out, err := m.run(t, "", "manifest", "init", "--from", "cask:tool", "-o", "-")
+			if err != nil {
+				t.Fatalf("init: %v\n%s", err, out)
+			}
+
+			for _, want := range []string{
+				strings.ReplaceAll(tc.want, "SERVER", url),
+				`/dl/{{version_part2}}/mac-arm64/tool.tar.gz"`,
+			} {
+				if !strings.Contains(out, want) {
+					t.Fatalf("the manifest lacks %q:\n%s", want, out)
+				}
+			}
+		})
+	}
+}
+
+func TestB305AScoopURLWithADerivedVersionFollowsTheVersion(t *testing.T) {
+	m := newMachine(t)
+	recipeServer{scoop: map[string]string{"ScoopInstaller/Main/tool": `{
+  "version": "26.03",
+  "url": "SERVER/dl/2603/win/tool.zip",
+  "bin": "tool.exe",
+  "checkver": {"url": "SERVER/latest.json", "jsonpath": "$.version"},
+  "autoupdate": {"url": "SERVER/dl/$cleanVersion/win/tool.zip"}
+}`}}.start(t, &m)
+
+	out, err := m.run(t, "", "manifest", "init", "--from", "scoop:tool", "-o", "-")
+	if err != nil {
+		t.Fatalf("init: %v\n%s", err, out)
+	}
+
+	if !strings.Contains(out, `/dl/{{version_nodots}}/win/tool.zip"`) || strings.Contains(out, "It pins") {
+		t.Fatalf("the manifest does not follow the version with {{version_nodots}}:\n%s", out)
+	}
+}

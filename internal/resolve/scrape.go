@@ -1,6 +1,7 @@
 package resolve
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"io"
@@ -48,7 +49,7 @@ func (r *Resolver) scrape(ctx context.Context, v manifest.Version) (Release, err
 		}
 	}
 
-	version := strings.Join(parts, ".")
+	version := strings.Join(parts, cmp.Or(v.Join, "."))
 	if !scrapedRe.MatchString(version) {
 		return Release{}, fmt.Errorf(
 			"%s: version.regex %s captured %q, which is not a version", what, v.Regex, version,
@@ -136,11 +137,15 @@ var (
 	sparkleShortRe = regexp.MustCompile(
 		`sparkle:shortVersionString\s*(?:=\s*"([^"]*)"|>\s*([^<]*?)\s*</sparkle:shortVersionString>)`,
 	)
+	sparkleBuildRe = regexp.MustCompile(
+		`sparkle:version\s*(?:=\s*"([^"]*)"|>\s*([^<]*?)\s*</sparkle:version>)`,
+	)
 )
 
 // sparkle returns the newest macOS release of the Sparkle appcast at v.Repo by
-// its sparkle:shortVersionString. An item on a channel, such as beta, or for
-// another system, is skipped.
+// its sparkle:shortVersionString, and its sparkle:version after v.Join when
+// that is set. It skips an item on a channel, such as beta, or for another
+// system.
 func (r *Resolver) sparkle(ctx context.Context, v manifest.Version) (Release, error) {
 	what := "read the versions of " + v.Repo
 
@@ -159,7 +164,21 @@ func (r *Resolver) sparkle(ctx context.Context, v manifest.Version) (Release, er
 			continue
 		}
 
-		if version := m[1] + m[2]; scrapedRe.MatchString(version) && (newest == "" || Compare(version, newest) > 0) {
+		// A feed may add the build to the short version, as "1.165.1 (87405)".
+		version, _, _ := strings.Cut(strings.TrimSpace(m[1]+m[2]), " ")
+
+		// With join, the version is the short version and the build, such as
+		// "1.2+345".
+		if v.Join != "" {
+			build := sparkleBuildRe.FindStringSubmatch(item)
+			if build == nil {
+				continue
+			}
+
+			version += v.Join + build[1] + build[2]
+		}
+
+		if scrapedRe.MatchString(version) && (newest == "" || Compare(version, newest) > 0) {
 			newest = version
 		}
 	}

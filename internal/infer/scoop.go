@@ -286,20 +286,36 @@ func scoopHash(h any) string {
 
 var scoopVarRe = regexp.MustCompile(`\$[A-Za-z]`)
 
+// scoopVersions are the version variables of Scoop's autoupdate, and the oku
+// variables that give them. $cleanVersion also drops dashes, so it is
+// {{version_nodots}} only for a version with none.
+var scoopVersions = strings.NewReplacer(
+	"$cleanVersion", "{{version_nodots}}",
+	"$majorVersion", "{{version_major}}",
+	"$minorVersion", "{{version_minor}}",
+	"$patchVersion", "{{version_patch}}",
+	"$underscoreVersion", "{{version_underscores}}",
+	"$dashVersion", "{{version_dashes}}",
+	"$version", "{{version}}",
+)
+
 // scoopTemplate turns the autoupdate URL of a Scoop manifest into an oku one.
-// It returns "" when the URL uses more than $version, or does not give url for
-// version.
+// It returns "" when the URL uses a variable oku has none for, or does not give
+// url for version.
 func scoopTemplate(later any, version, url string) string {
 	s, ok := later.(string)
-	if !ok {
+	if !ok || strings.Contains(s, "$cleanVersion") && strings.Contains(version, "-") {
 		return ""
 	}
 
 	s, _, _ = strings.Cut(s, "#")
-	s = strings.ReplaceAll(s, "$version", "{{version}}")
+	s = scoopVersions.Replace(s)
 
-	if scoopVarRe.MatchString(s) || !strings.Contains(s, "{{version}}") ||
-		strings.ReplaceAll(s, "{{version}}", version) != url {
+	if scoopVarRe.MatchString(s) || !strings.Contains(s, "{{version") {
+		return ""
+	}
+
+	if filled, err := manifest.Expand(s, map[string]string{"version": version}); err != nil || filled != url {
 		return ""
 	}
 

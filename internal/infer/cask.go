@@ -183,7 +183,7 @@ func (c caskJSON) recipe(source string) (recipe, error) {
 		var vars map[string]string
 
 		for _, t := range templates {
-			if a.template, vars = fillTemplate(t, c.Version, at.url); a.template != "" {
+			if a.template, vars = fillTemplate(t, r.version, at.url); a.template != "" {
 				break
 			}
 		}
@@ -193,16 +193,12 @@ func (c caskJSON) recipe(source string) (recipe, error) {
 		switch f, ok := githubFollow(a.template); {
 		case a.template == "":
 		case len(checks) > 0:
-			a.follow = caskLivecheck(checks, vars, c.Homepage, a.template)
+			a.follow = caskLivecheck(checks, vars, c.Homepage, a.template, r.version)
 		case ok:
 			a.follow = f
 		}
 
 		r.artifacts = append(r.artifacts, a)
-	}
-
-	if strings.Contains(c.Version, ",") {
-		r.fixed = "its version has parts that the download URL uses one by one"
 	}
 
 	r.follow = sharedFollow(r.artifacts)
@@ -643,11 +639,31 @@ func rubyURLs(src string) []string {
 
 var interpolationRe = regexp.MustCompile(`#\{([^}]*)\}`)
 
+// rubyVersions are the parts of a cask's version that a URL template may use,
+// and the oku variables that give them. A cask joins the parts of its version
+// with commas, where oku's version joins them with "+".
+var rubyVersions = map[string]string{
+	"version":                     "{{version}}",
+	"version.csv.first":           "{{version_part1}}",
+	"version.before_comma":        "{{version_part1}}",
+	"version.csv.second":          "{{version_part2}}",
+	"version.after_comma":         "{{version_part2}}",
+	"version.csv.third":           "{{version_part3}}",
+	"version.major":               "{{version_major}}",
+	"version.minor":               "{{version_minor}}",
+	"version.patch":               "{{version_patch}}",
+	"version.major_minor":         "{{version_major}}.{{version_minor}}",
+	"version.major_minor_patch":   "{{version_major}}.{{version_minor}}.{{version_patch}}",
+	"version.no_dots":             "{{version_nodots}}",
+	"version.dots_to_underscores": "{{version_underscores}}",
+	"version.dots_to_hyphens":     "{{version_dashes}}",
+}
+
 // fillTemplate matches the Ruby URL template t against url, the download of
-// version. It returns url with "{{version}}" where t has #{version}, and the
-// values the other interpolations took, such as the "arm64" of #{arch}. It
-// returns "" when t does not give url, or when an interpolation other than
-// #{version} depends on the version.
+// version, which is oku's form of the cask's version. It returns url with oku's
+// variables where t uses the version, and the values the other interpolations
+// took, such as the "arm64" of #{arch}. It returns "" when t does not give url,
+// or uses the version in a way oku has no variable for.
 func fillTemplate(t, version, url string) (string, map[string]string) {
 	parts := interpolationRe.FindAllStringSubmatchIndex(t, -1)
 	if len(parts) == 0 {
@@ -667,9 +683,17 @@ func fillTemplate(t, version, url string) (string, map[string]string) {
 
 		expr := t[p[2]:p[3]]
 
+		oku, isVersion := rubyVersions[expr]
+
 		switch {
-		case expr == "version":
-			pattern.WriteString("(" + regexp.QuoteMeta(version) + ")")
+		case isVersion:
+			value, err := manifest.Expand(oku, map[string]string{"version": version})
+			// A cask's own version holds commas, which oku's cannot give.
+			if err != nil || expr == "version" && strings.Contains(version, "+") {
+				return "", nil
+			}
+
+			pattern.WriteString("(" + regexp.QuoteMeta(value) + ")")
 		case strings.Contains(expr, "version"):
 			return "", nil
 		default:
@@ -683,7 +707,7 @@ func fillTemplate(t, version, url string) (string, map[string]string) {
 	pattern.WriteString(regexp.QuoteMeta(t[last:]) + "$")
 
 	m := regexp.MustCompile(pattern.String()).FindStringSubmatchIndex(url)
-	if m == nil || !slices.Contains(exprs, "version") {
+	if m == nil || !slices.ContainsFunc(exprs, func(e string) bool { return rubyVersions[e] != "" }) {
 		return "", nil
 	}
 
@@ -698,8 +722,8 @@ func fillTemplate(t, version, url string) (string, map[string]string) {
 		start, end := m[2+2*i], m[3+2*i]
 		out.WriteString(url[last:start])
 
-		if expr == "version" {
-			out.WriteString("{{version}}")
+		if oku, isVersion := rubyVersions[expr]; isVersion {
+			out.WriteString(oku)
 		} else {
 			out.WriteString(url[start:end])
 			vars[expr] = url[start:end]
@@ -722,10 +746,12 @@ var (
 )
 
 // caskLivecheck translates the livecheck of a cask for one platform, whose
-// interpolations took vars and whose download is template. It returns nil when
-// the livecheck says to skip, runs Ruby oku cannot read, or uses a strategy oku
-// has no source for.
-func caskLivecheck(bodies []string, vars map[string]string, homepage, template string) *follow {
+// interpolations took vars and whose download is template. version is oku's
+// form of the cask's version, and a version of several parts needs a regex
+// with a group for each. It returns nil when the livecheck says to skip, runs
+// Ruby oku cannot read, or uses a strategy oku has no source for.
+func caskLivecheck(bodies []string, vars map[string]string, homepage, template, version string) *follow {
+	parts := strings.Count(version, "+") + 1
 	var live []string
 
 	for _, body := range bodies {
@@ -769,6 +795,17 @@ func caskLivecheck(bodies []string, vars map[string]string, homepage, template s
 		strategy = m[1]
 	}
 
+	switch {
+	case parts > 1 && strategy == "sparkle" && (!strings.Contains(body, " do |") && !strings.Contains(body, "&:") ||
+		strings.Contains(body, "nice_version")):
+		// Sparkle's nice version is the short version and the build, as a cask
+		// with two parts has it.
+		return &follow{from: manifest.FromSparkle, repo: repo, join: "+"}
+	case parts > 1 && !slices.Contains([]string{"", "page_match", "header_match"}, strategy):
+		// Only a regex gives the parts one by one.
+		return nil
+	}
+
 	switch strategy {
 	case "github_latest", "github_releases":
 		if repo == template {
@@ -809,8 +846,9 @@ func caskLivecheck(bodies []string, vars map[string]string, homepage, template s
 		}
 	}
 
-	// Any other strategy takes a regex, and a block would run Ruby.
-	if strings.Contains(body, " do |") {
+	// Any other strategy takes a regex, and a block would run Ruby, except one
+	// that only joins the regex's groups with commas, in order.
+	if strings.Contains(body, " do |") && !joinsGroups(body, parts) {
 		return nil
 	}
 
@@ -827,10 +865,10 @@ func caskLivecheck(bodies []string, vars map[string]string, homepage, template s
 		})
 
 		var ok bool
-		if re, ok = rubyRegex(literal, m[3]); !ok {
+		if re, ok = rubyRegex(literal, m[3], parts); !ok {
 			return nil
 		}
-	} else if strategy == "header_match" {
+	} else if strategy == "header_match" && parts == 1 {
 		// Without a regex, livecheck reads the version from the file name that
 		// the URL redirects to.
 		re = fileNameRegex(template)
@@ -840,18 +878,24 @@ func caskLivecheck(bodies []string, vars map[string]string, homepage, template s
 		return nil
 	}
 
+	join := ""
+	if parts > 1 {
+		join = "+"
+	}
+
 	switch strategy {
 	case "", "page_match":
-		return &follow{from: manifest.FromPage, repo: repo, regex: re}
+		return &follow{from: manifest.FromPage, repo: repo, regex: re, join: join}
 	case "header_match":
-		return &follow{from: manifest.FromRedirect, repo: repo, regex: re}
+		return &follow{from: manifest.FromRedirect, repo: repo, regex: re, join: join}
 	}
 
 	return nil
 }
 
-// rubyRegex turns a Ruby regex literal into Go syntax with one group.
-func rubyRegex(body, flags string) (string, bool) {
+// rubyRegex turns a Ruby regex literal into Go syntax with a group for each
+// of the version's parts.
+func rubyRegex(body, flags string, parts int) (string, bool) {
 	if strings.Contains(body, "#{") {
 		return "", false
 	}
@@ -873,6 +917,12 @@ func rubyRegex(body, flags string) (string, bool) {
 
 	if prefix != "" {
 		body = "(?" + prefix + ")" + body
+	}
+
+	if parts > 1 {
+		compiled, err := regexp.Compile(body)
+
+		return body, err == nil && compiled.NumSubexp() == parts
 	}
 
 	return oneGroup(body)
@@ -913,4 +963,33 @@ func onlyExecutable(files []File, fits func(string) bool) string {
 	}
 
 	return found
+}
+
+var rubyJoinRe = regexp.MustCompile(`\.scan\(regex\)\.map \{ \|match\| "([^"]*)" \}`)
+
+// joinsGroups reports whether a livecheck block does nothing but scan the page
+// with its regex and join the groups 0 to parts-1 with commas, as in
+// page.scan(regex).map { |match| "#{match[0]},#{match[1]}" }.
+func joinsGroups(body string, parts int) bool {
+	m := rubyJoinRe.FindStringSubmatch(body)
+	if m == nil || parts < 2 {
+		return false
+	}
+
+	// The scan is the only line of the block.
+	for line := range strings.Lines(body) {
+		line = strings.TrimSpace(line)
+		if line != "" && line != "end" && !rubyJoinRe.MatchString(line) &&
+			!strings.HasPrefix(line, "url ") && !strings.HasPrefix(line, "regex") &&
+			!strings.HasPrefix(line, "strategy ") {
+			return false
+		}
+	}
+
+	want := make([]string, parts)
+	for i := range want {
+		want[i] = fmt.Sprintf("#{match[%d]}", i)
+	}
+
+	return m[1] == strings.Join(want, ",")
 }

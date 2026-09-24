@@ -368,9 +368,9 @@ func TestB284LintChecksAVersionInEachArtifact(t *testing.T) {
 		artifact(good) + artifact(""):                                                                           "artifact[1]: version is required",
 		artifact(good) + "[build]\n[[build.step]]\nrun = \"true\"\n":                                            "[build] needs [version]",
 		artifact("version = { from = \"npm\", repo = \"x\" }\n"):                                                `"git-tags", "redirect", "page" or "sparkle"`,
-		artifact("version = { from = \"page\", repo = \"https://example.com\", regex = '(.)', tag = \"x\" }\n"): "from, repo, regex and strip_prefix only",
+		artifact("version = { from = \"page\", repo = \"https://example.com\", regex = '(.)', tag = \"x\" }\n"): "from, repo, regex, join and strip_prefix only",
 		artifact("version = { from = \"github-releases\", repo = \"not a repo\" }\n"):                           `artifact[0].version.repo must be "owner/repo"`,
-		artifact("version = { from = \"github-releases\", repo = \"o/r\", regex = '(.)' }\n"):                   "artifact[0].version.regex needs",
+		artifact("version = { from = \"github-releases\", repo = \"o/r\", regex = '(.)' }\n"):                   "artifact[0].version.regex and artifact[0].version.join need",
 		artifact("version = { from = \"page\", repo = \"https://example.com\" }\n"):                             "artifact[0].version.regex is required",
 	} {
 		must(t, os.WriteFile(path, []byte("[package]\nname = \"tool\"\ndescription = \"a tool\"\n"+body), 0o644))
@@ -517,5 +517,107 @@ func TestB300AnArtifactFollowsReleasesWhileAnotherFollowsARedirect(t *testing.T)
 
 	if got := fresh.toolOutput(t); got != "2.0.0" {
 		t.Fatalf("the lock installed %q on another machine, want 2.0.0", got)
+	}
+}
+
+// partsManifest writes a manifest whose version source is version and whose
+// download path is dir, a template of the version's parts.
+func (m machine) partsManifest(t *testing.T, s *vendorServer, version, dir string) string {
+	t.Helper()
+
+	path := filepath.Join(m.fixtures, "tool.toml")
+	must(t, os.WriteFile(path, []byte(
+		"[package]\nname = \"tool\"\ndescription = \"a tool\"\n[version]\n"+version+"\n"+
+			"[[artifact]]\nurl = \""+s.URL+"/dl/"+dir+"/tool.tar.gz\"\nbin = [\"tool\"]\n",
+	), 0o644))
+
+	return path
+}
+
+func TestB304AURLUsesThePartsOfAVersion(t *testing.T) {
+	m := newMachine(t)
+	s := m.vendorServer(t, "1.2-45")
+	s.setFeed("Tool 1.2.3 build 45")
+
+	ref := m.partsManifest(t, s,
+		"from = \"page\"\nrepo = \""+s.URL+"/feed\"\nregex = 'Tool ([\\d.]+) build (\\d+)'\njoin = \"+\"",
+		"{{version_major}}.{{version_minor}}-{{version_part2}}")
+
+	if out, err := m.run(t, "", "add", ref, "--yes"); err != nil {
+		t.Fatalf("add: %v\n%s", err, out)
+	}
+
+	if got := m.toolOutput(t); got != "1.2-45" {
+		t.Fatalf("installed %q, want the download of 1.2-45", got)
+	}
+
+	if got := m.lockedVersion(t, "tool"); got != "1.2.3+45" {
+		t.Fatalf("locked %q, want the groups joined with +", got)
+	}
+
+	// A part the version does not have fails the download, and names it.
+	// The manifest at the same path now wants a patch number.
+	s.setFeed("Tool 1.2 build 45")
+	m.partsManifest(t, s,
+		"from = \"page\"\nrepo = \""+s.URL+"/feed\"\nregex = 'Tool ([\\d.]+) build (\\d+)'\njoin = \"+\"",
+		"{{version_patch}}")
+
+	_, err := m.run(t, "", "update", "tool", "--yes")
+	if err == nil || !strings.Contains(err.Error(), "{{version_patch}}: the version 1.2+45 has no patch number") {
+		t.Fatalf("want the missing patch number named, got %v", err)
+	}
+}
+
+func TestB304ASparkleFeedJoinsTheShortVersionAndTheBuild(t *testing.T) {
+	m := newMachine(t)
+	s := m.vendorServer(t, "1.2.0-87")
+	s.setFeed(`<rss><channel>
+<item><sparkle:shortVersionString>1.1.0 (80)</sparkle:shortVersionString><sparkle:version>80</sparkle:version></item>
+<item><enclosure url="x" sparkle:shortVersionString="1.2.0 (87)" sparkle:version="87"/></item>
+</channel></rss>`)
+
+	ref := m.partsManifest(t, s, "from = \"sparkle\"\nrepo = \""+s.URL+"/feed\"\njoin = \"+\"",
+		"{{version_part1}}-{{version_part2}}")
+
+	if out, err := m.run(t, "", "add", ref, "--yes"); err != nil {
+		t.Fatalf("add: %v\n%s", err, out)
+	}
+
+	if got := m.lockedVersion(t, "tool"); got != "1.2.0+87" {
+		t.Fatalf("locked %q, want the short version and the build of the newest item", got)
+	}
+}
+
+func TestB304LintKnowsTheVersionPartsAndChecksJoin(t *testing.T) {
+	m := newMachine(t)
+	path := filepath.Join(m.fixtures, "tool.toml")
+
+	lint := func(version, url string) (string, error) {
+		must(t, os.WriteFile(path, []byte("[package]\nname = \"tool\"\ndescription = \"a tool\"\n[version]\n"+version+
+			"\n[[artifact]]\nurl = \""+url+"\"\nsha256 = \""+strings.Repeat("a", 64)+"\"\nbin = [\"tool\"]\n"), 0o644))
+
+		return m.run(t, "", "manifest", "lint", path)
+	}
+
+	page := "from = \"page\"\nrepo = \"https://example.com\"\nregex = '(\\d+)-(\\d+)'"
+
+	out, err := lint(page+"\njoin = \"+\"",
+		"https://example.com/{{version_nodots}}/{{version_underscores}}/{{version_dashes}}/{{version_part2}}.zip")
+	if err != nil {
+		t.Fatalf("lint refused the version parts: %v\n%s", err, out)
+	}
+
+	for version, want := range map[string]string{
+		page + "\njoin = \"x\"": `version.join must be ".", "+", "-" or "_"`,
+		"from = \"github-releases\"\nrepo = \"owner/tool\"\njoin = \"+\"": "version.join needs version.regex",
+	} {
+		if out, err := lint(version, "https://example.com/{{version}}.zip"); err == nil || !strings.Contains(out, want) {
+			t.Errorf("lint accepted\n%s\nor did not say %q: %v\n%s", version, want, err, out)
+		}
+	}
+
+	if out, err := lint(page, "https://example.com/{{version_bogus}}.zip"); err == nil ||
+		!strings.Contains(out, "unknown template variable {{version_bogus}}") {
+		t.Errorf("lint accepted an unknown variable: %v\n%s", err, out)
 	}
 }
