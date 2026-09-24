@@ -121,7 +121,8 @@ manifest first, and treats the file as the download when it is not one. A
 download gets a manifest for this machine's OS and CPU only, so another kind of
 machine cannot install it from your list. Its version comes from the file name,
 and `oku update` never changes it. To move on, add the URL of the newer
-version. A URL on its own has no checksum, so oku trusts the first download
+version, or write a manifest that
+[follows a download URL](../reference/manifest.md#follow-a-download-url). A URL on its own has no checksum, so oku trusts the first download
 and pins its sha256 in `oku.lock`.
 
 A manifest on disk works too:

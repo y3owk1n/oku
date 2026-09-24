@@ -2,6 +2,7 @@
 package lock
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -75,6 +76,12 @@ type Package struct {
 	Deps []Package `toml:"dep,omitempty"`
 }
 
+// VersionOn returns the version that p pins for the platform key, such as
+// "linux-amd64-musl".
+func (p Package) VersionOn(key string) string {
+	return cmp.Or(p.Platforms[key].Version, p.Version)
+}
+
 // FindDep returns the pinned dep that came from ref.
 func (p Package) FindDep(ref string) Package {
 	for _, dep := range p.Deps {
@@ -98,6 +105,9 @@ type Platform struct {
 	Commands bool `toml:"commands,omitempty"`
 	// VendorSHA256 pins what the build's vendor steps downloaded.
 	VendorSHA256 string `toml:"vendor_sha256,omitempty"`
+	// Version is the version of this platform, for a manifest whose artifacts
+	// find their own versions. The package's Version holds it otherwise.
+	Version string `toml:"version,omitempty"`
 }
 
 // Read parses the lock at path. A missing file is an empty lock. File refs that

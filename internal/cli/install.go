@@ -417,6 +417,12 @@ func (e env) installFrom(
 		Version: previous.Version, Tag: previous.Tag, Commit: previous.TagCommit,
 	}
 
+	if m.PerArtifact() && (r.Version != "" || req.constraint != "") {
+		return installed{}, fmt.Errorf(
+			"%s: each artifact finds its own version, so you cannot pick one", r,
+		)
+	}
+
 	allowed, err := resolve.Matches(previous.Version, r.Version)
 	if err != nil {
 		return installed{}, fmt.Errorf("%s: %w", r, err)
@@ -424,6 +430,8 @@ func (e env) installFrom(
 
 	keep := req.keepVersion && previous.Version != "" && allowed
 	switch {
+	case m.PerArtifact():
+		release, err = e.artifactVersions(ctx, opts, req, m, keep)
 	case keep:
 	case r.Version == "" && req.constraint != "":
 		release, err = e.resolver(opts).Pick(ctx, m.Version, req.constraint)
@@ -455,7 +463,7 @@ func (e env) installFrom(
 
 	// A platform whose lock entry says "build" is built from source again.
 	build := req.fromSource || previous.Platforms[host.String()].Strategy == strategyBuild &&
-		previous.Version == m.Version.Value
+		previous.VersionOn(host.String()) == m.Version.Value
 
 	switch {
 	case (build || !ok) && m.BuildsOn(host):
@@ -506,7 +514,7 @@ func (e env) installFrom(
 	// for. Update drops it only together with the version, or when the manifest
 	// now states a digest itself.
 	pinnedSource := ""
-	if at := previous.Platforms[host.String()]; previous.Version == m.Version.Value &&
+	if at := previous.Platforms[host.String()]; previous.VersionOn(host.String()) == m.Version.Value &&
 		at.Strategy == strategyBuild && !req.acceptDigest {
 		pinnedSource = at.SHA256
 	}
@@ -608,7 +616,7 @@ func (e env) installFrom(
 		// A digest that oku.lock pinned for this version and URL still applies,
 		// even when the manifest gives none.
 		pinned := ""
-		if at := previous.Platforms[host.String()]; previous.Version == m.Version.Value &&
+		if at := previous.Platforms[host.String()]; previous.VersionOn(host.String()) == m.Version.Value &&
 			at.URL == artifact.URL {
 			pinned = at.SHA256
 		}
@@ -665,6 +673,10 @@ func (e env) installFrom(
 			SHA256:   realized.SHA256,
 			Commands: artifact.Completions.Generate != "",
 		}
+	}
+
+	if m.PerArtifact() {
+		entry.Version = m.Version.Value
 	}
 
 	env := map[string]string{}
@@ -733,7 +745,7 @@ func keepPins(
 ) lock.Platform {
 	at := previous.Platforms[host.String()]
 	if at.Strategy != strategyBuild || previous.ManifestSHA256 != m.SHA256 ||
-		previous.Version != m.Version.Value {
+		previous.VersionOn(host.String()) != m.Version.Value {
 		return entry
 	}
 
@@ -747,6 +759,8 @@ func keepPins(
 }
 
 // keptPlatforms returns the platform entries of previous that still describe m.
+// When each artifact finds its own version, an entry stays unless oku found
+// another version for its platform.
 func keptPlatforms(
 	previous lock.Package,
 	m *manifest.Manifest,
@@ -754,12 +768,105 @@ func keptPlatforms(
 ) map[string]lock.Platform {
 	platforms := map[string]lock.Platform{}
 
-	if previous.ManifestSHA256 == m.SHA256 && previous.Ref == r.String() &&
-		previous.Version == m.Version.Value {
-		maps.Copy(platforms, previous.Platforms)
+	if previous.ManifestSHA256 != m.SHA256 || previous.Ref != r.String() {
+		return platforms
+	}
+
+	if !m.PerArtifact() {
+		if previous.Version == m.Version.Value {
+			maps.Copy(platforms, previous.Platforms)
+		}
+
+		return platforms
+	}
+
+	for key, at := range previous.Platforms {
+		if now := m.Versions[key]; now == "" || now == at.Version {
+			platforms[key] = at
+		}
 	}
 
 	return platforms
+}
+
+// lockedVersion returns the version that the lock entry of m names. When each
+// artifact finds its own version, that is the version of the first platform in
+// order, so every machine writes the same one.
+func lockedVersion(m *manifest.Manifest, platforms map[string]lock.Platform) string {
+	if !m.PerArtifact() {
+		return m.Version.Value
+	}
+
+	for _, key := range slices.Sorted(maps.Keys(platforms)) {
+		if v := platforms[key].Version; v != "" {
+			return v
+		}
+	}
+
+	return m.Version.Value
+}
+
+// artifactVersions finds the version of each platform that req installs or
+// pins, for a manifest whose artifacts find their own versions, and keeps them
+// in m.Versions. With keep, a platform keeps the version oku.lock pins for it.
+// It returns the release of the platform that req installs.
+func (e env) artifactVersions(
+	ctx context.Context,
+	opts Options,
+	req request,
+	m *manifest.Manifest,
+	keep bool,
+) (resolve.Release, error) {
+	targets := []platform.Platform{req.target()}
+
+	// lockOthers pins other platforms only then.
+	if !req.keepVersion || req.strictPlatforms || req.lockOnly {
+		targets = append(targets, req.platforms...)
+	}
+
+	m.Versions = map[string]string{}
+	found := map[manifest.Version]string{}
+
+	for _, p := range targets {
+		i := slices.IndexFunc(m.Artifacts, func(a manifest.Artifact) bool { return a.Match.Matches(p) })
+		if i < 0 {
+			continue
+		}
+
+		source := *m.Artifacts[i].Version
+
+		version := ""
+		if keep {
+			version = req.previous.Platforms[p.String()].Version
+		}
+
+		if version == "" {
+			version = found[source]
+		}
+
+		if version == "" {
+			release, err := e.resolver(opts).Pick(ctx, source, "")
+
+			// lockOthers skips a platform it cannot pin, unless the platforms are
+			// strict.
+			if err != nil && p != req.target() && !req.strictPlatforms {
+				continue
+			}
+
+			if err != nil {
+				return resolve.Release{}, fmt.Errorf("%s for %s: %w", m.Package.Name, p, err)
+			}
+
+			version = release.Version
+			found[source] = version
+		}
+
+		m.Versions[p.String()] = version
+	}
+
+	version := m.Versions[req.target().String()]
+
+	return resolve.Release{Version: version, Tag: version}, nil
 }
 
 // lockEntry returns the lock entry of m.
@@ -776,7 +883,7 @@ func lockEntry(
 		Ref:            req.ref.String(),
 		Commit:         fetched.Commit,
 		ManifestSHA256: m.SHA256,
-		Version:        m.Version.Value,
+		Version:        lockedVersion(m, platforms),
 		SigningKey:     m.Package.SigningKey,
 		Tag:            tagFor(m),
 		TagCommit:      m.TagCommit,
@@ -859,7 +966,13 @@ func (e env) lockOthers(
 			continue
 		}
 
-		entry, trusted, err := pinFor(ctx, e.store().As(auth), m, release, p, host, at)
+		// Progress names the version of p, not the host's.
+		scoped := ctx
+		if m.PerArtifact() {
+			scoped = status.Scope(ctx, m.Package.Name+" "+m.Versions[p.String()])
+		}
+
+		entry, trusted, err := pinFor(scoped, e.store().As(auth), m, release, p, host, at)
 		if err != nil && req.strictPlatforms {
 			return nil, err
 		}
@@ -954,7 +1067,7 @@ func pinFor(
 
 	return lock.Platform{
 		Strategy: strategyArtifact, URL: artifact.URL, SHA256: sum,
-		Commands: artifact.Completions.Generate != "",
+		Commands: artifact.Completions.Generate != "", Version: m.Versions[p.String()],
 	}, trusted, nil
 }
 

@@ -606,7 +606,7 @@ func reportGained(
 	if len(gained) > 0 {
 		warn(
 			w, "%s %s has an artifact or a build for %s, which its when leaves out",
-			name, got.lock.Version, platformNames(gained),
+			name, got.lock.VersionOn(platform.Host().String()), platformNames(gained),
 		)
 	}
 }
@@ -736,7 +736,7 @@ func driftError(jobs []*job, updating []string) error {
 // changed.
 func (j *job) row(s ui.Style, host platform.Platform) (kind, version, note string) {
 	previous, got := j.req.previous, j.got
-	version = got.lock.Version
+	version = got.lock.VersionOn(host.String())
 
 	switch {
 	case j.req.rebuild:
@@ -748,13 +748,21 @@ func (j *job) row(s ui.Style, host platform.Platform) (kind, version, note strin
 		return "·", version, "pinned and not installed on " + host.String()
 	case !j.locksManifest:
 		return "+", version, ""
-	case previous.Version != version:
-		return "^", previous.Version + " " + s.Arrow() + " " + version, ""
+	case previous.VersionOn(host.String()) != version:
+		return "^", previous.VersionOn(host.String()) + " " + s.Arrow() + " " + version, ""
 	case previous.ManifestSHA256 != got.lock.ManifestSHA256:
 		return "~", version, "manifest changed"
 	case previous.Platforms[host.String()] != (lock.Platform{}) &&
 		previous.Platforms[host.String()].SHA256 != got.lock.Platforms[host.String()].SHA256:
 		return "~", version, "checksum changed"
+	}
+
+	// A platform with a version of its own may move while the host stays.
+	for _, key := range slices.Sorted(maps.Keys(got.lock.Platforms)) {
+		was, now := previous.Platforms[key].Version, got.lock.Platforms[key].Version
+		if was != "" && now != was {
+			return "·", version, key + " " + was + " " + s.Arrow() + " " + now
+		}
 	}
 
 	return "", "", ""

@@ -282,6 +282,22 @@ order step in `prd/product.md`.
 - B177 [3] With `version.from = "git-branch"`, `add` builds the newest commit of
   `version.branch` as version `<date>-<commit>`. `sync` builds the locked commit
   after the branch has moved, and `update` takes the newest commit.
+- B280 [3] With `version.from = "redirect"`, `add` follows the redirects of
+  `repo` past hops without a version, and installs the version that `regex`
+  finds in the first URL it matches. `sync` installs the locked version
+  without asking `repo`, and `update` takes the version `repo` leads to now.
+  When upstream is not at x, `add <ref>@x` fails and names the version it is
+  at.
+- B281 [3] With `version.from = "page"`, the version is the groups of `regex`'s
+  first match in the text at `repo`, joined with `.`. When `regex` matches
+  nothing, or the groups make no version, `add` and `update` fail and change
+  no lock.
+- B283 [3] When each artifact has a `version` table, `add`, `update` and `sync`
+  pin each platform of `[lock] platforms` at its own version, and install the
+  host's. `update` moves only the platforms whose upstream moved, and names
+  them. `sync` installs the host's locked version and leaves `oku.lock` as it
+  was, whatever the host. `outdated` compares the host's version, and
+  `add <ref>@x` fails.
 - B106 [3] With `[version] tag`, `add` installs the release of that tag, also
   when it is a prerelease, as version `<date>-<commit>`, the day and the first
   seven characters of the commit the tag points at. `update` moves the
@@ -304,6 +320,16 @@ order step in `prd/product.md`.
 - B213 [4] `manifest lint` warns about every artifact that has neither
   `sha256` nor `sha256_url`, the first one included, and about no artifact
   that has one.
+- B282 [4] `manifest lint` rejects `redirect` and `page` without `regex`, with
+  a `repo` that is no http(s) URL, or with `strip_prefix` or `tag`, and
+  rejects a `regex` with no group, one that does not compile, and one with
+  another `from`. It warns about their artifacts without a checksum.
+- B284 [4] `manifest lint` rejects an artifact `version` beside `[version]` or
+  `[build]`, missing from another artifact, with a `from` other than
+  `redirect` or `page`, or with keys other than `from`, `repo` and `regex`.
+  `manifest bump` refuses such a manifest.
+- B285 [4] An artifact `version` given as a string, such as `"1.0.0"`, fails
+  `manifest lint` and `add` with an error that says it must be a table.
 - B22 [3] Every profile change creates a generation. `oku rollback` restores
   the previous one, `oku rollback <n>` a named one. Rollback restores
   `oku.lock` with it, so a following `sync` changes nothing, and it never
