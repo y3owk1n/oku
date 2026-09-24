@@ -9,6 +9,7 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 
@@ -112,17 +113,29 @@ func (e env) wantedEnv(
 	var hints []string
 
 	want.packages(e.globalProfile())
-	hints = append(hints, want.list(filepath.Join(e.config, list.FileName), base)...)
+	hints = append(hints, want.list(filepath.Join(e.config, list.FileName), list.Read, base)...)
 
 	if project != "" && active {
 		e.project = project
 		want.prepend["PATH"] = append([]string{e.profile().BinDir()}, want.prepend["PATH"]...)
 		want.packages(e.profile())
-		hints = append(hints, want.list(e.listPath(), base)...)
+		hints = append(hints, want.list(e.listPath(), list.Read, base)...)
+
+		overlays, err := overlaysOf(project, base)
+		if err != nil {
+			hints = append(hints, err.Error())
+		}
+
+		for _, path := range overlays {
+			hints = append(hints, want.list(path, list.ReadOverlay, base)...)
+		}
 	}
 
+	// A later list may set what an earlier one requires.
 	for _, name := range slices.Sorted(maps.Keys(want.missing)) {
-		hints = append(hints, name+" is not set, "+want.missing[name])
+		if _, set := want.set[name]; !set {
+			hints = append(hints, name+" is not set, "+want.missing[name])
+		}
 	}
 
 	return want, hints
@@ -142,12 +155,14 @@ func (w *shellEnv) packages(prof *profile.Profile) {
 // list applies the [[env.file]] and then the [env] of the list at path. A list
 // that does not parse is left out, and so is a file that does not, and the
 // hints say why.
-func (w *shellEnv) list(path string, base func(string) (string, bool)) []string {
+func (w *shellEnv) list(
+	path string, read func(string) (*list.List, error), base func(string) (string, bool),
+) []string {
 	if _, err := os.Stat(path); err != nil {
 		return nil
 	}
 
-	l, err := list.Read(path)
+	l, err := read(path)
 	if err != nil {
 		return []string{err.Error()}
 	}
@@ -337,4 +352,33 @@ func isHookState(name string) bool {
 	return slices.Contains([]string{
 		shellhook.StateSaved, shellhook.StateAdded, shellhook.StatePath, shellhook.StateKeys, shellhook.StateHint,
 	}, name)
+}
+
+// envNameRe matches the value of OKU_ENV, which names oku.<env>.toml.
+var envNameRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]*$`)
+
+// overlaysOf returns the lists that set variables over the oku.toml of
+// project, in order: oku.<env>.toml when OKU_ENV names one, then
+// oku.local.toml when it exists.
+func overlaysOf(project string, lookup func(string) (string, bool)) ([]string, error) {
+	var overlays []string
+
+	if name, _ := lookup("OKU_ENV"); name != "" {
+		path := filepath.Join(project, "oku."+name+".toml")
+
+		switch {
+		case !envNameRe.MatchString(name) || name == "local" || name == "pkg":
+			return nil, fmt.Errorf("OKU_ENV=%s names no environment, give letters, digits, - and _, other than local or pkg", name)
+		case !fileExists(path):
+			return nil, fmt.Errorf("OKU_ENV=%s, and %s does not exist", name, path)
+		}
+
+		overlays = append(overlays, path)
+	}
+
+	if local := filepath.Join(project, "oku.local.toml"); fileExists(local) {
+		overlays = append(overlays, local)
+	}
+
+	return overlays, nil
 }

@@ -318,6 +318,37 @@ unless = ["CLAUDECODE", "CI"]
   gitignored `.env.local`, is yours to change without one. See
   [Why you have to allow a project](../guides/projects.md#why-you-have-to-allow-a-project).
 
+#### oku.\<env\>.toml and oku.local.toml
+
+Two more lists beside a project's `oku.toml` set variables over it:
+
+| File | When | Commit it |
+|---|---|---|
+| `oku.<env>.toml` | `OKU_ENV=<env>` is set, such as `OKU_ENV=staging` for `oku.staging.toml` | Yes |
+| `oku.local.toml` | It exists | No, gitignore it |
+
+```toml
+# oku.local.toml
+[env]
+API_URL = "http://localhost:8080"
+
+[[env.file]]
+path = ".env.mine"
+```
+
+- Later lists win: `oku.toml`, then `oku.<env>.toml`, then
+  `oku.local.toml`. A `required` variable of `oku.toml` counts as set when a
+  later list sets it.
+- They hold `[env]` alone. oku refuses one with `[packages]` or any other
+  table, since packages belong in `oku.lock`.
+- `OKU_ENV` takes letters, digits, `-` and `_`. `local` and `pkg` name no
+  environment, since `oku.pkg.toml` is a manifest. When `oku.<env>.toml` does
+  not exist, the hook prints a hint and `oku exec` refuses to run.
+- `oku allow` covers each of them that git tracks, whatever `OKU_ENV` names,
+  so a pull that changes `oku.prod.toml` needs a new allow. An untracked one,
+  and the `.env` files it loads, are yours to change without one.
+- They apply to a project only. The global list has none.
+
 ### [vars]
 
 `[vars]` holds values that you name yourself, for `[files]` paths, `text`

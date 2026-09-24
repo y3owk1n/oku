@@ -225,7 +225,8 @@ list's sha256.
 - oku decrypts a `secret = true` `.env` file in memory and writes no
   decrypted copy. A file of `scope = "exec"` loads for `oku exec` only, never
   for the shell.
-- The allow covers each `.env` file of the project that git tracks, so a pull
+- The allow covers each `oku.<env>.toml`, `oku.local.toml` and `.env` file of
+  the project that git tracks, whatever `OKU_ENV` names, so a pull
   that changes one stops the hook until a new `oku allow`. oku asks git about
   a file that git did not track only when the file changes.
 - A project list may not hold `[files]`, `[vars]`, `[secrets]` or settings

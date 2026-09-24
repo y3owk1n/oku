@@ -582,3 +582,86 @@ scope = "exec"
 		t.Fatalf("exec saw DEPLOY_TOKEN=%q", got)
 	}
 }
+
+func TestB322OkuEnvAndOkuLocalSetVariablesOverTheList(t *testing.T) {
+	m := newMachine(t)
+	t.Setenv("PATH", "/usr/bin:/bin")
+	t.Setenv("OKU_ENV", "")
+
+	project := m.envFileProject(t, `[env]
+STAGE = "dev"
+API = "https://dev.example.com"
+TOKEN = { required = "set it in oku.local.toml" }
+`, map[string]string{
+		"oku.staging.toml": "[env]\nSTAGE = \"staging\"\nAPI = \"https://staging.example.com\"\n",
+		"oku.local.toml":   "[env]\nAPI = \"http://localhost:8080\"\nTOKEN = \"mine\"\n",
+	})
+
+	got := m.dirEnv(t)
+	if *got["STAGE"] != "dev" || *got["API"] != "http://localhost:8080" || *got["TOKEN"] != "mine" {
+		t.Fatalf("without OKU_ENV STAGE=%s API=%s TOKEN=%s", *got["STAGE"], *got["API"], *got["TOKEN"])
+	}
+
+	t.Setenv("OKU_ENV", "staging")
+
+	if got := strings.TrimSpace(m.stdout(t, "exec", "sh", "-c", "echo $STAGE $API")); got != "staging http://localhost:8080" {
+		t.Fatalf("exec with OKU_ENV=staging saw %q", got)
+	}
+
+	for _, name := range []string{"prod", "local"} {
+		t.Setenv("OKU_ENV", name)
+
+		if _, err := m.run(t, "", "exec", "true"); err == nil || !strings.Contains(err.Error(), "OKU_ENV="+name) {
+			t.Fatalf("want exec refused with OKU_ENV=%s, got %v", name, err)
+		}
+	}
+
+	t.Setenv("OKU_ENV", "")
+	must(t, os.WriteFile(filepath.Join(project, "oku.local.toml"), []byte("[packages]\nrg = \"github:BurntSushi/ripgrep\"\n"), 0o644))
+
+	if out := m.apply(t); !strings.Contains(out, "holds packages") {
+		t.Fatalf("an oku.local.toml with [packages] was not refused:\n%s", out)
+	}
+}
+
+func TestB323AllowCoversTheOverlaysThatGitTracks(t *testing.T) {
+	m := newMachine(t)
+	t.Setenv("PATH", "/usr/bin:/bin")
+	t.Setenv("OKU_ENV", "prod")
+
+	project := filepath.Join(m.fixtures, "proj")
+	must(t, os.MkdirAll(project, 0o755))
+	must(t, os.WriteFile(filepath.Join(project, "oku.toml"), []byte("[env]\nSTAGE = \"dev\"\n"), 0o644))
+	must(t, os.WriteFile(filepath.Join(project, "oku.prod.toml"), []byte("[env]\nSTAGE = \"prod\"\n"), 0o644))
+
+	cmd := exec.Command("git", "-C", project, "init", "-q")
+	must(t, cmd.Run())
+	must(t, exec.Command("git", "-C", project, "add", "oku.toml", "oku.prod.toml").Run())
+
+	m.opts.WorkDir = project
+
+	_, err := m.run(t, "", "allow")
+	must(t, err)
+	m.apply(t)
+
+	if os.Getenv("STAGE") != "prod" {
+		t.Fatalf("STAGE=%q, want prod", os.Getenv("STAGE"))
+	}
+
+	// The user's own overlay, and a file it loads, change without a new allow.
+	must(t, os.WriteFile(filepath.Join(project, ".env.mine"), []byte("MINE=1\n"), 0o644))
+	must(t, os.WriteFile(filepath.Join(project, "oku.local.toml"), []byte("[[env.file]]\npath = \".env.mine\"\n"), 0o644))
+	m.apply(t)
+
+	if os.Getenv("MINE") != "1" {
+		t.Fatalf("an untracked oku.local.toml did not apply, MINE=%q", os.Getenv("MINE"))
+	}
+
+	// A pull that changes a tracked overlay stops the project, whatever OKU_ENV says.
+	t.Setenv("OKU_ENV", "")
+	must(t, os.WriteFile(filepath.Join(project, "oku.prod.toml"), []byte("[env]\nSTAGE = \"evil\"\n"), 0o644))
+
+	if out := m.apply(t); !strings.Contains(out, "oku allow") {
+		t.Fatalf("a changed tracked overlay still applied:\n%s", out)
+	}
+}

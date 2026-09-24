@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"slices"
 
 	"github.com/y3owk1n/oku/internal/list"
@@ -12,8 +13,8 @@ import (
 )
 
 // newAllow returns the allow of the project in e as it is now. It covers the
-// oku.toml and each .env file it loads that git tracks, since a pull can
-// change those. The .env files that git does not track are the user's own.
+// oku.toml, and each overlay and .env file that git tracks, since a pull can
+// change those. The files that git does not track are the user's own.
 func (e env) newAllow() (*trust.Allow, []string, error) {
 	listed, paths, err := e.envFilesOfList()
 	if err != nil {
@@ -38,9 +39,9 @@ func (e env) newAllow() (*trust.Allow, []string, error) {
 }
 
 // allowHolds reports whether the allow of the project in e still covers its
-// oku.toml and the .env files that git tracks. A file that git did not track
-// and that changed since is asked about again, and the allow keeps its new
-// time when git still does not track it.
+// oku.toml and the files that git tracks. oku asks git about a file that is
+// new to the allow, or that git did not track and that changed since. The
+// allow keeps a file that git does not track, with its new time.
 func (e env) allowHolds(allowed *trust.Allowed) (bool, error) {
 	allow, ok := allowed.Get(e.project)
 	if !ok {
@@ -60,8 +61,11 @@ func (e env) allowHolds(allowed *trust.Allowed) (bool, error) {
 		i := slices.IndexFunc(allow.Untracked, func(u trust.Untracked) bool { return u.Path == path })
 
 		switch {
-		case i < 0:
+		case i < 0 && gitTracks(e.project, path):
 			tracked = append(tracked, path)
+		case i < 0:
+			allow.Untracked = append(allow.Untracked, trust.Untracked{Path: path, ModTime: modTime(path)})
+			changed = true
 		case modTime(path) == allow.Untracked[i].ModTime:
 		case gitTracks(e.project, path):
 			tracked = append(tracked, path)
@@ -80,8 +84,9 @@ func (e env) allowHolds(allowed *trust.Allowed) (bool, error) {
 	return holds, nil
 }
 
-// envFilesOfList returns the oku.toml of the project in e and the paths of the
-// .env files it loads.
+// envFilesOfList returns the oku.toml of the project in e and the paths of
+// the other files the hook may read: every overlay, whatever OKU_ENV names,
+// and the .env files of the list and of each overlay.
 func (e env) envFilesOfList() ([]byte, []string, error) {
 	listed, err := os.ReadFile(e.listPath())
 	if err != nil {
@@ -93,11 +98,33 @@ func (e env) envFilesOfList() ([]byte, []string, error) {
 		return nil, nil, err
 	}
 
+	overlays, err := filepath.Glob(filepath.Join(e.project, "oku.*.toml"))
+	if err != nil {
+		return nil, nil, err
+	}
+
 	var paths []string
 
-	for _, f := range l.EnvFiles {
-		if path := f.Abs(e.project); !slices.Contains(paths, path) {
-			paths = append(paths, path)
+	add := func(files []list.EnvFile) {
+		for _, f := range files {
+			if path := f.Abs(e.project); !slices.Contains(paths, path) {
+				paths = append(paths, path)
+			}
+		}
+	}
+
+	add(l.EnvFiles)
+
+	for _, path := range overlays {
+		if filepath.Base(path) == "oku.pkg.toml" {
+			continue
+		}
+
+		paths = append(paths, path)
+
+		// An overlay that does not parse is refused when the hook reads it.
+		if o, err := list.ReadOverlay(path); err == nil {
+			add(o.EnvFiles)
 		}
 	}
 

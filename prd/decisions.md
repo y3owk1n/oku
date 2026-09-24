@@ -1361,3 +1361,17 @@ The hook decrypts a shell-scoped secret file at each prompt, with no cache,
 since a cache would put the plaintext on disk or trust a value the user may
 have changed. With an age key that takes about 10 ms. Give a file encrypted to a
 cloud key service scope "exec".
+
+## D86. Environments are lists of [env] over oku.toml, picked by OKU_ENV
+
+`OKU_ENV=staging` applies `oku.staging.toml` over a project's `oku.toml`, and
+`oku.local.toml` applies over both. They hold `[env]` alone. Why: mise picks
+`mise.<env>.toml` with `MISE_ENV` and keeps `mise.local.toml` for the user,
+and Vite and dotenv-flow layer `.env.<mode>` and `.env.local` the same way. Packages
+stay out, since one `oku.lock` pins the project's packages and an overlay
+that changed them would need a lock of its own.
+
+The allow covers every overlay that git tracks, not only the one `OKU_ENV`
+names, so switching environments needs no new allow and a pull that changes
+any of them does. `local` and `pkg` name no environment, since
+`oku.local.toml` loads anyway and `oku.pkg.toml` is a manifest.

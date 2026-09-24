@@ -53,6 +53,10 @@ project is allowed and synced. Look for the one-line hint it printed when you en
   why.
 - `<file> does not exist, create it or give the file optional = true`: an
   [`[[env.file]]`](reference/oku-toml.md#envfile) is missing.
+- `OKU_ENV=<env>, and <dir>/oku.<env>.toml does not exist`: unset `OKU_ENV`,
+  or create the file.
+- `<file> holds packages, and a list over oku.toml holds [env] alone`: move
+  the packages to `oku.toml`.
 - `decrypt <file>: ...`: a `secret = true` file did not decrypt. The rest of
   the line comes from age or sops, and
   [the secrets guide](guides/secrets.md#when-a-secret-cannot-be-decrypted)
