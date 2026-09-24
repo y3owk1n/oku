@@ -101,8 +101,9 @@ has, and how to build it from source if needed. A project can publish one as
 
 A manifest oku writes for you when a repo has none. oku reads the newest
 release, matches the files to operating systems and CPUs, finds the published
-checksums, and looks inside the download for the programs. `--verbose` prints
-the manifest it wrote.
+checksums, and looks inside the download for the programs. For a `cask:` or
+`scoop:` ref, oku translates the recipe of Homebrew or Scoop instead.
+`--verbose` prints the manifest it wrote.
 
 ### store
 

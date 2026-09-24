@@ -84,7 +84,7 @@ manifest change.
 | `strip_prefix` | no | Text cut off the front of a tag to get the version, such as `"v"`. oku ignores a tag without the prefix, except for `v`, see [How oku reads tags](#how-oku-reads-tags). Not for `npm`, `pypi`, `go`, `crates` or `git-branch`. |
 | `tag` | no | One tag that upstream moves, such as `"nightly"`. Only with `github-releases`, `gitea-releases` or `gitlab-releases`, and not with `strip_prefix`. See [Follow a moving tag](#follow-a-moving-tag). |
 | `branch` | with `git-branch` | The branch to follow, such as `"main"`. See [Follow a branch](#follow-a-branch). |
-| `regex` | with `redirect` or `page` | Finds the version, see [Follow a download URL](#follow-a-download-url). |
+| `regex` | with `redirect` or `page` | Finds the version, see [Follow a download URL](#follow-a-download-url). Not with `sparkle`. |
 
 | `from` | `repo` | Reads |
 |---|---|---|
@@ -99,6 +99,7 @@ manifest change.
 | `crates` | a crate name, such as `ripgrep` | Every version of the crate on crates.io. |
 | `redirect` | an http(s) URL | One version, from the URL it redirects to. |
 | `page` | an http(s) URL | One version, from the text at the URL. |
+| `sparkle` | the http(s) URL of a Sparkle feed | One version, the newest in the feed, see [Follow a Sparkle feed](#follow-a-sparkle-feed). |
 
 ```toml
 [version]
@@ -263,6 +264,33 @@ regex = '"host_version":\[(\d+),(\d+),(\d+)\]'
   of each version, and `oku manifest lint` warns.
 - `strip_prefix`, `tag` and `branch` do not apply.
 
+### Follow a Sparkle feed
+
+Many macOS apps announce updates in a Sparkle feed, an XML file that lists
+releases. `sparkle` reads one:
+
+```toml
+[version]
+from = "sparkle"
+repo = "https://www.iina.io/appcast.xml"
+
+[[artifact]]
+match = { os = "darwin" }
+url = "https://dl.iina.io/IINA.v{{version}}.dmg"
+app = ["IINA.app"]
+```
+
+- The version is the highest `sparkle:shortVersionString` among the items of
+  the feed, whether an element or an attribute of the enclosure. The order of
+  the items does not matter.
+- oku skips an item with a `sparkle:channel`, such as `beta`, and an item
+  whose `sparkle:os` names another system, as a feed shared with WinSparkle
+  on Windows has. Sparkle is for macOS, so give other platforms their own
+  [`version` table](#a-version-for-each-platform).
+- As with `page`, the feed names only the newest version, oku has no
+  checksum for the download, and `strip_prefix`, `tag` and `regex` do not
+  apply.
+
 ### A version for each platform
 
 Some vendors keep each platform at its own version. Discord's macOS download is
@@ -287,7 +315,7 @@ strip = 1
 bin = ["discord"]
 ```
 
-- `from` is `redirect` or `page`. Every artifact then needs a `version`, and
+- `from` is `redirect`, `page` or `sparkle`. Every artifact then needs a `version`, and
   the manifest cannot have `[version]` or `[build]`.
 - `{{version}}` and `{{tag}}` in an artifact are its own version.
   `oku add` and `oku update` find the version of this machine and of each
@@ -1260,6 +1288,7 @@ wrote oku.pkg.toml
 | `codeberg:`, `gitea:` | `gitea-releases` |
 | `gitlab:` | `gitlab-releases`. Its assets are the links of the release, not the source archives GitLab adds. |
 | `npm:`, `pypi:`, `go:`, `cargo:` | `npm`, `pypi`, `go`, `crates`, see [Registry packages](#registry-packages) |
+| `cask:`, `scoop:` | the recipe's own rule, see [Recipes of other package managers](#recipes-of-other-package-managers) |
 | a URL of a download | a fixed `value`, see [A URL of the download](#a-url-of-the-download) |
 
 With `@version` oku reads that version's release. It tries the tag `version`,
@@ -1399,6 +1428,80 @@ package's `bin`. A package that lists dependencies gets an
 [npm build](#npm-with-package) instead. `pypi:`, `go:` and `cargo:` refs always
 get a build with a [vendor step](#vendoring) and `package`. Where the runtimes
 come from is in [Registry packages](../guides/npm-pypi-go-cargo.md).
+
+### Recipes of other package managers
+
+`oku add cask:<token>` and `oku add scoop:<name>` read the recipe of a Homebrew
+cask or a Scoop manifest and translate it into a manifest of oku's own. The
+manifest downloads from the vendor, the same URLs the recipe uses, and never
+from Homebrew or Scoop. After that, the recipe only matters to `oku update`,
+which translates it again.
+
+| The recipe says | The manifest gets |
+|---|---|
+| A download for each platform. For a cask, macOS arm64 and Intel, and Linux when it has a Linux build. For Scoop, each arch. | One `[[artifact]]` per platform, with a `match` |
+| A URL with the version in it, `#{version}` or `$version` | `url` with `{{version}}` |
+| A cask's `app`, `binary`, `font`, `manpage`, `app_image` | `app`, `bin`, `font`, `man`, and `bin` for an AppImage |
+| A cask's `.pkg` or `suite` | The apps in it, the programs the cask links from where the package puts them, or else the programs under its `bin` folders, or else the one program named after the cask. oku opens the download to find them, on macOS only. |
+| A cask's `artifact` that moves a folder | The folder in the download, for a `binary` inside it |
+| Scoop's `bin`, `extract_dir`, `shortcuts` | `bin`, `strip`, and a program with an [`[[app]]`](#apps-and-fonts) launcher for each shortcut |
+| Scoop's `bin` with arguments | A [`bin` table](#run-a-program-through-an-interpreter) with `run` and `args` |
+| Scoop's `env_add_path` | Every program in that folder of the download, which oku opens to find them |
+| Scoop's `depends` | [`[runtime] deps`](#runtime) on `scoop:` refs, without 7zip, lessmsi, innounp and dark, which Scoop needs only to unpack |
+| A cask's livecheck, or Scoop's checkver, that reads GitHub releases | `from = "github-releases"` |
+| One that follows a redirect | `from = "redirect"` with a `regex`. Without a regex, the regex finds the version in the file name of the download. |
+| One that matches a regex at a URL, or reads one JSON key there | `from = "page"` with a `regex` |
+| One that reads a Sparkle feed for its short version | `from = "sparkle"` |
+| No rule at all, and a download from GitHub releases | `from = "github-releases"` of that repo |
+
+```toml
+# Translated from the Homebrew cask obsidian.
+[package]
+name = "obsidian"
+homepage = "https://obsidian.md/"
+
+[version]
+from = "page"
+repo = "https://raw.githubusercontent.com/obsidianmd/obsidian-releases/master/desktop-releases.json"
+regex = "\"latestVersion\"\\s*:\\s*\"([0-9][0-9A-Za-z._+-]*)\""
+
+[[artifact]]
+match = { os = "darwin" }
+url = "https://github.com/obsidianmd/obsidian-releases/releases/download/v{{version}}/Obsidian-{{version}}.dmg"
+bin = [{ name = "obsidian", path = "Obsidian.app/Contents/MacOS/obsidian-cli" }]
+app = ["Obsidian.app"]
+
+[[artifact]]
+match = { os = "linux", arch = "amd64" }
+url = "https://github.com/obsidianmd/obsidian-releases/releases/download/v{{version}}/Obsidian-{{version}}.AppImage"
+bin = ["obsidian"]
+```
+
+- oku reads the Ruby of a cask as text and never runs it.
+- A URL template counts only when it gives back the recipe's own download
+  for the recipe's version, on every platform. Other parts of the URL keep
+  the value they have in that download, such as `arm64` for `#{arch}`.
+- When the rule's URL differs by platform, each artifact gets its own
+  [`version` table](#a-version-for-each-platform).
+- When no template gives back the download, when oku has no source for the
+  rule, such as a livecheck that runs Ruby, or when a file inside the
+  download is named after the version, the manifest pins the recipe's version
+  with the recipe's URLs and sha256 digests. A comment at the top says why.
+  `oku update` then moves when the recipe moves.
+- A manifest that follows versions has no checksum, so oku trusts the first
+  download of each version and pins its digest, unless GitHub reports one.
+- oku runs no script of a recipe. A script that only sets up the app, such as
+  a cask's `postflight` or Scoop's `pre_install`, `post_install` and
+  `persist`, stays out of the manifest, and a comment at the top names it. A program whose
+  Scoop arguments name a Scoop folder runs without them, and the comment says
+  so.
+- oku refuses a recipe whose files an installer makes: a cask's `installer`,
+  a Scoop `installer` with a `file`, `innosetup`, and a Scoop script that
+  unpacks the download. A Scoop arch whose download needs such a script gets
+  no artifact. oku refuses a cask with a kernel extension too.
+- oku refuses programs that come from two parts of one `.pkg`, because the
+  installer puts the parts in one folder and oku keeps each part apart.
+- `--asset` and `--bin` do not apply.
 
 ### A URL of the download
 

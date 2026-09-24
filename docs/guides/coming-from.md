@@ -41,7 +41,7 @@ rectangle = { ref = "github:rxhanson/Rectangle", when = { os = "darwin" } }
 | `brew outdated` | `oku outdated` |
 | `brew list`, `brew info` | `oku list`, `oku info <name>` |
 | `brew bundle` with a Brewfile | `oku sync` with `oku.toml` |
-| A cask | A package with an app, which oku copies to `~/Applications` |
+| A cask | `oku add cask:<token>`, which translates the cask into a manifest. oku copies the app to `~/Applications`. |
 | A tap | A [source](../how-oku-works.md#source): `oku source add <alias> <ref>` |
 | `brew search` | `oku search <term>`, in your sources only |
 | `brew services start` | `service = true` on the package, or `oku service start <name>`. See [Services](services.md). |

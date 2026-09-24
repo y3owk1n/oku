@@ -13,6 +13,7 @@ import (
 
 	"github.com/y3owk1n/oku/internal/crates"
 	"github.com/y3owk1n/oku/internal/goproxy"
+	"github.com/y3owk1n/oku/internal/infer"
 	"github.com/y3owk1n/oku/internal/pypi"
 )
 
@@ -37,6 +38,11 @@ const (
 	// Cargo is a crate on crates.io that builds programs. oku infers its
 	// manifest too.
 	Cargo
+	// Cask is a Homebrew cask, a recipe that oku translates into a manifest of
+	// its own.
+	Cask
+	// Scoop is a Scoop manifest, translated the same way.
+	Scoop
 )
 
 // Target is the kind of file Fetch reads a ref as. It sets the file names Fetch
@@ -114,7 +120,9 @@ func ParseIn(dir, s string) (Ref, error) {
 	}
 
 	body := s
-	if _, err := os.Stat(inDir(s)); err != nil {
+	// The "@" of a cask such as cask:temurin@21 is part of its name, so a cask
+	// ref takes no version.
+	if _, err := os.Stat(inDir(s)); err != nil && !strings.HasPrefix(s, "cask:") {
 		body, r.Version = splitVersion(s)
 	}
 
@@ -177,6 +185,22 @@ func ParseIn(dir, s string) (Ref, error) {
 		if !crates.ValidName(r.Location) {
 			return Ref{}, fmt.Errorf("%s: want cargo:name, such as cargo:ripgrep", s)
 		}
+	case strings.HasPrefix(body, "cask:"):
+		r.Kind = Cask
+		r.Location = strings.TrimPrefix(body, "cask:")
+
+		if !infer.ValidCask(r.Location) {
+			return Ref{}, fmt.Errorf("%s: want cask:name, such as cask:rectangle", s)
+		}
+	case strings.HasPrefix(body, "scoop:"):
+		r.Kind = Scoop
+		r.Location = strings.TrimPrefix(body, "scoop:")
+
+		if !infer.ValidScoop(r.Location) {
+			return Ref{}, fmt.Errorf(
+				"%s: want scoop:name or scoop:bucket/name, with a bucket that Scoop knows by name", s,
+			)
+		}
 	case strings.HasPrefix(body, "git+"):
 		r.Kind = Git
 		r.Location, r.Fragment, _ = strings.Cut(strings.TrimPrefix(body, "git+"), "#")
@@ -224,6 +248,10 @@ func (r Ref) String() string {
 		s = "go:" + s
 	case Cargo:
 		s = "cargo:" + s
+	case Cask:
+		s = "cask:" + s
+	case Scoop:
+		s = "scoop:" + s
 	}
 
 	if r.Fragment != "" {

@@ -291,6 +291,15 @@ func (r *Resolver) List(ctx context.Context, v manifest.Version) ([]Release, err
 		return r.crateVersions(ctx, v.Repo)
 	}
 
+	if v.From == manifest.FromSparkle {
+		release, err := r.sparkle(ctx, v)
+		if err != nil {
+			return nil, err
+		}
+
+		return []Release{release}, nil
+	}
+
 	if v.From == manifest.FromRedirect || v.From == manifest.FromPage {
 		release, err := r.scrape(ctx, v)
 		if err != nil {

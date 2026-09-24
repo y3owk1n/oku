@@ -128,3 +128,45 @@ func quoted(text string) string {
 
 	return fmt.Sprintf("%q", text)
 }
+
+var (
+	sparkleItemRe = regexp.MustCompile(`(?s)<item\b.*?</item>`)
+	// A feed puts the version for people in an element or in an attribute of
+	// the enclosure.
+	sparkleShortRe = regexp.MustCompile(
+		`sparkle:shortVersionString\s*(?:=\s*"([^"]*)"|>\s*([^<]*?)\s*</sparkle:shortVersionString>)`,
+	)
+)
+
+// sparkle returns the newest macOS release of the Sparkle appcast at v.Repo by
+// its sparkle:shortVersionString. An item on a channel, such as beta, or for
+// another system, is skipped.
+func (r *Resolver) sparkle(ctx context.Context, v manifest.Version) (Release, error) {
+	what := "read the versions of " + v.Repo
+
+	text, err := r.fetchText(ctx, v, nil)
+	if err != nil {
+		return Release{}, fmt.Errorf("%s: %w", what, err)
+	}
+
+	newest := ""
+
+	for _, item := range sparkleItemRe.FindAllString(text, -1) {
+		// A feed that WinSparkle shares marks the items of other systems.
+		m := sparkleShortRe.FindStringSubmatch(item)
+		if m == nil || strings.Contains(item, "<sparkle:channel>") ||
+			strings.Contains(item, `sparkle:os="`) && !strings.Contains(item, `sparkle:os="macos"`) {
+			continue
+		}
+
+		if version := m[1] + m[2]; scrapedRe.MatchString(version) && (newest == "" || Compare(version, newest) > 0) {
+			newest = version
+		}
+	}
+
+	if newest == "" {
+		return Release{}, fmt.Errorf("%s: no item names a sparkle:shortVersionString", what)
+	}
+
+	return Release{Version: newest, Tag: newest}, nil
+}
