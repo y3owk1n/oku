@@ -283,17 +283,19 @@ url = "https://dl.iina.io/IINA.v{{version}}.dmg"
 app = ["IINA.app"]
 ```
 
-- The version is the highest `sparkle:shortVersionString` among the items of
-  the feed, whether an element or an attribute of the enclosure. The order of
-  the items does not matter.
+- The version is the `sparkle:shortVersionString` of the newest item, whether
+  an element or an attribute of the enclosure. Like Sparkle, oku ranks the
+  items by their build, `sparkle:version`, and by the short version where an
+  item names no build. The order of the items does not matter.
 - oku reads a short version such as `1.165.1 (87405)` up to its space.
 - With `join = "+"` the version is the short version and the item's
   `sparkle:version`, the build, such as `1.165.1+87405`. `{{version_part1}}`
   and `{{version_part2}}` give each in the URL.
-- oku skips an item with a `sparkle:channel`, such as `beta`, and an item
-  whose `sparkle:os` names another system, as a feed shared with WinSparkle
-  on Windows has. Sparkle is for macOS, so give other platforms their own
-  [`version` table](#a-version-for-each-platform).
+- oku skips an item on a `sparkle:channel` such as `beta`. It reads `stable`
+  and `release` as no channel, because some feeds put every release on one.
+  It also skips an item whose `sparkle:os` names another system, as a feed
+  shared with WinSparkle on Windows has. Sparkle is for macOS, so give other platforms
+  their own [`version` table](#a-version-for-each-platform).
 - As with `page`, the feed names only the newest version, oku has no
   checksum for the download, and `strip_prefix`, `tag` and `regex` do not
   apply.
