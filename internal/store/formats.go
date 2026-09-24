@@ -446,3 +446,50 @@ func isDiskImage(f *os.File) bool {
 
 	return string(trailer) == "koly"
 }
+
+// expandPackages expands each installer package at the top of an unpacked disk
+// image into a folder of the same name, when the image holds no app. Such an
+// image, as Zulu and Karabiner ship, only carries the package.
+func expandPackages(dest string) error {
+	entries, err := os.ReadDir(dest)
+	if err != nil {
+		return err
+	}
+
+	var packages []string
+
+	for _, entry := range entries {
+		switch filepath.Ext(entry.Name()) {
+		case ".app":
+			return nil
+		case ".pkg":
+			// A bundle package is a folder, which pkgutil does not read.
+			if entry.Type().IsRegular() {
+				packages = append(packages, entry.Name())
+			}
+		}
+	}
+
+	for _, name := range packages {
+		file := filepath.Join(dest, name)
+		moved := file + ".file"
+
+		if err := os.Rename(file, moved); err != nil {
+			return err
+		}
+
+		if err := os.Mkdir(file, 0o755); err != nil {
+			return err
+		}
+
+		if err := unpkg(moved, file); err != nil {
+			return fmt.Errorf("%s: %w", name, err)
+		}
+
+		if err := os.Remove(moved); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}

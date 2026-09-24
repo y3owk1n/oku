@@ -486,12 +486,14 @@ order step in `prd/product.md`.
   the download on every arch.
 - B296 [4] `oku manifest init --from cask:<token>` or `--from scoop:<name>`
   writes the translated manifest.
-- B298 [4] A cask that ships a `.pkg` or a `suite` translates on macOS. oku
-  opens the download and takes the apps in it, the files that the cask links
-  from where the package installs them, or else the programs under its `bin`
-  folders, or else the one program named after the cask. Programs from two
-  parts of one package fail, since oku keeps the parts apart. A `binary` in
-  the folder that an `artifact` stanza moves is the file of the download.
+- B298 [4] A cask that ships a `.pkg` or a `suite` translates on macOS, where
+  oku opens the download. It takes the apps that the package installs into
+  Applications, or the apps in the suite, and the files that the cask links
+  from where the package installs them. With neither, it takes the programs
+  under the package's `bin` folders, or else the one program named after the
+  cask. Programs from two parts of one package fail, since oku keeps the
+  parts apart. A `binary` in the folder that an `artifact` stanza moves is
+  the file of the download.
 - B299 [4] The `@` of a cask ref is part of the cask's name, as in
   `cask:temurin@21`, so a cask ref takes no `@version`.
 - B264 [4] A `[runtimes]` entry may be a table with `ref` and a `version`
@@ -641,6 +643,9 @@ order step in `prd/product.md`.
   `remove` and `rollback` take it away again.
 - B72 [8] oku unpacks dmg, pkg, deb, rpm and AppImage downloads without
   executing anything inside them. `.msi` follows in step 9.
+- B301 [8] When the top of a `.dmg` holds a `.pkg` and no app, oku unpacks
+  each package into a folder named after it, so `bin` and `app` name files of
+  its payload. oku keeps the packages of an image with an app as files.
 - B287 [8] A disk image that a killed oku process left mounted does not stop
   the next install of it. That install detaches it and unpacks the image, and
   `oku gc` detaches it too.

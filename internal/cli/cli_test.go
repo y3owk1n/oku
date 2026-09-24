@@ -7054,3 +7054,54 @@ func TestB218LintRejectsCompletionPathsTogetherWithGenerate(t *testing.T) {
 		}
 	}
 }
+
+func TestB301ADiskImageThatOnlyCarriesAPackageUnpacksThePackage(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("dmg and pkg are unpacked with macOS tools")
+	}
+
+	m := newMachine(t)
+
+	payload := filepath.Join(m.fixtures, "payload")
+	must(t, os.MkdirAll(filepath.Join(payload, "bin"), 0o755))
+	must(t, os.WriteFile(filepath.Join(payload, "bin", "tool"), []byte("#!/bin/sh\necho from package\n"), 0o755))
+
+	image := filepath.Join(m.fixtures, "image")
+	must(t, os.MkdirAll(image, 0o755))
+
+	if out, err := exec.Command("/usr/bin/pkgbuild", "--quiet", "--root", payload,
+		"--identifier", "test.oku.tool", "--version", "1", "--install-location", "/usr/local/tool",
+		filepath.Join(image, "Install Tool.pkg")).CombinedOutput(); err != nil {
+		t.Skipf("cannot build an installer package here: %v\n%s", err, out)
+	}
+
+	dmg := filepath.Join(m.fixtures, "tool.dmg")
+	if out, err := exec.Command("/usr/bin/hdiutil", "create", "-quiet", "-volname", "Tool", "-srcfolder", image, "-format", "UDZO", dmg).
+		CombinedOutput(); err != nil {
+		t.Skipf("cannot create a disk image here: %v\n%s", err, out)
+	}
+
+	data, err := os.ReadFile(dmg)
+	must(t, err)
+
+	m.installAndRun(t, m.fileManifest(t, "image.dmg", data, `bin = ["Install Tool.pkg/Payload/bin/tool"]`), "from package")
+
+	// Beside an app, a package is an extra, such as an uninstaller, and stays a
+	// file.
+	must(t, os.MkdirAll(filepath.Join(image, "Tool.app", "Contents", "MacOS"), 0o755))
+	must(t, os.WriteFile(filepath.Join(image, "Tool.app", "Contents", "MacOS", "tool"),
+		[]byte("#!/bin/sh\necho from app\n"), 0o755))
+
+	withApp := filepath.Join(m.fixtures, "with-app.dmg")
+	if out, err := exec.Command("/usr/bin/hdiutil", "create", "-quiet", "-volname", "Tool", "-srcfolder", image, "-format", "UDZO", withApp).
+		CombinedOutput(); err != nil {
+		t.Skipf("cannot create a disk image here: %v\n%s", err, out)
+	}
+
+	data, err = os.ReadFile(withApp)
+	must(t, err)
+
+	fresh := newMachine(t)
+	fresh.installAndRun(t, fresh.fileManifest(t, "with-app.dmg", data,
+		"bin = [\"Tool.app/Contents/MacOS/tool\", { name = \"uninstall\", path = \"Install Tool.pkg\" }]"), "from app")
+}

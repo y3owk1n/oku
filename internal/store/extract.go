@@ -73,7 +73,11 @@ func unpackArchive(src, dest string, strip int) error {
 	case bytes.HasPrefix(head, magicOLE):
 		return unmsi(src, dest)
 	case isDiskImage(f):
-		return undmg(src, dest)
+		if err := undmg(src, dest); err != nil {
+			return err
+		}
+
+		return expandPackages(dest)
 	case len(head) > 262 && string(head[257:262]) == "ustar":
 		return untar(f, root, strip)
 	}
