@@ -606,6 +606,8 @@ order step in `prd/product.md`.
   of another store package prints one warning per package on stderr, naming
   the file and the package, unless `runtime.deps` names that package. The
   install succeeds. A download is never checked, and Windows never warns.
+- B328 [5] On macOS the check of B202 counts weak, re-exported, lazy and
+  upward library loads as well as plain ones.
 - B38 [5] Deps are absent from the profile. `oku why <name>` names the
   packages that pull a dep in. `gc` keeps a dep while a generation uses it.
 - B39 [5] Two packages depending on different versions of one dep both install
