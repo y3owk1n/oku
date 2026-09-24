@@ -1279,7 +1279,7 @@ message, see [Troubleshooting](../troubleshooting.md).
 | Message | Meaning |
 |---|---|
 | `<name> has no artifact for darwin-arm64` | No `[[artifact]]` matches this machine, and there is no `[build]`. |
-| `no release asset fits this machine` | The repo has no manifest, and no release asset names this OS and arch. The asset names follow. Pass one to `--asset`. |
+| `no release asset fits this machine` | The repo has no manifest, and no release asset names this OS and arch. The asset names follow. Pass one to `--asset`. For a `[lock]` platform the message names the platform in place of this machine. |
 | `cannot tell which file is the program` | The inferred asset holds several executables and none is named after the repo. Pass one to `--bin`. |
 | `it chose the asset <name> for this machine` | An install from an inferred manifest failed. The lines after it list the other assets that fit and the `--asset` command that picks one. `--verbose` adds the manifest. |
 | `--asset and --bin apply when oku infers a manifest` | The ref has a manifest. |

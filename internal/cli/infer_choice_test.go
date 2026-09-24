@@ -118,7 +118,7 @@ func TestB198InferencePrefersTheSmallerAssetAndNoneNamedAsAnApp(t *testing.T) {
 		t.Fatalf("the %s artifact should be the smaller asset:\n%s", arch, out)
 	}
 
-	if !strings.Contains(out, "fit this machine too: "+name+", "+sevenZip+", "+appName) {
+	if !strings.Contains(out, "fit "+platform.Host().String()+" too: "+name+", "+sevenZip+", "+appName) {
 		t.Fatalf("the manifest should list the larger asset, the 7z and the app:\n%s", out)
 	}
 }
