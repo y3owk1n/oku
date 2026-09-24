@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"reflect"
 	"regexp"
 	"slices"
 	"strconv"
@@ -91,6 +92,11 @@ type Version struct {
 	// the parts apart for {{version_part1}} and the like. With FromSparkle it
 	// joins the short version and the build.
 	Join string `toml:"join"`
+	// JSON holds paths into the JSON that FromPage reads, such as
+	// "releases.0.version". Their values, one per line, are the text Regex reads,
+	// or without Regex the parts of the version. A "*" goes through a list, and
+	// the newest version found wins.
+	JSON []string `toml:"json"`
 }
 
 // UnmarshalText refuses a version given as a string, which TOML would
@@ -496,8 +502,12 @@ func (m *Manifest) validate() error {
 		errs = append(errs, errors.New(`version.regex needs version.from = "redirect" or "page"`))
 	}
 
-	if m.Version.Join != "" && m.Version.Regex == "" && m.Version.From != FromSparkle {
-		errs = append(errs, errors.New("version.join needs version.regex, whose groups it joins"))
+	if m.Version.Join != "" && m.Version.Regex == "" && len(m.Version.JSON) == 0 && m.Version.From != FromSparkle {
+		errs = append(errs, errors.New("version.join needs version.regex or version.json, whose parts it joins"))
+	}
+
+	if len(m.Version.JSON) > 0 && m.Version.From != FromPage {
+		errs = append(errs, errors.New(`version.json needs version.from = "page"`))
 	}
 
 	if m.Version.Branch != "" && m.Version.From != FromGitBranch {
@@ -594,7 +604,7 @@ func (m *Manifest) PerArtifact() bool {
 func perArtifactErrors(m *Manifest) []error {
 	var errs []error
 
-	if m.Version != (Version{}) {
+	if !reflect.ValueOf(m.Version).IsZero() {
 		errs = append(errs, errors.New("set [version] or a version in each artifact, not both"))
 	}
 
@@ -689,9 +699,13 @@ func scrapeErrors(v Version, key string) []error {
 		))
 	}
 
+	errs = append(errs, jsonPathErrors(v.JSON, key)...)
+
 	switch re, err := regexp.Compile(v.Regex); {
 	case v.From == FromSparkle:
 		// Validate rejects a regex beside sparkle.
+	case v.Regex == "" && len(v.JSON) > 0:
+		// The values of the paths are the version.
 	case v.Regex == "":
 		errs = append(errs, fmt.Errorf("%s.regex is required for %s", key, v.From))
 	case err != nil:
@@ -958,4 +972,36 @@ func versionVar(name, version string) (string, error) {
 	i, _ := strconv.Atoi(versionPartRe.FindStringSubmatch(name)[1])
 
 	return nth(strings.Split(version, "+"), i-1, fmt.Sprintf("part %d", i))
+}
+
+// jsonPathErrors checks the paths of version.json. A path is keys and list
+// indexes joined by dots, with at most one "*", and every path with a "*"
+// goes through the same list.
+func jsonPathErrors(paths []string, key string) []error {
+	var (
+		errs []error
+		list string
+	)
+
+	for _, p := range paths {
+		parts := strings.Split(p, ".")
+		if slices.Contains(parts, "") {
+			errs = append(errs, fmt.Errorf("%s.json: %q has an empty part", key, p))
+
+			continue
+		}
+
+		before, _, starred := strings.Cut(p, "*")
+
+		switch {
+		case strings.Count(p, "*") > 1:
+			errs = append(errs, fmt.Errorf("%s.json: %q goes through more than one list", key, p))
+		case starred && list != "" && before != list:
+			errs = append(errs, fmt.Errorf("%s.json: the paths with * must go through the same list", key))
+		case starred:
+			list = before
+		}
+	}
+
+	return errs
 }

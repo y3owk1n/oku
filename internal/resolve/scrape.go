@@ -3,11 +3,13 @@ package resolve
 import (
 	"cmp"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/y3owk1n/oku/internal/manifest"
@@ -35,6 +37,10 @@ func (r *Resolver) scrape(ctx context.Context, v manifest.Version) (Release, err
 	text, err := r.fetchText(ctx, v, re)
 	if err != nil {
 		return Release{}, fmt.Errorf("%s: %w", what, err)
+	}
+
+	if len(v.JSON) > 0 {
+		return jsonVersion(text, v, re, what)
 	}
 
 	match := re.FindStringSubmatch(text)
@@ -222,4 +228,114 @@ func offChannel(item string) bool {
 	m := sparkleChannelRe.FindStringSubmatch(item)
 
 	return m != nil && !slices.Contains([]string{"stable", "release"}, strings.ToLower(m[1]))
+}
+
+// jsonVersion reads the version from the JSON in text at the paths of
+// v.JSON. Their values, one per line, are what re reads, or without a regex
+// the parts of the version. A path with "*" gives one candidate per item of
+// its list, and the newest version wins.
+func jsonVersion(text string, v manifest.Version, re *regexp.Regexp, what string) (Release, error) {
+	var doc any
+
+	// A feed is JSON, or an XML property list, as Apple's feeds are.
+	if err := json.Unmarshal([]byte(text), &doc); err != nil {
+		var plistErr error
+		if doc, plistErr = parsePlist(text); plistErr != nil {
+			return Release{}, fmt.Errorf(
+				"%s: version.json needs a JSON answer or a property list: %w", what, err,
+			)
+		}
+	}
+
+	// The list that the paths with "*" go through, and its length.
+	items := 1
+
+	for _, p := range v.JSON {
+		if before, _, ok := strings.Cut(p, "*"); ok {
+			list, _ := jsonAt(doc, strings.TrimSuffix(before, "."))
+			values, _ := list.([]any)
+			items = len(values)
+		}
+	}
+
+	var best string
+
+	for i := range items {
+		var values []string
+
+		for _, p := range v.JSON {
+			value, ok := jsonAt(doc, strings.Replace(p, "*", strconv.Itoa(i), 1))
+			if !ok {
+				values = nil
+
+				break
+			}
+
+			// A list, such as [0, 0, 413], is its items joined with dots.
+			if list, ok := value.([]any); ok {
+				items := make([]string, len(list))
+				for j, item := range list {
+					items[j] = fmt.Sprint(item)
+				}
+
+				value = strings.Join(items, ".")
+			}
+
+			values = append(values, fmt.Sprint(value))
+		}
+
+		version := ""
+
+		switch {
+		case values == nil:
+		case v.Regex == "":
+			version = strings.Join(values, cmp.Or(v.Join, "."))
+		default:
+			if m := re.FindStringSubmatch(strings.Join(values, "\n")); m != nil {
+				var parts []string
+
+				for _, group := range m[1:] {
+					if group != "" {
+						parts = append(parts, group)
+					}
+				}
+
+				version = strings.Join(parts, cmp.Or(v.Join, "."))
+			}
+		}
+
+		if scrapedRe.MatchString(version) && (best == "" || Compare(version, best) > 0) {
+			best = version
+		}
+	}
+
+	if best == "" {
+		return Release{}, fmt.Errorf("%s: version.json %s gives no version", what, strings.Join(v.JSON, ", "))
+	}
+
+	return Release{Version: best, Tag: best}, nil
+}
+
+// jsonAt returns the value at path in doc, keys and list indexes joined by
+// dots, and whether it is there and not null.
+func jsonAt(doc any, path string) (any, bool) {
+	at := doc
+
+	for _, part := range strings.Split(path, ".") {
+		switch node := at.(type) {
+		case map[string]any:
+			at = node[part]
+		case []any:
+			i, err := strconv.Atoi(part)
+			if err != nil || i < 0 || i >= len(node) {
+				return nil, false
+			}
+
+			at = node[i]
+		default:
+			return nil, false
+		}
+	}
+
+	return at, at != nil
 }

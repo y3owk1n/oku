@@ -805,8 +805,17 @@ func caskLivecheck(bodies []string, vars map[string]string, homepage, template, 
 		switch {
 		case m[1] != "":
 			repo = interpolationRe.ReplaceAllStringFunc(m[1], func(s string) string {
-				if v, ok := vars[s[2:len(s)-1]]; ok {
+				expr := s[2 : len(s)-1]
+				if v, ok := vars[expr]; ok {
 					return v
+				}
+
+				// Homebrew fills a part of the version, as in a feed for each major
+				// version, with the cask's own version.
+				if oku, ok := rubyVersions[expr]; ok {
+					if v, err := manifest.Expand(oku, map[string]string{"version": version}); err == nil {
+						return v
+					}
 				}
 
 				return s
@@ -826,6 +835,20 @@ func caskLivecheck(bodies []string, vars map[string]string, homepage, template, 
 	strategy := ""
 	if m := rubyStrategyRe.FindStringSubmatch(body); m != nil {
 		strategy = m[1]
+	}
+
+	// A block that reads fields of a JSON or an XML feed becomes version.json
+	// or a regex.
+	if (strategy == "json" || strategy == "xml") && strings.Contains(body, " do |") &&
+		!strings.Contains(repo, "{{") {
+		regex, ok := "", true
+		if m := rubyRegexRe.FindStringSubmatch(body); m != nil {
+			regex, ok = liveRegex(m[1]+m[2], m[3])
+		}
+
+		if f := blockFollow(body, strategy, repo, regex, parts); ok && f != nil {
+			return f
+		}
 	}
 
 	switch {
@@ -933,7 +956,7 @@ func rubyRegex(body, flags string, parts int) (string, bool) {
 		return "", false
 	}
 
-	body = strings.ReplaceAll(body, `\/`, "/")
+	body = strings.ReplaceAll(strings.ReplaceAll(body, `\/`, "/"), `\h`, `[0-9a-fA-F]`)
 	prefix := ""
 
 	for _, f := range flags {
