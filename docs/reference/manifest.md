@@ -404,7 +404,7 @@ oku recognises a download by its content, not by its file name.
 
 | Format | Notes |
 |---|---|
-| tar, tar.gz, tar.bz2, tar.xz, tar.zst | |
+| tar, tar.gz, tar.bz2, tar.xz, tar.zst | An xz file may use a BCJ filter for x86, ARM, ARM-Thumb, PowerPC, IA-64 or SPARC, or the Delta filter. ARM64 and RISC-V BCJ are not read. |
 | zip | |
 | 7z | An archive made on Windows has no unix file modes. Its programs still run, because oku marks every `bin` as executable. |
 | `.deb` | oku unpacks only the data archive. Its files are at `usr/bin/...`. |

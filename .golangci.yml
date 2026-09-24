@@ -1,5 +1,9 @@
 version: "2"
 linters:
+  exclusions:
+    # A copy of XZ Embedded's Go port, kept as it is upstream.
+    paths:
+      - internal/xz
   settings:
     errcheck:
       exclude-functions:

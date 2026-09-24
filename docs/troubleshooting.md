@@ -259,7 +259,8 @@ error. Find the file's current URL.
 
 `decompress: ...` means the download starts as gzip, bzip2, xz or zstd but
 fails to decompress. A cut-off download does this, and so does an xz file
-with a filter oku does not read.
+with an ARM64 or RISC-V BCJ filter, which oku does not read. oku reads the x86,
+ARM, ARM-Thumb, PowerPC, IA-64, SPARC and Delta filters.
 
 `the download is no archive and no program` means the file is neither an
 archive oku unpacks nor a program. A single file that a runtime runs, such
