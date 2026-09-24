@@ -1270,5 +1270,5 @@ version on first use, or oku checks it against GitHub's digest.
 
 Out of scope for now: merging the recipes of several package managers into one
 manifest, winget, the aqua registry, finding the upstream repo of a Homebrew
-formula, third-party taps and buckets, a `.pkg` inside a `.dmg`, and a version
+formula, third-party taps and buckets, and a version
 whose parts a URL uses one by one, such as Homebrew's `version.csv`.
