@@ -160,6 +160,13 @@ order step in `prd/product.md`.
   package for the `[lock]` platforms it matches and installs nothing, and
   with no such platform it fails. A `when` that matches no platform, or a
   value that is no key=value pair, fails.
+- B331 [2] A go or cargo vendor step with a `when` gives another `[lock]`
+  platform the vendor digest of the build on this machine when the same
+  vendor steps match both.
+- B332 [2] Every build of a `pypi:` package asks uv for the wheels of a fixed
+  platform: manylinux 2.28 on Linux with glibc, musllinux with musl, macOS 13
+  on macOS, and the MSVC target on Windows. The digest does not depend on the
+  machine's glibc or macOS, so a pin from another platform matches.
 - B182 [2] oku pins a package whose `when` leaves out the host, with its deps,
   for the lock platforms that `when` matches, and installs nothing of it.
   `sync` does that when the lock has no entry for its ref, or with `[lock]`

@@ -1386,3 +1386,27 @@ more than one filter. Why: ulikunitz reads LZMA2 alone and fails with
 use. The Go port is the only pure-Go decoder with BCJ and Delta, and it has
 not changed since 2020, so oku keeps a copy it can patch in place of a module
 nobody maintains. It has no ARM64 or RISC-V BCJ filter.
+
+## D88. A pypi: build asks uv for the wheels of a fixed platform
+
+Every build of a `pypi:` package passes `--python-platform` to uv, on the host
+as for a pin of another platform: `<arch>-manylinux_2_28` for Linux with
+glibc, `<arch>-unknown-linux-musl` for musl, `<arch>-apple-darwin` with
+`MACOSX_DEPLOYMENT_TARGET=13.0` for macOS, and `<arch>-pc-windows-msvc` for
+Windows. Why: uv picks the newest wheel that the machine's glibc or macOS
+takes. On 2026-09-24 cryptography 44.0.0 in Debian 13 on arm64, glibc 2.41,
+installed the `manylinux_2_34` wheel, and the same install with
+`--python-platform aarch64-unknown-linux-gnu` took the `manylinux_2_28` one. So
+a pin written on a Mac disagreed with the build on Linux, and two Linux
+machines with different glibc disagreed with each other. A fixed platform
+makes the digest a property of the lock. glibc 2.28 is Debian 10 and RHEL 8,
+and macOS 13 is the oldest macOS that Apple still supports.
+
+A go or cargo vendor step with a `when` shares the host's digest with a
+platform where the same vendor steps run (B331). The plain `pip` step, which
+runs `pip download -r requirements.txt`, stays pinned by the first build on
+each platform: pip cannot name a platform without refusing source archives.
+
+A lock written before this change pins the wheels of the machine that built
+the package. A new build of it, on a new machine or after `oku gc`, can then
+fail with "the vendored packages changed", which names `oku update`.
