@@ -409,11 +409,17 @@ func (e env) installFrom(
 	}
 
 	// oku installs deps first. A build links against its build deps, and every dep
-	// stays in the closure so that gc keeps it.
+	// stays in the closure so that gc keeps it. A dep whose when leaves out this
+	// machine is only pinned, so it counts for neither.
 	wanted, buildDeps := m.Runtime.Deps, 0
 	if build {
 		wanted = append(slices.Clone(m.Build.Deps), wanted...)
-		buildDeps = len(m.Build.Deps)
+
+		for _, dep := range m.Build.Deps {
+			if dep.When.Matches(host) {
+				buildDeps++
+			}
+		}
 	}
 
 	deps, err := e.installDeps(ctx, opts, req, fetched, wanted)
@@ -1151,7 +1157,7 @@ func (e env) manifestData(
 	}
 
 	if write := e.inferrerOf(req.ref.Kind); write != nil {
-		text, err := e.inferAt(ctx, opts, req.ref.Version, func(version string) (string, error) {
+		text, err := e.inferAt(ctx, opts, cmp.Or(req.ref.Version, req.constraint), func(version string) (string, error) {
 			at := req
 			at.ref.Version = version
 
@@ -1200,7 +1206,7 @@ func (e env) manifestData(
 	}
 
 	for i, target := range targets {
-		_, err = e.inferAt(ctx, opts, req.ref.Version, func(version string) (string, error) {
+		_, err = e.inferAt(ctx, opts, cmp.Or(req.ref.Version, req.constraint), func(version string) (string, error) {
 			var err error
 
 			inferred, err = e.inferrer(opts).Manifest(
@@ -1784,6 +1790,38 @@ func (e env) installDeps(
 			)
 		}
 
+		// A dep is for the platforms its when matches. This machine installs it
+		// only when it is one of them, and the others pin it.
+		onHost := !parent.lockOnly && dep.When.Matches(platform.Host())
+		platforms := slices.DeleteFunc(slices.Clone(parent.platforms), func(p platform.Platform) bool {
+			return !dep.When.Matches(p)
+		})
+
+		keys := make([]string, 0, len(platforms)+1)
+		if onHost {
+			keys = append(keys, platform.Host().String())
+		}
+
+		for _, p := range platforms {
+			keys = append(keys, p.String())
+		}
+
+		// Nothing here resolves the dep. The entry that a machine of its platforms
+		// pinned stays in the lock, as a package's entries for other platforms do.
+		if !onHost && len(platforms) == 0 {
+			var theirs []string
+			for _, p := range dep.When.Of() {
+				theirs = append(theirs, p.String())
+			}
+
+			if kept := parent.previous.FindDepFor(r.String(), theirs); kept.Ref != "" &&
+				slices.ContainsFunc(theirs, func(key string) bool { return kept.Platforms[key] != (lock.Platform{}) }) {
+				set.locks = append(set.locks, kept)
+			}
+
+			continue
+		}
+
 		stack := append(slices.Clone(parent.stack), parent.ref.String())
 		if slices.Contains(stack, r.String()) {
 			return set, fmt.Errorf(
@@ -1792,7 +1830,7 @@ func (e env) installDeps(
 			)
 		}
 
-		previous := parent.previous.FindDep(r.String())
+		previous := parent.previous.FindDepFor(r.String(), keys)
 		keep := parent.keepVersion && previous.Ref != ""
 
 		commit, wantManifest := "", ""
@@ -1808,7 +1846,7 @@ func (e env) installDeps(
 		// ref, the constraint and the lock entry all match.
 		key := fmt.Sprintf(
 			"%s %s %v %v %v %v %v", r, dep.Version, keep, parent.acceptDigest, previous,
-			parent.platforms, parent.lockOnly,
+			platforms, !onHost,
 		)
 
 		got, err := parent.deps.do(parent.root, key, func() (installed, error) {
@@ -1820,9 +1858,9 @@ func (e env) installDeps(
 				acceptDigest:    parent.acceptDigest,
 				acceptKey:       parent.acceptKey,
 				keepVersion:     keep,
-				platforms:       parent.platforms,
+				platforms:       platforms,
 				strictPlatforms: parent.strictPlatforms,
-				lockOnly:        parent.lockOnly,
+				lockOnly:        !onHost,
 				approve:         parent.approve,
 				log:             parent.log,
 				constraint:      dep.Version,
@@ -1835,11 +1873,17 @@ func (e env) installDeps(
 			return set, fmt.Errorf("dep %s: %w", r, err)
 		}
 
+		set.locks = append(set.locks, got.lock)
+
+		// A dep that is only pinned is not on this machine.
+		if !onHost {
+			continue
+		}
+
 		set.prefixes = append(
 			set.prefixes,
 			store.Dep{Name: got.lock.Name, Prefix: got.profile.StorePath},
 		)
-		set.locks = append(set.locks, got.lock)
 		set.substituted = append(set.substituted, got.substituted...)
 		set.cacheNotes = append(set.cacheNotes, got.cacheNotes...)
 		set.linkNotes = append(set.linkNotes, got.linkNotes...)

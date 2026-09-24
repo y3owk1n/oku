@@ -598,3 +598,136 @@ func TestB331AGoVendorStepWithWhenSharesItsDigestWithThePlatformsItMatches(t *te
 		t.Fatalf("the entry of %s lacks the vendor digest of this machine:\n%s", other, locked)
 	}
 }
+
+func TestB333ADepTakesWhenSoEachPlatformPinsItsOwnVersion(t *testing.T) {
+	m := newMachine(t)
+	other := otherPlatform()
+	server := newReleaseServer(t, "v1.0.0", "v2.0.0")
+	m.opts.GitHubAPI = server.URL + "/api"
+
+	m.dataDep(t)
+
+	user := filepath.Join(m.fixtures, "user.toml")
+	must(t, os.WriteFile(user, []byte(fmt.Sprintf(`[package]
+name = "user"
+[version]
+value = "1.0.0"
+[build]
+deps = [
+  { ref = "./data.toml", version = "^1", when = { os = %q } },
+  { ref = "./data.toml", version = "^2", when = { os = %q } },
+]
+[[build.step]]
+run = "printf '#!/bin/sh\\ncat %%s\\n' {{dep.data.prefix}}/share/data.txt > user"
+shell = "sh"
+[[build.step]]
+install = { bin = ["user"] }
+`, platform.Host().OS, other.OS)), 0o644))
+
+	must(t, os.MkdirAll(m.config, 0o755))
+	must(t, os.WriteFile(filepath.Join(m.config, "oku.toml"),
+		[]byte(fmt.Sprintf("[lock]\nplatforms = [%q]\n", other.String())), 0o644))
+
+	if out, err := m.run(t, "", "add", user, "--yes"); err != nil {
+		t.Fatalf("add: %v\n%s", err, out)
+	}
+
+	if got := m.output(t, "user"); got != "1.0.0" {
+		t.Fatalf("user was built with data %q, want 1.0.0 on this machine", got)
+	}
+
+	locked, err := os.ReadFile(filepath.Join(m.config, "oku.lock"))
+	must(t, err)
+
+	for _, want := range []string{"version = '1.0.0'", "version = '2.0.0'", "[package.dep.platform." + other.String() + "]"} {
+		if !strings.Contains(string(locked), want) {
+			t.Fatalf("oku.lock lacks %s:\n%s", want, locked)
+		}
+	}
+
+	if out, err := m.run(t, "", "sync", "--locked"); err != nil {
+		t.Fatalf("sync --locked after add: %v\n%s", err, out)
+	}
+
+	// On a machine where neither the host nor [lock] matches the second entry,
+	// sync keeps what another machine pinned for it.
+	list, err := os.ReadFile(filepath.Join(m.config, "oku.toml"))
+	must(t, err)
+	must(t, os.WriteFile(filepath.Join(m.config, "oku.toml"),
+		[]byte(strings.Replace(string(list), fmt.Sprintf("platforms = [%q]", other.String()), "platforms = []", 1)), 0o644))
+
+	if out, err := m.run(t, "", "sync", "--locked"); err != nil {
+		t.Fatalf("sync --locked dropped the entry of another platform: %v\n%s", err, out)
+	}
+
+	// Two entries of one dep may not both match a platform.
+	must(t, os.WriteFile(user, []byte(`[package]
+name = "user"
+[version]
+value = "1.0.0"
+[build]
+deps = [{ ref = "./data.toml", version = "^1" }, { ref = "./data.toml", version = "^2", when = { os = "linux" } }]
+[[build.step]]
+install = { bin = ["user"] }
+`), 0o644))
+
+	if _, err := m.run(t, "", "add", user, "--yes"); err == nil || !strings.Contains(err.Error(), "listed twice") {
+		t.Fatalf("want overlapping entries of one dep refused, got %v", err)
+	}
+}
+
+func TestB334AnInferredDepWithARangeInfersFromTheReleaseItPicks(t *testing.T) {
+	m := newMachine(t)
+	host := platform.Host()
+
+	// The older release names its files another way than the newest one does.
+	older, _ := m.archive(t, "older", map[string]string{"tool": "#!/bin/sh\necho 1.3.0\n"})
+	newest, _ := m.archive(t, "newest", map[string]string{"tool": "#!/bin/sh\necho 1.4.0\n"})
+
+	release := func(tag, name, file string) string {
+		return fmt.Sprintf(
+			`{"tag_name": %q, "assets": [{"name": %q, "browser_download_url": "file://%s"}]}`, tag, name, file,
+		)
+	}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/repos/owner/tool/commits/HEAD":
+			_, _ = w.Write([]byte("5555555555555555555555555555555555555555"))
+		case "/api/repos/owner/tool/releases/latest":
+			_, _ = w.Write([]byte(release("v1.4.0", hostAssetName(), newest)))
+		case "/api/repos/owner/tool/releases/tags/v1.3.0":
+			_, _ = w.Write([]byte(release("v1.3.0", "tool_1.3.0_"+host.OS+"_"+host.Arch+".tar.gz", older)))
+		case "/api/repos/owner/tool/releases":
+			_, _ = w.Write([]byte(`[{"tag_name": "v1.4.0"}, {"tag_name": "v1.3.0"}]`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(server.Close)
+
+	m.opts.GitHubAPI = server.URL + "/api"
+	m.opts.GitHubRaw = server.URL + "/raw"
+
+	user := filepath.Join(m.fixtures, "user.toml")
+	must(t, os.WriteFile(user, []byte(`[package]
+name = "user"
+[version]
+value = "1.0.0"
+[build]
+deps = [{ ref = "github:owner/tool", version = "~1.3" }]
+[[build.step]]
+run = "cp {{dep.tool.prefix}}/bin/tool user"
+shell = "sh"
+[[build.step]]
+install = { bin = ["user"] }
+`), 0o644))
+
+	if out, err := m.run(t, "", "add", user, "--yes"); err != nil {
+		t.Fatalf("add: %v\n%s", err, out)
+	}
+
+	if got := m.output(t, "user"); got != "1.3.0" {
+		t.Fatalf("user was built with tool %q, want 1.3.0", got)
+	}
+}

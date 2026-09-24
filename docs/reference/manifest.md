@@ -952,7 +952,26 @@ deps = [
 deps = ["github:someone/recipes#ca-certificates"]
 ```
 
-A dep is a ref string, or a table with `ref` and an optional `version`:
+A dep is a ref string, or a table with `ref`, an optional `version` and an
+optional `when`. `when` takes the form of a package's
+[`when` in oku.toml](oku-toml.md#when), and limits the dep to matching
+platforms. The same dep may appear twice with a version for each platform:
+
+```toml
+[runtime]
+deps = [
+  { ref = "./node.toml", version = "^22", when = { os = "linux" } },
+  { ref = "./node.toml", version = "^20", when = [{ os = "darwin" }, { os = "windows" }] },
+]
+```
+
+- Each entry is installed on the machines its `when` matches, and pinned in
+  `oku.lock` for the `[lock]` platforms it matches. A platform that no entry
+  matches gets no such dep.
+- Two entries of one dep must not both match a platform.
+- A `[runtimes]` entry in oku.toml takes no `when`.
+
+A `version`:
 
 - A bare version such as `22` picks that version, or the newest 22.x when no
   release is exactly 22.
