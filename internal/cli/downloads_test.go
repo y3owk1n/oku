@@ -92,3 +92,25 @@ func TestB327AURLWhoseFileNamesNoVersionTakesItFromItsFolder(t *testing.T) {
 		t.Fatalf("want version 0, got %v:\n%s", err, out)
 	}
 }
+
+func TestB329AnXzArchiveWithABCJFilterUnpacks(t *testing.T) {
+	m := newMachine(t)
+
+	// testdata/tool-bcj.tar.xz is tool-1.0.0/tool, packed with "xz --x86 --lzma2".
+	fixture, err := os.ReadFile(filepath.Join("testdata", "tool-bcj.tar.xz"))
+	must(t, err)
+
+	archive := filepath.Join(m.fixtures, "tool-1.0.0.tar.xz")
+	must(t, os.WriteFile(archive, fixture, 0o644))
+
+	out, err := m.run(t, "", "add", m.rawManifest(t, "tool", fmt.Sprintf(
+		"[[artifact]]\nurl = \"file://%s\"\nstrip = 1\nbin = [\"tool\"]\n", archive,
+	)))
+	if err != nil {
+		t.Fatalf("add: %v\n%s", err, out)
+	}
+
+	if got := m.toolOutput(t); got != "from a bcj archive" {
+		t.Fatalf("tool printed %q", got)
+	}
+}
