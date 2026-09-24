@@ -297,10 +297,13 @@ order step in `prd/product.md`.
   first match in the text at `repo`, joined with `.`. When `regex` matches
   nothing, or the groups make no version, `add` and `update` fail and change
   no lock.
-- B297 [3] With `version.from = "sparkle"`, the version is the highest
-  `sparkle:shortVersionString` among the items of the Sparkle feed at `repo`,
-  as an element or an attribute. An item on a channel, such as beta, or one
-  whose `sparkle:os` is not `macos`, does not count. `regex` does not apply.
+- B297 [3] With `version.from = "sparkle"`, the version is the
+  `sparkle:shortVersionString` of the newest item of the Sparkle feed at
+  `repo`, from an element or an attribute. Like Sparkle, oku ranks the items
+  by `sparkle:version`, and by the short version when an item names no build.
+  An item on a channel, such as beta, or one whose `sparkle:os` is not
+  `macos`, does not count. A channel named `stable` or `release` counts as
+  none. `regex` does not apply.
 - B304 [3] `{{version_major}}`, `{{version_minor}}`, `{{version_patch}}`,
   `{{version_nodots}}`, `{{version_underscores}}`, `{{version_dashes}}` and
   `{{version_partN}}` expand wherever `{{version}}` does. `join` in a
