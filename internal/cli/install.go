@@ -352,7 +352,11 @@ func noSupportError(m *manifest.Manifest, unsupported []platform.Platform) error
 func inferredHints(req request, inferred infer.Inferred) string {
 	var b strings.Builder
 
-	fmt.Fprintf(&b, "oku inferred a manifest for %s from its release", req.ref)
+	if req.ref.Kind == ref.Cask || req.ref.Kind == ref.Scoop {
+		fmt.Fprintf(&b, "oku translated %s into a manifest", req.ref)
+	} else {
+		fmt.Fprintf(&b, "oku inferred a manifest for %s from its release", req.ref)
+	}
 
 	if !req.verbose {
 		b.WriteString(", --verbose prints it")
@@ -1319,7 +1323,7 @@ func (e env) inferNPM(ctx context.Context, opts Options, req request) (string, e
 // fromRegistry reports whether a ref of kind names a package of a registry,
 // whose manifest oku always infers.
 func fromRegistry(kind ref.Kind) bool {
-	return slices.Contains([]ref.Kind{ref.NPM, ref.PyPI, ref.Go, ref.Cargo}, kind)
+	return slices.Contains([]ref.Kind{ref.NPM, ref.PyPI, ref.Go, ref.Cargo, ref.Cask, ref.Scoop}, kind)
 }
 
 // inferrerOf returns what writes the manifest of a ref of a registry, or nil
@@ -1327,7 +1331,22 @@ func fromRegistry(kind ref.Kind) bool {
 func (e env) inferrerOf(kind ref.Kind) func(context.Context, Options, request) (string, error) {
 	return map[ref.Kind]func(context.Context, Options, request) (string, error){
 		ref.NPM: e.inferNPM, ref.PyPI: e.inferPyPI, ref.Go: e.inferGo, ref.Cargo: e.inferCargo,
+		ref.Cask: e.translate, ref.Scoop: e.translate,
 	}[kind]
+}
+
+// translate writes the manifest of a cask or scoop ref from its recipe. The
+// manifest downloads from the vendor and follows the vendor's versions.
+func (e env) translate(ctx context.Context, opts Options, req request) (string, error) {
+	if req.asset != "" || len(req.bins) > 0 {
+		return "", fmt.Errorf("--asset and --bin do not apply, %s names its downloads and programs", req.ref)
+	}
+
+	if req.ref.Kind == ref.Cask {
+		return e.inferrer(opts).FromCask(ctx, req.ref.Location, opts.CaskAPI)
+	}
+
+	return e.inferrer(opts).FromScoop(ctx, req.ref.Location)
 }
 
 // inferCargo writes the manifest of a cargo ref. The build runs the cargo of
@@ -1573,6 +1592,9 @@ func inferredWhy(got installed) (one, many string) {
 	case strings.HasPrefix(got.lock.Ref, "npm:"):
 		return "is an npm package, so oku inferred a manifest from the registry",
 			"are npm packages, so oku inferred their manifests from the registry"
+	case strings.HasPrefix(got.lock.Ref, "cask:"), strings.HasPrefix(got.lock.Ref, "scoop:"):
+		return "is a recipe of another package manager, so oku translated it into a manifest",
+			"are recipes of other package managers, so oku translated each into a manifest"
 	case strings.HasPrefix(got.lock.Ref, "http"):
 		return "is a download and no manifest, so oku inferred one from it",
 			"are downloads and no manifests, so oku inferred one from each"

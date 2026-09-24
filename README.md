@@ -126,6 +126,7 @@ oku doctor                     # checks PATH, the shell line, the sandbox and th
 | :-- | :-- | :-- |
 | Install a tool from GitHub, GitLab, Codeberg, Gitea, a URL or a file | `oku add github:BurntSushi/ripgrep` | [Add packages](docs/guides/add-packages.md) |
 | Install from npm, PyPI, Go or crates.io without their toolchains on `PATH` | `oku add npm:prettier` and `[runtimes]` | [Registry packages](docs/guides/npm-pypi-go-cargo.md) |
+| Install an app that has a Homebrew cask or a Scoop manifest, without brew or scoop | `oku add cask:obsidian` | [Add packages](docs/guides/add-packages.md#add-a-homebrew-cask-or-a-scoop-package) |
 | Set up every machine from one repo | a git clone at `~/.config/oku` and `oku sync` | [New machine](docs/guides/new-machine.md) |
 | Place dotfiles and templates | `[files]` and `[vars]` | [Dotfiles](docs/guides/dotfiles.md) |
 | Keep SSH keys and tokens in the repo, encrypted | `[secrets]` with sops and age | [Secrets](docs/guides/secrets.md) |

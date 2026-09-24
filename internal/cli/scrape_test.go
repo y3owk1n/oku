@@ -367,7 +367,7 @@ func TestB284LintChecksAVersionInEachArtifact(t *testing.T) {
 		"[version]\nvalue = \"1.0.0\"\n" + artifact(good):                                                       "not both",
 		artifact(good) + artifact(""):                                                                           "artifact[1]: version is required",
 		artifact(good) + "[build]\n[[build.step]]\nrun = \"true\"\n":                                            "[build] needs [version]",
-		artifact("version = { from = \"npm\", repo = \"x\" }\n"):                                                `"redirect" or "page"`,
+		artifact("version = { from = \"npm\", repo = \"x\" }\n"):                                                `"redirect", "page" or "sparkle"`,
 		artifact("version = { from = \"page\", repo = \"https://example.com\", regex = '(.)', tag = \"x\" }\n"): "from, repo and regex only",
 		artifact("version = { from = \"page\", repo = \"https://example.com\" }\n"):                             "artifact[0].version.regex is required",
 	} {

@@ -77,6 +77,8 @@ type Options struct {
 	// CratesAPI and CrateDownloads replace the URLs of the crates.io API and of
 	// its downloads when set.
 	CratesAPI, CrateDownloads string
+	// CaskAPI replaces the URL of the Homebrew API when set.
+	CaskAPI string
 }
 
 // NewRootCmd builds the oku command tree.

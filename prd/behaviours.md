@@ -297,6 +297,10 @@ order step in `prd/product.md`.
   first match in the text at `repo`, joined with `.`. When `regex` matches
   nothing, or the groups make no version, `add` and `update` fail and change
   no lock.
+- B297 [3] With `version.from = "sparkle"`, the version is the highest
+  `sparkle:shortVersionString` among the items of the Sparkle feed at `repo`,
+  as an element or an attribute. An item on a channel, such as beta, or one
+  whose `sparkle:os` is not `macos`, does not count. `regex` does not apply.
 - B283 [3] When each artifact has a `version` table, `add`, `update` and `sync`
   pin each platform of `[lock] platforms` at its own version, and install the
   host's. `update` moves only the platforms whose upstream moved, and names
@@ -325,13 +329,15 @@ order step in `prd/product.md`.
 - B213 [4] `manifest lint` warns about every artifact that has neither
   `sha256` nor `sha256_url`, the first one included, and about no artifact
   that has one.
-- B282 [4] `manifest lint` rejects `redirect` and `page` without `regex`, with
-  a `repo` that is no http(s) URL, or with `strip_prefix` or `tag`, and
-  rejects a `regex` with no group, one that does not compile, and one with
-  another `from`. It warns about their artifacts without a checksum.
+- B282 [4] `manifest lint` rejects `redirect` and `page` without `regex`, and
+  `redirect`, `page` and `sparkle` with a `repo` that is no http(s) URL, or
+  with `strip_prefix` or `tag`. It rejects a `regex` with no group, one that
+  does not compile, and one with another `from`. It warns about their
+  artifacts without a checksum.
 - B284 [4] `manifest lint` rejects an artifact `version` beside `[version]` or
   `[build]`, missing from another artifact, with a `from` other than
-  `redirect` or `page`, or with keys other than `from`, `repo` and `regex`.
+  `redirect`, `page` or `sparkle`, or with keys other than `from`, `repo` and
+  `regex`.
   `manifest bump` refuses such a manifest.
 - B285 [4] An artifact `version` given as a string, such as `"1.0.0"`, fails
   `manifest lint` and `add` with an error that says it must be a table.
@@ -438,6 +444,49 @@ order step in `prd/product.md`.
 - B261 [4] A crate follows crates.io's versions. A yanked version and one with
   a `-` are never the newest, and `cargo:<name>@<version>` takes one. A crate
   with no programs fails and says it is a library.
+- B291 [4] `oku add cask:<token>` translates the Homebrew cask into a manifest
+  of oku's own and installs from it with no brew. Each platform the cask builds
+  for, macOS arm64 and Intel and Linux, gets an artifact with the vendor's
+  download, and its `app`, `binary`, `font`, `manpage` and `app_image` become
+  `app`, `bin`, `font` and `man`. oku says it translated the recipe, and the
+  lock stores the manifest text.
+- B292 [4] `oku add scoop:<name>` translates a Scoop manifest the same way,
+  from main and else extras, and `scoop:<bucket>/<name>` names any bucket that
+  Scoop knows by name except nonportable. Each arch gets an artifact, with
+  `strip` from `extract_dir`. Each shortcut to a program becomes a program and
+  a Start Menu launcher, and every program in a folder of `env_add_path` is a
+  program. A program with arguments becomes a `bin` table with `run` and
+  `args`, and one whose arguments name a folder of Scoop's runs without them.
+  `depends` becomes `[runtime] deps` on `scoop:` refs, without the packages
+  Scoop needs only to unpack.
+- B293 [4] A translated manifest follows the recipe's own rule for new
+  versions, the cask's livecheck or Scoop's checkver, when it reads GitHub
+  releases, follows a redirect, reads a Sparkle feed, or matches a regex or
+  one JSON key at a URL. A recipe with no rule follows the GitHub releases
+  that its download comes from. A rule whose URL differs by platform gives
+  each artifact its own `version` table.
+- B294 [4] A translation uses a URL template only when it gives back the
+  recipe's own download for the recipe's version on that platform. When no
+  template does, oku cannot translate the rule for new versions, or a file
+  inside the download is named after the version, the manifest pins the
+  recipe's version with its downloads and sha256 digests, and a comment says
+  why. `oku update` translates the recipe again.
+- B295 [4] oku runs no script of a recipe. A script that only sets up the
+  app, such as a cask's `postflight` or Scoop's `persist`, stays out of the
+  manifest, and a comment in the manifest names it. A recipe whose files an installer or a
+  script makes fails and says so: a cask's `installer` or kernel extension,
+  and Scoop's `installer` with a `file`, `innosetup`, or a script that unpacks
+  the download on every arch.
+- B296 [4] `oku manifest init --from cask:<token>` or `--from scoop:<name>`
+  writes the translated manifest.
+- B298 [4] A cask that ships a `.pkg` or a `suite` translates on macOS. oku
+  opens the download and takes the apps in it, the files that the cask links
+  from where the package installs them, or else the programs under its `bin`
+  folders, or else the one program named after the cask. Programs from two
+  parts of one package fail, since oku keeps the parts apart. A `binary` in
+  the folder that an `artifact` stanza moves is the file of the download.
+- B299 [4] The `@` of a cask ref is part of the cask's name, as in
+  `cask:temurin@21`, so a cask ref takes no `@version`.
 - B264 [4] A `[runtimes]` entry may be a table with `ref` and a `version`
   constraint, in a list or in `config.toml`. `add` and `update` then build and
   run with the newest version of that package that the constraint allows, and

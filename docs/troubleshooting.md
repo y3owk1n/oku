@@ -108,6 +108,14 @@ with `--bin`. See [Fix a wrong pick](guides/add-packages.md#fix-a-wrong-pick-wit
 | `--asset "<glob>" names 0 assets, want one of: ...` | The glob matches no file. Pick a name from the list. It must match exactly one. |
 | `--asset and --bin apply when oku infers a manifest, and <ref> has one` | The ref has a manifest, so these flags do nothing. Drop them. |
 | `--asset and --bin do not apply, <ref> names its programs` | An `npm:`, `pypi:`, `go:` or `cargo:` ref. The registry names the download. |
+| `--asset and --bin do not apply, <ref> names its downloads and programs` | A `cask:` or `scoop:` ref. The recipe names the download. |
+| `the cask runs an installer that makes its files`, `the manifest runs an installer` | An installer makes the files, and oku runs none. Write a manifest for the app. |
+| `the cask uses the <kind> stanza, which oku does not place` | The cask installs something oku has no place for, such as a preference pane. |
+| `the cask installs a kernel extension` | A kernel extension works only where macOS loads it, which oku does not do. |
+| `its download needs a pre_install script to unpack it`, `its installer script unpacks the download` | A script of the Scoop manifest makes the files. Write a manifest for it. |
+| `its programs come from <part> and <part>, parts of a package` | The `.pkg` installs its parts into one folder, which oku does not do. Write a manifest for it. |
+| `open <url> to find what it installs` | oku opens a `.pkg` on macOS only. Translate the cask on a Mac, or write a manifest. |
+| `no bucket of main or extras has it` | Name the bucket, as in `scoop:versions/<name>`. |
 | `<ref> has no manifest and no release to infer one from` | The repo has neither. Write a manifest, or point at one elsewhere. |
 
 ## oku cannot find the package or the version

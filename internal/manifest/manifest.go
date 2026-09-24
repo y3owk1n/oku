@@ -116,6 +116,9 @@ const (
 	FromRedirect = "redirect"
 	// FromPage reads one version from the body of a URL.
 	FromPage = "page"
+	// FromSparkle reads the newest version of a Sparkle appcast, the update feed
+	// of many macOS apps.
+	FromSparkle = "sparkle"
 )
 
 // Artifact is a prebuilt download for the platforms its selector matches.
@@ -125,7 +128,8 @@ type Artifact struct {
 	SHA256    string            `toml:"sha256"`
 	SHA256URL string            `toml:"sha256_url"`
 	// Version finds the version of this artifact alone, for a vendor whose
-	// platforms are at different versions. Only FromRedirect and FromPage.
+	// platforms are at different versions. Only FromRedirect, FromPage and
+	// FromSparkle.
 	Version *Version `toml:"version"`
 	// Integrity is a sha512 digest the way npm publishes it, "sha512-" and the
 	// digest in base64.
@@ -462,19 +466,20 @@ func (m *Manifest) validate() error {
 		errs = append(errs, errors.New(
 			"version.strip_prefix does not apply to git-branch, which reads no tags",
 		))
-	case m.Version.From == FromRedirect || m.Version.From == FromPage:
+	case m.Version.From == FromRedirect || m.Version.From == FromPage || m.Version.From == FromSparkle:
 		errs = append(errs, scrapeErrors(m.Version, "version")...)
 	case m.Version.From != "" && !slices.Contains(
 		[]string{
 			FromGitHubReleases, FromGiteaReleases, FromGitLabReleases, FromGitTags,
 			FromGitBranch, FromNPM, FromPyPI, FromGo, FromCrates, FromRedirect, FromPage,
+			FromSparkle,
 		},
 		m.Version.From,
 	):
 		errs = append(errs, fmt.Errorf(
-			"version.from %q must be %q, %q, %q, %q, %q, %q, %q, %q, %q, %q or %q", m.Version.From,
+			"version.from %q must be %q, %q, %q, %q, %q, %q, %q, %q, %q, %q, %q or %q", m.Version.From,
 			FromGitHubReleases, FromGiteaReleases, FromGitLabReleases, FromGitTags,
-			FromGitBranch, FromNPM, FromPyPI, FromGo, FromCrates, FromRedirect, FromPage,
+			FromGitBranch, FromNPM, FromPyPI, FromGo, FromCrates, FromRedirect, FromPage, FromSparkle,
 		))
 	}
 
@@ -590,8 +595,8 @@ func perArtifactErrors(m *Manifest) []error {
 		switch v := a.Version; {
 		case v == nil:
 			errs = append(errs, fmt.Errorf("artifact[%d]: version is required when another artifact has one", i))
-		case v.From != FromRedirect && v.From != FromPage:
-			errs = append(errs, fmt.Errorf(`%s.from must be "redirect" or "page"`, key))
+		case v.From != FromRedirect && v.From != FromPage && v.From != FromSparkle:
+			errs = append(errs, fmt.Errorf(`%s.from must be "redirect", "page" or "sparkle"`, key))
 		case v.Value != "" || v.Tag != "" || v.Branch != "":
 			errs = append(errs, fmt.Errorf("%s takes from, repo and regex only", key))
 		default:
@@ -602,8 +607,8 @@ func perArtifactErrors(m *Manifest) []error {
 	return errs
 }
 
-// scrapeErrors checks a version that FromRedirect or FromPage finds. key names
-// it in the errors.
+// scrapeErrors checks a version that FromRedirect, FromPage or FromSparkle
+// finds. key names it in the errors.
 func scrapeErrors(v Version, key string) []error {
 	var errs []error
 
@@ -612,12 +617,19 @@ func scrapeErrors(v Version, key string) []error {
 	}
 
 	if v.StripPrefix != "" {
+		finds := "regex"
+		if v.From == FromSparkle {
+			finds = "feed"
+		}
+
 		errs = append(errs, fmt.Errorf(
-			"%s.strip_prefix does not apply to %s, whose regex finds the version", key, v.From,
+			"%s.strip_prefix does not apply to %s, whose %s finds the version", key, v.From, finds,
 		))
 	}
 
 	switch re, err := regexp.Compile(v.Regex); {
+	case v.From == FromSparkle:
+		// Validate rejects a regex beside sparkle.
 	case v.Regex == "":
 		errs = append(errs, fmt.Errorf("%s.regex is required for %s", key, v.From))
 	case err != nil:

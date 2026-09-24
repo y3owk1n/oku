@@ -208,6 +208,35 @@ oku add cargo:just
 These need a toolchain named in `[runtimes]`. See
 [npm, PyPI, Go and Cargo packages](npm-pypi-go-cargo.md).
 
+## Add a Homebrew cask or a Scoop package
+
+Many apps have no release that oku can infer from, but have a Homebrew cask or
+a Scoop manifest. oku can read those recipes:
+
+```sh
+oku add cask:visual-studio-code
+oku add scoop:ripgrep
+oku add scoop:extras/vlc
+```
+
+oku writes a manifest of its own from the recipe, which downloads from the
+vendor and follows the vendor's versions. oku never runs brew or scoop, and
+neither needs to be installed. `--verbose` prints the manifest, and
+`oku manifest init --from cask:<token>` writes it to a file you can edit.
+
+A cask covers macOS, and Linux when it has a Linux build. A Scoop package covers
+Windows. To install the same app on every machine, give each OS its ref with
+`when`:
+
+```toml
+[packages]
+vlc = { ref = "cask:vlc", when = { os = "darwin" } }
+vlc-windows = { ref = "scoop:extras/vlc", when = { os = "windows" } }
+```
+
+How each part of a recipe translates is in the
+[manifest reference](../reference/manifest.md#recipes-of-other-package-managers).
+
 ## Pick a version
 
 Without a version, `oku add` takes the newest. Add `@` and a version to pick
