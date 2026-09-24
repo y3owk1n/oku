@@ -525,6 +525,15 @@ order step in `prd/product.md`.
   a `+` version, and a livecheck that only joins its regex's groups, or a
   Sparkle livecheck with no block, becomes a version source with
   `join = "+"`.
+- B306 [4] An answer from a source that lacks a field oku needs, such as a
+  cask without `url` or a release without a tag, fails `add` and `update`
+  before anything changes. The error names the source and each missing field,
+  and says its format may have changed.
+- B307 [4] oku asks each source for a format version where the source has
+  one, and refuses a version it does not read. It asks GitHub's REST API for
+  2026-03-10 and says so when GitHub retires it. It reads PyPI's Simple API
+  in JSON at major version 1, winget manifests at major version 1, and the
+  aqua registry at v4.
 - B264 [4] A `[runtimes]` entry may be a table with `ref` and a `version`
   constraint, in a list or in `config.toml`. `add` and `update` then build and
   run with the newest version of that package that the constraint allows, and
