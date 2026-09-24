@@ -2900,6 +2900,14 @@ mkdir -p "$dir" "$prefix/node_modules/left-pad"
 echo "echo $spec before $before scripts-off=$safe" > "$dir/tool"
 echo "os=$npm_config_os cpu=$npm_config_cpu libc=$npm_config_libc" > "$dir/target"
 echo "module.exports = 1" > "$prefix/node_modules/left-pad/index.js"
+# 1.2.0 depends on a package that builds a native part when npm installs it.
+case "$spec" in *@1.2.0)
+  mkdir -p "$prefix/node_modules/@scope/tool/node_modules/native-dep"
+  echo '{"name": "native-dep", "scripts": {"install": "node-gyp rebuild"}}' \
+    > "$prefix/node_modules/@scope/tool/node_modules/native-dep/package.json"
+  mkdir -p "$prefix/node_modules/native-dep"
+  cp "$prefix/node_modules/@scope/tool/node_modules/native-dep/package.json" "$prefix/node_modules/native-dep/"
+esac
 `
 
 	return m.manifest(t, "interp", map[string]string{
@@ -3090,10 +3098,10 @@ install = { bin = [{ name = "scripted", run = "{{dep.interp.prefix}}/bin/node", 
 
 	must(t, os.RemoveAll(m.data))
 
-	// A name that is not a dependency of the package stops the build.
+	// A name that is not a package of the installed tree stops the build.
 	out, err = m.run(t, "", "add", write(`scripts = ["right-pad"]`), "--yes")
 	if err == nil ||
-		!strings.Contains(err.Error(), "right-pad, which is not a dependency of @scope/tool") {
+		!strings.Contains(err.Error(), "right-pad, which is not a package of the tree of @scope/tool") {
 		t.Fatalf("add accepted a script that is no dependency: %v\n%s", err, out)
 	}
 }
@@ -7104,4 +7112,51 @@ func TestB301ADiskImageThatOnlyCarriesAPackageUnpacksThePackage(t *testing.T) {
 	fresh := newMachine(t)
 	fresh.installAndRun(t, fresh.fileManifest(t, "with-app.dmg", data,
 		"bin = [\"Tool.app/Contents/MacOS/tool\", { name = \"uninstall\", path = \"Install Tool.pkg\" }]"), "from app")
+}
+
+func TestB340AnNPMPackageWhoseTreeHasInstallScriptsNamesThemAndAsks(t *testing.T) {
+	m := newMachine(t)
+	npmServerWith(t, &m, "", true, "1.1.0", "1.2.0")
+
+	must(t, os.MkdirAll(m.config, 0o755))
+	must(t, os.WriteFile(
+		filepath.Join(m.config, "config.toml"),
+		[]byte(fmt.Sprintf("[runtimes]\nnode = %q\n", m.fakeNode(t))), 0o644,
+	))
+
+	// 1.1.0 has no install script in its tree, so nothing runs and nobody is asked.
+	out, err := m.run(t, "", "add", "npm:@scope/tool@1.1.0", "--yes")
+	if err != nil || strings.Contains(out, "install scripts") {
+		t.Fatalf("add 1.1.0: %v\n%s", err, out)
+	}
+
+	_, err = m.run(t, "", "remove", "tool")
+	must(t, err)
+
+	// 1.2.0 pulls in native-dep, which builds when npm installs it. The approval
+	// names it before its script runs.
+	m.opts.Interactive = yes()
+
+	out, err = m.run(t, "y\ny\n", "add", "npm:@scope/tool@1.2.0")
+	if err != nil {
+		t.Fatalf("add 1.2.0: %v\n%s", err, out)
+	}
+
+	if !strings.Contains(out, "runs the install scripts of native-dep") {
+		t.Fatalf("the approval does not name native-dep:\n%s", out)
+	}
+
+	ran, err := filepath.Glob(filepath.Join(m.data, "store", "*", "lib", "node_modules", "native-dep", "postinstall-ran"))
+	must(t, err)
+
+	if len(ran) == 0 {
+		t.Fatal("the install script of native-dep did not run")
+	}
+
+	locked, err := os.ReadFile(filepath.Join(m.config, "oku.lock"))
+	must(t, err)
+
+	if !strings.Contains(string(locked), `scripts = [\"native-dep\"]`) && !strings.Contains(string(locked), `scripts = ["native-dep"]`) {
+		t.Fatalf("the translated manifest in oku.lock does not name native-dep:\n%s", locked)
+	}
 }

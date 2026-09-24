@@ -105,6 +105,9 @@ type Realized struct {
 	Impure bool
 	// VendorSHA256 is the digest of what the vendor steps downloaded, or empty.
 	VendorSHA256 string
+	// UnnamedScripts are the packages of an npm step whose install scripts did
+	// not run, because its scripts does not name them.
+	UnnamedScripts []string
 	// MissingDeps are the store packages a build loads that are not runtime deps.
 	MissingDeps []MissingDep
 }

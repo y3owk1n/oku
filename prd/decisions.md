@@ -1463,3 +1463,23 @@ Alfred's feed does not keep. Paths name the fields themselves. A property
 list is read as the same tree, so one key serves both formats. oku reads the
 Ruby of the block and runs none, and a block with any other statement keeps
 the version pinned.
+
+## D93. oku names the install scripts of an npm: package's tree and asks
+
+After an npm step installs its tree with `--ignore-scripts`, oku reads the
+`package.json` of every package in it and finds those with a `preinstall`,
+`install` or `postinstall` script or a `binding.gyp`. For an `npm:` ref, the
+manifest is oku's own translation, so oku translates it again with those names
+in `scripts` and runs the build approval again, which lists them. A manifest
+of the user's is left as it is, with a warning. Why: packages such as esbuild
+and opencode-ai download or build their native program in an
+install script, and without it they install and then fail at run time.
+Naming them keeps D69's rule that a manifest says whose code runs, and the
+approval shows the names before any code runs. The installed tree is the only
+exact answer, since the registry does not record which versions npm will pick
+for each platform. A name in `scripts` may be any package of the tree, since
+the one that builds is often a dependency of a dependency.
+
+An install script often puts a native program where the package's script was.
+A wrapper that would run such a file through its interpreter runs it
+directly.
