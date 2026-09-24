@@ -1334,3 +1334,16 @@ project, as it does in direnv. A list may not set `PATH` other than by `prepend`
 `ReservedEnv`, since those control the shell. Only the list itself sets
 variables, and oku refuses `[env]` in an included list, since the hook reads
 one file and would otherwise ignore a shared list's variables with no error.
+
+## D84. The allow covers the .env files that git tracks
+
+`oku allow` covers the `oku.toml` and each `.env` file it loads that git
+tracks. A file that git does not track is the user's own, and the hook reads
+its changes without a new allow. Why: a tracked file changes with a
+`git pull`, as the `oku.toml` does, so it needs the same review. A gitignored
+file holds the user's own secrets, and asking for an allow after each edit
+would teach users to run it without reading the change. direnv covers only `.envrc`, so a
+pull that changes a file it loads applies with no prompt.
+
+The allow records each untracked file's modification time, and the hook asks
+git again only when that time changes, so most prompts run no git. A project outside git, or a machine without git, tracks nothing.

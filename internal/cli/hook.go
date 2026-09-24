@@ -2,8 +2,6 @@ package cli
 
 import (
 	"bytes"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -271,20 +269,21 @@ func keepState(change *shellhook.Change, name, value string) {
 }
 
 // projectActive reports whether the hook may apply the project in e. It may when
-// the user allowed this exact oku.toml and the profile matches oku.lock. The
+// the user allowed this exact oku.toml, with the .env files it loads that git
+// tracks, and the profile matches oku.lock. The
 // string says what to run otherwise.
 func (e env) projectActive() (bool, string) {
-	listed, err := os.ReadFile(e.listPath())
-	if err != nil {
-		return false, "cannot read " + e.listPath()
-	}
-
 	allowed, err := trust.ReadAllowed(e.data)
 	if err != nil {
 		return false, err.Error()
 	}
 
-	if !allowed.Has(e.project, digest(listed)) {
+	holds, err := e.allowHolds(allowed)
+	if err != nil {
+		return false, err.Error()
+	}
+
+	if !holds {
 		return false, fmt.Sprintf(
 			"%s is not allowed, run `oku allow` to use its programs here",
 			e.listPath(),
@@ -313,20 +312,16 @@ func (e env) projectSynced() bool {
 	return err == nil && bytes.Equal(locked, snapshot)
 }
 
-func digest(data []byte) string {
-	sum := sha256.Sum256(data)
-
-	return hex.EncodeToString(sum[:])
-}
-
 func newAllowCmd(opts Options) *cobra.Command {
 	return &cobra.Command{
 		Use:   "allow [dir]",
 		Short: "Let the shell hook apply this project's environment",
 		Long: `Let the shell hook apply this project's environment.
 
-An allow belongs to the oku.toml as it is now. After the file changes, the hook
-stops and asks you to allow it again.`,
+An allow belongs to the oku.toml as it is now, and to each .env file it loads
+that git tracks, since a pull can change those. After one of them changes, the
+hook stops and asks you to allow it again. A .env file that git does not track
+is yours, and you change it without a new allow.`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return setAllowed(cmd, opts, args, true)
@@ -376,27 +371,34 @@ func setAllowed(cmd *cobra.Command, opts Options, args []string, allow bool) err
 		return err
 	}
 
-	sum := ""
-
-	if allow {
-		listed, err := os.ReadFile(e.listPath())
-		if err != nil {
+	if !allow {
+		if err := allowed.Set(e.project, nil); err != nil {
 			return err
 		}
 
-		sum = digest(listed)
+		fmt.Fprintf(cmd.OutOrStdout(), "denied %s\n", e.project)
+
+		return nil
 	}
 
-	if err := allowed.Set(e.project, sum); err != nil {
+	record, tracked, err := e.newAllow()
+	if err != nil {
 		return err
 	}
 
-	verb := "allowed"
-	if !allow {
-		verb = "denied"
+	if err := allowed.Set(e.project, record); err != nil {
+		return err
 	}
 
-	fmt.Fprintf(cmd.OutOrStdout(), "%s %s\n", verb, e.project)
+	fmt.Fprintf(cmd.OutOrStdout(), "allowed %s\n", e.project)
+
+	for _, path := range tracked {
+		fmt.Fprintf(cmd.OutOrStdout(), "  git tracks %s, so a change to it needs a new allow\n", path)
+	}
+
+	for _, u := range record.Untracked {
+		fmt.Fprintf(cmd.OutOrStdout(), "  git does not track %s, so it is yours to change\n", u.Path)
+	}
 
 	return nil
 }

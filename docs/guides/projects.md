@@ -112,13 +112,52 @@ The keys are in [the \[env\] reference](../reference/oku-toml.md#env).
 
 Editing `[env]` edits the `oku.toml`, so the hook asks for `oku allow` again.
 
+### Load .env files
+
+`[[env.file]]` loads `.env` files, in order, before the values of `[env]`.
+The example keeps a deploy token away from Claude Code, which sets
+`CLAUDECODE` in the shells it runs. Other agents set their own variable:
+
+```toml
+[[env.file]]
+path = ".env"
+
+[[env.file]]
+path = ".env.deploy"
+optional = true
+unless = ["CLAUDECODE"]
+```
+
+- `.env` must exist. When it is missing, the hook prints a hint and
+  `oku exec` refuses to run.
+- `optional = true` lets `.env.deploy` be missing, for a teammate without a
+  token.
+- `unless` skips the file while `CLAUDECODE` is set and not empty. `oku exec`
+  under an agent leaves out the token even when your shell has it already.
+- Edits to a file apply at the next prompt.
+
+`oku allow` says which files git tracks. Those are part of the allow, since a
+`git pull` can change them. A gitignored file such as `.env.deploy` is yours
+to change without a new allow:
+
+```
+$ oku allow
+allowed /home/you/work/api
+  git tracks /home/you/work/api/.env, so a change to it needs a new allow
+  git does not track /home/you/work/api/.env.deploy, so it is yours to change
+```
+
+The file syntax is in
+[the \[\[env.file\]\] reference](../reference/oku-toml.md#envfile).
+
 ### Why you have to allow a project
 
 A cloned repo could hold an `oku.toml` that puts its own `make` or `git` ahead
 of yours. So the hook does nothing for a project until you run `oku allow`.
 
-- The allow belongs to the `oku.toml` as it is now. After any edit, including
-  a `git pull` that changes it, the hook stops and asks again.
+- The allow belongs to the `oku.toml` as it is now, and to each `.env` file
+  it loads that git tracks. After any edit, including a `git pull` that
+  changes one of them, the hook stops and asks again.
 - `oku deny` removes the allow.
 - `oku allow` and `oku deny` take a directory, and default to the project you
   are in. Both fail when there is no `oku.toml` in the directory or above it.

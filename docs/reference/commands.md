@@ -754,8 +754,11 @@ oku deny [dir]
 `allow` lets the shell hook apply a project's environment. `deny` takes that
 back.
 
-- An allow belongs to the project's `oku.toml` as it is now. Any later edit,
-  such as a `git pull` that changes it, needs a new `oku allow`.
+- An allow belongs to the project's `oku.toml` as it is now, and to each
+  [`.env` file](oku-toml.md#envfile) it loads that git tracks. Any later edit,
+  such as a `git pull` that changes one of them, needs a new `oku allow`.
+- A `.env` file that git does not track is yours, and you change it without a
+  new allow. `oku allow` names each file and says which kind it is.
 - Both default to the project you are in, and fail when there is no
   `oku.toml` in the directory or above it.
 

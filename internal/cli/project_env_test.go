@@ -3,6 +3,7 @@ package cli_test
 import (
 	"encoding/json"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -295,5 +296,212 @@ func TestB315ProjectWithOnlyEnvAppliesWithoutALock(t *testing.T) {
 
 	if got := strings.TrimSpace(m.stdout(t, "exec", "sh", "-c", "echo $STAGE")); got != "dev" {
 		t.Fatalf("exec saw STAGE=%q", got)
+	}
+}
+
+// envFileProject makes an allowed project without packages whose oku.toml is
+// list and whose other files are files, and returns its directory.
+func (m *machine) envFileProject(t *testing.T, list string, files map[string]string) string {
+	t.Helper()
+
+	project := filepath.Join(m.fixtures, "proj")
+	must(t, os.MkdirAll(project, 0o755))
+	must(t, os.WriteFile(filepath.Join(project, "oku.toml"), []byte(list), 0o644))
+
+	for name, body := range files {
+		must(t, os.WriteFile(filepath.Join(project, name), []byte(body), 0o644))
+	}
+
+	m.opts.WorkDir = project
+
+	_, err := m.run(t, "", "allow")
+	must(t, err)
+
+	return project
+}
+
+// dirEnv returns what oku env --json gives for the current directory.
+func (m machine) dirEnv(t *testing.T) map[string]*string {
+	t.Helper()
+
+	var got map[string]*string
+	must(t, json.Unmarshal([]byte(m.stdout(t, "env", "--json")), &got))
+
+	return got
+}
+
+func TestB316EnvFilesLoadInOrderUnderTheInlineValues(t *testing.T) {
+	m := newMachine(t)
+	t.Setenv("PATH", "/usr/bin:/bin")
+	t.Setenv("USER", "kyle")
+
+	m.envFileProject(t, `[[env.file]]
+path = ".env"
+
+[[env.file]]
+path = ".env.local"
+
+[env]
+STAGE = "inline"
+URL = "https://${HOST}/${STAGE}"
+`, map[string]string{
+		".env": `# shared settings
+export HOST=example.com
+STAGE=file
+PLAIN=a b # a comment
+SINGLE='keeps $HOST and \n'
+DOUBLE="line one
+line \"two\"\tend, ${HOST} $USER \$HOST"
+DEFAULT=${MISSING:-fallback}
+LAYER=shared
+`,
+		".env.local": "LAYER=local\n",
+	})
+
+	got := m.dirEnv(t)
+
+	for name, want := range map[string]string{
+		"HOST":    "example.com",
+		"STAGE":   "inline",
+		"URL":     "https://example.com/inline",
+		"PLAIN":   "a b",
+		"SINGLE":  `keeps $HOST and \n`,
+		"DOUBLE":  "line one\nline \"two\"\tend, example.com kyle $HOST",
+		"DEFAULT": "fallback",
+		"LAYER":   "local",
+	} {
+		if got[name] == nil || *got[name] != want {
+			t.Errorf("%s is %v, want %q", name, got[name], want)
+		}
+	}
+}
+
+func TestB317MissingEnvFileHintsUnlessOptionalAndUnlessSkipsIt(t *testing.T) {
+	m := newMachine(t)
+	t.Setenv("PATH", "/usr/bin:/bin")
+	t.Setenv("CLAUDECODE", "")
+
+	project := m.envFileProject(t, `[[env.file]]
+path = ".env"
+
+[[env.file]]
+path = ".env.deploy"
+optional = true
+unless = ["CLAUDECODE"]
+`, nil)
+
+	out := m.apply(t)
+	if !strings.Contains(out, filepath.Join(project, ".env")+" does not exist") {
+		t.Fatalf("no hint for the missing .env:\n%s", out)
+	}
+
+	if strings.Contains(out, ".env.deploy") {
+		t.Fatalf("a missing optional file hints:\n%s", out)
+	}
+
+	if _, err := m.run(t, "", "exec", "true"); err == nil || !strings.Contains(err.Error(), "does not exist") {
+		t.Fatalf("want exec refused without .env, got %v", err)
+	}
+
+	must(t, os.WriteFile(filepath.Join(project, ".env"), nil, 0o644))
+	must(t, os.WriteFile(filepath.Join(project, ".env.deploy"), []byte("DEPLOY_TOKEN=t0ken\n"), 0o644))
+
+	if got := m.dirEnv(t)["DEPLOY_TOKEN"]; got == nil || *got != "t0ken" {
+		t.Fatalf("DEPLOY_TOKEN is %v, want the value of .env.deploy", got)
+	}
+
+	// An agent starts in a shell where the hook already set the token.
+	m.apply(t)
+	t.Setenv("CLAUDECODE", "1")
+
+	if got := m.dirEnv(t)["DEPLOY_TOKEN"]; got != nil {
+		t.Fatalf("CLAUDECODE=1 still loaded .env.deploy, DEPLOY_TOKEN=%s", *got)
+	}
+
+	if got := strings.TrimSpace(m.stdout(t, "exec", "sh", "-c", "echo ${DEPLOY_TOKEN-unset}")); got != "unset" {
+		t.Fatalf("exec under CLAUDECODE=1 passed on DEPLOY_TOKEN=%s", got)
+	}
+}
+
+func TestB318AllowCoversTheEnvFilesThatGitTracks(t *testing.T) {
+	m := newMachine(t)
+	t.Setenv("PATH", "/usr/bin:/bin")
+
+	project := filepath.Join(m.fixtures, "proj")
+	must(t, os.MkdirAll(project, 0o755))
+	must(t, os.WriteFile(filepath.Join(project, "oku.toml"), []byte(`[[env.file]]
+path = ".env"
+
+[[env.file]]
+path = ".env.deploy"
+optional = true
+`), 0o644))
+	must(t, os.WriteFile(filepath.Join(project, ".env"), []byte("STAGE=dev\n"), 0o644))
+
+	git := func(args ...string) {
+		t.Helper()
+
+		cmd := exec.Command("git", append([]string{"-C", project}, args...)...)
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+
+	git("init", "-q")
+	git("add", "oku.toml", ".env")
+
+	m.opts.WorkDir = project
+
+	out, err := m.run(t, "", "allow")
+	must(t, err)
+
+	if !strings.Contains(out, "git tracks "+filepath.Join(project, ".env")) ||
+		!strings.Contains(out, "git does not track "+filepath.Join(project, ".env.deploy")) {
+		t.Fatalf("allow does not say which files it covers:\n%s", out)
+	}
+
+	// The user's own file changes freely, and the next prompt reads it.
+	must(t, os.WriteFile(filepath.Join(project, ".env.deploy"), []byte("TOKEN=one\n"), 0o644))
+	m.apply(t)
+
+	if os.Getenv("TOKEN") != "one" || os.Getenv("STAGE") != "dev" {
+		t.Fatalf("after writing .env.deploy TOKEN=%q STAGE=%q", os.Getenv("TOKEN"), os.Getenv("STAGE"))
+	}
+
+	// A pull that changes a tracked file stops the project until a new allow.
+	must(t, os.WriteFile(filepath.Join(project, ".env"), []byte("STAGE=evil\n"), 0o644))
+
+	if out := m.apply(t); !strings.Contains(out, "oku allow") || os.Getenv("STAGE") == "evil" {
+		t.Fatalf("a changed tracked file still applied, STAGE=%q:\n%s", os.Getenv("STAGE"), out)
+	}
+
+	_, err = m.run(t, "", "allow")
+	must(t, err)
+	m.apply(t)
+
+	if os.Getenv("STAGE") != "evil" {
+		t.Fatalf("a new allow did not apply the tracked file, STAGE=%q", os.Getenv("STAGE"))
+	}
+
+	// A file that git starts to track needs a new allow too.
+	must(t, os.WriteFile(filepath.Join(project, ".env.deploy"), []byte("TOKEN=two\n"), 0o644))
+	git("add", ".env.deploy")
+
+	if out := m.apply(t); !strings.Contains(out, "oku allow") {
+		t.Fatalf("a file that git started to track still applied:\n%s", out)
+	}
+}
+
+func TestB319EnvFileThatSetsAShellVariableIsRefused(t *testing.T) {
+	m := newMachine(t)
+	t.Setenv("PATH", "/usr/bin:/bin")
+
+	m.envFileProject(t, "[[env.file]]\npath = \".env\"\n", map[string]string{
+		".env": "STAGE=dev\nLD_PRELOAD=/tmp/x.so\n",
+	})
+
+	out := m.apply(t)
+	if !strings.Contains(out, "LD_PRELOAD") || os.Getenv("LD_PRELOAD") != "" || os.Getenv("STAGE") != "" {
+		t.Fatalf("a file with LD_PRELOAD applied, STAGE=%q:\n%s", os.Getenv("STAGE"), out)
 	}
 }

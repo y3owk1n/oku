@@ -51,6 +51,10 @@ project is allowed and synced. Look for the one-line hint it printed when you en
   shell.
 - `oku.toml: env.<NAME>: ...`: the `[env]` does not parse, and the error says
   why.
+- `<file> does not exist, create it or give the file optional = true`: an
+  [`[[env.file]]`](reference/oku-toml.md#envfile) is missing.
+- `<file>: line <n>: ...`: the `.env` file does not parse. oku sets none of
+  its variables until you fix the line.
 
 The hint shows once per directory. `oku env --dotenv` prints what the directory
 sets now, and its hints again.

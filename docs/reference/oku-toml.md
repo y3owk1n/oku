@@ -271,6 +271,44 @@ DEPLOY_TOKEN = { required = "ask ops for a token" }
 - Only the list itself sets variables. oku refuses an included list with
   `[env]`.
 
+#### [[env.file]]
+
+`[[env.file]]` loads a `.env` file before the values of `[env]`:
+
+```toml
+[[env.file]]
+path = ".env"
+
+[[env.file]]
+path = ".env.deploy"
+optional = true
+unless = ["CLAUDECODE", "CI"]
+```
+
+| Key | Type | Meaning |
+|---|---|---|
+| `path` | string | The file. A relative path starts at the directory of the `oku.toml`. |
+| `optional` | bool | `true` lets the file be missing. Without it, a missing file prints a hint and `oku exec` refuses to run. |
+| `unless` | array of names | oku skips the file while one of these variables is set and not empty. |
+
+- oku loads the files in order, and a later file wins. The values of `[env]`
+  win over every file and may read a file's variables as `${NAME}`.
+- The file holds `NAME=value` lines. `export` in front, blank lines and `#`
+  comments are fine.
+- A value without quotes ends at the end of the line or at ` #`. Double quotes
+  may span lines and take `\n`, `\t`, `\"`, `\\` and `\$`. Single quotes keep
+  the value as it is.
+- A value without quotes or in double quotes expands `${NAME}`,
+  `${NAME:-default}` and `$NAME`, from the file's earlier lines and then from
+  the environment.
+- oku refuses a file that sets a variable a list may not set, such as `PATH`
+  or `LD_PRELOAD`, and sets none of its variables.
+- The hook reads the files at each prompt, so an edit applies at the next one.
+- In a project, `oku allow` covers each file that git tracks, and a change to
+  one needs a new allow. A file that git does not track, such as a
+  gitignored `.env.local`, is yours to change without one. See
+  [Why you have to allow a project](../guides/projects.md#why-you-have-to-allow-a-project).
+
 ### [vars]
 
 `[vars]` holds values that you name yourself, for `[files]` paths, `text`

@@ -33,30 +33,128 @@ func (v EnvValue) isValue() bool {
 	return !v.Unset && v.Prepend == nil && v.Required == ""
 }
 
-// toEnv reads [env].
-func toEnv(raw map[string]any) (map[string]EnvValue, error) {
+// EnvFile is one entry of [[env.file]], a .env file to load.
+type EnvFile struct {
+	// Path starts at the list's directory when it is relative.
+	Path string
+	// Optional lets the file be missing.
+	Optional bool
+	// Unless names variables that skip the file when one of them is set and
+	// not empty.
+	Unless []string
+}
+
+// toEnv reads [env]. Its key "file", when it holds tables, is [[env.file]].
+func toEnv(raw map[string]any) (map[string]EnvValue, []EnvFile, error) {
 	env := map[string]EnvValue{}
 
+	var files []EnvFile
+
 	for name, value := range raw {
-		v, err := toEnvValue(value)
-		if err != nil {
-			return nil, fmt.Errorf("env.%s: %w", name, err)
+		if tables, ok := value.([]any); ok && name == "file" {
+			for i, table := range tables {
+				f, err := toEnvFile(table)
+				if err != nil {
+					return nil, nil, fmt.Errorf("env.file[%d]: %w", i, err)
+				}
+
+				files = append(files, f)
+			}
+
+			continue
 		}
 
-		switch {
-		case !manifest.ValidEnvName(name):
-			return nil, fmt.Errorf("env.%s: a variable name is letters, digits and _", name)
-		case manifest.ReservedEnv(name) && (name != "PATH" || v.Prepend == nil):
-			return nil, fmt.Errorf(
-				"env.%s: oku does not let a list set %s, which controls the shell. PATH takes { prepend = [...] }",
-				name, name,
-			)
+		v, err := toEnvValue(value)
+		if err != nil {
+			return nil, nil, fmt.Errorf("env.%s: %w", name, err)
+		}
+
+		if err := CheckEnvName(name, v.Prepend != nil); err != nil {
+			return nil, nil, fmt.Errorf("env.%w", err)
 		}
 
 		env[name] = v
 	}
 
-	return env, nil
+	return env, files, nil
+}
+
+// CheckEnvName fails when a list may not set name. prepend says whether the
+// list only puts entries in front of it.
+func CheckEnvName(name string, prepend bool) error {
+	switch {
+	case !manifest.ValidEnvName(name):
+		return fmt.Errorf("%s: a variable name is letters, digits and _", name)
+	case manifest.ReservedEnv(name) && (name != "PATH" || !prepend):
+		return fmt.Errorf(
+			"%s: oku does not let a list set %s, which controls the shell. PATH takes { prepend = [...] }",
+			name, name,
+		)
+	}
+
+	return nil
+}
+
+func toEnvFile(value any) (EnvFile, error) {
+	table, ok := value.(map[string]any)
+	if !ok {
+		return EnvFile{}, errors.New("give a table with path")
+	}
+
+	var f EnvFile
+
+	for key, field := range table {
+		switch key {
+		case "path":
+			f.Path, _ = field.(string)
+		case "optional":
+			if f.Optional, ok = field.(bool); !ok {
+				return EnvFile{}, errors.New("optional is true or false")
+			}
+		case "unless":
+			names, ok := field.([]any)
+			if !ok {
+				return EnvFile{}, errors.New("unless is a list of variable names")
+			}
+
+			for _, name := range names {
+				s, ok := name.(string)
+				if !ok || !manifest.ValidEnvName(s) {
+					return EnvFile{}, errors.New("unless is a list of variable names")
+				}
+
+				f.Unless = append(f.Unless, s)
+			}
+		default:
+			return EnvFile{}, fmt.Errorf("%s is not a key of env.file, which takes path, optional and unless", key)
+		}
+	}
+
+	if f.Path == "" {
+		return EnvFile{}, errors.New("path is the file to load, a string")
+	}
+
+	return f, nil
+}
+
+// Skipped reports whether one of the variables of Unless is set and not empty.
+func (f EnvFile) Skipped(lookup func(string) (string, bool)) bool {
+	for _, name := range f.Unless {
+		if value, _ := lookup(name); value != "" {
+			return true
+		}
+	}
+
+	return false
+}
+
+// Abs returns the file's path, from dir when it is relative.
+func (f EnvFile) Abs(dir string) string {
+	if filepath.IsAbs(f.Path) {
+		return f.Path
+	}
+
+	return filepath.Join(dir, filepath.FromSlash(f.Path))
 }
 
 func toEnvValue(value any) (EnvValue, error) {

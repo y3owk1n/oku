@@ -1,0 +1,141 @@
+package cli
+
+import (
+	"crypto/sha256"
+	"encoding/hex"
+	"os"
+	"os/exec"
+	"slices"
+
+	"github.com/y3owk1n/oku/internal/list"
+	"github.com/y3owk1n/oku/internal/trust"
+)
+
+// newAllow returns the allow of the project in e as it is now. It covers the
+// oku.toml and each .env file it loads that git tracks, since a pull can
+// change those. The .env files that git does not track are the user's own.
+func (e env) newAllow() (*trust.Allow, []string, error) {
+	listed, paths, err := e.envFilesOfList()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	allow := &trust.Allow{}
+
+	var tracked []string
+
+	for _, path := range paths {
+		if gitTracks(e.project, path) {
+			tracked = append(tracked, path)
+		} else {
+			allow.Untracked = append(allow.Untracked, trust.Untracked{Path: path, ModTime: modTime(path)})
+		}
+	}
+
+	allow.ListSHA256 = allowDigest(listed, tracked)
+
+	return allow, tracked, nil
+}
+
+// allowHolds reports whether the allow of the project in e still covers its
+// oku.toml and the .env files that git tracks. A file that git did not track
+// and that changed since is asked about again, and the allow keeps its new
+// time when git still does not track it.
+func (e env) allowHolds(allowed *trust.Allowed) (bool, error) {
+	allow, ok := allowed.Get(e.project)
+	if !ok {
+		return false, nil
+	}
+
+	listed, paths, err := e.envFilesOfList()
+	if err != nil {
+		return false, err
+	}
+
+	var tracked []string
+
+	changed := false
+
+	for _, path := range paths {
+		i := slices.IndexFunc(allow.Untracked, func(u trust.Untracked) bool { return u.Path == path })
+
+		switch {
+		case i < 0:
+			tracked = append(tracked, path)
+		case modTime(path) == allow.Untracked[i].ModTime:
+		case gitTracks(e.project, path):
+			tracked = append(tracked, path)
+		default:
+			allow.Untracked[i].ModTime = modTime(path)
+			changed = true
+		}
+	}
+
+	holds := allowDigest(listed, tracked) == allow.ListSHA256
+	if holds && changed {
+		// Saving the new time only spares git the next time, so a failure is fine.
+		_ = allowed.Set(e.project, &allow)
+	}
+
+	return holds, nil
+}
+
+// envFilesOfList returns the oku.toml of the project in e and the paths of the
+// .env files it loads.
+func (e env) envFilesOfList() ([]byte, []string, error) {
+	listed, err := os.ReadFile(e.listPath())
+	if err != nil {
+		return nil, nil, err
+	}
+
+	l, err := list.Parse(listed, e.listPath())
+	if err != nil {
+		return nil, nil, err
+	}
+
+	var paths []string
+
+	for _, f := range l.EnvFiles {
+		if path := f.Abs(e.project); !slices.Contains(paths, path) {
+			paths = append(paths, path)
+		}
+	}
+
+	return listed, paths, nil
+}
+
+// allowDigest is the sha256 of listed and of each file of tracked, with its
+// path.
+func allowDigest(listed []byte, tracked []string) string {
+	sum := sha256.New()
+	sum.Write(listed)
+
+	for _, path := range tracked {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			data = []byte("\x01missing")
+		}
+
+		sum.Write([]byte("\x00" + path + "\x00"))
+		sum.Write(data)
+	}
+
+	return hex.EncodeToString(sum.Sum(nil))
+}
+
+// gitTracks reports whether git tracks path in the repo of dir. Without git,
+// or outside a repo, nothing is tracked.
+func gitTracks(dir, path string) bool {
+	return exec.Command("git", "-C", dir, "ls-files", "--error-unmatch", "--", path).Run() == nil
+}
+
+// modTime returns the modification time of path in Unix nanoseconds, or 0 when
+// it does not exist.
+func modTime(path string) int64 {
+	info, err := os.Stat(path)
+	if err != nil {
+		return 0
+	}
+
+	return info.ModTime().UnixNano()
+}

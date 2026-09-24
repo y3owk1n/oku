@@ -685,6 +685,21 @@ order step in `prd/product.md`.
   added.
 - B315 [7] A project whose list has `[env]` and no packages applies without an
   `oku.lock`.
+- B316 [7] `[[env.file]]` loads `.env` files in order before `[env]`, a
+  later file over an earlier one and `[env]` over both. A file takes
+  `export`, `#` comments, bare values that end at ` #`, single quotes as they
+  are, and double quotes over several lines with escapes. Bare and
+  double-quoted values expand `${NAME}`, `${NAME:-default}` and `$NAME`.
+- B317 [7] A missing `.env` file prints a hint and makes `oku exec` refuse,
+  unless it has `optional = true`. `unless = [names]` skips the file while one
+  of the names is set and not empty, and `oku exec` then leaves out what the
+  shell's hook set from it.
+- B318 [7] `oku allow` covers each `.env` file of the project that git
+  tracks, and says for each file whether git tracks it. A change to a
+  tracked file, or git starting to track a file, stops the hook until a new
+  allow. The hook applies an untracked file's changes at the next prompt.
+- B319 [7] oku refuses a whole `.env` file that sets a variable a list may
+  not set, such as `LD_PRELOAD`, with a hint.
 - B67 [7] Project packages shadow global ones on PATH while active.
 - B68 [7] The hook exports `[env]` of global packages in every shell.
 - B219 [7] The hook loads the completions under the global profile
