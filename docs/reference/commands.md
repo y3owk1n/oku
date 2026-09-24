@@ -818,6 +818,8 @@ hook runs before each prompt, and what an `.envrc` of direnv can `eval`.
   project's `bin` first and exports the `[env]` of its packages and of its
   `oku.toml`. See [\[env\]](oku-toml.md#env).
 - Otherwise it prints a one-line hint that names `oku allow` or `oku sync`.
+- Inside a project that applies, it sets `OKU_PROJECT` to the project's
+  directory. Everywhere else it removes `OKU_PROJECT`.
 - When a variable that an `[env]` requires is not set, it prints a one-line
   hint that names the variable.
 - It also prints the commands that undo what the last run applied, and gives

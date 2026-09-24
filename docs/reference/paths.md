@@ -171,6 +171,7 @@ oku sets these for others:
 | `OKU_SHELL` | The shell of `oku shell`, to the refs it holds. |
 | `OKU_PREFIX`, `OKU_SRC`, `OKU_JOBS` | A build's steps, see the [manifest reference](manifest.md). |
 | `GIT_TERMINAL_PROMPT=0` | Every `git` oku runs. |
+| `OKU_PROJECT` | Your shell, by the hook, while a project applies, and the command of `oku exec` in a project. It holds the project's directory, for a prompt to show. |
 | `OKU_HOOK_SAVED`, `OKU_HOOK_ADDED`, `OKU_HOOK_HINT` | Your shell, by the hook, to undo what it applied. The hook removes `OKU_HOOK_PATH` and `OKU_HOOK_KEYS`, the state of an older oku. |
 
 The install scripts read `OKU_INSTALL_DIR` and `OKU_VERSION`, see
