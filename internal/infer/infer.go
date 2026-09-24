@@ -31,6 +31,10 @@ var errNoRelease = errors.New("has no release")
 // ErrNoVersion reports that a registry has no version the user asked for.
 var ErrNoVersion = errors.New("has no version")
 
+// ErrWebPage reports a download that is a web page, such as the page of a
+// repo, where oku wanted a file to install.
+var ErrWebPage = errors.New("a web page")
+
 // ErrNoAsset reports that a release has no asset for the platform asked for.
 var ErrNoAsset = errors.New("no release asset fits")
 

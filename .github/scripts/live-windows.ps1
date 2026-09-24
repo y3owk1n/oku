@@ -597,6 +597,15 @@ Check 'a URL of the download installs, with its version from the file name' {
     $hyperfine -match '^hyperfine 1\.19\.0'
 }
 
+Oku add https://github.com/jqlang/jq/releases/download/jq-1.8.1/jq-windows-amd64.exe
+$jq = & "$bin\jq.exe" --version
+Check 'a URL of a single .exe installs as a program' { $jq -match '^jq-1\.8\.1' }
+
+$page = (& $oku add https://github.com/BurntSushi/ripgrep 2>&1) -join "`n"
+Check 'a URL of a repo page is refused and names the github: ref' {
+    ($LASTEXITCODE -ne 0) -and ($page -match 'web page') -and ($page -match 'github:BurntSushi/ripgrep')
+}
+
 # A bin table: a program that runs a dep with arguments in front of the user's.
 # Node stands in for any interpreter, and "-p" prints what it evaluates.
 New-Item -ItemType Directory -Force $fixtures | Out-Null

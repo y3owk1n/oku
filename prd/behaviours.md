@@ -556,6 +556,12 @@ order step in `prd/product.md`.
   manifest for the host from the download, says so, prints it with `--verbose`,
   and warns that it trusted the download. A URL that holds a manifest stays a
   manifest whatever its name, and a URL that does not exist fails as not found.
+- B325 [4] A download that is not an archive must start as a Linux, macOS or
+  Windows program or a `#!` script, or be a `.cmd`, `.bat` or `.ps1` script,
+  or oku refuses it at `add` and at install. A single file that a `bin` table
+  runs through a runtime only has to not be a web page. For a web page oku says so, and for the
+  page of a repo names the forge ref to add. A compressed download that does
+  not decompress fails with the reason.
 - B120 [4] Inference takes a macOS universal build for both darwin arches and a
   `windows-gnu` asset for Windows, and never reads a signature file as the
   checksum file.

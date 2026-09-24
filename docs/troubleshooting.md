@@ -248,6 +248,22 @@ from your own machine, name them in `[lock] platforms`, see
 from another kind of machine, so a machine of that platform has to build it
 once.
 
+## The download is a web page, not a program
+
+A URL, or the `url` of a manifest, gave oku an HTML page where it wanted a
+file to install. Often the URL is the page of a repo, and the error names the
+ref to use, such as `github:owner/repo` or `gitea:host/owner/repo`. A
+download link that now leads to a login or an error page gives the same
+error. Find the file's current URL.
+
+`decompress: ...` means the download starts as gzip, bzip2, xz or zstd but
+fails to decompress. A cut-off download does this, and so does an xz file
+with a filter oku does not read.
+
+`the download is no archive and no program` means the file is neither an
+archive oku unpacks nor a program. A single file that a runtime runs, such
+as a script without `#!`, needs a `bin` table with `run` in its manifest.
+
 ## A package has nothing for this platform
 
 ```

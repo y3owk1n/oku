@@ -91,7 +91,11 @@ func unpackArchive(src, dest string, strip int) error {
 
 			// A compressed file that is no tar archive is a single binary.
 			buffered := bufio.NewReader(data)
-			block, _ := buffered.Peek(512)
+
+			block, err := buffered.Peek(512)
+			if err != nil && !errors.Is(err, io.EOF) {
+				return fmt.Errorf("decompress: %w", err)
+			}
 
 			_, err = tar.NewReader(bytes.NewReader(block)).Next()
 			if len(block) < 512 || errors.Is(err, tar.ErrHeader) {

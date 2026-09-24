@@ -3,6 +3,7 @@
 package store
 
 import (
+	"bufio"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -422,7 +423,18 @@ func unpack(download, tmp string, a manifest.Artifact) error {
 		return err
 	}
 
-	return writeNew(binary, filepath.Join(pkg, filepath.FromSlash(name)))
+	buffered := bufio.NewReader(binary)
+
+	head, err := buffered.Peek(512)
+	if err != nil && !errors.Is(err, io.EOF) {
+		return fmt.Errorf("decompress: %w", err)
+	}
+
+	if err := checkSingleFile(head, name, len(a.Wrap) == 1); err != nil {
+		return err
+	}
+
+	return writeNew(buffered, filepath.Join(pkg, filepath.FromSlash(name)))
 }
 
 // singleFileName names a download that is the program itself after the last
@@ -880,6 +892,11 @@ func (s *Store) Inspect(ctx context.Context, url string) ([]infer.File, error) {
 
 	err = extract(download, tmp, 0)
 	if errors.Is(err, errNotArchive) {
+		name := singleFileName(url)
+		if err := checkHead(download, name); err != nil {
+			return nil, err
+		}
+
 		return []infer.File{{Path: path.Base(url), Executable: true}}, nil
 	}
 
