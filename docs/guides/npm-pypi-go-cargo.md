@@ -145,7 +145,20 @@ as a build dep, so you set nothing up and uv does not land on your `PATH`.
 
 uv installs the package and its dependencies as they were when that version
 was uploaded, and never downloads a python of its own. `oku.lock` pins a
-digest of the install, the same on every machine of a platform. oku writes a
+digest of the install, the same on every machine of a platform.
+
+oku asks uv for the wheels of a fixed platform, on every machine, so the
+digest does not depend on the machine's glibc or macOS version:
+
+| Platform | Wheels for |
+|---|---|
+| Linux with glibc | manylinux 2.28, which runs on glibc 2.28 and newer, such as Debian 10 and RHEL 8 |
+| Linux with musl | musllinux |
+| macOS | macOS 13 and newer |
+| Windows | the MSVC target |
+
+A lock written on a Mac therefore pins the wheels that a Linux machine
+installs. oku writes a
 program for each console script of the package, and copies any other program
 it ships, such as ruff's binary. oku does not expose the programs of its
 dependencies.
@@ -241,10 +254,9 @@ See [Windows](windows.md) for the rest.
 - A library crate has no programs to install.
 - `--asset` and `--bin` do not apply to these refs, because the registry names
   the download and the programs.
-- A `pypi:` digest depends on the platform, so a lock cannot pin it from
-  another kind of machine. `oku sync --locked` fails on a new platform until a
-  machine of that platform has built the package and you committed the lock.
-  See [One list for several OSes](new-machine.md).
+- A `pypi:` package built with an older oku pinned the wheels of the machine
+  that built it. A new build can then stop with "the vendored packages
+  changed". Run `oku update <name>` once to pin the fixed platform's wheels.
 
 To edit the manifest oku writes, save it to a file with
 `oku manifest init --from npm:prettier`, or with a `pypi:`, `go:` or `cargo:`
