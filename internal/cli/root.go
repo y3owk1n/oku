@@ -65,9 +65,10 @@ type Options struct {
 	Elevate func(ctx context.Context, argv []string) error
 	// Interactive overrides the check for a terminal on stdin. Tests set it.
 	Interactive *bool
-	// GitHubAPI and GitHubRaw replace the github.com URLs when set.
+	// GitHubAPI, GitHubRaw and GitHubWeb replace the github.com URLs when set.
 	GitHubAPI string
 	GitHubRaw string
+	GitHubWeb string
 	// NPMRegistry replaces the URL of the npm registry when set.
 	NPMRegistry string
 	// PyPIIndex replaces the URL of the Python Package Index when set.
@@ -379,6 +380,8 @@ type env struct {
 	// runtimes holds the [runtimes] of the list in use and its includes, after a
 	// command loaded it. config.toml's [runtimes] is the fallback.
 	runtimes map[string]manifest.Dep
+	// hosts opens forges, with the addresses that tests give.
+	hosts forge.Hosts
 }
 
 func loadEnv() (env, error) {
@@ -419,6 +422,8 @@ func scopedEnv(cmd *cobra.Command, opts Options) (env, error) {
 	if err != nil {
 		return e, err
 	}
+
+	e.hosts.GitHubAPI, e.hosts.GitHubRaw, e.hosts.GitHubWeb = opts.GitHubAPI, opts.GitHubRaw, opts.GitHubWeb
 
 	if global, _ := cmd.Flags().GetBool(globalFlag); global {
 		return e, nil
@@ -493,7 +498,10 @@ func (e env) profile() *profile.Profile {
 }
 
 func (e env) store() *store.Store {
-	return store.New(e.root, e.cache)
+	s := store.New(e.root, e.cache)
+	s.Private = e.hosts.GitHubAsset
+
+	return s
 }
 
 // stores returns every store that can hold packages. After "oku setup

@@ -109,6 +109,8 @@ type Hosts struct {
 	HTTP      *http.Client
 	GitHubAPI string
 	GitHubRaw string
+	// GitHubWeb replaces https://github.com, for tests.
+	GitHubWeb string
 }
 
 // GitHub returns github.com for an empty host, else the GitHub Enterprise
@@ -146,6 +148,10 @@ func (h Hosts) github(host string) *github {
 
 	if h.GitHubRaw != "" {
 		g.raw = h.GitHubRaw
+	}
+
+	if h.GitHubWeb != "" {
+		g.web = h.GitHubWeb
 	}
 
 	return g

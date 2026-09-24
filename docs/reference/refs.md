@@ -194,9 +194,12 @@ needs the token too.
 - On Codeberg, a Gitea or Forgejo server, and GitLab, oku sends the token with
   the API requests and with the downloads of a release, so a private repo
   installs like a public one.
-- On GitHub the token reads a private repo's manifest and releases, but the
-  download of a private release fails. GitHub serves those files from its API
-  only, and oku downloads the URL a release lists.
+- On github.com the token reads a private repo's manifest and releases. The
+  download link of a private release answers 404, so oku then finds the file
+  through the API and downloads it from there with the token. The manifest and
+  `oku.lock` keep the download link. GitHub redirects the API request to a
+  signed address, and oku never sends the token there. A GitHub Enterprise
+  Server's private release still fails to download.
 - For `git+`, use an ssh URL with a loaded key.
 
 ## Limits
