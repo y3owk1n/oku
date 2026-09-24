@@ -282,7 +282,7 @@ internal/shellhook/ hook and env output per shell
 ## CLI
 
 ```
-oku add <ref>[@version] [--from-source] [--yes] [--verbose] [--global]
+oku add <ref>[@version] [--from-source] [--yes] [--verbose] [--plan | --manifest] [--global]
 oku remove <name> [--global]
 oku sync [list-ref]
 oku update [name]

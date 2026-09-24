@@ -66,6 +66,8 @@ Installs the package that a [ref](refs.md) points at, and writes it to
 | `--yes`, `-y` | Approves the manifest's build commands, or the command that generates an artifact's completions, without asking. See [approvals](security.md#approve-build-commands). |
 | `--accept-key` | Accepts a manifest whose `signing_key` differs from the one in `oku.lock`. See [signing keys](security.md#signing-keys-of-a-manifest). |
 | `--verbose`, `-v` | Shows the output of build commands as they run, and prints a manifest that oku inferred. |
+| `--plan` | Prints what oku found for the ref and what `add` would do, and changes nothing. See [A plan](#a-plan). |
+| `--manifest` | Prints the manifest `add` would use and changes nothing. See [A plan](#a-plan). |
 
 What it does, in order:
 
@@ -112,6 +114,59 @@ On stderr oku also prints, when they apply:
 A failed `add` leaves the previous generation active, and the list, the lock
 and every app, font and service unchanged. The messages it can stop with are
 in [Error messages](#error-messages).
+
+#### A plan
+
+`oku add <ref> --plan` fetches the manifest, or infers one, picks the version
+and the download or build for this machine, and prints what it found. It
+takes the other flags of `add`, such as `@version`, `--from-source`, `--asset`
+and `--bin`, and plans what they would do.
+
+```
+$ oku add github:sharkdp/fd --plan
+name       fd
+version    10.5.0
+homepage   https://github.com/sharkdp/fd
+ref        github:sharkdp/fd
+manifest   inferred by oku, because the ref has none
+asset      fd-v10.5.0-aarch64-apple-darwin.tar.gz
+install    download for darwin-arm64
+url        https://github.com/sharkdp/fd/releases/download/v10.5.0/fd-v10.5.0-aarch64-apple-darwin.tar.gz
+verify     sha256 the release publishes
+programs   fd
+platforms  darwin-amd64, darwin-arm64, linux-amd64-glibc, linux-amd64-musl, linux-arm64-glibc, linux-arm64-musl
+installed  no
+list       ~/.config/oku/oku.toml
+`oku add github:sharkdp/fd --manifest` prints the inferred manifest
+plan: nothing was changed
+```
+
+- `install` is `download`, `build from source`, or `pin in oku.lock only`
+  when nothing fits this machine but a `[lock]` platform does.
+- `verify` says how oku checks the download. `none` means oku
+  [trusts the first download](security.md#trust-on-first-use).
+- `commands` appears when the manifest runs commands, in a build or to
+  generate completions. oku [asks you to approve](security.md#approve-build-commands)
+  them before it runs them.
+- `also fits` lists the other assets that fit this machine, and a line names
+  the `--asset` flag that picks one.
+- `installed` names the version that `oku.lock` holds now.
+- Other rows, such as `deps`, `build deps`, `needs`, `apps`, `services` and
+  `env`, appear when the manifest has them. `--json` prints the same fields.
+
+`oku add <ref> --manifest` prints the manifest `add` would use, ready to save
+as a file. A manifest that oku infers covers every platform, as
+[`oku manifest init`](#oku-manifest-init) does, and a published one prints as
+fetched.
+
+A plan fails where `add` would fail. That covers a ref, a version or an asset
+that does not exist, and a download, checksum file or signature that the
+server does not have. oku checks those files without downloading them.
+
+Neither writes to the list, the lock, the store or a generation, and neither
+waits for another oku process. Inference still opens a release asset to find
+the programs inside it, so a plan of a repo with no manifest downloads that
+asset. Neither runs a build step or a command from the manifest.
 
 ### oku remove
 

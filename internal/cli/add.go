@@ -26,6 +26,8 @@ func newAddCmd(opts Options) *cobra.Command {
 		system     bool
 		asset      string
 		bins       []string
+		plan       bool
+		printed    bool
 	)
 
 	cmd := &cobra.Command{
@@ -45,11 +47,25 @@ one of:
   gitlab:group/project                the same on gitlab.com
   npm:@scope/name                     a command-line tool in the npm registry
   git+https://host/repo#path/pkg.toml a file in any git repo
-  alias/name                          a package in a source, see "oku source"`,
+  alias/name                          a package in a source, see "oku source"
+
+--plan prints what oku found for a ref and what add would do, and changes
+nothing. --manifest prints the manifest add would use, ready to save as a file.`,
 		Args: minArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) > 1 && (asset != "" || len(bins) > 0) {
 				return errors.New("--asset and --bin describe one download, so add that ref on its own")
+			}
+
+			if plan && printed {
+				return errors.New("--plan and --manifest both print instead of adding, so pick one")
+			}
+
+			if plan || printed {
+				return runPlan(cmd, opts, args, planFlags{
+					manifest: printed, fromSource: fromSource, asset: asset, bins: bins,
+					verbose: flags.verbose, acceptKey: flags.acceptKey,
+				})
 			}
 
 			programs := 0
@@ -91,6 +107,10 @@ one of:
 		StringVar(&asset, "asset", "", "with no manifest, the release asset for this machine, as a glob")
 	cmd.Flags().
 		StringArrayVar(&bins, "bin", nil, "with no manifest, the file name of a program in the asset, once per program")
+	cmd.Flags().
+		BoolVar(&plan, "plan", false, "print what oku found and what add would do, and change nothing")
+	cmd.Flags().
+		BoolVar(&printed, "manifest", false, "print the manifest oku would use, inferred for every platform when the ref has none")
 
 	return cmd
 }
@@ -112,6 +132,74 @@ func (e env) parseRef(arg string) (ref.Ref, error) {
 	return ref.Parse(expanded)
 }
 
+// addRequest reads the ref of arg and what oku.toml and oku.lock say about it
+// into the request that add installs. The env it returns has the runtimes that
+// a registry package runs through.
+func addRequest(cmd *cobra.Command, opts Options, arg string) (env, request, *lock.Lock, error) {
+	e, err := scopedEnv(cmd, opts)
+	if err != nil {
+		return e, request{}, nil, err
+	}
+
+	r, err := e.parseRef(arg)
+	if err != nil {
+		return e, request{}, nil, err
+	}
+
+	locked, err := lock.Read(e.lockPath())
+	if err != nil {
+		return e, request{}, nil, err
+	}
+
+	// The manifest names the package, so the lock entry to reuse is found by ref.
+	var previous lock.Package
+
+	for _, pkg := range locked.Packages {
+		if pkg.Ref == r.String() {
+			previous = pkg
+		}
+	}
+
+	own, err := list.Read(e.listPath())
+	if err != nil {
+		return e, request{}, nil, err
+	}
+
+	platforms, strict := e.lockPlatforms(own, nil)
+
+	// A package of a registry runs through, or builds with, the runtime that
+	// the list names.
+	if e.inferrerOf(r.Kind) != nil {
+		all, err := e.mergedList(cmd, opts)
+		if err != nil {
+			return e, request{}, nil, err
+		}
+
+		e.runtimes = all.runtimes
+	}
+
+	return e, request{
+		ref:             r,
+		previous:        previous,
+		platforms:       platforms,
+		strictPlatforms: strict,
+		fit:             fitNarrow,
+	}, locked, nil
+}
+
+// notFound turns a missing file into a hint when arg looks like a bare name.
+func notFound(arg string, err error) error {
+	if errors.Is(err, ref.ErrNotFound) && !strings.ContainsAny(arg, ":/\\") {
+		return fmt.Errorf(
+			"there is no file named %s here\n"+
+				"a package from a source is written alias/name, and `oku add --help` lists every ref form",
+			arg,
+		)
+	}
+
+	return err
+}
+
 func runAdd(
 	cmd *cobra.Command,
 	opts Options,
@@ -130,69 +218,19 @@ func runAdd(
 		return false, err
 	}
 
-	r, err := e.parseRef(arg)
+	e, req, locked, err := addRequest(cmd, opts, arg)
 	if err != nil {
 		return false, err
 	}
 
-	locked, err := lock.Read(e.lockPath())
+	r := req.ref
+	req.fromSource, req.asset, req.bins = fromSource, asset, bins
+	req.service, req.acceptKey, req.system = enable, flags.acceptKey, system
+	req.verbose, req.approve, req.log = flags.verbose, e.approver(cmd, opts, flags), buildLog(cmd, flags)
+
+	got, err := e.install(cmd.Context(), opts, req)
 	if err != nil {
-		return false, err
-	}
-
-	// The manifest names the package, so the lock entry to reuse is found by ref.
-	var previous lock.Package
-
-	for _, pkg := range locked.Packages {
-		if pkg.Ref == r.String() {
-			previous = pkg
-		}
-	}
-
-	own, err := list.Read(e.listPath())
-	if err != nil {
-		return false, err
-	}
-
-	platforms, strict := e.lockPlatforms(own, nil)
-
-	// A package of a registry runs through, or builds with, the runtime that
-	// the list names.
-	if e.inferrerOf(r.Kind) != nil {
-		all, err := e.mergedList(cmd, opts)
-		if err != nil {
-			return false, err
-		}
-
-		e.runtimes = all.runtimes
-	}
-
-	got, err := e.install(cmd.Context(), opts, request{
-		ref:             r,
-		previous:        previous,
-		platforms:       platforms,
-		strictPlatforms: strict,
-		fit:             fitNarrow,
-		fromSource:      fromSource,
-		asset:           asset,
-		bins:            bins,
-		service:         enable,
-		acceptKey:       flags.acceptKey,
-		system:          system,
-		verbose:         flags.verbose,
-		approve:         e.approver(cmd, opts, flags),
-		log:             buildLog(cmd, flags),
-	})
-	if errors.Is(err, ref.ErrNotFound) && !strings.ContainsAny(arg, ":/\\") {
-		return false, fmt.Errorf(
-			"there is no file named %s here\n"+
-				"a package from a source is written alias/name, and `oku add --help` lists every ref form",
-			arg,
-		)
-	}
-
-	if err != nil {
-		return false, err
+		return false, notFound(arg, err)
 	}
 
 	locked.Set(got.lock)
