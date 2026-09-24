@@ -1347,3 +1347,17 @@ pull that changes a file it loads applies with no prompt.
 
 The allow records each untracked file's modification time, and the hook asks
 git again only when that time changes, so most prompts run no git. A project outside git, or a machine without git, tracks nothing.
+
+## D85. A project's secrets are encrypted .env files, and "exec" keeps them out of the shell
+
+`[[env.file]]` with `secret = true` decrypts an age or a sops file in memory,
+then reads it as a `.env` file. `scope = "exec"` loads a file for `oku exec`
+only. Why: sops has `exec-env` and dotenvx encrypts `.env` files for git, so teams
+already commit encrypted `.env` files. A secret that the hook exports reaches
+every program the shell starts, and in what an agent in that shell reads. `oku exec` gives it to the
+one command that needs it.
+
+The hook decrypts a shell-scoped secret file at each prompt, with no cache,
+since a cache would put the plaintext on disk or trust a value the user may
+have changed. With an age key that takes about 10 ms. Give a file encrypted to a
+cloud key service scope "exec".
