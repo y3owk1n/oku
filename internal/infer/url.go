@@ -65,6 +65,8 @@ func (inf *Inferrer) FromURL(
 	name, version := platformless(asset[:len(asset)-len(ending(asset))]), "0"
 	if m := versionRe.FindStringSubmatchIndex(asset); m != nil && m[0] > 0 {
 		name, version = asset[:m[0]], asset[m[4]:m[5]]
+	} else if v := folderVersion(parsed.Path); v != "" {
+		version = v
 	}
 
 	name = strings.ToLower(name)
@@ -129,4 +131,22 @@ func pageHint(u *url.URL) string {
 			"or give the URL of the file to download",
 		u.Host, repo,
 	)
+}
+
+// folderRe matches a folder that names a version, such as "v1.19.0" or
+// "jq-1.8.1".
+var folderRe = regexp.MustCompile(`^(?:.*[-_])?v?(\d+(?:\.\d+)+)$`)
+
+// folderVersion returns the version that the folder nearest the file in p
+// names, or "" when none does. A release often keeps its files in a folder
+// named after its tag, as GitHub does.
+func folderVersion(p string) string {
+	parts := strings.Split(path.Dir(p), "/")
+	for i := len(parts) - 1; i >= 0; i-- {
+		if m := folderRe.FindStringSubmatch(parts[i]); m != nil {
+			return m[1]
+		}
+	}
+
+	return ""
 }

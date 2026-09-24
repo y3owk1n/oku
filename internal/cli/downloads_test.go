@@ -67,3 +67,28 @@ func TestB325ADownloadThatIsNoArchiveMustBeAProgram(t *testing.T) {
 		t.Fatalf("a refused download reached the list:\n%s", list)
 	}
 }
+
+func TestB327AURLWhoseFileNamesNoVersionTakesItFromItsFolder(t *testing.T) {
+	m := newMachine(t)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/releases/download/jq-1.8.1/jq-program", "/files/latest/tool":
+			fmt.Fprint(w, "#!/bin/sh\necho hi\n")
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(server.Close)
+
+	out, err := m.run(t, "", "add", server.URL+"/releases/download/jq-1.8.1/jq-program")
+	if err != nil || !strings.Contains(out, "added jq-program 1.8.1") {
+		t.Fatalf("want the version of the folder, got %v:\n%s", err, out)
+	}
+
+	// No folder names a version, so the version stays 0.
+	out, err = m.run(t, "", "add", server.URL+"/files/latest/tool")
+	if err != nil || !strings.Contains(out, "added tool 0") {
+		t.Fatalf("want version 0, got %v:\n%s", err, out)
+	}
+}

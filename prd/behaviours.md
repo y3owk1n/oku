@@ -565,6 +565,9 @@ order step in `prd/product.md`.
 - B326 [4] An inference error for a `[lock]` platform names that platform,
   and says "this machine" only for the host. It suggests `--asset` only for
   the host, and for a `[lock]` platform the package's `when` or a manifest.
+- B327 [4] A download URL whose file names no version takes the version of
+  the nearest folder that names one, such as `jq-1.8.1` or `v1.19.0`, and
+  version `0` without one.
 - B120 [4] Inference takes a macOS universal build for both darwin arches and a
   `windows-gnu` asset for Windows, and never reads a signature file as the
   checksum file.
