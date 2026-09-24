@@ -155,6 +155,11 @@ order step in `prd/product.md`.
 - B180 [2] Without `[lock]`, `add` and `update` pin the host alone, in the
   global list and in a project. Another platform gets its entry when a machine
   of that platform syncs (B15).
+- B330 [4] `oku add --when os=...,arch=...,libc=...`, once per table, writes
+  that `when` to the list. When it leaves out the host, `add` pins the
+  package for the `[lock]` platforms it matches and installs nothing, and
+  with no such platform it fails. A `when` that matches no platform, or a
+  value that is no key=value pair, fails.
 - B182 [2] oku pins a package whose `when` leaves out the host, with its deps,
   for the lock platforms that `when` matches, and installs nothing of it.
   `sync` does that when the lock has no entry for its ref, or with `[lock]`
