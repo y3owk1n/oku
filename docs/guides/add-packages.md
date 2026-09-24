@@ -153,8 +153,10 @@ oku add https://github.com/sharkdp/hyperfine/releases/download/v1.19.0/hyperfine
 A URL that ends in `.toml` is always a manifest. For any other URL oku tries a
 manifest first, and treats the file as the download when it is not one. A
 download gets a manifest for this machine's OS and CPU only, so another kind of
-machine cannot install it from your list. Its version comes from the file name,
-and `oku update` never changes it. To move on, add the URL of the newer
+machine cannot install it from your list. Its version comes from the file name, or,
+when the name has none, from the nearest folder of the URL that names one, as
+`jq-1.8.1` does in `.../download/jq-1.8.1/jq-macos-arm64`. Without either the
+version is `0`. `oku update` never changes it. To move on, add the URL of the newer
 version, or write a manifest that
 [follows a download URL](../reference/manifest.md#follow-a-download-url). A URL on its own has no checksum, so oku trusts the first download
 and pins its sha256 in `oku.lock`.
