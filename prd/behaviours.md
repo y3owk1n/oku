@@ -705,6 +705,14 @@ order step in `prd/product.md`.
   the reason as a hint and makes `oku exec` refuse.
 - B321 [7] An `[[env.file]]` with `scope = "exec"` loads for `oku exec`
   alone. The hook and `oku env` leave its variables out.
+- B322 [7] `OKU_ENV=<env>` applies the `[env]` of the project's
+  `oku.<env>.toml` over its `oku.toml`, and `oku.local.toml` applies over
+  both, in the hook, `oku exec` and `oku env`. A missing `oku.<env>.toml`,
+  `OKU_ENV=local`, or an overlay that holds anything but `[env]` prints a hint
+  and makes `oku exec` refuse.
+- B323 [7] `oku allow` covers every overlay that git tracks, whatever
+  `OKU_ENV` names. An untracked overlay, and the `.env` files it loads, change
+  without a new allow.
 - B67 [7] Project packages shadow global ones on PATH while active.
 - B68 [7] The hook exports `[env]` of global packages in every shell.
 - B219 [7] The hook loads the completions under the global profile
