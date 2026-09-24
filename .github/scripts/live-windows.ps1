@@ -109,10 +109,14 @@ Set-Content (Join-Path $project 'oku.toml') @'
 [packages]
 fd = "github:sharkdp/fd"
 
+[[env.file]]
+path = ".env"
+
 [env]
 STAGE = "dev"
 PATH = { prepend = ["scripts"] }
 '@
+Set-Content (Join-Path $project '.env') "REGION=`"eu west`"`n"
 $env:PATH = "$root;$env:PATH"
 $env:STAGE = 'mine'
 
@@ -148,14 +152,16 @@ Check 'inside the project fd comes from the project profile' {
 $fdVersion = & fd --version
 Check 'fd runs through its shim' { $fdVersion -match '^fd \d' }
 Check 'inside the project its [env] applies' {
-    ($env:STAGE -eq 'dev') -and (($env:PATH -split ';')[0] -eq (Join-Path $project 'scripts'))
+    ($env:STAGE -eq 'dev') -and ($env:REGION -eq 'eu west') -and
+    (($env:PATH -split ';')[0] -eq (Join-Path $project 'scripts'))
 }
 
 Set-Location $root
 prompt | Out-Null
 Check 'leaving the project takes fd away again' { -not (Get-Command fd -ErrorAction SilentlyContinue) }
 Check 'leaving the project restores STAGE and drops its PATH entry' {
-    ($env:STAGE -eq 'mine') -and (($env:PATH -split ';') -notcontains (Join-Path $project 'scripts'))
+    ($env:STAGE -eq 'mine') -and (-not $env:REGION) -and
+    (($env:PATH -split ';') -notcontains (Join-Path $project 'scripts'))
 }
 
 # doctor, without the profile on PATH and then with it. The hook above already

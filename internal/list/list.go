@@ -100,6 +100,9 @@ type List struct {
 	LockPlatforms []platform.Platform
 	// Env holds [env], the variables the list sets in the shell and for oku exec.
 	Env map[string]EnvValue
+	// EnvFiles holds [[env.file]], the .env files the list loads before Env, in
+	// order.
+	EnvFiles []EnvFile
 	// Runtimes maps an interpreter, such as "node", to the package that
 	// provides it, for the packages that run through one. A version constraint
 	// limits which versions of that package oku picks.
@@ -158,7 +161,7 @@ func Parse(data []byte, origin string) (*List, error) {
 	}
 
 	var err error
-	if l.Env, err = toEnv(raw.Env); err != nil {
+	if l.Env, l.EnvFiles, err = toEnv(raw.Env); err != nil {
 		return nil, fmt.Errorf("%s: %w", origin, err)
 	}
 

@@ -221,7 +221,10 @@ list's sha256.
   A list's `[env]` can only put entries in front of `PATH`, and cannot set the
   others.
 - A list's `[env]` sets values and reads variables as `${NAME}`. It runs no
-  command.
+  command, and neither does a `.env` file it loads.
+- The allow covers each `.env` file of the project that git tracks, so a pull
+  that changes one stops the hook until a new `oku allow`. oku asks git about
+  a file that git did not track only when the file changes.
 - A project list may not hold `[files]`, `[vars]`, `[secrets]` or settings
   tables, so a cloned repo cannot write into your home directory.
 

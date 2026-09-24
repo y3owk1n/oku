@@ -3,6 +3,8 @@ package cli
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io/fs"
 	"maps"
 	"os"
 	"path/filepath"
@@ -127,8 +129,9 @@ func (w *shellEnv) packages(prof *profile.Profile) {
 	}
 }
 
-// list applies the [env] of the list at path. A list that does not parse is
-// left out, and the hint says why.
+// list applies the [[env.file]] and then the [env] of the list at path. A list
+// that does not parse is left out, and so is a file that does not, and the
+// hints say why.
 func (w *shellEnv) list(path string, base func(string) (string, bool)) []string {
 	if _, err := os.Stat(path); err != nil {
 		return nil
@@ -139,7 +142,7 @@ func (w *shellEnv) list(path string, base func(string) (string, bool)) []string 
 		return []string{err.Error()}
 	}
 
-	change, err := list.ResolveEnv(l.Env, filepath.Dir(path), func(name string) (string, bool) {
+	lookup := func(name string) (string, bool) {
 		if w.unset[name] {
 			return "", false
 		}
@@ -149,7 +152,17 @@ func (w *shellEnv) list(path string, base func(string) (string, bool)) []string 
 		}
 
 		return base(name)
-	})
+	}
+
+	var problems []string
+
+	for _, f := range l.EnvFiles {
+		if err := w.file(f.Abs(filepath.Dir(path)), f, lookup); err != nil {
+			problems = append(problems, err.Error())
+		}
+	}
+
+	change, err := list.ResolveEnv(l.Env, filepath.Dir(path), lookup)
 	if err != nil {
 		return []string{path + ": " + err.Error()}
 	}
@@ -169,6 +182,45 @@ func (w *shellEnv) list(path string, base func(string) (string, bool)) []string 
 	}
 
 	maps.Copy(w.missing, change.Missing)
+
+	return problems
+}
+
+// file sets the variables of the .env file f at path, unless f is skipped.
+func (w *shellEnv) file(path string, f list.EnvFile, lookup func(string) (string, bool)) error {
+	if f.Skipped(lookup) {
+		return nil
+	}
+
+	data, err := os.ReadFile(path)
+	if errors.Is(err, fs.ErrNotExist) {
+		if f.Optional {
+			return nil
+		}
+
+		return fmt.Errorf("%s does not exist, create it or give the file optional = true", path)
+	}
+
+	if err != nil {
+		return err
+	}
+
+	vars, err := list.ParseDotenv(data, lookup)
+	if err != nil {
+		return fmt.Errorf("%s: %w", path, err)
+	}
+
+	// A file sets all its variables or none.
+	for _, v := range vars {
+		if err := list.CheckEnvName(v.Name, false); err != nil {
+			return fmt.Errorf("%s: %w", path, err)
+		}
+	}
+
+	for _, v := range vars {
+		w.set[v.Name] = v.Value
+		delete(w.unset, v.Name)
+	}
 
 	return nil
 }
@@ -235,6 +287,14 @@ func (e env) execEnviron() ([]string, string, error) {
 	if _, ok := final["PATH"]; !ok {
 		path, _ := base("PATH")
 		final["PATH"] = &path
+	}
+
+	// A shell inside a project passes on what its hook set, such as a secret
+	// that unless now leaves out, so each of those goes back to its old value.
+	for name := range state.saved {
+		if _, ours := final[name]; !ours {
+			final[name] = orNil(state.base(name))
+		}
 	}
 
 	environ := make([]string, 0, len(final))

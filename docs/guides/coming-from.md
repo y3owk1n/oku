@@ -103,7 +103,7 @@ What oku does not do:
 | Generations and `--rollback` | `oku generations` and `oku rollback` |
 | `nix-collect-garbage` | `oku gc` |
 | `nix shell nixpkgs#<pkg>` | `oku shell <ref>` |
-| A dev shell with direnv | A [project](projects.md) `oku.toml` with the shell hook, and `[env]` for the `.envrc` exports |
+| A dev shell with direnv | A [project](projects.md) `oku.toml` with the shell hook, `[env]` for the `.envrc` exports, and `[[env.file]]` for `dotenv` and `dotenv_if_exists` |
 
 What oku does not do:
 
@@ -124,6 +124,7 @@ What oku does not do:
 | `mise use -g <tool>` | `oku add <ref>` |
 | A project's `mise.toml` | A [project](projects.md) `oku.toml` |
 | `[env]` and `_.path` in `mise.toml` | `[env]`, with `PATH = { prepend = [...] }` |
+| `_.file` in `mise.toml` | `[[env.file]]` |
 | `mise install` | `oku sync` |
 | `mise upgrade`, `mise outdated` | `oku update`, `oku outdated` |
 | `mise.lock` | `oku.lock`, which is always there and pins every download |

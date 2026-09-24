@@ -81,8 +81,22 @@ type Allowed struct {
 
 // Allow is one project the user trusts.
 type Allow struct {
-	Dir        string `toml:"dir"`
+	Dir string `toml:"dir"`
+	// ListSHA256 covers the oku.toml and the .env files it loads that git
+	// tracks.
 	ListSHA256 string `toml:"list_sha256"`
+	// Untracked holds the .env files the list loads that git did not track,
+	// which the user changes without a new allow.
+	Untracked []Untracked `toml:"untracked,omitempty"`
+}
+
+// Untracked is a .env file that git did not track when the user allowed the
+// project. oku asks git again once the file changes.
+type Untracked struct {
+	Path string `toml:"path"`
+	// ModTime is the file's modification time in Unix nanoseconds, or 0 when
+	// the file did not exist.
+	ModTime int64 `toml:"mod_time"`
 }
 
 // ReadAllowed loads the allow list under dataDir. A missing file allows nothing.
@@ -101,18 +115,24 @@ func ReadAllowed(dataDir string) (*Allowed, error) {
 	return a, nil
 }
 
-// Has reports whether dir is allowed with exactly this list content.
-func (a *Allowed) Has(dir, listSHA256 string) bool {
-	return slices.Contains(a.Items, Allow{Dir: dir, ListSHA256: listSHA256})
+// Get returns the allow of dir.
+func (a *Allowed) Get(dir string) (Allow, bool) {
+	i := slices.IndexFunc(a.Items, func(item Allow) bool { return item.Dir == dir })
+	if i < 0 {
+		return Allow{}, false
+	}
+
+	return a.Items[i], true
 }
 
-// Set allows dir with this list content, or removes dir when listSHA256 is
-// empty, and saves the file.
-func (a *Allowed) Set(dir, listSHA256 string) error {
+// Set records the allow of dir, or removes it when allow is nil, and saves the
+// file.
+func (a *Allowed) Set(dir string, allow *Allow) error {
 	a.Items = slices.DeleteFunc(a.Items, func(item Allow) bool { return item.Dir == dir })
 
-	if listSHA256 != "" {
-		a.Items = append(a.Items, Allow{Dir: dir, ListSHA256: listSHA256})
+	if allow != nil {
+		allow.Dir = dir
+		a.Items = append(a.Items, *allow)
 	}
 
 	data, err := toml.Marshal(a)
