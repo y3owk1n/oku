@@ -1279,6 +1279,17 @@ the newest folder. A manifest whose download comes from GitHub releases follows
 those releases. Any other pins the version, and `update` reads winget again.
 
 Out of scope for now: merging the recipes of several package managers into one
-manifest, finding the upstream repo of a Homebrew formula, third-party taps and
-buckets, and a version whose parts a URL uses one by one, such as Homebrew's
-`version.csv`.
+manifest, finding the upstream repo of a Homebrew formula, and third-party taps
+and buckets.
+
+## D81. The parts of a version are named variables
+
+`{{version_major}}`, `{{version_minor}}`, `{{version_patch}}`,
+`{{version_nodots}}`, `{{version_underscores}}`, `{{version_dashes}}` and
+`{{version_partN}}` derive from `{{version}}`. A version source joins its
+parts with `join`, and `join = "+"` keeps them apart. Why: vendors put parts
+of a version in their URLs, as Homebrew's `version.csv` and Scoop's
+`$cleanVersion` record, and named variables express that without logic in
+templates (D61). A filter syntax such as `{{version | nodots}}` would add that
+logic. Why `+`: a version holds no comma, and `+` is one of the characters a
+version may hold.

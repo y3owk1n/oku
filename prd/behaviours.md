@@ -301,6 +301,12 @@ order step in `prd/product.md`.
   `sparkle:shortVersionString` among the items of the Sparkle feed at `repo`,
   as an element or an attribute. An item on a channel, such as beta, or one
   whose `sparkle:os` is not `macos`, does not count. `regex` does not apply.
+- B304 [3] `{{version_major}}`, `{{version_minor}}`, `{{version_patch}}`,
+  `{{version_nodots}}`, `{{version_underscores}}`, `{{version_dashes}}` and
+  `{{version_partN}}` expand wherever `{{version}}` does. `join` in a
+  `redirect`, `page` or `sparkle` version joins its parts, and `join = "+"`
+  keeps them apart for `{{version_partN}}`. A variable whose part the version lacks fails and names
+  the part.
 - B283 [3] When each artifact has a `version` table, `add`, `update` and `sync`
   pin each platform of `[lock] platforms` at its own version, and install the
   host's. `update` moves only the platforms whose upstream moved, and names
@@ -335,7 +341,9 @@ order step in `prd/product.md`.
 - B213 [4] `manifest lint` warns about every artifact that has neither
   `sha256` nor `sha256_url`, the first one included, and about no artifact
   that has one.
-- B282 [4] `manifest lint` rejects `redirect` and `page` without `regex`, and
+- B282 [4] `manifest lint` rejects `join` that is not `.`, `+`, `-` or `_`, or
+  that has no `regex` outside `sparkle`. It rejects `redirect` and `page`
+  without `regex`, and
   `redirect`, `page` and `sparkle` with a `repo` that is no http(s) URL, or
   with `strip_prefix` or `tag`. It rejects a `regex` with no group, one that
   does not compile, and one with another `from`. It warns about their
@@ -508,6 +516,12 @@ order step in `prd/product.md`.
   programs oku finds on Windows becomes `bin`. oku refuses a setup program.
   The manifest follows the GitHub releases of its download, or else pins the
   version with its sha256.
+- B305 [4] A translation maps the parts of a version that a cask's or a
+  Scoop manifest's URL uses, such as `#{version.csv.second}` or
+  `$cleanVersion`, to the version variables. A cask's comma version becomes
+  a `+` version, and a livecheck that only joins its regex's groups, or a
+  Sparkle livecheck with no block, becomes a version source with
+  `join = "+"`.
 - B264 [4] A `[runtimes]` entry may be a table with `ref` and a `version`
   constraint, in a list or in `config.toml`. `add` and `update` then build and
   run with the newest version of that package that the constraint allows, and
