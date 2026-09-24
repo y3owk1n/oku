@@ -64,6 +64,16 @@ func pypiMachine(t *testing.T, versions map[string]string) machine {
 		case "/pypi/tool/json":
 			_, _ = fmt.Fprint(w, `{"info": {"name": "tool", "summary": "A tool", "version": "1.0.0"}}`)
 		case "/simple/tool/":
+			// As PyPI does, the index answers a request it saw before with 304 and
+			// no media type, which oku's cache has to keep.
+			w.Header().Set("ETag", `"simple"`)
+
+			if r.Header.Get("If-None-Match") == `"simple"` {
+				w.WriteHeader(http.StatusNotModified)
+
+				return
+			}
+
 			w.Header().Set("Content-Type", "application/vnd.pypi.simple.v1+json")
 			_, _ = fmt.Fprintf(w, `{"meta": {"api-version": "1.4"}, "name": "tool", "versions": [%s], "files": [%s]}`,
 				strings.Join(names, ","), strings.Join(files, ","))
