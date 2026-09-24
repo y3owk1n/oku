@@ -26,7 +26,7 @@ refs to lists.
 | `pypi:name` | A package in the Python Package Index. |
 | `go:host/path` | A Go program, such as `go:golang.org/x/tools/gopls`. |
 | `cargo:name` | A crate on crates.io. |
-| `cask:name` | A Homebrew cask, which oku translates into a manifest. An `@` is part of the name, as in `cask:temurin@21`, so a cask ref takes no version. |
+| `cask:name`, `cask:owner/tap/name` | A Homebrew cask, which oku translates into a manifest. `owner/tap` names another tap, the GitHub repo `owner/homebrew-tap`. An `@` is part of the name, as in `cask:temurin@21`, so a cask ref takes no version. |
 | `aqua:owner/repo` | The GitHub repo's entry in the aqua registry, which oku translates into a manifest. |
 | `winget:Publisher.Package` | The newest version of a package of winget's community manifests, which oku translates into a manifest. |
 | `scoop:name`, `scoop:bucket/name` | A Scoop manifest, which oku translates into a manifest. oku looks up a bare name in the `main` bucket, then `extras`. |

@@ -923,3 +923,96 @@ func TestB307ASourceAtAFormatVersionOkuDoesNotReadIsRefused(t *testing.T) {
 		})
 	}
 }
+
+// tapCask is a cask of a tap, in the Ruby of a Homebrew cask.
+const tapCask = `cask "tool" do # generated
+  arch arm: "arm64", intel: "x86_64"
+
+  version '1.4.0'
+  sha256 arm:   "` + "aaaa" + `",
+         intel: "` + "bbbb" + `"
+
+  home = "https://tool.example.com"
+
+  url "SERVER/dl/v#{version}/Tool-#{version}-#{arch}.zip"
+  name "Tool"
+  desc "A tool from a tap"
+  homepage home
+
+  on_intel do
+    url "SERVER/dl/v#{version}/Tool-#{version}-intel.zip"
+  end
+
+  livecheck do
+    url :url
+    strategy :github_latest
+  end
+
+  postflight do
+    system_command "/usr/bin/xattr"
+  end
+
+  app "Tool-#{version}/Tool.app"
+  binary "Tool-#{version}/bin/tool"
+  binary "Tool-#{version}/completions/_tool",
+         target: "#{HOMEBREW_PREFIX}/share/zsh/site-functions/_tool"
+end
+`
+
+func TestB337ACaskOfATapTranslatesFromItsRuby(t *testing.T) {
+	m := newMachine(t)
+
+	var server *httptest.Server
+
+	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/raw/someone/homebrew-tools/HEAD/Casks/tool.rb":
+			_, _ = fmt.Fprint(w, strings.ReplaceAll(tapCask, "SERVER", server.URL))
+		case "/raw/someone/homebrew-tools/HEAD/Casks/logic.rb":
+			_, _ = fmt.Fprint(w, "cask \"logic\" do\n  if Hardware::CPU.intel?\n    url \"a\"\n  end\nend\n")
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(server.Close)
+
+	m.opts.GitHubAPI, m.opts.GitHubRaw = server.URL+"/api", server.URL+"/raw"
+
+	out, err := m.run(t, "", "manifest", "init", "--from", "cask:someone/tools/tool", "-o", "-")
+	if err != nil {
+		t.Fatalf("init: %v\n%s", err, out)
+	}
+
+	for _, want := range []string{
+		"# Translated from the Homebrew cask someone/tools/tool.",
+		"# oku runs no script of a recipe, so it left out postflight.",
+		`description = "A tool from a tap"`,
+		`homepage = "https://tool.example.com"`,
+		`match = { os = "darwin", arch = "arm64" }`,
+		`/dl/v1.4.0/Tool-1.4.0-arm64.zip"`,
+		`sha256 = "aaaa"`,
+		`match = { os = "darwin", arch = "amd64" }`,
+		`/dl/v1.4.0/Tool-1.4.0-intel.zip"`,
+		`sha256 = "bbbb"`,
+		`app = ["Tool-1.4.0/Tool.app"]`,
+		`bin = ["Tool-1.4.0/bin/tool"]`,
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("the manifest lacks %q:\n%s", want, out)
+		}
+	}
+
+	if strings.Contains(out, "_tool") {
+		t.Fatalf("a completion file became a program:\n%s", out)
+	}
+
+	if _, err := m.run(t, "", "manifest", "init", "--from", "cask:someone/tools/logic", "-o", "-"); err == nil ||
+		!strings.Contains(err.Error(), "Ruby logic") {
+		t.Fatalf("want a cask with Ruby logic refused, got %v", err)
+	}
+
+	if _, err := m.run(t, "", "manifest", "init", "--from", "cask:someone/tools/other", "-o", "-"); err == nil ||
+		!strings.Contains(err.Error(), "the tap someone/homebrew-tools has no cask other") {
+		t.Fatalf("want a missing cask named with its tap, got %v", err)
+	}
+}

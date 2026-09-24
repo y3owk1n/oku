@@ -196,7 +196,7 @@ func ParseIn(dir, s string) (Ref, error) {
 		r.Location = strings.TrimPrefix(body, "cask:")
 
 		if !infer.ValidCask(r.Location) {
-			return Ref{}, fmt.Errorf("%s: want cask:name, such as cask:rectangle", s)
+			return Ref{}, fmt.Errorf("%s: want cask:name, such as cask:rectangle, or cask:owner/tap/name of another tap", s)
 		}
 	case strings.HasPrefix(body, "scoop:"):
 		r.Kind = Scoop

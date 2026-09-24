@@ -1516,6 +1516,23 @@ which translates it again.
 | A livecheck that joins its regex's groups with commas, or Sparkle's version with no block | `join = "+"` |
 | Scoop's `$cleanVersion`, `$majorVersion`, `$minorVersion`, `$patchVersion`, `$underscoreVersion`, `$dashVersion` | `{{version_nodots}}`, `{{version_major}}` and the like |
 
+`oku add cask:owner/tap/token` reads a cask of another tap, the file
+`Casks/<token>.rb` of the GitHub repo `owner/homebrew-tap`. The Homebrew API
+has the official casks alone, so oku reads the tap's Ruby file for the values
+it declares and never runs it:
+
+- `version`, `sha256` with `arm:` and `intel:`, `url`, `desc`, `homepage`,
+  `arch arm: ..., intel: ...`, `depends_on arch:`, and the stanzas that place
+  files, such as `app` and `binary`.
+- `#{version}` and its parts, `#{arch}`, `#{HOMEBREW_PREFIX}` and `#{appdir}`
+  in those values.
+- `on_arm` and `on_intel` blocks, and local variables that hold a string, as
+  in `url_arm = "..."` and then `url url_arm`.
+- A `binary` whose target is a folder of shell completions is no program.
+
+A cask that picks a value with Ruby logic, such as `if`, or names another
+`#{...}`, is refused. The rest of the translation is the one in the table above.
+
 `oku add aqua:owner/repo` translates the repo's entry in the
 [aqua registry](https://github.com/aquaproj/aqua-registry), which names the
 release file of each platform:

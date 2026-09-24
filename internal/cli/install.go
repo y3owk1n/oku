@@ -1367,6 +1367,10 @@ func (e env) translate(ctx context.Context, opts Options, req request) (string, 
 
 	switch req.ref.Kind {
 	case ref.Cask:
+		if strings.Contains(req.ref.Location, "/") {
+			return e.inferrer(opts).FromTap(ctx, req.ref.Location)
+		}
+
 		return e.inferrer(opts).FromCask(ctx, req.ref.Location, opts.CaskAPI)
 	case ref.Aqua:
 		return e.inferrer(opts).FromAqua(ctx, req.ref.Location)
