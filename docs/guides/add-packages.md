@@ -208,10 +208,10 @@ oku add cargo:just
 These need a toolchain named in `[runtimes]`. See
 [npm, PyPI, Go and Cargo packages](npm-pypi-go-cargo.md).
 
-## Add a Homebrew cask or a Scoop package
+## Add a package from Homebrew, Scoop, winget or aqua
 
-Many apps have no release that oku can infer from, but have a Homebrew cask or
-a Scoop manifest. oku can read those recipes:
+Many apps have no release that oku can infer from, but have a Homebrew cask, a
+Scoop manifest or a winget manifest. oku can read those recipes:
 
 ```sh
 oku add cask:visual-studio-code
