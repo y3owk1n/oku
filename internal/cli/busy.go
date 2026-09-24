@@ -36,6 +36,14 @@ var exclusive = [][]string{
 func oneAtATime(cmd *cobra.Command) {
 	run := cmd.RunE
 	cmd.RunE = func(cmd *cobra.Command, args []string) error {
+		// "add --plan" and "add --manifest" only read, so they do not wait.
+		plan, _ := cmd.Flags().GetBool("plan")
+		printed, _ := cmd.Flags().GetBool("manifest")
+
+		if plan || printed {
+			return run(cmd, args)
+		}
+
 		release, err := lockMachine(cmd)
 		if err != nil {
 			return err

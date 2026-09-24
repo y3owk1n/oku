@@ -385,69 +385,12 @@ func (e env) installFrom(
 	fetched ref.Fetched,
 	inferred string,
 ) (installed, error) {
-	r, previous, wantManifest := req.ref, req.previous, req.wantManifest
+	r, previous := req.ref, req.previous
 
-	m, err := manifest.Parse(fetched.Data, r.String())
+	m, release, keep, err := e.pickRelease(ctx, opts, req, fetched)
 	if err != nil {
 		return installed{}, err
 	}
-
-	if wantManifest != "" && wantManifest != m.SHA256 {
-		return installed{}, errManifestChanged
-	}
-
-	if pinned := previous.SigningKey; pinned != "" && pinned != m.Package.SigningKey &&
-		!req.acceptKey {
-		now := "no signing key"
-		if m.Package.SigningKey != "" {
-			now = "the signing key " + m.Package.SigningKey
-		}
-
-		return installed{}, fmt.Errorf(
-			"%s: oku.lock pinned the signing key %s, and the manifest now has %s\n"+
-				"if the developer announced this change, run the command again with --accept-key",
-			m.Package.Name, pinned, now,
-		)
-	}
-
-	// A version in the list limits the versions oku may pick. sync stays on the
-	// locked version while the list allows it, and add and update take the
-	// newest that it allows.
-	release := resolve.Release{
-		Version: previous.Version, Tag: previous.Tag, Commit: previous.TagCommit,
-	}
-
-	if m.PerArtifact() && (r.Version != "" || req.constraint != "") {
-		return installed{}, fmt.Errorf(
-			"%s: each artifact finds its own version, so you cannot pick one", r,
-		)
-	}
-
-	allowed, err := resolve.Matches(previous.Version, r.Version)
-	if err != nil {
-		return installed{}, fmt.Errorf("%s: %w", r, err)
-	}
-
-	keep := req.keepVersion && previous.Version != "" && allowed
-	switch {
-	case m.PerArtifact():
-		release, err = e.artifactVersions(ctx, opts, req, m, keep)
-	case keep:
-	case r.Version == "" && req.constraint != "":
-		release, err = e.resolver(opts).Pick(ctx, m.Version, req.constraint)
-	default:
-		release, err = e.resolver(opts).Pick(ctx, m.Version, r.Version)
-	}
-
-	if err != nil {
-		return installed{}, fmt.Errorf("%s: %w", r, err)
-	}
-
-	if release.Tag == "" {
-		release.Tag = release.Version
-	}
-
-	m.Version.Value, m.Tag, m.TagCommit = release.Version, release.Tag, release.Commit
 	ctx = status.Scope(ctx, m.Package.Name+" "+m.Version.Value)
 
 	if req.lockOnly {
@@ -456,31 +399,9 @@ func (e env) installFrom(
 
 	host := platform.Host()
 
-	artifact, ok, err := m.Select(host)
+	artifact, build, err := hostStrategy(m, req, host)
 	if err != nil {
 		return installed{}, err
-	}
-
-	// A platform whose lock entry says "build" is built from source again.
-	build := req.fromSource || previous.Platforms[host.String()].Strategy == strategyBuild &&
-		previous.VersionOn(host.String()) == m.Version.Value
-
-	switch {
-	case (build || !ok) && m.BuildsOn(host):
-		build = true
-	case build:
-		if m.HasBuild() {
-			return installed{}, fmt.Errorf(
-				"the [build] of %s leaves out %s in its when", m.Package.Name, host,
-			)
-		}
-
-		return installed{}, fmt.Errorf(
-			"%s has no [build], so it cannot be built from source",
-			m.Package.Name,
-		)
-	case !ok:
-		return installed{}, fmt.Errorf("%s has no artifact for %s", m.Package.Name, host)
 	}
 
 	// oku installs deps first. A build links against its build deps, and every dep
@@ -732,6 +653,121 @@ func (e env) installFrom(
 		cacheNotes:     deps.cacheNotes,
 		linkNotes:      deps.linkNotes,
 	}, nil
+}
+
+// pickRelease parses the manifest in fetched and picks the release of it that
+// req installs, which it sets in m. keep reports that the release is the one
+// oku.lock pins.
+func (e env) pickRelease(
+	ctx context.Context,
+	opts Options,
+	req request,
+	fetched ref.Fetched,
+) (m *manifest.Manifest, release resolve.Release, keep bool, err error) {
+	r, previous := req.ref, req.previous
+
+	m, err = manifest.Parse(fetched.Data, r.String())
+	if err != nil {
+		return nil, resolve.Release{}, false, err
+	}
+
+	if req.wantManifest != "" && req.wantManifest != m.SHA256 {
+		return nil, resolve.Release{}, false, errManifestChanged
+	}
+
+	if pinned := previous.SigningKey; pinned != "" && pinned != m.Package.SigningKey &&
+		!req.acceptKey {
+		now := "no signing key"
+		if m.Package.SigningKey != "" {
+			now = "the signing key " + m.Package.SigningKey
+		}
+
+		return nil, resolve.Release{}, false, fmt.Errorf(
+			"%s: oku.lock pinned the signing key %s, and the manifest now has %s\n"+
+				"if the developer announced this change, run the command again with --accept-key",
+			m.Package.Name, pinned, now,
+		)
+	}
+
+	// A version in the list limits the versions oku may pick. sync stays on the
+	// locked version while the list allows it, and add and update take the
+	// newest that it allows.
+	release = resolve.Release{
+		Version: previous.Version, Tag: previous.Tag, Commit: previous.TagCommit,
+	}
+
+	if m.PerArtifact() && (r.Version != "" || req.constraint != "") {
+		return nil, resolve.Release{}, false, fmt.Errorf(
+			"%s: each artifact finds its own version, so you cannot pick one", r,
+		)
+	}
+
+	allowed, err := resolve.Matches(previous.Version, r.Version)
+	if err != nil {
+		return nil, resolve.Release{}, false, fmt.Errorf("%s: %w", r, err)
+	}
+
+	keep = req.keepVersion && previous.Version != "" && allowed
+	switch {
+	case m.PerArtifact():
+		release, err = e.artifactVersions(ctx, opts, req, m, keep)
+	case keep:
+	case r.Version == "" && req.constraint != "":
+		release, err = e.resolver(opts).Pick(ctx, m.Version, req.constraint)
+	default:
+		release, err = e.resolver(opts).Pick(ctx, m.Version, r.Version)
+	}
+
+	if err != nil {
+		return nil, resolve.Release{}, false, fmt.Errorf("%s: %w", r, err)
+	}
+
+	if release.Tag == "" {
+		release.Tag = release.Version
+	}
+
+	m.Version.Value, m.Tag, m.TagCommit = release.Version, release.Tag, release.Commit
+
+	return m, release, keep, nil
+}
+
+// hostStrategy returns the artifact of m for host, and whether oku builds m
+// from source there instead.
+func hostStrategy(
+	m *manifest.Manifest,
+	req request,
+	host platform.Platform,
+) (manifest.Artifact, bool, error) {
+	artifact, ok, err := m.Select(host)
+	if err != nil {
+		return manifest.Artifact{}, false, err
+	}
+
+	// A platform whose lock entry says "build" is built from source again.
+	build := req.fromSource || req.previous.Platforms[host.String()].Strategy == strategyBuild &&
+		req.previous.VersionOn(host.String()) == m.Version.Value
+
+	switch {
+	case (build || !ok) && m.BuildsOn(host):
+		build = true
+	case build:
+		if m.HasBuild() {
+			return manifest.Artifact{}, false, fmt.Errorf(
+				"the [build] of %s leaves out %s in its when", m.Package.Name, host,
+			)
+		}
+
+		return manifest.Artifact{}, false, fmt.Errorf(
+			"%s has no [build], so it cannot be built from source",
+			m.Package.Name,
+		)
+	case !ok:
+		return manifest.Artifact{}, false, fmt.Errorf(
+			"%s has no artifact for %s", m.Package.Name, host,
+		)
+	}
+
+	return artifact, build, nil
 }
 
 // keepPins fills the pins that entry lacks from the entry of the same build in

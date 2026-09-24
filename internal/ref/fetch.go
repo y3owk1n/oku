@@ -378,6 +378,14 @@ func (f *Fetcher) checkout(ctx context.Context, r Ref, commit string) (string, s
 		r.Location,
 		target,
 	); err != nil {
+		// A host answers a repo that does not exist with a login prompt, which git
+		// cannot show here.
+		if msg := err.Error(); strings.Contains(msg, "could not read Username") ||
+			strings.Contains(msg, "Repository not found") ||
+			strings.Contains(msg, "does not appear to be a git repository") {
+			return "", "", fmt.Errorf("fetch %s: no such repo, or git cannot read it without a login: %w", r, err)
+		}
+
 		return "", "", fmt.Errorf("fetch %s: %w", r, err)
 	}
 

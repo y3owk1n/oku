@@ -113,6 +113,17 @@ func (s *Store) download(
 	return dest, got, nil
 }
 
+// Reachable reports an error when url serves no download, the error that a
+// download of it would give. It reads none of the body.
+func (s *Store) Reachable(ctx context.Context, url string) error {
+	resp, err := s.get(ctx, url)
+	if err != nil {
+		return err
+	}
+
+	return resp.Body.Close()
+}
+
 func (s *Store) get(ctx context.Context, url string) (*http.Response, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {

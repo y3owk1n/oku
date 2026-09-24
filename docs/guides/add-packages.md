@@ -64,6 +64,40 @@ and services where every user sees them, see [System-wide](system-wide.md).
 `--from-source` builds it even when a download fits. The
 [command reference](../reference/commands.md#oku-add) lists them all.
 
+## Look before you add
+
+`--plan` shows what `oku add` would install and changes nothing:
+
+```
+$ oku add github:sharkdp/fd --plan
+name       fd
+version    10.5.0
+manifest   inferred by oku, because the ref has none
+asset      fd-v10.5.0-aarch64-apple-darwin.tar.gz
+install    download for darwin-arm64
+url        https://github.com/sharkdp/fd/releases/download/v10.5.0/fd-v10.5.0-aarch64-apple-darwin.tar.gz
+verify     sha256 the release publishes
+programs   fd
+installed  no
+...
+plan: nothing was changed
+```
+
+It names the version, the download or the build, how oku checks it, the
+programs, and whether the manifest runs commands. It takes the same ref,
+`@version`, `--asset` and `--bin` as `add`, so you can check a version or an
+asset before you install it. [A plan](../reference/commands.md#a-plan) lists
+every row.
+
+`--manifest` prints the manifest instead. For a repo with no manifest, it
+prints the manifest oku infers, with an artifact for every platform. Save it,
+edit it, and add the file:
+
+```sh
+oku add github:sharkdp/fd --manifest > fd.toml
+oku add ./fd.toml
+```
+
 ## Add a package from another forge
 
 The same short form works on GitLab, Codeberg, and any Gitea or Forgejo
