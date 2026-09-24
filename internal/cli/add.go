@@ -28,6 +28,7 @@ func newAddCmd(opts Options) *cobra.Command {
 		bins       []string
 		plan       bool
 		printed    bool
+		whens      []string
 	)
 
 	cmd := &cobra.Command{
@@ -53,6 +54,11 @@ one of:
 nothing. --manifest prints the manifest add would use, ready to save as a file.`,
 		Args: minArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			when, err := parseWhenFlags(whens)
+			if err != nil {
+				return err
+			}
+
 			if len(args) > 1 && (asset != "" || len(bins) > 0) {
 				return errors.New("--asset and --bin describe one download, so add that ref on its own")
 			}
@@ -64,14 +70,14 @@ nothing. --manifest prints the manifest add would use, ready to save as a file.`
 			if plan || printed {
 				return runPlan(cmd, opts, args, planFlags{
 					manifest: printed, fromSource: fromSource, asset: asset, bins: bins,
-					verbose: flags.verbose, acceptKey: flags.acceptKey,
+					verbose: flags.verbose, acceptKey: flags.acceptKey, when: when,
 				})
 			}
 
 			programs := 0
 
 			for _, arg := range args {
-				ran, err := runAdd(cmd, opts, arg, &flags, fromSource, enable, system, asset, bins)
+				ran, err := runAdd(cmd, opts, arg, &flags, fromSource, enable, system, asset, bins, when)
 				if err != nil {
 					return err
 				}
@@ -111,6 +117,8 @@ nothing. --manifest prints the manifest add would use, ready to save as a file.`
 		BoolVar(&plan, "plan", false, "print what oku found and what add would do, and change nothing")
 	cmd.Flags().
 		BoolVar(&printed, "manifest", false, "print the manifest oku would use, inferred for every platform when the ref has none")
+	cmd.Flags().StringArrayVar(&whens, "when", nil,
+		"the platforms the package is for, as os=darwin,arch=arm64, once per alternative")
 
 	return cmd
 }
@@ -135,7 +143,9 @@ func (e env) parseRef(arg string) (ref.Ref, error) {
 // addRequest reads the ref of arg and what oku.toml and oku.lock say about it
 // into the request that add installs. The env it returns has the runtimes that
 // a registry package runs through.
-func addRequest(cmd *cobra.Command, opts Options, arg string) (env, request, *lock.Lock, error) {
+func addRequest(
+	cmd *cobra.Command, opts Options, arg string, when platform.When,
+) (env, request, *lock.Lock, error) {
 	e, err := scopedEnv(cmd, opts)
 	if err != nil {
 		return e, request{}, nil, err
@@ -165,7 +175,17 @@ func addRequest(cmd *cobra.Command, opts Options, arg string) (env, request, *lo
 		return e, request{}, nil, err
 	}
 
-	platforms, strict := e.lockPlatforms(own, nil)
+	platforms, strict := e.lockPlatforms(own, when)
+
+	// A when that leaves out this machine pins the package for the lock
+	// platforms it matches, as sync does.
+	lockOnly := !when.Matches(platform.Host())
+	if lockOnly && len(platforms) == 0 {
+		return e, request{}, nil, fmt.Errorf(
+			"--when leaves out this machine, %s, and matches no platform of [lock], so there is nothing to pin",
+			platform.Host(),
+		)
+	}
 
 	// A package of a registry runs through, or builds with, the runtime that
 	// the list names.
@@ -184,6 +204,8 @@ func addRequest(cmd *cobra.Command, opts Options, arg string) (env, request, *lo
 		platforms:       platforms,
 		strictPlatforms: strict,
 		fit:             fitNarrow,
+		when:            when,
+		lockOnly:        lockOnly,
 	}, locked, nil
 }
 
@@ -208,6 +230,7 @@ func runAdd(
 	fromSource, enable, system bool,
 	asset string,
 	bins []string,
+	when platform.When,
 ) (bool, error) {
 	e, err := scopedEnv(cmd, opts)
 	if err != nil {
@@ -218,7 +241,7 @@ func runAdd(
 		return false, err
 	}
 
-	e, req, locked, err := addRequest(cmd, opts, arg)
+	e, req, locked, err := addRequest(cmd, opts, arg, when)
 	if err != nil {
 		return false, err
 	}
@@ -253,6 +276,12 @@ func runAdd(
 		c.staged = true
 	}
 
+	// install narrows a when to the platforms the manifest has something for.
+	entryWhen := got.when
+	if entryWhen == nil {
+		entryWhen = when
+	}
+
 	c.commit = func() error {
 		err := list.Set(
 			e.listPath(),
@@ -262,7 +291,7 @@ func runAdd(
 				Version: r.Version,
 				Service: enable,
 				System:  system,
-				When:    got.when,
+				When:    entryWhen,
 			},
 		)
 		if err != nil {
@@ -326,4 +355,41 @@ func reportPath(cmd *cobra.Command, opts Options, e env, packages int) {
 			fmt.Fprintf(cmd.ErrOrStderr(), "add %s to PATH to run %s\n", prof.BinDir(), them)
 		}
 	}
+}
+
+// parseWhenFlags reads the values of --when, each os=,arch= and libc= pairs
+// joined by commas, as the tables of a when. It fails on a when that matches
+// no platform oku runs on.
+func parseWhenFlags(values []string) (platform.When, error) {
+	if len(values) == 0 {
+		return nil, nil
+	}
+
+	tables := make([]any, 0, len(values))
+
+	for _, value := range values {
+		table := map[string]any{}
+
+		for _, pair := range strings.Split(value, ",") {
+			key, val, ok := strings.Cut(strings.TrimSpace(pair), "=")
+			if !ok || val == "" {
+				return nil, fmt.Errorf("--when %s: want key=value pairs, such as os=darwin,arch=arm64", value)
+			}
+
+			table[key] = val
+		}
+
+		tables = append(tables, table)
+	}
+
+	when, err := platform.ParseWhen(tables)
+	if err != nil {
+		return nil, fmt.Errorf("--when: %w", err)
+	}
+
+	if len(when.Of()) == 0 {
+		return nil, fmt.Errorf("--when %s matches no platform oku runs on", strings.Join(values, " "))
+	}
+
+	return when, nil
 }
