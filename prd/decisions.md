@@ -1437,3 +1437,15 @@ is the same for a public and a private repo, so a repo that turns private or
 public needs no new lock. oku tries the link first because it needs no API
 request, which counts against the rate limit. An Enterprise Server is left
 out, since oku cannot tell its download links from any other host's.
+
+## D91. oku reads the declared values of a tap's cask, and runs no Ruby
+
+`cask:owner/tap/token` reads `Casks/<token>.rb` of `owner/homebrew-tap` and
+turns the values it declares into the form of the Homebrew API, then
+translates it like an official cask (D80). It reads string and symbol values,
+`#{version}` and its parts, `#{arch}`, `on_arm` and `on_intel` blocks, and
+local variables that hold a string. Why: the Homebrew API serves the official
+casks alone, and a tap has no other description of its casks. Running the
+Ruby would run code of the tap on the user's machine. A cask that computes a
+value with `if`, `case` or a method call is refused, since reading only one
+branch would install the wrong file.

@@ -181,6 +181,12 @@ order step in `prd/product.md`.
   a private repo, is downloaded through the API with `GITHUB_TOKEN` when
   the token is set. The token never goes to the host that the API
   redirects to, and without a token the 404 stands.
+- B337 [4] `cask:owner/tap/token` translates the cask `Casks/<token>.rb` of
+  the GitHub repo `owner/homebrew-tap` from its Ruby, without running it:
+  version, sha256 per arch, url with `#{version}` and `#{arch}`, `on_arm`
+  and `on_intel`, string variables, and the stanzas that place files. A
+  binary whose target is a completions folder is no program. A cask that
+  picks values with Ruby logic is refused, and a missing cask names its tap.
 - B182 [2] oku pins a package whose `when` leaves out the host, with its deps,
   for the lock platforms that `when` matches, and installs nothing of it.
   `sync` does that when the lock has no entry for its ref, or with `[lock]`
