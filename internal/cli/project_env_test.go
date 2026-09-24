@@ -1,12 +1,15 @@
 package cli_test
 
 import (
+	"bytes"
 	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"filippo.io/age"
 )
 
 // envProject makes an allowed project whose oku.toml ends with env, and returns
@@ -503,5 +506,79 @@ func TestB319EnvFileThatSetsAShellVariableIsRefused(t *testing.T) {
 	out := m.apply(t)
 	if !strings.Contains(out, "LD_PRELOAD") || os.Getenv("LD_PRELOAD") != "" || os.Getenv("STAGE") != "" {
 		t.Fatalf("a file with LD_PRELOAD applied, STAGE=%q:\n%s", os.Getenv("STAGE"), out)
+	}
+}
+
+func TestB320SecretEnvFilesAreDecryptedWithAgeOrSops(t *testing.T) {
+	m := newMachine(t)
+	identity := m.ageKey(t, "")
+
+	// A sops on PATH that prints a .env file, or fails for a file with FAIL.
+	bin := filepath.Join(m.fixtures, "bin")
+	must(t, os.MkdirAll(bin, 0o755))
+	must(t, os.WriteFile(filepath.Join(bin, "sops"), []byte("#!/bin/sh\n"+
+		"for last; do :; done\n"+
+		"if grep -q FAIL \"$last\"; then echo 'MAC mismatch' >&2; exit 1; fi\n"+
+		"printf 'FROM_SOPS=\"sops value\"\\n'\n"), 0o755))
+	t.Setenv("PATH", bin+":/usr/bin:/bin")
+
+	var sealed bytes.Buffer
+
+	w, err := age.Encrypt(&sealed, identity.Recipient())
+	must(t, err)
+	_, err = w.Write([]byte("FROM_AGE=age value\n"))
+	must(t, err)
+	must(t, w.Close())
+
+	project := m.envFileProject(t, `[[env.file]]
+path = "secrets.env.age"
+secret = true
+
+[[env.file]]
+path = "secrets.sops.env"
+secret = true
+`, map[string]string{
+		"secrets.env.age":  sealed.String(),
+		"secrets.sops.env": "FROM_SOPS=ENC[AES256_GCM,data:xx]\nsops_version=3\n",
+	})
+
+	m.apply(t)
+
+	if os.Getenv("FROM_AGE") != "age value" || os.Getenv("FROM_SOPS") != "sops value" {
+		t.Fatalf("FROM_AGE=%q FROM_SOPS=%q", os.Getenv("FROM_AGE"), os.Getenv("FROM_SOPS"))
+	}
+
+	must(t, os.WriteFile(filepath.Join(project, "secrets.sops.env"), []byte("FAIL\n"), 0o644))
+
+	if out := m.apply(t); !strings.Contains(out, "MAC mismatch") {
+		t.Fatalf("no hint for a file that does not decrypt:\n%s", out)
+	}
+
+	if _, err := m.run(t, "", "exec", "true"); err == nil || !strings.Contains(err.Error(), "MAC mismatch") {
+		t.Fatalf("want exec refused while a secret does not decrypt, got %v", err)
+	}
+}
+
+func TestB321ExecScopeFilesLoadOnlyForOkuExec(t *testing.T) {
+	m := newMachine(t)
+	t.Setenv("PATH", "/usr/bin:/bin")
+
+	m.envFileProject(t, `[[env.file]]
+path = ".env.deploy"
+scope = "exec"
+`, map[string]string{".env.deploy": "DEPLOY_TOKEN=t0ken\n"})
+
+	m.apply(t)
+
+	if _, set := os.LookupEnv("DEPLOY_TOKEN"); set {
+		t.Fatal("the hook set a variable of a file with scope = \"exec\"")
+	}
+
+	if got := m.dirEnv(t)["DEPLOY_TOKEN"]; got != nil {
+		t.Fatalf("oku env --json printed DEPLOY_TOKEN=%s", *got)
+	}
+
+	if got := strings.TrimSpace(m.stdout(t, "exec", "sh", "-c", "echo $DEPLOY_TOKEN")); got != "t0ken" {
+		t.Fatalf("exec saw DEPLOY_TOKEN=%q", got)
 	}
 }

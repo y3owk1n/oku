@@ -53,6 +53,10 @@ project is allowed and synced. Look for the one-line hint it printed when you en
   why.
 - `<file> does not exist, create it or give the file optional = true`: an
   [`[[env.file]]`](reference/oku-toml.md#envfile) is missing.
+- `decrypt <file>: ...`: a `secret = true` file did not decrypt. The rest of
+  the line comes from age or sops, and
+  [the secrets guide](guides/secrets.md#when-a-secret-cannot-be-decrypted)
+  covers the causes.
 - `<file>: line <n>: ...`: the `.env` file does not parse. oku sets none of
   its variables until you fix the line.
 

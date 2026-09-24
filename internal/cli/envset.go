@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/y3owk1n/oku/internal/list"
 	"github.com/y3owk1n/oku/internal/profile"
+	"github.com/y3owk1n/oku/internal/secret"
 	"github.com/y3owk1n/oku/internal/shellhook"
 )
 
@@ -27,6 +29,11 @@ type shellEnv struct {
 	prepend map[string][]string
 	// missing holds each required variable that nothing sets, with its hint.
 	missing map[string]string
+	// exec says the environment is for oku exec, which also loads the files of
+	// scope = "exec".
+	exec bool
+	// decrypter decrypts the files of secret = true.
+	decrypter secret.Decrypter
 }
 
 // hookState is what the hook applied last time, kept in the environment so the
@@ -93,10 +100,13 @@ func (s hookState) base(name string) (string, bool) {
 // wantedEnv works out the environment for project, empty outside one, over
 // base. active says whether the project's programs and variables apply. It also
 // returns a hint for the user, such as a list that does not parse.
-func (e env) wantedEnv(project string, active bool, base func(string) (string, bool)) (shellEnv, []string) {
+func (e env) wantedEnv(
+	project string, active, exec bool, base func(string) (string, bool),
+) (shellEnv, []string) {
 	want := shellEnv{
 		set: map[string]string{}, unset: map[string]bool{},
 		prepend: map[string][]string{}, missing: map[string]string{},
+		exec: exec, decrypter: e.decrypter(e.globalProfile().Current()),
 	}
 
 	var hints []string
@@ -188,7 +198,7 @@ func (w *shellEnv) list(path string, base func(string) (string, bool)) []string 
 
 // file sets the variables of the .env file f at path, unless f is skipped.
 func (w *shellEnv) file(path string, f list.EnvFile, lookup func(string) (string, bool)) error {
-	if f.Skipped(lookup) {
+	if f.Skipped(lookup) || f.ExecOnly && !w.exec {
 		return nil
 	}
 
@@ -203,6 +213,13 @@ func (w *shellEnv) file(path string, f list.EnvFile, lookup func(string) (string
 
 	if err != nil {
 		return err
+	}
+
+	if f.Secret {
+		source := secret.Source{Name: path, Data: data}
+		if data, err = w.decrypter.Decrypt(context.Background(), source); err != nil {
+			return err
+		}
 	}
 
 	vars, err := list.ParseDotenv(data, lookup)
@@ -278,7 +295,7 @@ func (e env) execEnviron() ([]string, string, error) {
 		return strings.Join([]string{e.globalProfile().BinDir(), value}, string(os.PathListSeparator)), true
 	}
 
-	want, problems := e.wantedEnv(e.project, e.project != "", base)
+	want, problems := e.wantedEnv(e.project, e.project != "", true, base)
 	if len(problems) > 0 {
 		return nil, "", errors.New(strings.Join(problems, "\n"))
 	}

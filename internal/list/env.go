@@ -42,6 +42,10 @@ type EnvFile struct {
 	// Unless names variables that skip the file when one of them is set and
 	// not empty.
 	Unless []string
+	// Secret says the file is encrypted with sops or age.
+	Secret bool
+	// ExecOnly says only oku exec loads the file, and never the shell.
+	ExecOnly bool
 }
 
 // toEnv reads [env]. Its key "file", when it holds tables, is [[env.file]].
@@ -111,6 +115,18 @@ func toEnvFile(value any) (EnvFile, error) {
 			if f.Optional, ok = field.(bool); !ok {
 				return EnvFile{}, errors.New("optional is true or false")
 			}
+		case "secret":
+			if f.Secret, ok = field.(bool); !ok {
+				return EnvFile{}, errors.New("secret is true or false")
+			}
+		case "scope":
+			switch field {
+			case "shell":
+			case "exec":
+				f.ExecOnly = true
+			default:
+				return EnvFile{}, errors.New(`scope is "shell", the default, or "exec"`)
+			}
 		case "unless":
 			names, ok := field.([]any)
 			if !ok {
@@ -126,7 +142,7 @@ func toEnvFile(value any) (EnvFile, error) {
 				f.Unless = append(f.Unless, s)
 			}
 		default:
-			return EnvFile{}, fmt.Errorf("%s is not a key of env.file, which takes path, optional and unless", key)
+			return EnvFile{}, fmt.Errorf("%s is not a key of env.file, which takes path, optional, unless, secret and scope", key)
 		}
 	}
 
