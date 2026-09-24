@@ -665,3 +665,40 @@ func TestB323AllowCoversTheOverlaysThatGitTracks(t *testing.T) {
 		t.Fatalf("a changed tracked overlay still applied:\n%s", out)
 	}
 }
+
+func TestB324OkuProjectNamesTheProjectThatApplies(t *testing.T) {
+	m := newMachine(t)
+	t.Setenv("PATH", "/usr/bin:/bin")
+
+	project := m.hookProject(t)
+
+	// A project that is not allowed does not apply.
+	m.apply(t)
+
+	if _, set := os.LookupEnv("OKU_PROJECT"); set {
+		t.Fatal("OKU_PROJECT is set for a project that is not allowed")
+	}
+
+	_, err := m.run(t, "", "allow")
+	must(t, err)
+	m.apply(t)
+
+	if got := os.Getenv("OKU_PROJECT"); got != project {
+		t.Fatalf("OKU_PROJECT inside the project is %q, want %s", got, project)
+	}
+
+	if got := strings.TrimSpace(m.stdout(t, "exec", "sh", "-c", "echo $OKU_PROJECT")); got != project {
+		t.Fatalf("exec saw OKU_PROJECT=%q", got)
+	}
+
+	m.opts.WorkDir = filepath.Dir(project)
+	m.apply(t)
+
+	if _, set := os.LookupEnv("OKU_PROJECT"); set {
+		t.Fatal("OKU_PROJECT survived leaving the project")
+	}
+
+	if got := strings.TrimSpace(m.stdout(t, "exec", "sh", "-c", "echo ${OKU_PROJECT-unset}")); got != "unset" {
+		t.Fatalf("exec outside a project saw OKU_PROJECT=%q", got)
+	}
+}

@@ -114,7 +114,7 @@ as null, and a .env file leaves it out.`,
 				return nil
 			}
 
-			final, _, problems := e.dirEnv(project, readHookState())
+			final, _, _, problems := e.dirEnv(project, readHookState())
 			for _, problem := range problems {
 				fmt.Fprintln(cmd.ErrOrStderr(), "oku: "+problem)
 			}
@@ -147,7 +147,7 @@ as null, and a .env file leaves it out.`,
 // the hook stops setting gets back the value it had before.
 func (e env) hookChange(project string) shellhook.Change {
 	state := readHookState()
-	final, prepended, problems := e.dirEnv(project, state)
+	final, prepended, active, problems := e.dirEnv(project, state)
 	change := shellhook.Change{Set: map[string]string{}}
 	saved := map[string]*string{}
 
@@ -195,6 +195,12 @@ func (e env) hookChange(project string) shellhook.Change {
 		keepState(&change, name, encoded)
 	}
 
+	if !active {
+		project = ""
+	}
+
+	keepState(&change, shellhook.Project, project)
+
 	// This run read the state of an older oku, so the old variables go.
 	keepState(&change, shellhook.StatePath, "")
 	keepState(&change, shellhook.StateKeys, "")
@@ -217,9 +223,11 @@ func (e env) hookChange(project string) shellhook.Change {
 
 // dirEnv returns the value of each variable the hook sets in project, nil for
 // one it unsets, with PATH in full, and the entries it only puts in front of a
-// list variable. It also returns what keeps a part from applying, such as a
-// project that is not allowed.
-func (e env) dirEnv(project string, state hookState) (map[string]*string, map[string][]string, []string) {
+// list variable. It also returns whether the project applies, and what keeps a
+// part from applying, such as a project that is not allowed.
+func (e env) dirEnv(
+	project string, state hookState,
+) (map[string]*string, map[string][]string, bool, []string) {
 	active, why := false, ""
 	if project != "" {
 		e.project = project
@@ -233,7 +241,7 @@ func (e env) dirEnv(project string, state hookState) (map[string]*string, map[st
 
 	final, prepended := want.finalValues(state.base)
 
-	return final, prepended, problems
+	return final, prepended, active, problems
 }
 
 // orNil returns a pointer to value, or nil when ok is false.

@@ -25,6 +25,9 @@ const (
 	// once and removes.
 	StatePath = "OKU_HOOK_PATH"
 	StateKeys = "OKU_HOOK_KEYS"
+	// Project holds the directory of the project that applies, for a prompt to
+	// show. The hook and oku exec set it.
+	Project = "OKU_PROJECT"
 	// StateHint holds the last hint the hook printed, so a hint appears once per
 	// directory and not before every prompt.
 	StateHint = "OKU_HOOK_HINT"

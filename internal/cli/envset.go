@@ -344,6 +344,10 @@ func (e env) execEnviron() ([]string, string, error) {
 		}
 	}
 
+	if e.project != "" {
+		environ = append(environ, shellhook.Project+"="+e.project)
+	}
+
 	return environ, *final["PATH"], nil
 }
 
@@ -351,6 +355,7 @@ func (e env) execEnviron() ([]string, string, error) {
 func isHookState(name string) bool {
 	return slices.Contains([]string{
 		shellhook.StateSaved, shellhook.StateAdded, shellhook.StatePath, shellhook.StateKeys, shellhook.StateHint,
+		shellhook.Project,
 	}, name)
 }
 

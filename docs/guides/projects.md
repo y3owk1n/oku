@@ -194,6 +194,31 @@ $ export OKU_ENV=staging    # the hook applies it at the next prompt
 Each holds `[env]` alone. The order and the rules are in
 [the reference](../reference/oku-toml.md#okuenvtoml-and-okulocaltoml).
 
+### Show the project in your prompt
+
+While a project applies, the hook sets `OKU_PROJECT` to its directory. It
+sets `OKU_HOOK_HINT` to the hint it printed when the project does not apply.
+A [starship](https://starship.rs) prompt can show both:
+
+```toml
+[custom.oku_project]
+when = 'test -n "$OKU_PROJECT"'
+shell = ['sh']
+command = 'basename "$OKU_PROJECT"'
+format = '[oku $output]($style) '
+style = 'bold green'
+
+[custom.oku_hint]
+when = 'test -n "$OKU_HOOK_HINT"'
+shell = ['sh']
+command = 'case "$OKU_HOOK_HINT" in *"not allowed"*) echo "not allowed";; *sync*) echo stale;; *) echo attention;; esac'
+format = '[oku $output]($style) '
+style = 'bold red'
+```
+
+Read no other `OKU_HOOK_` variable in a prompt. They hold the hook's own
+state, and a new oku may change them.
+
 ### Why you have to allow a project
 
 A cloned repo could hold an `oku.toml` that puts its own `make` or `git` ahead
