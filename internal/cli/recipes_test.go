@@ -1016,3 +1016,23 @@ func TestB337ACaskOfATapTranslatesFromItsRuby(t *testing.T) {
 		t.Fatalf("want a missing cask named with its tap, got %v", err)
 	}
 }
+
+func TestB336AScoopRefReadsABucketOnGitHub(t *testing.T) {
+	m := newMachine(t)
+	recipeServer{scoop: map[string]string{"someone/scoop-tools/tool": scoopJSON}}.start(t, &m)
+
+	out, err := m.run(t, "", "manifest", "init", "--from", "scoop:someone/scoop-tools/tool", "-o", "-")
+	if err != nil {
+		t.Fatalf("init: %v\n%s", err, out)
+	}
+
+	if !strings.Contains(out, "# Translated from the Scoop manifest someone/scoop-tools/tool.") ||
+		!strings.Contains(out, `/dl/{{version}}/win-x64/tool.zip"`) {
+		t.Fatalf("the manifest does not come from the bucket on GitHub:\n%s", out)
+	}
+
+	if _, err := m.run(t, "", "manifest", "init", "--from", "scoop:someone/scoop-tools/other", "-o", "-"); err == nil ||
+		!strings.Contains(err.Error(), "no bucket of someone/scoop-tools has it") {
+		t.Fatalf("want a missing manifest named with its bucket, got %v", err)
+	}
+}

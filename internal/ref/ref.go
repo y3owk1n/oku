@@ -204,7 +204,7 @@ func ParseIn(dir, s string) (Ref, error) {
 
 		if !infer.ValidScoop(r.Location) {
 			return Ref{}, fmt.Errorf(
-				"%s: want scoop:name or scoop:bucket/name, with a bucket that Scoop knows by name", s,
+				"%s: want scoop:name, scoop:bucket/name with a bucket that Scoop knows by name, or scoop:owner/repo/name of a bucket on GitHub", s,
 			)
 		}
 	case strings.HasPrefix(body, "aqua:"):
