@@ -397,7 +397,7 @@ func (m *Manifest) validate() error {
 	}
 
 	for name := range m.Env {
-		if !envNameRe.MatchString(name) || reservedEnv(name) {
+		if !envNameRe.MatchString(name) || ReservedEnv(name) {
 			errs = append(errs, fmt.Errorf(
 				"env.%s: a package may not set this variable, because it changes how other programs load or run",
 				name,
@@ -769,9 +769,14 @@ func (m *Manifest) Select(p platform.Platform) (Artifact, bool, error) {
 
 var envNameRe = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 
-// reservedEnv reports variables that would let a package control the user's
-// shell or other programs.
-func reservedEnv(name string) bool {
+// ValidEnvName reports whether name can name an environment variable.
+func ValidEnvName(name string) bool {
+	return envNameRe.MatchString(name)
+}
+
+// ReservedEnv reports variables that would let a package or a list control the
+// user's shell or other programs.
+func ReservedEnv(name string) bool {
 	upper := strings.ToUpper(name)
 
 	for _, prefix := range []string{"LD_", "DYLD_", "OKU_"} {

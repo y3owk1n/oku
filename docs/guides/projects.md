@@ -27,7 +27,7 @@ oku wrote `oku.toml` and `oku.lock` in `~/work/api`. Commit both. The first
 line, on stderr, names the project oku is using.
 
 A project list takes `[packages]`, `include`, `when`, version pins,
-`[runtimes]` and `[lock]`. A relative ref starts at the project directory. The
+`[runtimes]`, `[lock]` and `[env]`. A relative ref starts at the project directory. The
 keys are in [the oku.toml reference](../reference/oku-toml.md).
 
 ## Know which list a command uses
@@ -77,12 +77,40 @@ $ cd ~ && which rg
 ```
 
 Inside the project, in any subdirectory, the hook puts the project's `bin`
-first on `PATH` and exports the `[env]` of its packages. A project program
-runs instead of a global one with the same name. When you leave, the hook
-removes both.
+first on `PATH` and exports the `[env]` of its packages and of its `oku.toml`.
+A project program runs instead of a global one with the same name. When you
+leave, the hook takes the programs off `PATH` and gives each variable back the
+value it had before.
 
 The hook reads local files only. It never uses the network, never installs,
 and never runs anything from a manifest. One run takes a few milliseconds.
+
+## Set the project's variables
+
+`[env]` in the project's `oku.toml` sets variables while you are inside the
+project:
+
+```toml
+[env]
+AWS_PROFILE = "api-dev"
+DATABASE_URL = "postgres://localhost/${USER}_api"
+PATH = { prepend = ["scripts"] }
+DEPLOY_TOKEN = { required = "get one from the ops vault" }
+```
+
+- `${NAME}` reads a variable, and `${NAME:-default}` gives a default.
+- `PATH = { prepend = [...] }` puts the repo's `scripts` directory first. A
+  relative entry starts at the project directory.
+- `{ required = "..." }` sets nothing. When `DEPLOY_TOKEN` is not set, the
+  hook prints `oku: DEPLOY_TOKEN is not set, get one from the ops vault` once,
+  and `oku exec` refuses to run.
+- `KEY = false` unsets a variable inside the project.
+
+A project with `[env]` and no packages needs no `oku.lock`. `[env]` in your
+global `oku.toml` applies in every directory, and a project's wins over it.
+The keys are in [the \[env\] reference](../reference/oku-toml.md#env).
+
+Editing `[env]` edits the `oku.toml`, so the hook asks for `oku allow` again.
 
 ### Why you have to allow a project
 
@@ -113,10 +141,13 @@ The hook prints one line, once per directory, and changes nothing when:
 eval "$(oku env --shell bash)"
 ```
 
+`oku env --dotenv` prints the variables as a `.env` file, and
+`oku env --json` as JSON, for a tool that reads one of those.
+
 ## Give an editor the project's programs
 
 An editor or a script does not run the shell hook. `oku exec` runs a command
-with the same `PATH` and `[env]` the hook would give it:
+with the same `PATH` and variables the hook would give it:
 
 ```
 $ oku exec gopls version

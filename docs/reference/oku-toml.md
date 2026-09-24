@@ -43,14 +43,15 @@ autohide = true
 | `[packages]` | table | [\[packages\]](#packages) |
 | `[lock]` | table | [\[lock\]](#lock) |
 | `[runtimes]` | table | [\[runtimes\]](#runtimes) |
+| `[env]` | table | [\[env\]](#env) |
 | `[vars]` | table | [\[vars\]](#vars) |
 | `[files]` | table | [\[files\]](#files) |
 | `[secrets]` | table | [\[secrets\]](#secrets) |
 | `[defaults]`, `[defaults-currenthost]`, `[registry]`, `[dconf]` | tables | [Settings tables](#settings-tables) |
 
 oku ignores a key it does not know at the top of the file and inside a
-`[packages]` table. `when`, `[lock]`, `[runtimes]`, `[files]` and `[secrets]`
-reject a key they do not know.
+`[packages]` table. `when`, `[lock]`, `[runtimes]`, `[env]`, `[files]` and
+`[secrets]` reject a key they do not know.
 
 ### How oku edits the file
 
@@ -226,6 +227,50 @@ go = { ref = "./packages/go.toml", version = "1.26" }
 How each registry uses its runtime is in
 [npm, PyPI, Go and cargo](../guides/npm-pypi-go-cargo.md).
 
+### [env]
+
+`[env]` holds environment variables. The shell hook sets them, and so do
+`oku exec` and `oku env`. The global list's apply everywhere, and a project's
+apply inside the project once you [allow it](../guides/projects.md#why-you-have-to-allow-a-project).
+
+```toml
+[env]
+AWS_PROFILE = "api-dev"
+REGION = "${AWS_REGION:-eu-west-1}"
+API_URL = "https://${REGION}.example.com"
+PAGER = false
+PATH = { prepend = ["scripts", "node_modules/.bin"] }
+DEPLOY_TOKEN = { required = "ask ops for a token" }
+```
+
+| Value | Effect |
+|---|---|
+| a string | Sets the variable. |
+| `false` | Unsets the variable. |
+| `{ prepend = [...] }` | Puts the entries in front of a list variable such as `PATH` or `MANPATH`. A relative entry starts at the directory of the `oku.toml`. |
+| `{ required = "hint" }` | Sets nothing. When the variable is unset or empty, the hook prints the hint once and `oku exec` refuses to run. |
+
+- A string, or a `prepend` entry, may name a variable as `${NAME}`, or as
+  `${NAME:-default}` for a default when `NAME` is unset or empty. `$NAME`
+  without braces stays as it is, and oku runs no command.
+- `${NAME}` reads another key of the same `[env]` as that key sets it, in any
+  order, and fails on a cycle. A key that names itself, such as
+  `GREETING = "${GREETING}!"`, reads the value from before.
+- Later sources win, in this order: your shell, the `[env]` of global
+  packages, the global list's `[env]`, the `[env]` of the project's packages,
+  the project's `[env]`. The project's own `prepend` entries come before its
+  `bin`.
+- Leaving a project gives each variable back the value it had before, and
+  removes the entries that `prepend` added. If you change such a variable by
+  hand inside the project, leaving still restores the value from before you
+  entered.
+- A name holds letters, digits and `_`. oku refuses a list that sets `PATH`
+  other than by `prepend`, or a variable that controls the shell or other
+  programs: `HOME`, `SHELL`, `USER`, `IFS`, `ENV`, `BASH_ENV`,
+  `PROMPT_COMMAND`, `PS1`, and any `LD_*`, `DYLD_*` or `OKU_*`.
+- Only the list itself sets variables. oku refuses an included list with
+  `[env]`.
+
 ### [vars]
 
 `[vars]` holds values that you name yourself, for `[files]` paths, `text`
@@ -385,6 +430,7 @@ happens after a write, such as the Dock restart, is in
 | Table | Global list | Included list, file or repo | Included list at a URL | Project list |
 |---|---|---|---|---|
 | `[packages]`, `include`, `[runtimes]` | yes | yes | yes | yes |
+| `[env]` | yes | error | error | yes |
 | `[lock]` | yes | ignored | ignored | yes |
 | `[vars]`, settings tables | yes | yes | yes | error |
 | `[files]`, `[secrets]` | yes | yes | error | error |

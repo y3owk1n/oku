@@ -98,6 +98,8 @@ type List struct {
 	// LockPlatforms holds the platforms of [lock], which oku.lock pins every
 	// package for besides the host.
 	LockPlatforms []platform.Platform
+	// Env holds [env], the variables the list sets in the shell and for oku exec.
+	Env map[string]EnvValue
 	// Runtimes maps an interpreter, such as "node", to the package that
 	// provides it, for the packages that run through one. A version constraint
 	// limits which versions of that package oku picks.
@@ -130,6 +132,7 @@ func Parse(data []byte, origin string) (*List, error) {
 		Dconf    map[string]any `toml:"dconf"`
 		Lock     map[string]any `toml:"lock"`
 		Runtimes map[string]any `toml:"runtimes"`
+		Env      map[string]any `toml:"env"`
 	}
 
 	if err := toml.Unmarshal(data, &raw); err != nil {
@@ -155,6 +158,10 @@ func Parse(data []byte, origin string) (*List, error) {
 	}
 
 	var err error
+	if l.Env, err = toEnv(raw.Env); err != nil {
+		return nil, fmt.Errorf("%s: %w", origin, err)
+	}
+
 	if l.LockPlatforms, err = toLockPlatforms(raw.Lock); err != nil {
 		return nil, fmt.Errorf("%s: %w", origin, err)
 	}

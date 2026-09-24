@@ -662,6 +662,29 @@ order step in `prd/product.md`.
   fish.
 - B69 [7] A manifest whose `[env]` sets `PATH`, `LD_PRELOAD` or another variable
   that controls other programs is rejected.
+- B308 [7] Inside an allowed project, the hook sets the variables of its
+  `oku.toml` `[env]`, with `${NAME}` and `${NAME:-default}` read from the shell
+  and from other keys, and unsets a key set to `false`. Leaving gives each
+  variable back the value it had before.
+- B309 [7] `KEY = { prepend = [...] }` puts the entries in front of a list
+  variable, a relative one from the directory of the `oku.toml`. The project's
+  entries come before its `bin`. Leaving removes only those entries.
+- B310 [7] `KEY = { required = "hint" }` prints the variable and the hint once
+  while it is unset or empty, and `oku exec` refuses to run until it is set.
+- B311 [7] The global `oku.toml` `[env]` applies in every directory. Inside a
+  project the project's packages override it, and the project's `[env]`
+  overrides those. `oku exec` sets the same variables.
+- B312 [7] oku rejects a list whose `[env]` sets `PATH` without `prepend`,
+  `LD_PRELOAD`, an `OKU_` variable or another variable that controls the shell,
+  and an included list with `[env]`.
+- B313 [7] `oku env --json` prints each variable the directory sets, with
+  `null` for one it unsets, and `oku env --dotenv` prints them as a `.env`
+  file.
+- B314 [7] In a shell that an older oku's hook set up, the next prompt takes
+  over the old hook's state, and leaving the project removes what the old hook
+  added.
+- B315 [7] A project whose list has `[env]` and no packages applies without an
+  `oku.lock`.
 - B67 [7] Project packages shadow global ones on PATH while active.
 - B68 [7] The hook exports `[env]` of global packages in every shell.
 - B219 [7] The hook loads the completions under the global profile
