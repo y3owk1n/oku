@@ -293,9 +293,10 @@ app = ["IINA.app"]
 
 ### A version for each platform
 
-Some vendors keep each platform at its own version. Discord's macOS download is
-`0.0.413` while its Linux one is `1.0.159`. Give each artifact a `version`
-table instead of `[version]`, with the same `from`, `repo` and `regex`:
+Some vendors keep each platform at its own version, or publish each platform
+in its own place. Discord's macOS download is `0.0.413` while its Linux one is
+`1.0.159`. Give each artifact a `version` table instead of `[version]`, with
+the same `from`, `repo`, `regex` and `strip_prefix`:
 
 ```toml
 [package]
@@ -315,9 +316,30 @@ strip = 1
 bin = ["discord"]
 ```
 
-- `from` is `redirect`, `page` or `sparkle`. Every artifact then needs a `version`, and
+A macOS app may announce its updates in a Sparkle feed while its Linux build
+comes from GitHub releases:
+
+```toml
+[[artifact]]
+match = { os = "darwin" }
+version = { from = "sparkle", repo = "https://example.com/appcast.xml" }
+url = "https://example.com/Tool-{{version}}.dmg"
+app = ["Tool.app"]
+
+[[artifact]]
+match = { os = "linux", arch = "amd64" }
+version = { from = "github-releases", repo = "owner/tool", strip_prefix = "v" }
+url = "https://github.com/owner/tool/releases/download/{{tag}}/tool-linux-amd64.tar.gz"
+bin = ["tool"]
+```
+
+- `from` is `github-releases`, `gitea-releases`, `gitlab-releases`,
+  `git-tags`, `redirect`, `page` or `sparkle`. A moving `tag`, a `branch` and
+  the registries need `[version]`. Every artifact then needs a `version`, and
   the manifest cannot have `[version]` or `[build]`.
-- `{{version}}` and `{{tag}}` in an artifact are its own version.
+- `{{version}}` and `{{tag}}` in an artifact are its own version and tag. oku
+  checks a file of a GitHub release against the digest GitHub reports, as in
+  [Checksums](#checksums).
   `oku add` and `oku update` find the version of this machine and of each
   platform of [`[lock] platforms`](oku-toml.md#lock), and `oku.lock` keeps each
   one in its [platform entry](lock.md#platform-entries). oku asks upstream
@@ -422,10 +444,10 @@ oku checks a download against the first of these that exists:
 
 1. `sha256` in the artifact.
 2. The file at `sha256_url`.
-3. The sha256 that GitHub reports for the file, when the manifest follows
-   `github-releases`. GitHub has one for most files uploaded since mid 2025, so
-   such a manifest needs no `sha256` for them, and `oku manifest lint` does not
-   warn.
+3. The sha256 that GitHub reports for the file, when the manifest, or the
+   artifact's own `version`, follows `github-releases`. GitHub has one for
+   most files uploaded since mid 2025, so such a manifest needs no `sha256`
+   for them, and `oku manifest lint` does not warn.
 4. The digest that the user's `oku.lock` pinned earlier.
 
 oku also checks `integrity` when the artifact has one, or when the npm registry

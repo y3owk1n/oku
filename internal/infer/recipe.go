@@ -165,10 +165,6 @@ func (r recipe) text() (string, error) {
 			fixed = "the files inside its download are named after the version"
 		case perArtifact && a.follow == nil:
 			fixed = "it names no source of new versions"
-		case perArtifact && !slices.Contains(
-			[]string{manifest.FromRedirect, manifest.FromPage, manifest.FromSparkle}, a.follow.from,
-		):
-			fixed = "each platform has its own source of versions"
 		}
 	}
 

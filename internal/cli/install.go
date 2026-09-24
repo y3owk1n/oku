@@ -602,6 +602,7 @@ func (e env) installFrom(
 
 	if m.PerArtifact() {
 		entry.Version = m.Version.Value
+		entry.Tag = m.Tags[host.String()]
 	}
 
 	env := map[string]string{}
@@ -864,8 +865,11 @@ func (e env) artifactVersions(
 		targets = append(targets, req.platforms...)
 	}
 
-	m.Versions = map[string]string{}
-	found := map[manifest.Version]string{}
+	m.Versions, m.Tags = map[string]string{}, map[string]string{}
+	found := map[manifest.Version]resolve.Release{}
+	// The digests that hosts report for every platform's release, so oku checks
+	// each platform's download against its own.
+	digests := map[string]string{}
 
 	for _, p := range targets {
 		i := slices.IndexFunc(m.Artifacts, func(a manifest.Artifact) bool { return a.Match.Matches(p) })
@@ -875,17 +879,20 @@ func (e env) artifactVersions(
 
 		source := *m.Artifacts[i].Version
 
-		version := ""
+		var release resolve.Release
 		if keep {
-			version = req.previous.Platforms[p.String()].Version
+			at := req.previous.Platforms[p.String()]
+			release = resolve.Release{Version: at.Version, Tag: at.Tag}
 		}
 
-		if version == "" {
-			version = found[source]
+		if release.Version == "" {
+			release = found[source]
 		}
 
-		if version == "" {
-			release, err := e.resolver(opts).Pick(ctx, source, "")
+		if release.Version == "" {
+			var err error
+
+			release, err = e.resolver(opts).Pick(ctx, source, "")
 
 			// lockOthers skips a platform it cannot pin, unless the platforms are
 			// strict.
@@ -897,16 +904,22 @@ func (e env) artifactVersions(
 				return resolve.Release{}, fmt.Errorf("%s for %s: %w", m.Package.Name, p, err)
 			}
 
-			version = release.Version
-			found[source] = version
+			found[source] = release
 		}
 
-		m.Versions[p.String()] = version
+		m.Versions[p.String()] = release.Version
+		if release.Tag != "" && release.Tag != release.Version {
+			m.Tags[p.String()] = release.Tag
+		}
+
+		maps.Copy(digests, release.Digests)
 	}
 
 	version := m.Versions[req.target().String()]
 
-	return resolve.Release{Version: version, Tag: version}, nil
+	return resolve.Release{
+		Version: version, Tag: cmp.Or(m.Tags[req.target().String()], version), Digests: digests,
+	}, nil
 }
 
 // lockEntry returns the lock entry of m.
@@ -1108,6 +1121,7 @@ func pinFor(
 	return lock.Platform{
 		Strategy: strategyArtifact, URL: artifact.URL, SHA256: sum,
 		Commands: artifact.Completions.Generate != "", Version: m.Versions[p.String()],
+		Tag: m.Tags[p.String()],
 	}, trusted, nil
 }
 

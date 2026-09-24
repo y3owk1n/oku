@@ -86,6 +86,7 @@ A platform name is `os-arch`, plus `-glibc` or `-musl` on Linux:
 | `vendor_sha256` | A build's digest of what its vendor steps downloaded. |
 | `impure` | `true` when a `run` step of the build used `network = true`. |
 | `version` | The version of this platform, when each artifact of the manifest [finds its own version](manifest.md#a-version-for-each-platform). |
+| `tag` | The upstream tag of that version, when it differs, such as `v2.0.0`. `oku sync` downloads from it. |
 
 oku keeps `vendor_sha256` and `impure` beside the build in the store, so
 `oku update` of a build that did not change writes the same lock.

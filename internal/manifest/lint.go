@@ -123,14 +123,16 @@ func Lint(data []byte) Report {
 		}
 	}
 
-	// With github-releases oku takes the sha256 from the GitHub API, which only
-	// knows the files of that repo's releases.
-	fromRelease := "https://github.com/" + full.Version.Repo + "/releases/download/"
-	if host, repo := forge.Split(full.Version.Repo); host != "" {
-		fromRelease = "https://" + host + "/" + repo + "/releases/download/"
-	}
-
 	for i, a := range full.Artifacts {
+		// An artifact with a version of its own takes the digests of its own
+		// releases.
+		version := full.Version
+		if a.Version != nil {
+			version = *a.Version
+		}
+
+		fromRelease := releaseDownloads(version.Repo)
+
 		for _, text := range []string{a.URL, a.SHA256URL} {
 			for _, name := range unknownVars(text, artifactVars) {
 				report.Errors = append(report.Errors, fmt.Sprintf(
@@ -141,12 +143,12 @@ func Lint(data []byte) Report {
 
 		switch {
 		case a.SHA256 != "" || a.SHA256URL != "" || a.Integrity != "" ||
-			full.Package.SigningKey != "" || full.Version.From == FromNPM:
-		case full.Version.From != FromGitHubReleases && full.Version.Tag == "":
+			full.Package.SigningKey != "" || version.From == FromNPM:
+		case version.From != FromGitHubReleases && version.Tag == "":
 			report.Warnings = append(report.Warnings, fmt.Sprintf(
 				"artifact[%d]: no sha256 or sha256_url, so users trust the first download", i,
 			))
-		case full.Version.From != FromGitHubReleases:
+		case version.From != FromGitHubReleases:
 			report.Warnings = append(report.Warnings, fmt.Sprintf(
 				"artifact[%d]: only GitHub reports a sha256 for the files of a release, "+
 					"so users trust the first download", i,
@@ -165,7 +167,7 @@ func Lint(data []byte) Report {
 	// GitHub reports the sha256 of a file of the repo's release, and crates.io
 	// publishes one for each version's .crate file.
 	case source.URL != "" && source.SHA256 == "" && source.SHA256URL == "" &&
-		(full.Version.From != FromGitHubReleases || !strings.HasPrefix(source.URL, fromRelease)) &&
+		(full.Version.From != FromGitHubReleases || !strings.HasPrefix(source.URL, releaseDownloads(full.Version.Repo))) &&
 		(full.Version.From != FromCrates || source.URL != crates.URL("", full.Version.Repo, "{{version}}")):
 		report.Warnings = append(report.Warnings,
 			"build.source: no sha256 or sha256_url, so users trust the first download")
@@ -274,4 +276,15 @@ func unknownVars(text string, known []string) []string {
 	}
 
 	return unknown
+}
+
+// releaseDownloads is where the files of repo's GitHub releases are. With
+// github-releases oku takes their sha256 from the GitHub API, which only knows
+// those files.
+func releaseDownloads(repo string) string {
+	if host, name := forge.Split(repo); host != "" {
+		return "https://" + host + "/" + name + "/releases/download/"
+	}
+
+	return "https://github.com/" + repo + "/releases/download/"
 }

@@ -307,6 +307,12 @@ order step in `prd/product.md`.
   them. `sync` installs the host's locked version and leaves `oku.lock` as it
   was, whatever the host. `outdated` compares the host's version, and
   `add <ref>@x` fails.
+- B300 [3] An artifact's `version` table may read GitHub, Gitea or GitLab
+  releases or git tags, beside artifacts that follow a redirect, a page or a
+  Sparkle feed. `{{tag}}` in its URL is the tag of its own version. The
+  platform entry of `oku.lock` keeps that tag, and `sync` on another machine
+  downloads from it. oku checks a release file against the digest
+  the host reports for it, and `manifest lint` does not warn about it.
 - B106 [3] With `[version] tag`, `add` installs the release of that tag, also
   when it is a prerelease, as version `<date>-<commit>`, the day and the first
   seven characters of the commit the tag points at. `update` moves the
@@ -335,9 +341,10 @@ order step in `prd/product.md`.
   does not compile, and one with another `from`. It warns about their
   artifacts without a checksum.
 - B284 [4] `manifest lint` rejects an artifact `version` beside `[version]` or
-  `[build]`, missing from another artifact, with a `from` other than
-  `redirect`, `page` or `sparkle`, or with keys other than `from`, `repo` and
-  `regex`.
+  `[build]`, missing from another artifact, with a `from` that is a moving tag,
+  a branch or a registry, with keys other than `from`, `repo`, `regex` and
+  `strip_prefix`, with a `repo` that does not fit its `from`, or with a
+  `regex` beside a source of releases or tags.
   `manifest bump` refuses such a manifest.
 - B285 [4] An artifact `version` given as a string, such as `"1.0.0"`, fails
   `manifest lint` and `add` with an error that says it must be a table.

@@ -3,12 +3,14 @@ package manifest
 
 import (
 	"bytes"
+	"cmp"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"fmt"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 
 	"aead.dev/minisign"
@@ -46,6 +48,9 @@ type Manifest struct {
 	// Versions holds the version of each platform, keyed by
 	// platform.Platform.String(), for artifacts that find their own version.
 	Versions map[string]string `toml:"-"`
+	// Tags holds the upstream tag of each platform's version when it differs
+	// from the version, keyed like Versions.
+	Tags map[string]string `toml:"-"`
 }
 
 type Package struct {
@@ -595,13 +600,62 @@ func perArtifactErrors(m *Manifest) []error {
 		switch v := a.Version; {
 		case v == nil:
 			errs = append(errs, fmt.Errorf("artifact[%d]: version is required when another artifact has one", i))
-		case v.From != FromRedirect && v.From != FromPage && v.From != FromSparkle:
-			errs = append(errs, fmt.Errorf(`%s.from must be "redirect", "page" or "sparkle"`, key))
+		case !slices.Contains(artifactSources, v.From):
+			errs = append(errs, fmt.Errorf("%s.from must be %s", key, oneOf(artifactSources)))
 		case v.Value != "" || v.Tag != "" || v.Branch != "":
-			errs = append(errs, fmt.Errorf("%s takes from, repo and regex only", key))
-		default:
+			errs = append(errs, fmt.Errorf("%s takes from, repo, regex and strip_prefix only", key))
+		case v.From == FromRedirect || v.From == FromPage || v.From == FromSparkle:
 			errs = append(errs, scrapeErrors(*v, key)...)
+		default:
+			errs = append(errs, releaseErrors(*v, key)...)
 		}
+	}
+
+	return errs
+}
+
+// artifactSources are the sources an artifact's own version may read. A moving
+// tag and a branch name commits, and registries serve builds, so they need
+// [version].
+var artifactSources = []string{
+	FromGitHubReleases, FromGiteaReleases, FromGitLabReleases, FromGitTags,
+	FromRedirect, FromPage, FromSparkle,
+}
+
+// oneOf quotes items as "a", "b" or "c".
+func oneOf(items []string) string {
+	quoted := make([]string, len(items))
+	for i, item := range items {
+		quoted[i] = strconv.Quote(item)
+	}
+
+	last := len(quoted) - 1
+
+	return strings.Join(quoted[:last], ", ") + " or " + quoted[last]
+}
+
+// releaseErrors checks an artifact's version that reads releases or tags. key
+// names it in the errors.
+func releaseErrors(v Version, key string) []error {
+	var errs []error
+
+	switch {
+	case v.From == FromGitHubReleases && !repoRe.MatchString(v.Repo):
+		errs = append(errs, fmt.Errorf(
+			`%s.repo must be "owner/repo" or "host/owner/repo" for github-releases`, key,
+		))
+	case v.From == FromGiteaReleases && !giteaRepoRe.MatchString(v.Repo):
+		errs = append(errs, fmt.Errorf(`%s.repo must be "host/owner/repo" for gitea-releases`, key))
+	case v.From == FromGitLabReleases && !gitlabRepoRe.MatchString(v.Repo):
+		errs = append(errs, fmt.Errorf(
+			`%s.repo must be "group/project" or "host/group/project" for gitlab-releases`, key,
+		))
+	case v.From == FromGitTags && v.Repo == "":
+		errs = append(errs, fmt.Errorf("%s.repo must be a git URL for git-tags", key))
+	}
+
+	if v.Regex != "" {
+		errs = append(errs, fmt.Errorf(`%s.regex needs from = "redirect" or "page"`, key))
 	}
 
 	return errs
@@ -671,7 +725,7 @@ func (m *Manifest) Select(p platform.Platform) (Artifact, bool, error) {
 		version, tag := m.Version.Value, m.Tag
 		if a.Version != nil {
 			version = m.Versions[p.String()]
-			tag = version
+			tag = cmp.Or(m.Tags[p.String()], version)
 
 			if version == "" {
 				return Artifact{}, false, fmt.Errorf("no version was found for %s", p)
