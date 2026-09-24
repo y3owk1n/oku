@@ -108,6 +108,8 @@ type Platform struct {
 	// Version is the version of this platform, for a manifest whose artifacts
 	// find their own versions. The package's Version holds it otherwise.
 	Version string `toml:"version,omitempty"`
+	// Tag is the upstream tag of Version when it differs from Version.
+	Tag string `toml:"tag,omitempty"`
 }
 
 // Read parses the lock at path. A missing file is an empty lock. File refs that

@@ -367,8 +367,10 @@ func TestB284LintChecksAVersionInEachArtifact(t *testing.T) {
 		"[version]\nvalue = \"1.0.0\"\n" + artifact(good):                                                       "not both",
 		artifact(good) + artifact(""):                                                                           "artifact[1]: version is required",
 		artifact(good) + "[build]\n[[build.step]]\nrun = \"true\"\n":                                            "[build] needs [version]",
-		artifact("version = { from = \"npm\", repo = \"x\" }\n"):                                                `"redirect", "page" or "sparkle"`,
-		artifact("version = { from = \"page\", repo = \"https://example.com\", regex = '(.)', tag = \"x\" }\n"): "from, repo and regex only",
+		artifact("version = { from = \"npm\", repo = \"x\" }\n"):                                                `"git-tags", "redirect", "page" or "sparkle"`,
+		artifact("version = { from = \"page\", repo = \"https://example.com\", regex = '(.)', tag = \"x\" }\n"): "from, repo, regex and strip_prefix only",
+		artifact("version = { from = \"github-releases\", repo = \"not a repo\" }\n"):                           `artifact[0].version.repo must be "owner/repo"`,
+		artifact("version = { from = \"github-releases\", repo = \"o/r\", regex = '(.)' }\n"):                   "artifact[0].version.regex needs",
 		artifact("version = { from = \"page\", repo = \"https://example.com\" }\n"):                             "artifact[0].version.regex is required",
 	} {
 		must(t, os.WriteFile(path, []byte("[package]\nname = \"tool\"\ndescription = \"a tool\"\n"+body), 0o644))
@@ -389,6 +391,21 @@ func TestB284LintChecksAVersionInEachArtifact(t *testing.T) {
 	if _, err := m.run(t, "", "manifest", "bump", path); err == nil {
 		t.Fatal("bump accepted a manifest whose artifacts find their own versions")
 	}
+
+	// A file of a GitHub release has the digest GitHub reports, so lint warns
+	// about the page's download only.
+	must(t, os.WriteFile(path, []byte(
+		"[package]\nname = \"tool\"\ndescription = \"a tool\"\n"+
+			"[[artifact]]\nmatch = { os = \"linux\" }\n"+
+			"version = { from = \"github-releases\", repo = \"owner/tool\", strip_prefix = \"v\" }\n"+
+			"url = \"https://github.com/owner/tool/releases/download/{{tag}}/tool.tar.gz\"\nbin = [\"tool\"]\n"+
+			artifact("match = { os = \"darwin\" }\n"+good),
+	), 0o644))
+
+	out, err = m.run(t, "", "manifest", "lint", path)
+	if err != nil || !strings.Contains(out, "artifact[1]: no sha256") || strings.Contains(out, "artifact[0]") {
+		t.Errorf("lint did not warn about the page's download alone: %v\n%s", err, out)
+	}
 }
 
 func TestB285AnArtifactVersionGivenAsAStringIsRefusedByName(t *testing.T) {
@@ -405,5 +422,100 @@ func TestB285AnArtifactVersionGivenAsAStringIsRefusedByName(t *testing.T) {
 		if err == nil || !strings.Contains(out+err.Error(), "version must be a table") {
 			t.Errorf("%s did not refuse the string and name the table: %v\n%s", args[0], err, out)
 		}
+	}
+}
+
+func TestB300AnArtifactFollowsReleasesWhileAnotherFollowsARedirect(t *testing.T) {
+	m := newMachine(t)
+
+	other := platform.All()[0]
+	if other == platform.Host() {
+		other = platform.All()[1]
+	}
+
+	vendor := m.vendorServer(t, "1.5.0")
+	vendor.set("other", "1.5.0")
+
+	archive, sum := m.archive(t, "release", map[string]string{"tool": "#!/bin/sh\necho 2.0.0\n"})
+
+	var github *httptest.Server
+
+	github = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/repos/owner/tool/releases":
+			fmt.Fprintf(w, `[{"tag_name": "v2.0.0", "assets": [{"name": "tool.tar.gz", `+
+				`"browser_download_url": %q, "digest": "sha256:%s"}]}]`,
+				github.URL+"/owner/tool/releases/download/v2.0.0/tool.tar.gz", sum)
+		case "/owner/tool/releases/download/v2.0.0/tool.tar.gz":
+			http.ServeFile(w, r, archive)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(github.Close)
+
+	host := platform.Host()
+	ref := filepath.Join(m.fixtures, "tool.toml")
+	must(t, os.WriteFile(ref, []byte(fmt.Sprintf(
+		"[package]\nname = \"tool\"\n"+
+			"[[artifact]]\nmatch = { os = %q, arch = %q, libc = %q }\n"+
+			"version = { from = \"github-releases\", repo = \"owner/tool\", strip_prefix = \"v\" }\n"+
+			"url = \"%s/owner/tool/releases/download/{{tag}}/tool.tar.gz\"\nbin = [\"tool\"]\n"+
+			"[[artifact]]\nmatch = { os = %q, arch = %q }\n"+
+			"version = { from = \"redirect\", repo = \"%s/latest/other\", regex = '/dl/([0-9.]+)/' }\n"+
+			"url = \"%s/dl/{{version}}/tool.tar.gz\"\nbin = [\"tool\"]\n",
+		host.OS, host.Arch, host.Libc, github.URL, other.OS, other.Arch, vendor.URL, vendor.URL,
+	)), 0o644))
+
+	list := fmt.Sprintf("[lock]\nplatforms = [%q]\n\n[packages]\ntool = %q\n", other.String(), ref)
+	must(t, os.MkdirAll(m.config, 0o755))
+	must(t, os.WriteFile(filepath.Join(m.config, "oku.toml"), []byte(list), 0o644))
+
+	m.opts.GitHubAPI = github.URL + "/api"
+
+	out, err := m.run(t, "", "sync", "--yes")
+	if err != nil {
+		t.Fatalf("sync: %v\n%s", err, out)
+	}
+
+	if got := m.toolOutput(t); got != "2.0.0" {
+		t.Fatalf("installed %q, want the release 2.0.0", got)
+	}
+
+	// GitHub reports the digest of the host's file, so oku trusts only the
+	// redirect's download on first use.
+	if strings.Contains(out, "trusted this download") {
+		t.Fatalf("oku trusted the release file whose digest GitHub reports:\n%s", out)
+	}
+
+	locked, err := lock.Read(filepath.Join(m.config, "oku.lock"))
+	must(t, err)
+
+	pkg, _ := locked.Find("tool")
+	if at := pkg.Platforms[host.String()]; at.Version != "2.0.0" || at.Tag != "v2.0.0" || at.SHA256 != sum {
+		t.Fatalf("oku.lock pins the host at %+v, want 2.0.0 from the tag v2.0.0", at)
+	}
+
+	if at := pkg.Platforms[other.String()]; at.Version != "1.5.0" || at.Tag != "" {
+		t.Fatalf("oku.lock pins %s at %+v, want the redirect's 1.5.0", other, at)
+	}
+
+	// Another machine installs from the lock, and downloads from the locked tag.
+	fresh := newMachine(t)
+	fresh.opts.GitHubAPI = m.opts.GitHubAPI
+
+	must(t, os.MkdirAll(fresh.config, 0o755))
+	must(t, os.WriteFile(filepath.Join(fresh.config, "oku.toml"), []byte(list), 0o644))
+
+	data, err := os.ReadFile(filepath.Join(m.config, "oku.lock"))
+	must(t, err)
+	must(t, os.WriteFile(filepath.Join(fresh.config, "oku.lock"), data, 0o644))
+
+	if out, err := fresh.run(t, "", "sync", "--locked", "--yes"); err != nil {
+		t.Fatalf("sync --locked: %v\n%s", err, out)
+	}
+
+	if got := fresh.toolOutput(t); got != "2.0.0" {
+		t.Fatalf("the lock installed %q on another machine, want 2.0.0", got)
 	}
 }
