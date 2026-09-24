@@ -45,6 +45,10 @@ type Store struct {
 	http  *http.Client
 	// auth is the login for downloads from one host.
 	auth forge.Auth
+	// Private finds where the API serves a download that answered 404, such as
+	// a release asset of a private GitHub repo, and the header it needs. It
+	// returns "" when it knows no other address.
+	Private func(ctx context.Context, url string) (string, string, error)
 }
 
 // As returns a store that sends auth with the downloads it is for.

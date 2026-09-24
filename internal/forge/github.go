@@ -40,8 +40,11 @@ type githubRelease struct {
 	Draft      bool   `json:"draft"`
 	Prerelease bool   `json:"prerelease"`
 	Assets     []struct {
-		Name   string `json:"name"`
-		URL    string `json:"browser_download_url"`
+		Name string `json:"name"`
+		URL  string `json:"browser_download_url"`
+		// API is the asset's address in the API, which serves the file of a
+		// private repo too.
+		API    string `json:"url"`
 		Digest string `json:"digest"`
 		Size   int64  `json:"size"`
 	} `json:"assets"`
@@ -277,4 +280,43 @@ func (h Hosts) GitHubDir(ctx context.Context, repo, commit, dir string) ([]strin
 	}
 
 	return names, nil
+}
+
+// GitHubAsset returns the API address of the release asset whose download page
+// is rawURL, and the header that authorizes it, for a private repo on
+// github.com. GitHub serves such a file only from the API, to a request that
+// asks for application/octet-stream. It returns "" when rawURL is no release
+// download on github.com or no token is set.
+func (h Hosts) GitHubAsset(ctx context.Context, rawURL string) (string, string, error) {
+	g := h.github("")
+	if g.http == nil {
+		g.http = http.DefaultClient
+	}
+
+	rest, ok := strings.CutPrefix(rawURL, g.web+"/")
+	if !ok || g.token == "" {
+		return "", "", nil
+	}
+
+	// owner/repo/releases/download/tag/name, where the tag may hold a slash.
+	parts := strings.Split(rest, "/")
+	if len(parts) < 6 || parts[2] != "releases" || parts[3] != "download" {
+		return "", "", nil
+	}
+
+	repo, name := parts[0]+"/"+parts[1], parts[len(parts)-1]
+	tag := strings.Join(parts[4:len(parts)-1], "/")
+
+	var found githubRelease
+	if err := g.json(ctx, "/repos/"+repo+"/releases/tags/"+tag, &found); err != nil {
+		return "", "", fmt.Errorf("read release %s of %s: %w", tag, repo, err)
+	}
+
+	for _, asset := range found.Assets {
+		if asset.Name == name && strings.HasPrefix(asset.API, g.api) {
+			return asset.API, "Bearer " + g.token, nil
+		}
+	}
+
+	return "", "", fmt.Errorf("release %s of %s has no asset %s", tag, repo, name)
 }

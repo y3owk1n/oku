@@ -142,10 +142,62 @@ func (s *Store) get(ctx context.Context, url string) (*http.Response, error) {
 		return nil, fmt.Errorf("download %s: %w", url, err)
 	}
 
+	if resp.StatusCode == http.StatusNotFound && s.Private != nil {
+		if private, err := s.privateGet(ctx, url); private != nil || err != nil {
+			resp.Body.Close()
+
+			return private, err
+		}
+	}
+
 	if resp.StatusCode != http.StatusOK {
 		resp.Body.Close()
 
 		return nil, fmt.Errorf("download %s: server returned %s", url, resp.Status)
+	}
+
+	return resp, nil
+}
+
+// privateGet downloads url from the address Private gives, or returns nil when
+// Private knows none. The API answers with a redirect to a signed address.
+func (s *Store) privateGet(ctx context.Context, url string) (*http.Response, error) {
+	api, header, err := s.Private(ctx, url)
+	if err != nil {
+		return nil, fmt.Errorf("download %s: %w", url, err)
+	}
+
+	if api == "" {
+		return nil, nil
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, api, nil)
+	if err != nil {
+		return nil, fmt.Errorf("download %s: %w", url, err)
+	}
+
+	req.Header.Set("User-Agent", "oku")
+	req.Header.Set("Accept", "application/octet-stream")
+	req.Header.Set("Authorization", header)
+
+	// The address the API redirects to is signed, so the token never follows,
+	// whichever host it names.
+	client := *s.http
+	client.CheckRedirect = func(next *http.Request, _ []*http.Request) error {
+		next.Header.Del("Authorization")
+
+		return nil
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("download %s: %w", url, err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		resp.Body.Close()
+
+		return nil, fmt.Errorf("download %s through the API: server returned %s", url, resp.Status)
 	}
 
 	return resp, nil
