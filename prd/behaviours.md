@@ -167,6 +167,16 @@ order step in `prd/product.md`.
   platform: manylinux 2.28 on Linux with glibc, musllinux with musl, macOS 13
   on macOS, and the MSVC target on Windows. The digest does not depend on the
   machine's glibc or macOS, so a pin from another platform matches.
+- B333 [5] A manifest dep takes `when`. Each entry is installed on the
+  machines it matches and pinned for the `[lock]` platforms it matches, so
+  the same dep listed twice pins one version per platform, and `sync
+  --locked` accepts the lock. An entry that neither the machine nor
+  `[lock]` matches keeps what another machine pinned for it. Two entries of
+  one dep that both match a platform are refused.
+- B334 [5] A dep inferred from a repo without a manifest, with a version
+  range, is inferred from the release that the range picks, so an older
+  release that names its files another way installs, and a release with
+  nothing for the platform says so.
 - B182 [2] oku pins a package whose `when` leaves out the host, with its deps,
   for the lock platforms that `when` matches, and installs nothing of it.
   `sync` does that when the lock has no entry for its ref, or with `[lock]`

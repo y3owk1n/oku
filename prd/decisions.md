@@ -1410,3 +1410,16 @@ each platform: pip cannot name a platform without refusing source archives.
 A lock written before this change pins the wheels of the machine that built
 the package. A new build of it, on a new machine or after `oku gc`, can then
 fail with "the vendored packages changed", which names `oku update`.
+
+## D89. A dep names its platforms with when
+
+A manifest dep is a ref, or a table with `ref`, `version` and `when`. Each
+entry is installed on the machines its `when` matches and pinned for the
+`[lock]` platforms it matches, and the lock holds one dep entry per manifest
+entry, each with its own platforms. Two entries of one dep must not both match
+a platform. Why: one version of a dep for every platform (D67) fails when a
+runtime drops a platform or a platform needs an older line. The manifest
+author picks the version for each platform, so no platform changes version
+without someone writing it down. An automatic fallback to an older version
+where the newest has nothing would let platforms drift apart unseen.
+`[runtimes]` takes no `when`, since it names one package per interpreter.
