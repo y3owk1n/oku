@@ -39,6 +39,22 @@ Inside a [project](how-oku-works.md#project), a package goes to the project's
 profile. oku prints `this project's programs are in <dir>`, and the hook puts
 them on `PATH` once you run `oku allow`, see [Projects](guides/projects.md).
 
+## A project's variables are not set
+
+The hook sets a project's [`[env]`](reference/oku-toml.md#env) only while the
+project is allowed and synced. Look for the one-line hint it printed when you entered:
+
+- `` run `oku allow` ``: the project is not allowed, or its `oku.toml` changed
+  since, and editing `[env]` changes it too.
+- `` run `oku sync` ``: the project's profile is behind its `oku.lock`.
+- `<NAME> is not set, <hint>`: the list requires `<NAME>`. Set it in your
+  shell.
+- `oku.toml: env.<NAME>: ...`: the `[env]` does not parse, and the error says
+  why.
+
+The hint shows once per directory. `oku env --dotenv` prints what the directory
+sets now, and its hints again.
+
 ## Another program runs in place of oku's
 
 A program of the same name earlier on `PATH`, such as `/usr/bin/rg`, runs

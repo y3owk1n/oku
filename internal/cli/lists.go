@@ -302,6 +302,12 @@ func (m *merger) merge(
 		}
 	}
 
+	// The shell reads [env] from the list itself, so an included list's would
+	// never apply.
+	if depth > 0 && len(l.Env) > 0 {
+		return fmt.Errorf("%s has [env], and only the list that includes it may set variables", origin)
+	}
+
 	// A cloned repo must not write into the home directory.
 	if m.project != "" && len(l.Files) > 0 {
 		return fmt.Errorf("%s has [files], and only the global list may place files", origin)

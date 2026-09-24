@@ -4,7 +4,10 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
+	"errors"
 	"fmt"
+	"io/fs"
 	"maps"
 	"os"
 	"path/filepath"
@@ -14,7 +17,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/y3owk1n/oku/internal/profile"
+	"github.com/y3owk1n/oku/internal/list"
 	"github.com/y3owk1n/oku/internal/shellhook"
 	"github.com/y3owk1n/oku/internal/trust"
 )
@@ -67,7 +70,10 @@ func newHookCmd(opts Options) *cobra.Command {
 }
 
 func newEnvCmd(opts Options) *cobra.Command {
-	var shell string
+	var (
+		shell  string
+		dotenv bool
+	)
 
 	cmd := &cobra.Command{
 		Use:   "env",
@@ -75,7 +81,11 @@ func newEnvCmd(opts Options) *cobra.Command {
 		Long: `Print the environment changes for the current directory.
 
 This is what the shell hook evaluates before each prompt. It reads local files
-only. It never uses the network and never runs anything from a manifest.`,
+only. It never uses the network and never runs anything from a manifest.
+
+With --json or --dotenv, oku prints every variable the directory sets, for an
+editor or a tool that reads an environment file. JSON gives an unset variable
+as null, and a .env file leaves it out.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			e, err := loadEnv()
@@ -90,16 +100,42 @@ only. It never uses the network and never runs anything from a manifest.`,
 				}
 			}
 
-			out, err := shellhook.Render(shell, e.hookChange(findProject(dir, e.config)))
-			if err != nil {
-				return err
+			project := findProject(dir, e.config)
+			if wantJSON(cmd) && dotenv {
+				return errors.New("--json and --dotenv print different formats, pick one")
 			}
 
-			fmt.Fprint(cmd.OutOrStdout(), out)
+			if !wantJSON(cmd) && !dotenv {
+				out, err := shellhook.Render(shell, e.hookChange(project))
+				if err != nil {
+					return err
+				}
+
+				fmt.Fprint(cmd.OutOrStdout(), out)
+
+				return nil
+			}
+
+			final, _, problems := e.dirEnv(project, readHookState())
+			for _, problem := range problems {
+				fmt.Fprintln(cmd.ErrOrStderr(), "oku: "+problem)
+			}
+
+			if wantJSON(cmd) {
+				return printJSON(cmd, final)
+			}
+
+			for _, name := range slices.Sorted(maps.Keys(final)) {
+				if value := final[name]; value != nil {
+					fmt.Fprintln(cmd.OutOrStdout(), name+"="+dotenvQuote(*value))
+				}
+			}
 
 			return nil
 		},
 	}
+
+	cmd.Flags().BoolVar(&dotenv, "dotenv", false, "print the variables as a .env file")
 
 	cmd.Flags().
 		StringVar(&shell, "shell", "bash", "the shell to write for: "+strings.Join(shellhook.Shells, ", "))
@@ -109,91 +145,129 @@ only. It never uses the network and never runs anything from a manifest.`,
 
 // hookChange works out what the shell must change for project, which is empty
 // outside a project. It undoes what the last run applied, using the state the
-// hook keeps in the environment, and then applies what holds now.
+// hook keeps in the environment, and then applies what holds now. A variable
+// the hook stops setting gets back the value it had before.
 func (e env) hookChange(project string) shellhook.Change {
-	wantPath, hint := "", ""
-	wantEnv := map[string]string{}
-
-	addEnv := func(prof *profile.Profile) {
-		pkgs, _ := prof.Packages()
-		for _, pkg := range pkgs {
-			maps.Copy(wantEnv, pkg.Env)
-		}
-	}
-
-	addEnv(e.globalProfile())
-
-	if project != "" {
-		e.project = project
-
-		switch ok, why := e.projectActive(); {
-		case ok:
-			wantPath = e.profile().BinDir()
-			addEnv(e.profile())
-		default:
-			hint = "oku: " + why
-		}
-	}
-
+	state := readHookState()
+	final, prepended, problems := e.dirEnv(project, state)
 	change := shellhook.Change{Set: map[string]string{}}
+	saved := map[string]*string{}
 
-	// PATH without the entry the hook added last time, plus the entry for now.
-	havePath := os.Getenv(shellhook.StatePath)
-	entries := slices.DeleteFunc(
-		filepath.SplitList(os.Getenv("PATH")),
-		func(entry string) bool { return havePath != "" && entry == havePath },
-	)
+	apply := func(name string, value *string) {
+		current, isSet := os.LookupEnv(name)
 
-	if wantPath != "" {
-		entries = append([]string{wantPath}, entries...)
-	}
-
-	if wantPath != havePath {
-		change.Path = strings.Join(entries, string(os.PathListSeparator))
-		change.Set[shellhook.StatePath] = wantPath
-	}
-
-	haveKeys := strings.FieldsFunc(
-		os.Getenv(shellhook.StateKeys),
-		func(r rune) bool { return r == ':' },
-	)
-
-	for _, name := range haveKeys {
-		if _, still := wantEnv[name]; !still {
+		switch {
+		case value == nil && isSet:
 			change.Unset = append(change.Unset, name)
+		case value != nil && (!isSet || current != *value) && name == "PATH":
+			change.Path = *value
+		case value != nil && (!isSet || current != *value):
+			change.Set[name] = *value
 		}
 	}
 
-	for name, value := range wantEnv {
-		if os.Getenv(name) != value || !slices.Contains(haveKeys, name) {
-			change.Set[name] = value
+	for name, value := range final {
+		if _, only := prepended[name]; !only {
+			saved[name] = orNil(state.base(name))
+		}
+
+		apply(name, value)
+	}
+
+	// A variable the hook set before and does not now gets its old value back.
+	for name := range state.saved {
+		if _, still := final[name]; !still {
+			apply(name, orNil(state.base(name)))
 		}
 	}
 
-	wantKeys := strings.Join(slices.Sorted(maps.Keys(wantEnv)), ":")
-	if wantKeys != strings.Join(slices.Sorted(slices.Values(haveKeys)), ":") {
-		change.Set[shellhook.StateKeys] = wantKeys
+	for name := range state.added {
+		if _, still := final[name]; !still {
+			old, _ := state.base(name)
+			apply(name, &old)
+		}
 	}
+
+	for name, value := range map[string]any{shellhook.StateSaved: saved, shellhook.StateAdded: prepended} {
+		encoded := ""
+		if data, _ := json.Marshal(value); string(data) != "{}" && string(data) != "null" {
+			encoded = string(data)
+		}
+
+		keepState(&change, name, encoded)
+	}
+
+	// This run read the state of an older oku, so the old variables go.
+	keepState(&change, shellhook.StatePath, "")
+	keepState(&change, shellhook.StateKeys, "")
 
 	// A hint is shown once, until the directory or the reason changes.
-	if hint != os.Getenv(shellhook.StateHint) {
-		change.Set[shellhook.StateHint] = hint
-		change.Hint = hint
+	hint := ""
+	if len(problems) > 0 {
+		hint = "oku: " + strings.Join(problems, "\noku: ")
 	}
 
-	for _, state := range []string{shellhook.StatePath, shellhook.StateKeys, shellhook.StateHint} {
-		if value, set := change.Set[state]; set && value == "" {
-			delete(change.Set, state)
-
-			if os.Getenv(state) != "" {
-				change.Unset = append(change.Unset, state)
-			}
-		}
+	if hint != os.Getenv(shellhook.StateHint) {
+		keepState(&change, shellhook.StateHint, hint)
+		change.Hint = hint
 	}
 
 	slices.Sort(change.Unset)
 
 	return change
+}
+
+// dirEnv returns the value of each variable the hook sets in project, nil for
+// one it unsets, with PATH in full, and the entries it only puts in front of a
+// list variable. It also returns what keeps a part from applying, such as a
+// project that is not allowed.
+func (e env) dirEnv(project string, state hookState) (map[string]*string, map[string][]string, []string) {
+	active, why := false, ""
+	if project != "" {
+		e.project = project
+		active, why = e.projectActive()
+	}
+
+	want, problems := e.wantedEnv(project, active, state.base)
+	if why != "" {
+		problems = append([]string{why}, problems...)
+	}
+
+	final, prepended := want.finalValues(state.base)
+
+	return final, prepended, problems
+}
+
+// orNil returns a pointer to value, or nil when ok is false.
+func orNil(value string, ok bool) *string {
+	if !ok {
+		return nil
+	}
+
+	return &value
+}
+
+// dotenvQuote quotes value for a .env file. Single quotes keep it as it is in
+// every reader, and a value that holds one or a newline takes double quotes.
+func dotenvQuote(value string) string {
+	if !strings.ContainsAny(value, "'\n") {
+		return "'" + value + "'"
+	}
+
+	return `"` + strings.NewReplacer(`\`, `\\`, `"`, `\"`, "\n", `\n`, "$", `\$`).Replace(value) + `"`
+}
+
+// keepState sets the state variable name to value, or removes it when value is
+// empty.
+func keepState(change *shellhook.Change, name, value string) {
+	current, isSet := os.LookupEnv(name)
+
+	switch {
+	case value == "" && isSet:
+		change.Unset = append(change.Unset, name)
+	case value != "" && current != value:
+		change.Set[name] = value
+	}
 }
 
 // projectActive reports whether the hook may apply the project in e. It may when
@@ -217,12 +291,26 @@ func (e env) projectActive() (bool, string) {
 		)
 	}
 
-	locked, err := os.ReadFile(e.lockPath())
-	if err != nil || !bytes.Equal(locked, e.profile().LockSnapshotOfCurrent()) {
+	if !e.projectSynced() {
 		return false, "this project's profile is behind its oku.lock, run `oku sync`"
 	}
 
 	return true, ""
+}
+
+// projectSynced reports whether the profile of the project in e matches its
+// oku.lock. A project that lists no packages has no lock and needs none.
+func (e env) projectSynced() bool {
+	snapshot := e.profile().LockSnapshotOfCurrent()
+
+	locked, err := os.ReadFile(e.lockPath())
+	if errors.Is(err, fs.ErrNotExist) && snapshot == nil {
+		l, err := list.Read(e.listPath())
+
+		return err == nil && len(l.Packages) == 0 && len(l.Include) == 0
+	}
+
+	return err == nil && bytes.Equal(locked, snapshot)
 }
 
 func digest(data []byte) string {

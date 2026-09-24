@@ -1,10 +1,8 @@
 package cli
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
-	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -12,8 +10,6 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-
-	"github.com/y3owk1n/oku/internal/profile"
 )
 
 func newExecCmd(opts Options) *cobra.Command {
@@ -22,10 +18,13 @@ func newExecCmd(opts Options) *cobra.Command {
 		Short: "Run a command with the programs of this directory on PATH",
 		Long: `Run a command with the programs of this directory on PATH.
 
-oku puts the global profile's programs on PATH and sets their [env], as the
-shell hook does. In a project it puts the project's programs first and sets
-their [env] too. The project needs no "oku allow", since you asked for the
-command, but its profile must match its oku.lock, so run "oku sync" first.
+oku puts the global profile's programs on PATH and sets the variables of the
+global oku.toml and its packages, as the shell hook does. In a project it puts
+the project's programs first and sets the variables of its oku.toml and its
+packages too. oku stops when a variable that a list requires is not set.
+
+The project needs no "oku allow", since you asked for the command, but its
+profile must match its oku.lock, so run "oku sync" first.
 
 An editor or a script that does not run the shell hook can start a program
 this way, such as a language server "oku exec gopls". oku exits with the
@@ -39,41 +38,13 @@ command's exit code.`,
 				return err
 			}
 
-			profiles := []*profile.Profile{e.globalProfile()}
-
-			if e.project != "" {
-				locked, err := os.ReadFile(e.lockPath())
-				if err != nil || !bytes.Equal(locked, e.profile().LockSnapshotOfCurrent()) {
-					return fmt.Errorf("the profile of %s is behind its oku.lock, run `oku sync`", e.project)
-				}
-
-				// The project comes first, so its programs and [env] win.
-				profiles = append([]*profile.Profile{e.profile()}, profiles...)
+			if e.project != "" && !e.projectSynced() {
+				return fmt.Errorf("the profile of %s is behind its oku.lock, run `oku sync`", e.project)
 			}
 
-			bins := make([]string, 0, len(profiles))
-			env := map[string]string{}
-
-			for i := len(profiles) - 1; i >= 0; i-- {
-				pkgs, err := profiles[i].Packages()
-				if err != nil {
-					return err
-				}
-
-				for _, pkg := range pkgs {
-					maps.Copy(env, pkg.Env)
-				}
-			}
-
-			for _, prof := range profiles {
-				bins = append(bins, prof.BinDir())
-			}
-
-			path := strings.Join(append(bins, os.Getenv("PATH")), string(os.PathListSeparator))
-			environ := append(os.Environ(), "PATH="+path)
-
-			for name, value := range env {
-				environ = append(environ, name+"="+value)
+			environ, path, err := e.execEnviron()
+			if err != nil {
+				return err
 			}
 
 			return runCommand(cmd, command, path, environ)

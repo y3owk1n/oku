@@ -15,10 +15,15 @@ var Shells = []string{"bash", "zsh", "fish", "pwsh"}
 // State variables. The hook keeps what it applied in the environment, so the
 // next run can undo exactly that.
 const (
-	// StatePath holds the bin directory the hook put on PATH.
+	// StateSaved holds, as JSON, the value each variable had before the hook set
+	// or unset it, null for one that was not set.
+	StateSaved = "OKU_HOOK_SAVED"
+	// StateAdded holds, as JSON, the entries the hook put in front of each list
+	// variable, such as PATH.
+	StateAdded = "OKU_HOOK_ADDED"
+	// StatePath and StateKeys are the state of an older oku, which the hook reads
+	// once and removes.
 	StatePath = "OKU_HOOK_PATH"
-	// StateKeys holds the names of the variables the hook exported, separated by
-	// ":".
 	StateKeys = "OKU_HOOK_KEYS"
 	// StateHint holds the last hint the hook printed, so a hint appears once per
 	// directory and not before every prompt.

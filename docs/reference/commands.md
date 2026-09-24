@@ -795,7 +795,7 @@ Completions come from the profile's `share/completions`.
 ### oku env
 
 ```
-oku env [--shell bash|zsh|fish|pwsh]
+oku env [--shell bash|zsh|fish|pwsh] [--json | --dotenv]
 ```
 
 Prints the environment changes for the current directory. This is what the
@@ -804,13 +804,21 @@ hook runs before each prompt, and what an `.envrc` of direnv can `eval`.
 | Flag | Effect |
 |---|---|
 | `--shell` | The shell to write for. Default `bash`. |
+| `--json` | Print every variable the directory sets as JSON, with `null` for one it unsets. |
+| `--dotenv` | Print every variable the directory sets as a `.env` file. A variable it unsets is left out. |
 
-- Outside a project it exports the `[env]` of your global packages and puts
-  the global `bin` on `PATH`.
+- Outside a project it exports the `[env]` of your global packages and of your
+  global `oku.toml`.
 - Inside an allowed project whose profile matches its lock, it also puts the
-  project's `bin` first and exports its packages' `[env]`.
+  project's `bin` first and exports the `[env]` of its packages and of its
+  `oku.toml`. See [\[env\]](oku-toml.md#env).
 - Otherwise it prints a one-line hint that names `oku allow` or `oku sync`.
-- It also prints the commands that undo what the last run applied.
+- When a variable that an `[env]` requires is not set, it prints a one-line
+  hint that names the variable.
+- It also prints the commands that undo what the last run applied, and gives
+  each variable back the value it had before.
+- `--json` and `--dotenv` print the variables after the hook's changes, with
+  `PATH` in full, and the hints on stderr.
 - It reads local files only, uses no network, runs nothing from a manifest,
   and takes a few milliseconds.
 
@@ -828,8 +836,11 @@ $ oku exec gopls version
 golang.org/x/tools/gopls v0.22.0
 ```
 
-- It puts the global `bin` on `PATH` and sets its packages' `[env]`. Inside a
-  project it puts the project's `bin` first and sets its packages' `[env]` too.
+- It puts the global `bin` on `PATH` and sets the `[env]` of the global
+  packages and the global `oku.toml`. Inside a project it puts the project's
+  `bin` first and sets the `[env]` of its packages and its `oku.toml` too.
+- It refuses to run while a variable that an `[env]` requires is not set, and
+  names it.
 - Flags after the command go to the command.
 - It exits with the command's exit code.
 - A project needs no `oku allow` here, because you name the command yourself.

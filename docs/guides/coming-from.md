@@ -103,7 +103,7 @@ What oku does not do:
 | Generations and `--rollback` | `oku generations` and `oku rollback` |
 | `nix-collect-garbage` | `oku gc` |
 | `nix shell nixpkgs#<pkg>` | `oku shell <ref>` |
-| A dev shell with direnv | A [project](projects.md) `oku.toml` with the shell hook |
+| A dev shell with direnv | A [project](projects.md) `oku.toml` with the shell hook, and `[env]` for the `.envrc` exports |
 
 What oku does not do:
 
@@ -123,6 +123,7 @@ What oku does not do:
 |---|---|
 | `mise use -g <tool>` | `oku add <ref>` |
 | A project's `mise.toml` | A [project](projects.md) `oku.toml` |
+| `[env]` and `_.path` in `mise.toml` | `[env]`, with `PATH = { prepend = [...] }` |
 | `mise install` | `oku sync` |
 | `mise upgrade`, `mise outdated` | `oku update`, `oku outdated` |
 | `mise.lock` | `oku.lock`, which is always there and pins every download |
@@ -135,8 +136,8 @@ What oku does not do:
 
 What oku does not do:
 
-- oku has no environment variables of your own and no tasks. A project gets
-  the `PATH` and the `[env]` that its packages declare, nothing more.
+- oku has no tasks. A project's `[env]` sets variables, see
+  [Set the project's variables](projects.md#set-the-projects-variables).
 - oku installs no OS packages through apt, brew or winget. It unpacks `.deb`,
   `.rpm`, `.pkg` and `.msi` files itself and never runs their scripts.
 

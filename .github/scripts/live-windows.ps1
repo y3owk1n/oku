@@ -105,8 +105,16 @@ Check 'list no longer shows ripgrep' { ($listed -join "`n") -notmatch 'ripgrep' 
 # The PowerShell hook, with a project that needs fd.
 $project = Join-Path $root 'project'
 New-Item -ItemType Directory -Force $project | Out-Null
-Set-Content (Join-Path $project 'oku.toml') "[packages]`nfd = `"github:sharkdp/fd`"`n"
+Set-Content (Join-Path $project 'oku.toml') @'
+[packages]
+fd = "github:sharkdp/fd"
+
+[env]
+STAGE = "dev"
+PATH = { prepend = ["scripts"] }
+'@
 $env:PATH = "$root;$env:PATH"
+$env:STAGE = 'mine'
 
 Set-Location $project
 Oku sync
@@ -139,10 +147,16 @@ Check 'inside the project fd comes from the project profile' {
 }
 $fdVersion = & fd --version
 Check 'fd runs through its shim' { $fdVersion -match '^fd \d' }
+Check 'inside the project its [env] applies' {
+    ($env:STAGE -eq 'dev') -and (($env:PATH -split ';')[0] -eq (Join-Path $project 'scripts'))
+}
 
 Set-Location $root
 prompt | Out-Null
 Check 'leaving the project takes fd away again' { -not (Get-Command fd -ErrorAction SilentlyContinue) }
+Check 'leaving the project restores STAGE and drops its PATH entry' {
+    ($env:STAGE -eq 'mine') -and (($env:PATH -split ';') -notcontains (Join-Path $project 'scripts'))
+}
 
 # doctor, without the profile on PATH and then with it. The hook above already
 # put it there, so the first check takes it out again.
