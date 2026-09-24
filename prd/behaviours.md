@@ -187,6 +187,9 @@ order step in `prd/product.md`.
   and `on_intel`, string variables, and the stanzas that place files. A
   binary whose target is a completions folder is no program. A cask that
   picks values with Ruby logic is refused, and a missing cask names its tap.
+- B336 [4] `scoop:owner/repo/name` translates the Scoop manifest `name`
+  from the bucket in that GitHub repo, from `bucket/` or the top, and names
+  the bucket when it lacks the manifest.
 - B182 [2] oku pins a package whose `when` leaves out the host, with its deps,
   for the lock platforms that `when` matches, and installs nothing of it.
   `sync` does that when the lock has no entry for its ref, or with `[lock]`
