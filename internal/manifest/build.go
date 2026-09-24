@@ -3,6 +3,7 @@ package manifest
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/y3owk1n/oku/internal/platform"
 )
@@ -180,6 +181,9 @@ type Runtime struct {
 type Dep struct {
 	Ref     string
 	Version string
+	// When limits the dep to matching platforms. The empty When matches all, so
+	// a manifest can name the same dep twice with a version for each platform.
+	When platform.When
 }
 
 // parseDeps converts the two TOML forms of a dep.
@@ -190,6 +194,20 @@ func parseDeps(raw []any) ([]Dep, error) {
 		d, err := ParseDep(value)
 		if err != nil {
 			return nil, fmt.Errorf("deps[%d]: %w", i, err)
+		}
+
+		// Two entries of one dep must not both match a platform, or oku could not
+		// tell which version the platform takes.
+		for _, other := range deps {
+			if other.Ref != d.Ref {
+				continue
+			}
+
+			for _, p := range platform.All() {
+				if other.When.Matches(p) && d.When.Matches(p) {
+					return nil, fmt.Errorf("deps[%d]: %s is listed twice for %s, give each a when", i, d.Ref, p)
+				}
+			}
 		}
 
 		deps = append(deps, d)
@@ -210,12 +228,19 @@ func ParseDep(value any) (Dep, error) {
 		d.Version, _ = v["version"].(string)
 
 		for key := range v {
-			if key != "ref" && key != "version" {
-				return Dep{}, fmt.Errorf("unknown key %q, use ref and version", key)
+			if key != "ref" && key != "version" && key != "when" {
+				return Dep{}, fmt.Errorf("unknown key %q, use ref, version and when", key)
 			}
 		}
+
+		when, err := platform.ParseWhen(v["when"])
+		if err != nil {
+			return Dep{}, err
+		}
+
+		d.When = when
 	default:
-		return Dep{}, errors.New("want a ref string or a table with ref and version")
+		return Dep{}, errors.New("want a ref string or a table with ref, version and when")
 	}
 
 	if d.Ref == "" {
@@ -225,11 +250,21 @@ func ParseDep(value any) (Dep, error) {
 	return d, nil
 }
 
-// TOML writes d in the form ParseDep reads, as a string without a version.
+// TOML writes d in the form ParseDep reads, as a string without a version or
+// a when.
 func (d Dep) TOML() string {
-	if d.Version == "" {
+	if d.Version == "" && len(d.When) == 0 {
 		return fmt.Sprintf("%q", d.Ref)
 	}
 
-	return fmt.Sprintf("{ ref = %q, version = %q }", d.Ref, d.Version)
+	fields := []string{fmt.Sprintf("ref = %q", d.Ref)}
+	if d.Version != "" {
+		fields = append(fields, fmt.Sprintf("version = %q", d.Version))
+	}
+
+	if len(d.When) > 0 {
+		fields = append(fields, "when = "+d.When.TOML())
+	}
+
+	return "{ " + strings.Join(fields, ", ") + " }"
 }

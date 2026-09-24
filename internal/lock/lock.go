@@ -82,6 +82,25 @@ func (p Package) VersionOn(key string) string {
 	return cmp.Or(p.Platforms[key].Version, p.Version)
 }
 
+// FindDepFor returns the pinned dep that came from ref and pins one of the
+// platform keys, or else the first that came from ref. A manifest lists a dep
+// twice when each of its platforms takes another version.
+func (p Package) FindDepFor(ref string, keys []string) Package {
+	for _, dep := range p.Deps {
+		if dep.Ref != ref {
+			continue
+		}
+
+		for _, key := range keys {
+			if _, ok := dep.Platforms[key]; ok {
+				return dep
+			}
+		}
+	}
+
+	return p.FindDep(ref)
+}
+
 // FindDep returns the pinned dep that came from ref.
 func (p Package) FindDep(ref string) Package {
 	for _, dep := range p.Deps {

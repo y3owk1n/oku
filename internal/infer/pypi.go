@@ -1,7 +1,6 @@
 package infer
 
 import (
-	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -58,7 +57,12 @@ func (inf *Inferrer) FromPyPI(ctx context.Context, name string, opts PyPIOptions
 	fmt.Fprintf(&b, "homepage = %q\n\n", "https://pypi.org/project/"+pypi.Normalize(name)+"/")
 	fmt.Fprintf(&b, "[version]\nfrom = \"pypi\"\nrepo = %q\n", name)
 
-	uv := cmp.Or(opts.UV, manifest.Dep{Ref: UV}).TOML()
+	uvDep := opts.UV
+	if uvDep.Ref == "" {
+		uvDep = manifest.Dep{Ref: UV}
+	}
+
+	uv := uvDep.TOML()
 	deps := uv
 
 	// The programs run through this python, so gc must keep it.
