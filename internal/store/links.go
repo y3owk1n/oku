@@ -102,7 +102,8 @@ func linkedLibraries(path string) []string {
 	return elfLibraries(path)
 }
 
-// machoLibraries reads LC_LOAD_DYLIB and LC_RPATH of a Mach-O file, thin or fat.
+// machoLibraries reads the libraries a Mach-O file loads, thin or fat, and
+// resolves them through its LC_RPATH.
 func machoLibraries(path string) ([]string, bool) {
 	var files []*macho.File
 
@@ -133,12 +134,7 @@ func machoLibraries(path string) ([]string, bool) {
 			}
 		}
 
-		imported, err := f.ImportedLibraries()
-		if err != nil {
-			continue
-		}
-
-		for _, lib := range imported {
+		for _, lib := range dylibs(f) {
 			if rest, ok := strings.CutPrefix(lib, "@rpath/"); ok {
 				libs = append(libs, firstExisting(rpaths, rest)...)
 
@@ -220,4 +216,31 @@ func firstExisting(dirs []string, name string) []string {
 	}
 
 	return nil
+}
+
+// dylibLoads are the load commands that name a library to load: plain, weak,
+// re-exported, lazy and upward. debug/macho reads the plain one alone.
+var dylibLoads = []macho.LoadCmd{macho.LoadCmdDylib, 0x80000018, 0x8000001f, 0x20, 0x80000023}
+
+// dylibs returns the libraries that the load commands of f name. A dylib
+// command holds, after its cmd and cmdsize, the offset of the name within it.
+func dylibs(f *macho.File) []string {
+	var libs []string
+
+	for _, load := range f.Loads {
+		raw := load.Raw()
+		if len(raw) < 12 || !slices.Contains(dylibLoads, macho.LoadCmd(f.ByteOrder.Uint32(raw))) {
+			continue
+		}
+
+		offset := f.ByteOrder.Uint32(raw[8:12])
+		if offset >= uint32(len(raw)) {
+			continue
+		}
+
+		name, _, _ := strings.Cut(string(raw[offset:]), "\x00")
+		libs = append(libs, name)
+	}
+
+	return libs
 }
