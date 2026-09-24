@@ -115,6 +115,8 @@ with `--bin`. See [Fix a wrong pick](guides/add-packages.md#fix-a-wrong-pick-wit
 | `its download needs a pre_install script to unpack it`, `its installer script unpacks the download` | A script of the Scoop manifest makes the files. Write a manifest for it. |
 | `its programs come from <part> and <part>, parts of a package` | The `.pkg` installs its parts into one folder, which oku does not do. Write a manifest for it. |
 | `open <url> to find what it installs` | oku opens a `.pkg` on macOS only. Translate the cask on a Mac, or write a manifest. |
+| `the aqua registry has no entry for it` | The registry lists the repo under another name, or not at all. Try `github:owner/repo`. |
+| `oku has no match for {{...}}` | The aqua entry uses a template function oku cannot translate. Write a manifest for it. |
 | `no bucket of main or extras has it` | Name the bucket, as in `scoop:versions/<name>`. |
 | `<ref> has no manifest and no release to infer one from` | The repo has neither. Write a manifest, or point at one elsewhere. |
 

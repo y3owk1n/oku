@@ -352,7 +352,7 @@ func noSupportError(m *manifest.Manifest, unsupported []platform.Platform) error
 func inferredHints(req request, inferred infer.Inferred) string {
 	var b strings.Builder
 
-	if req.ref.Kind == ref.Cask || req.ref.Kind == ref.Scoop {
+	if req.ref.Kind == ref.Cask || req.ref.Kind == ref.Scoop || req.ref.Kind == ref.Aqua {
 		fmt.Fprintf(&b, "oku translated %s into a manifest", req.ref)
 	} else {
 		fmt.Fprintf(&b, "oku inferred a manifest for %s from its release", req.ref)
@@ -1337,7 +1337,9 @@ func (e env) inferNPM(ctx context.Context, opts Options, req request) (string, e
 // fromRegistry reports whether a ref of kind names a package of a registry,
 // whose manifest oku always infers.
 func fromRegistry(kind ref.Kind) bool {
-	return slices.Contains([]ref.Kind{ref.NPM, ref.PyPI, ref.Go, ref.Cargo, ref.Cask, ref.Scoop}, kind)
+	return slices.Contains(
+		[]ref.Kind{ref.NPM, ref.PyPI, ref.Go, ref.Cargo, ref.Cask, ref.Scoop, ref.Aqua}, kind,
+	)
 }
 
 // inferrerOf returns what writes the manifest of a ref of a registry, or nil
@@ -1345,19 +1347,22 @@ func fromRegistry(kind ref.Kind) bool {
 func (e env) inferrerOf(kind ref.Kind) func(context.Context, Options, request) (string, error) {
 	return map[ref.Kind]func(context.Context, Options, request) (string, error){
 		ref.NPM: e.inferNPM, ref.PyPI: e.inferPyPI, ref.Go: e.inferGo, ref.Cargo: e.inferCargo,
-		ref.Cask: e.translate, ref.Scoop: e.translate,
+		ref.Cask: e.translate, ref.Scoop: e.translate, ref.Aqua: e.translate,
 	}[kind]
 }
 
-// translate writes the manifest of a cask or scoop ref from its recipe. The
+// translate writes the manifest of a cask, scoop or aqua ref from its recipe. The
 // manifest downloads from the vendor and follows the vendor's versions.
 func (e env) translate(ctx context.Context, opts Options, req request) (string, error) {
 	if req.asset != "" || len(req.bins) > 0 {
 		return "", fmt.Errorf("--asset and --bin do not apply, %s names its downloads and programs", req.ref)
 	}
 
-	if req.ref.Kind == ref.Cask {
+	switch req.ref.Kind {
+	case ref.Cask:
 		return e.inferrer(opts).FromCask(ctx, req.ref.Location, opts.CaskAPI)
+	case ref.Aqua:
+		return e.inferrer(opts).FromAqua(ctx, req.ref.Location)
 	}
 
 	return e.inferrer(opts).FromScoop(ctx, req.ref.Location)
@@ -1606,7 +1611,8 @@ func inferredWhy(got installed) (one, many string) {
 	case strings.HasPrefix(got.lock.Ref, "npm:"):
 		return "is an npm package, so oku inferred a manifest from the registry",
 			"are npm packages, so oku inferred their manifests from the registry"
-	case strings.HasPrefix(got.lock.Ref, "cask:"), strings.HasPrefix(got.lock.Ref, "scoop:"):
+	case strings.HasPrefix(got.lock.Ref, "cask:"), strings.HasPrefix(got.lock.Ref, "scoop:"),
+		strings.HasPrefix(got.lock.Ref, "aqua:"):
 		return "is a recipe of another package manager, so oku translated it into a manifest",
 			"are recipes of other package managers, so oku translated each into a manifest"
 	case strings.HasPrefix(got.lock.Ref, "http"):
