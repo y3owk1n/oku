@@ -118,9 +118,20 @@ it was when that version was published, and runs no install scripts.
 `oku.lock` pins a digest of what it installed. This covers a tool that ships
 its program in a platform package, as typescript 7 does.
 
-Some packages have a dependency whose install script downloads a native
-binary, and fail without it. Such a package needs a manifest of your own that
-names that dependency in `scripts`, see
+Some packages need an install script, which downloads or builds a native
+binary, such as esbuild's and opencode-ai's own. After npm installs the tree,
+oku looks for packages with an install script or a `binding.gyp`. For an
+`npm:` ref it names them in the manifest's `scripts` and asks again, and the
+approval lists them before any runs:
+
+```
+vendor npm, which installs esbuild and its dependencies and runs the install scripts of esbuild
+```
+
+`--yes` approves them too. A script that puts a native program where the
+package's script was makes the program run directly, not through node. A
+manifest of your own names its scripts itself, and oku warns about the
+packages with install scripts that it leaves out. See
 [Vendoring](../reference/manifest.md).
 
 ### Without runtimes.node
@@ -247,8 +258,6 @@ See [Windows](windows.md) for the rest.
 
 ## What does not work
 
-- An npm dependency that needs its install script, such as one that downloads
-  a native binary, needs your own manifest with `scripts`.
 - A crate published without a `Cargo.lock` fails at the build, with cargo's own
   message.
 - A library crate has no programs to install.

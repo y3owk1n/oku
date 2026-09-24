@@ -320,6 +320,24 @@ func (s *Store) Build(
 				)
 			}
 
+			// npm installed the tree, so oku can tell which of its packages have
+			// install scripts, and whether scripts names packages it holds.
+			if err == nil && *step.Vendor == "npm" && step.Package != "" && !opts.VendorOnly {
+				all, scripted := npmTree(filepath.Join(prefix, "lib", "node_modules"))
+
+				for _, name := range step.Scripts {
+					if !slices.Contains(all, name) {
+						err = fmt.Errorf("scripts names %s, which is not a package of the tree of %s", name, step.Package)
+					}
+				}
+
+				for _, name := range scripted {
+					if !slices.Contains(step.Scripts, name) {
+						result.UnnamedScripts = append(result.UnnamedScripts, name)
+					}
+				}
+			}
+
 			vendored = append(vendored, digest)
 		default:
 			err = s.runStep(ctx, step, src, prefix, vars, opts.RuntimeDeps)
@@ -663,8 +681,11 @@ func (s *Store) runStep(
 		wrapVars := maps.Clone(vars)
 		wrapVars["pkg"] = prefix
 
+		// A build installs into its prefix, so the files are where the wrappers
+		// name them.
 		return writeWraps(
 			filepath.Join(prefix, "bin"), step.Install.Wrap, wrapVars, vars["os"], depDirs(runtimeDeps, "bin"),
+			func(path string) string { return path },
 		)
 	case step.Copy != nil:
 		return copyInto(src, step.Copy.From, prefix, step.Copy.To, 0)
@@ -1030,8 +1051,8 @@ func runVendor(
 // npmPackageEnv returns env with what an npm step needs to install one package:
 // its name, its version, the time that version was published, and the packages
 // in scripts whose install scripts then run. npm resolves dependencies as of
-// that time, so a later install gets the same packages. A name in scripts must
-// be the package or one of its dependencies.
+// that time, so a later install gets the same packages. The build checks the
+// names in scripts against the tree npm installed.
 func (s *Store) npmPackageEnv(
 	ctx context.Context,
 	env []string,
@@ -1041,14 +1062,6 @@ func (s *Store) npmPackageEnv(
 	published, err := npm.Published(ctx, s.http, registry, name, version)
 	if err != nil {
 		return nil, fmt.Errorf("read when %s %s was published: %w", name, version, err)
-	}
-
-	for _, script := range scripts {
-		if script != name && !slices.Contains(published.Dependencies, script) {
-			return nil, fmt.Errorf(
-				"scripts names %s, which is not a dependency of %s %s", script, name, version,
-			)
-		}
 	}
 
 	env = append(

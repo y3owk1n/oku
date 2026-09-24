@@ -85,3 +85,26 @@ func checkHead(file, name string) error {
 
 	return checkSingleFile(head, name, false)
 }
+
+// nativeProgram reports whether the file at path starts as a program of Linux,
+// macOS or Windows, and not as a script.
+func nativeProgram(path string) bool {
+	f, err := os.Open(path)
+	if err != nil {
+		return false
+	}
+	defer f.Close()
+
+	head := make([]byte, 4)
+	if n, _ := io.ReadFull(f, head); n < 2 {
+		return false
+	}
+
+	for _, magic := range programMagic {
+		if string(magic) != "#!" && bytes.HasPrefix(head, magic) {
+			return true
+		}
+	}
+
+	return false
+}

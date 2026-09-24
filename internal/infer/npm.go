@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/y3owk1n/oku/internal/manifest"
@@ -23,6 +24,8 @@ type NPMOptions struct {
 	Node manifest.Dep
 	// NodeName is the name of the package at Node.
 	NodeName string
+	// Scripts names the packages of the tree whose install scripts run.
+	Scripts []string
 }
 
 // FromNPM returns manifest TOML for the npm package called name. The manifest
@@ -132,6 +135,15 @@ func npmBuild(name string, opts NPMOptions, programs []string, bin map[string]st
 
 	fmt.Fprintf(&b, "\n[build]\ndeps = [%s]\n", opts.Node.TOML())
 	fmt.Fprintf(&b, "\n[[build.step]]\nvendor = \"npm\"\npackage = %q\n", name)
+
+	if len(opts.Scripts) > 0 {
+		quoted := make([]string, len(opts.Scripts))
+		for i, s := range opts.Scripts {
+			quoted[i] = strconv.Quote(s)
+		}
+
+		fmt.Fprintf(&b, "scripts = [%s]\n", strings.Join(quoted, ", "))
+	}
 
 	// run names node without an extension, which on Windows is the node.exe
 	// beside it, so the same programs work on every OS.

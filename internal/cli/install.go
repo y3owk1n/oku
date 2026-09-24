@@ -60,6 +60,9 @@ type installed struct {
 	// lists the cache entries oku ignored. Both cover the deps too.
 	substituted []string
 	cacheNotes  []string
+	// unnamedScripts are the packages of an npm step whose install scripts did
+	// not run, since its scripts does not name them.
+	unnamedScripts []string
 	// linkNotes warns for each store package that a build loads without naming
 	// it in runtime.deps, for the deps too.
 	linkNotes []string
@@ -122,6 +125,9 @@ type request struct {
 	// lockOnly pins the package for platforms and installs nothing. sync sets it
 	// for a package whose when leaves out the host.
 	lockOnly bool
+	// npmScripts names the packages whose install scripts the manifest that oku
+	// translates from an npm: ref runs.
+	npmScripts []string
 	// when is the list entry's when, and fit says what install does with a
 	// platform the manifest has no artifact or build for.
 	when platform.When
@@ -271,6 +277,15 @@ func (e env) install(ctx context.Context, opts Options, req request) (installed,
 	}
 
 	got, err := e.installFrom(ctx, opts, req, fetched, inferred.Text)
+
+	// The tree of an npm: package holds packages with install scripts, which a
+	// program may need. oku translates it again with them named, and the build
+	// approval lists them before any runs.
+	if err == nil && req.ref.Kind == ref.NPM && req.npmScripts == nil && len(got.unnamedScripts) > 0 {
+		req.npmScripts = got.unnamedScripts
+
+		return e.install(ctx, opts, req)
+	}
 
 	// The user never saw an inferred manifest, so an error from it says what oku
 	// chose and what to type instead.
@@ -519,6 +534,14 @@ func (e env) installFrom(
 			return installed{}, fmt.Errorf("%s: %w", m.Package.Name, err)
 		}
 
+		// A manifest of the user's names its scripts itself, so oku only says so.
+		if len(realized.UnnamedScripts) > 0 && req.ref.Kind != ref.NPM {
+			deps.linkNotes = append(deps.linkNotes, fmt.Sprintf(
+				"%s: the install scripts of %s did not run, since the npm step's scripts does not name them",
+				m.Package.Name, strings.Join(realized.UnnamedScripts, ", "),
+			))
+		}
+
 		for _, missing := range realized.MissingDeps {
 			deps.linkNotes = append(deps.linkNotes, fmt.Sprintf(
 				"%s: %s loads %s, which is not in runtime.deps, so it breaks after `oku gc` or on another machine",
@@ -660,6 +683,7 @@ func (e env) installFrom(
 		firstUseOthers: firstUseOthers,
 		inferred:       inferred,
 		unsandboxed:    realized.Unsandboxed,
+		unnamedScripts: realized.UnnamedScripts,
 		substituted:    deps.substituted,
 		cacheNotes:     deps.cacheNotes,
 		linkNotes:      deps.linkNotes,
@@ -1319,7 +1343,7 @@ func (e env) inferNPM(ctx context.Context, opts Options, req request) (string, e
 		)
 	}
 
-	npmOpts := infer.NPMOptions{Registry: opts.NPMRegistry, Version: req.ref.Version}
+	npmOpts := infer.NPMOptions{Registry: opts.NPMRegistry, Version: req.ref.Version, Scripts: req.npmScripts}
 
 	var err error
 

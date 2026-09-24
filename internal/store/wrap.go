@@ -41,18 +41,29 @@ func writeWrappers(
 		vars["dep."+dep.Name+".prefix"] = dep.Prefix
 	}
 
-	return writeWraps(filepath.Join(tmp, "bin"), a.Wrap, vars, p.OS, depDirs(deps, "bin"))
+	// The files of the package are still under tmp.
+	local := func(path string) string {
+		if rest, ok := strings.CutPrefix(path, final); ok {
+			return tmp + rest
+		}
+
+		return path
+	}
+
+	return writeWraps(filepath.Join(tmp, "bin"), a.Wrap, vars, p.OS, depDirs(deps, "bin"), local)
 }
 
 // writeWraps writes wraps into the directory bin. vars are what their run and
 // args expand, and goos decides between a shell script and a shim's spec file.
-// path goes first on the PATH of a shell script.
+// path goes first on the PATH of a shell script. local maps a path of the
+// package to where the file is while oku writes the wrappers, or is nil.
 func writeWraps(
 	bin string,
 	wraps []manifest.Wrapper,
 	vars map[string]string,
 	goos string,
 	path []string,
+	local func(string) string,
 ) error {
 	if len(wraps) == 0 {
 		return nil
@@ -78,6 +89,13 @@ func writeWraps(
 			}
 
 			words = append(words, filepath.FromSlash(word))
+		}
+
+		// An interpreter cannot run a native program, such as the binary that an
+		// npm package's install script puts where its script was, so the
+		// wrapper runs that program itself.
+		if len(words) > 1 && local != nil && nativeProgram(local(words[1])) {
+			words = words[1:]
 		}
 
 		var err error
