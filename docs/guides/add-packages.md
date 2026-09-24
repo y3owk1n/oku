@@ -159,6 +159,17 @@ version, or write a manifest that
 [follows a download URL](../reference/manifest.md#follow-a-download-url). A URL on its own has no checksum, so oku trusts the first download
 and pins its sha256 in `oku.lock`.
 
+A download that is not an archive must be the program itself: a Linux, macOS
+or Windows executable, a `#!` script, or a Windows `.cmd`, `.bat` or `.ps1`
+script. oku refuses anything else, such as the web page of a repo:
+
+```
+$ oku add https://gitea.com/gitea/tea
+oku: https://gitea.com/gitea/tea: the download is a web page, not a program. For a repo on a Gitea or Forgejo server add gitea:gitea.com/gitea/tea, on a GitLab server gitlab:gitea.com/gitea/tea, or give the URL of the file to download
+```
+
+For a repo on GitHub, GitLab or Codeberg, the error names the one ref to add.
+
 A manifest on disk works too:
 
 ```sh
