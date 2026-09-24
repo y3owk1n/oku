@@ -713,6 +713,9 @@ order step in `prd/product.md`.
 - B323 [7] `oku allow` covers every overlay that git tracks, whatever
   `OKU_ENV` names. An untracked overlay, and the `.env` files it loads, change
   without a new allow.
+- B324 [7] The hook sets `OKU_PROJECT` to the project's directory while the
+  project applies, and removes it outside one or when the project does not
+  apply. `oku exec` sets it for its command in a project.
 - B67 [7] Project packages shadow global ones on PATH while active.
 - B68 [7] The hook exports `[env]` of global packages in every shell.
 - B219 [7] The hook loads the completions under the global profile
