@@ -1229,8 +1229,9 @@ OS, and `bin/node` is `bin/node.exe` on Windows.
 
 ## D80. Another package manager's recipe is translated, never installed from
 
-`cask:<token>` and `scoop:<name>` read the recipe of a Homebrew cask or a Scoop
-manifest once and write an oku manifest from it: the vendor's download as a
+`cask:<token>`, `scoop:<name>` and `aqua:<owner/repo>` read the recipe of a
+Homebrew cask, a Scoop manifest or an entry of the aqua registry once and write
+an oku manifest from it: the vendor's download as a
 `{{version}}` template, an artifact per platform, the outputs, and a
 `version.from` that is the recipe's own update rule in oku's terms. oku never
 runs the other package manager and never downloads its mirrors or bottles. `update` follows the translated source, not the recipe. The goal
@@ -1268,7 +1269,12 @@ Homebrew dependency graph. Why no digest check of the template: the template
 reproduces the recipe's URL exactly, and `oku.lock` pins the download of any
 version on first use, or oku checks it against GitHub's digest.
 
+Each ref names one source. oku never reads another source when one fails, so
+`github:` never reads the aqua registry. Why: a user who writes a ref knows
+which source it reads, and the lock of a ref does not change because a source
+it does not name changed.
+
 Out of scope for now: merging the recipes of several package managers into one
-manifest, winget, the aqua registry, finding the upstream repo of a Homebrew
-formula, third-party taps and buckets, and a version
-whose parts a URL uses one by one, such as Homebrew's `version.csv`.
+manifest, winget, finding the upstream repo of a Homebrew formula, third-party
+taps and buckets, and a version whose parts a URL uses one by one, such as
+Homebrew's `version.csv`.

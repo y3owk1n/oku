@@ -496,6 +496,12 @@ order step in `prd/product.md`.
   the file of the download.
 - B299 [4] The `@` of a cask ref is part of the cask's name, as in
   `cask:temurin@21`, so a cask ref takes no `@version`.
+- B302 [4] `oku add aqua:owner/repo` translates the repo's entry in the aqua
+  registry into a manifest that follows the repo's GitHub releases. oku reads
+  the rule for the newest releases. Each platform gets an artifact with the
+  file name the entry gives it, `bin` from `files`, and `sha256_url` from the
+  checksum. An entry whose template oku cannot translate fails and names the
+  template. A `github:` ref never reads the registry.
 - B264 [4] A `[runtimes]` entry may be a table with `ref` and a `version`
   constraint, in a list or in `config.toml`. `add` and `update` then build and
   run with the newest version of that package that the constraint allows, and
