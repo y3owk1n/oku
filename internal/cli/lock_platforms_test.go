@@ -568,3 +568,33 @@ func TestB330AddTakesWhen(t *testing.T) {
 		}
 	}
 }
+
+func TestB331AGoVendorStepWithWhenSharesItsDigestWithThePlatformsItMatches(t *testing.T) {
+	m := newMachine(t)
+	other := otherPlatform()
+	ref := m.goVendorManifest(t)
+
+	body, err := os.ReadFile(ref)
+	must(t, err)
+	must(t, os.WriteFile(ref, []byte(strings.Replace(string(body), "vendor = \"go\"\n", fmt.Sprintf(
+		"vendor = \"go\"\nwhen = [{ os = %q }, { os = %q }]\n", platform.Host().OS, other.OS,
+	), 1)), 0o644))
+
+	must(t, os.MkdirAll(m.config, 0o755))
+	must(t, os.WriteFile(filepath.Join(m.config, "oku.toml"), []byte(fmt.Sprintf(
+		"[lock]\nplatforms = [%q]\n\n[packages]\ngotool = %q\n", other.String(), ref,
+	)), 0o644))
+
+	if out, err := m.run(t, "", "sync", "--yes"); err != nil {
+		t.Fatalf("sync: %v\n%s", err, out)
+	}
+
+	locked, err := os.ReadFile(filepath.Join(m.config, "oku.lock"))
+	must(t, err)
+
+	entry := platformEntry(string(locked), other.String())
+	if !strings.Contains(entry, "vendor_sha256 = '") ||
+		entry != platformEntry(string(locked), platform.Host().String()) {
+		t.Fatalf("the entry of %s lacks the vendor digest of this machine:\n%s", other, locked)
+	}
+}

@@ -1088,7 +1088,7 @@ func pinFor(
 		// the platform it is told, so oku downloads those of p and builds nothing.
 		switch {
 		case host.entry.Strategy != strategyBuild || entry.VendorSHA256 != "":
-		case store.VendorPortable(m.Build):
+		case store.VendorPortable(m.Build, platform.Host(), p):
 			entry.VendorSHA256 = host.entry.VendorSHA256
 		case store.CanCrossVendor(m.Build, p):
 			vendored, err := s.Build(ctx, m, p, store.BuildOptions{

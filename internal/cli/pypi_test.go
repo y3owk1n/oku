@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -21,6 +22,7 @@ while [ $# -gt 0 ]; do
     --target) target="$2"; shift ;;
     --python) python="$2"; shift ;;
     --exclude-newer) before="$2"; shift ;;
+    --python-platform) platform="$2"; shift ;;
     --*) ;;
     *) spec="$1" ;;
   esac
@@ -29,6 +31,7 @@ done
 version="${spec#*==}"
 mkdir -p "$target/tool" "$target/tool-$version.dist-info" "$target/bin"
 printf 'def main():\n    print("tool %s %s")\n' "$version" "$before" > "$target/tool/__init__.py"
+printf '%s %s' "$platform" "$MACOSX_DEPLOYMENT_TARGET" > "$target/tool/platform"
 printf 'Metadata-Version: 2.1\nName: tool\nVersion: %s\n' "$version" > "$target/tool-$version.dist-info/METADATA"
 printf '[console_scripts]\ntool = tool:main\n' > "$target/tool-$version.dist-info/entry_points.txt"
 printf '#!%s\nimport tool\ntool.main()\n' "$python" > "$target/bin/tool"
@@ -222,5 +225,32 @@ func TestB307AnIndexThatDoesNotAnswerInTheSimpleAPIsJSONIsRefused(t *testing.T) 
 	_, err := m.run(t, "", "add", "pypi:tool", "--yes")
 	if err == nil || !strings.Contains(err.Error(), "lacks the Simple API's version 1 in JSON") {
 		t.Fatalf("want the answer refused, got %v", err)
+	}
+}
+
+func TestB332APythonPackageInstallsTheWheelsOfAFixedPlatform(t *testing.T) {
+	m := pypiMachine(t, map[string]string{"1.0.0": "2026-01-02T03:04:05Z"})
+
+	if out, err := m.run(t, "", "add", "pypi:tool", "--yes"); err != nil {
+		t.Fatalf("add: %v\n%s", err, out)
+	}
+
+	found, err := filepath.Glob(filepath.Join(m.data, "store", "*", "lib", "python", "tool", "platform"))
+	must(t, err)
+
+	if len(found) != 1 {
+		t.Fatalf("want one install of tool, found %v", found)
+	}
+
+	got, err := os.ReadFile(found[0])
+	must(t, err)
+
+	cpu := map[string]string{"amd64": "x86_64", "arm64": "aarch64"}[runtime.GOARCH]
+	want := map[string]string{
+		"linux": cpu + "-manylinux_2_28 ", "darwin": cpu + "-apple-darwin 13.0",
+	}[runtime.GOOS]
+
+	if string(got) != want {
+		t.Fatalf("uv was told the platform %q, want %q", got, want)
 	}
 }

@@ -330,10 +330,11 @@ for program in others:
 shutil.rmtree(moved, ignore_errors=True)
 `
 
-// VendorPortable reports whether the digest of what b vendors is the same on
-// every platform. That needs a vendor step, and each one must run on every
-// platform and be of a portable kind.
-func VendorPortable(b *manifest.Build) bool {
+// VendorPortable reports whether the vendor digest of a build of b on host
+// holds for platform p. That needs vendor steps that download the same files
+// on every platform, go and cargo, and the same of them for host and p, since
+// a step with a when may run on one and not the other.
+func VendorPortable(b *manifest.Build, host, p platform.Platform) bool {
 	found := false
 
 	for _, step := range b.Steps {
@@ -341,11 +342,17 @@ func VendorPortable(b *manifest.Build) bool {
 			continue
 		}
 
-		if len(step.When) > 0 || !vendorKinds[*step.Vendor].portable {
-			return false
-		}
+		onHost, onP := step.When.Matches(host), step.When.Matches(p)
 
-		found = true
+		switch {
+		case onHost != onP:
+			return false
+		case !onP:
+		case !vendorKinds[*step.Vendor].portable:
+			return false
+		default:
+			found = true
+		}
 	}
 
 	return found
@@ -378,20 +385,24 @@ func CanCrossVendor(b *manifest.Build, p platform.Platform) bool {
 	return last >= 0
 }
 
-// vendorTarget returns the variables that make npm and uv install the packages
-// of platform p and not those of the host.
-func vendorTarget(p platform.Platform) []string {
+// pipTarget returns the variables that make uv install the wheels of platform
+// p. Every pip build names its platform, the host's too, so the wheels do not
+// depend on the glibc or the macOS of the machine, and a pin made on another
+// platform matches a build on p. Linux takes wheels for glibc 2.28, and macOS
+// those for macOS 13.
+func pipTarget(p platform.Platform) []string {
 	cpu := map[string]string{"amd64": "x86_64", "arm64": "aarch64"}[p.Arch]
 
-	triple := map[string]string{
-		"darwin": cpu + "-apple-darwin", "windows": cpu + "-pc-windows-msvc",
-		"linux": cpu + "-unknown-linux-gnu",
-	}[p.OS]
-	if p.Libc == "musl" {
-		triple = cpu + "-unknown-linux-musl"
+	switch {
+	case p.OS == "darwin":
+		return []string{"OKU_PIP_PLATFORM=" + cpu + "-apple-darwin", "MACOSX_DEPLOYMENT_TARGET=13.0"}
+	case p.OS == "windows":
+		return []string{"OKU_PIP_PLATFORM=" + cpu + "-pc-windows-msvc"}
+	case p.Libc == "musl":
+		return []string{"OKU_PIP_PLATFORM=" + cpu + "-unknown-linux-musl"}
+	default:
+		return []string{"OKU_PIP_PLATFORM=" + cpu + "-manylinux_2_28"}
 	}
-
-	return append(npmTarget(p), "OKU_PIP_PLATFORM="+triple)
 }
 
 // npmTarget returns the variables that make npm install the optional packages

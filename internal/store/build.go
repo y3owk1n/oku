@@ -280,6 +280,7 @@ func (s *Store) Build(
 					// The source is the crate, so the step needs nothing more.
 				case "pip":
 					vendorEnv, err = s.pipPackageEnv(ctx, env, step.Package, m.Version.Value, opts.PyPIIndex)
+					vendorEnv = append(vendorEnv, pipTarget(p)...)
 				case "go":
 					// A manifest that follows the module's versions names the module,
 					// which may hold the package deeper down.
@@ -310,7 +311,7 @@ func (s *Store) Build(
 			}
 
 			if opts.VendorOnly {
-				vendorEnv = append(slices.Clone(vendorEnv), vendorTarget(p)...)
+				vendorEnv = append(slices.Clone(vendorEnv), npmTarget(p)...)
 			}
 
 			if err == nil {

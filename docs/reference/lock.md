@@ -116,9 +116,10 @@ from any machine.
 
 | `vendor` | Pinned from another machine |
 |---|---|
-| `go`, `cargo` | Yes. They download the same files on every platform, so the digest of your build holds for the others. This holds only when no vendor step of the manifest has a `when`. |
+| `go`, `cargo` | Yes. They download the same files on every platform, so the digest of your build holds for the others. A vendor step with a `when` shares it with the platforms where the same vendor steps run. |
 | `npm` | Yes. oku downloads the other platform's packages into a temporary directory, hashes them and keeps nothing. It runs none of their scripts. This needs a build on your machine, and a manifest with no `run` step before the `npm` step. |
-| `pip` | No. The digest comes from the first build on that platform. `oku sync --locked` fails there until a machine of that platform built the package and you committed the lock. |
+| `pip` with `package`, as `pypi:` writes | Yes. Every build asks uv for the wheels of a fixed platform, so oku downloads the other platform's wheels the same way. See [pypi packages](../guides/npm-pypi-go-cargo.md). |
+| `pip` with `requirements.txt` | No. pip picks the wheels of the machine it runs on. The digest comes from the first build on that platform, and `oku sync --locked` fails there until a machine of that platform built the package and you committed the lock. |
 
 When a package has nothing for some `[lock]` platforms:
 
