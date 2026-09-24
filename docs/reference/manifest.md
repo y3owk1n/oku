@@ -1311,6 +1311,7 @@ wrote oku.pkg.toml
 | `gitlab:` | `gitlab-releases`. Its assets are the links of the release, not the source archives GitLab adds. |
 | `npm:`, `pypi:`, `go:`, `cargo:` | `npm`, `pypi`, `go`, `crates`, see [Registry packages](#registry-packages) |
 | `cask:`, `scoop:` | the recipe's own rule, see [Recipes of other package managers](#recipes-of-other-package-managers) |
+| `aqua:` | `github-releases` of the repo, see [Recipes of other package managers](#recipes-of-other-package-managers) |
 | a URL of a download | a fixed `value`, see [A URL of the download](#a-url-of-the-download) |
 
 With `@version` oku reads that version's release. It tries the tag `version`,
@@ -1476,6 +1477,21 @@ which translates it again.
 | One that reads a Sparkle feed for its short version | `from = "sparkle"` |
 | No rule at all, and a download from GitHub releases | `from = "github-releases"` of that repo |
 
+`oku add aqua:owner/repo` translates the repo's entry in the
+[aqua registry](https://github.com/aquaproj/aqua-registry), which names the
+release file of each platform:
+
+| The entry says | The manifest gets |
+|---|---|
+| The rule for the newest releases, `version_constraint: "true"` | Its asset, format, files and checksum. oku leaves out the rules for older releases. |
+| `asset` with `{{.Version}}`, `{{.SemVer}}` or `{{trimV .Version}}` | `url` with `{{tag}}` or `{{version}}` |
+| `{{.OS}}` and `{{.Arch}}`, with `replacements` and `overrides` | One `[[artifact]]` per platform, each with its own file name |
+| `supported_envs`, `rosetta2`, `windows_arm_emulation` | The platforms it covers. Rosetta 2 and Windows emulation run the Intel build on arm64. |
+| `files` with a `src` | `bin`. A folder named after the version at the top becomes `strip`. On Windows a program gets `.exe`. |
+| `checksum` of type `github_release` with sha256 | `sha256_url` |
+| `version_prefix` | `strip_prefix` |
+| `type: http` with a `url` | That `url` as the download, and the repo's releases as the version source |
+
 ```toml
 # Translated from the Homebrew cask obsidian.
 [package]
@@ -1500,6 +1516,8 @@ bin = ["obsidian"]
 ```
 
 - oku reads the Ruby of a cask as text and never runs it.
+- An aqua template that uses a function oku has no match for, such as
+  `{{title .OS}}`, fails and names it.
 - A URL template counts only when it gives back the recipe's own download
   for the recipe's version, on every platform. Other parts of the URL keep
   the value they have in that download, such as `arm64` for `#{arch}`.

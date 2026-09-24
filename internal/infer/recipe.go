@@ -48,6 +48,8 @@ type recipeArtifact struct {
 	// template is the URL of any version, with "{{version}}" in it. It is empty
 	// when the recipe gives no template oku can read.
 	template string
+	// sha256URL is the checksum file of any version, when the recipe names one.
+	sha256URL string
 	// follow is where versions of this artifact come from, when they differ by
 	// platform.
 	follow *follow
@@ -248,6 +250,10 @@ func (r recipe) text() (string, error) {
 			}
 		} else {
 			fmt.Fprintf(&b, "url = %q\n", a.template)
+
+			if a.sha256URL != "" {
+				fmt.Fprintf(&b, "sha256_url = %q\n", a.sha256URL)
+			}
 		}
 
 		b.WriteString(a.outputs())
@@ -356,5 +362,6 @@ func (a recipeArtifact) namedAfter(version string) bool {
 		paths = append(paths, b.path)
 	}
 
-	return slices.ContainsFunc(paths, func(p string) bool { return strings.Contains(p, version) })
+	return version != "" &&
+		slices.ContainsFunc(paths, func(p string) bool { return strings.Contains(p, version) })
 }

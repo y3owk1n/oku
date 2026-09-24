@@ -26,6 +26,9 @@ type recipeServer struct {
 	appcast string
 	// files replace the one program in each download.
 	files map[string]string
+	// aqua is the aqua registry's entry for owner/tool. The server's GitHub API
+	// lists versions as releases of owner/tool, with a "v" in their tags.
+	aqua string
 }
 
 // start serves s for m and returns the server's URL.
@@ -60,6 +63,15 @@ func (s recipeServer) start(t *testing.T, m *machine) string {
 		parts := strings.Split(r.URL.Path, "/")
 
 		switch {
+		case r.URL.Path == "/raw/aquaproj/aqua-registry/HEAD/pkgs/owner/tool/registry.yaml" && s.aqua != "":
+			_, _ = fmt.Fprint(w, fill(s.aqua))
+		case r.URL.Path == "/api/repos/owner/tool/releases":
+			var releases []string
+			for _, v := range s.versions {
+				releases = append(releases, fmt.Sprintf(`{"tag_name": "v%s", "assets": []}`, v))
+			}
+
+			_, _ = fmt.Fprintf(w, "[%s]", strings.Join(releases, ","))
 		case r.URL.Path == "/appcast.xml":
 			_, _ = fmt.Fprint(w, s.appcast)
 		case r.URL.Path == "/latest.json":
@@ -109,6 +121,7 @@ func (s recipeServer) start(t *testing.T, m *machine) string {
 
 	m.opts.CaskAPI = server.URL + "/api"
 	m.opts.GitHubRaw = server.URL + "/raw"
+	m.opts.GitHubAPI = server.URL + "/api"
 
 	return server.URL
 }
@@ -522,5 +535,120 @@ func TestB298ACaskProgramInAMovedFolderIsFoundInTheDownload(t *testing.T) {
 
 	if !strings.Contains(out, `bin = ["sdk/bin/tool"]`) {
 		t.Fatalf("the program is not found in the moved folder:\n%s", out)
+	}
+}
+
+func TestB302AddTranslatesAnAquaEntryAndFollowsTheRepo(t *testing.T) {
+	m := newMachine(t)
+	recipeServer{
+		versions: []string{"1.2.0", "1.3.0"},
+		// A download at another URL than the release, as aqua's http type has.
+		aqua: `packages:
+  - type: http
+    repo_owner: owner
+    repo_name: tool
+    description: A tool
+    url: SERVER/dl/{{.SemVer}}/{{.OS}}-{{.Arch}}/tool.tar.gz
+    files:
+      - name: tool
+`,
+	}.start(t, &m)
+
+	out, err := m.run(t, "", "add", "aqua:owner/tool", "--yes")
+	if err != nil {
+		t.Fatalf("add: %v\n%s", err, out)
+	}
+
+	if got := m.toolOutput(t); got != "tool 1.3.0" {
+		t.Fatalf("tool printed %q, want the newest release 1.3.0", got)
+	}
+
+	if !strings.Contains(out, "aqua:owner/tool is a recipe of another package manager") {
+		t.Fatalf("add did not say that it translated the entry:\n%s", out)
+	}
+}
+
+func TestB302AnAquaEntryGivesEachPlatformItsOwnReleaseFile(t *testing.T) {
+	m := newMachine(t)
+	recipeServer{aqua: `packages:
+  - type: github_release
+    repo_owner: owner
+    repo_name: tool
+    version_constraint: "false"
+    version_overrides:
+      - version_constraint: semver("< 1.0.0")
+        asset: old-{{.OS}}.tgz
+      - version_constraint: "true"
+        asset: tool_{{trimV .Version}}_{{.OS}}_{{.Arch}}.{{.Format}}
+        format: tar.gz
+        rosetta2: true
+        supported_envs: [darwin, linux/amd64, windows/amd64]
+        replacements:
+          darwin: macOS
+          amd64: x86_64
+        overrides:
+          - goos: linux
+            replacements:
+              linux: Linux-musl
+          - goos: windows
+            format: zip
+            files:
+              - name: tool
+                src: bin/tool
+        files:
+          - name: tool
+            src: tool_{{trimV .Version}}_{{.OS}}_{{.Arch}}/bin/tool
+        checksum:
+          type: github_release
+          asset: checksums.txt
+          algorithm: sha256
+`}.start(t, &m)
+
+	out, err := m.run(t, "", "manifest", "init", "--from", "aqua:owner/tool", "-o", "-")
+	if err != nil {
+		t.Fatalf("init: %v\n%s", err, out)
+	}
+
+	release := "https://github.com/owner/tool/releases/download/{{tag}}/"
+	for _, want := range []string{
+		"[version]\nfrom = \"github-releases\"\nrepo = \"owner/tool\"\n",
+		// Rosetta 2 runs the Intel build on arm64.
+		"match = { os = \"darwin\", arch = \"arm64\" }\nurl = \"" + release + "tool_{{version}}_macOS_x86_64.tar.gz\"",
+		"sha256_url = \"" + release + "checksums.txt\"",
+		// An override's replacements add to the others.
+		"url = \"" + release + "tool_{{version}}_Linux-musl_x86_64.tar.gz\"",
+		"url = \"" + release + "tool_{{version}}_windows_x86_64.zip\"",
+		// A folder named after the version is stripped, and a Windows program
+		// gets ".exe".
+		"strip = 1\nbin = [\"bin/tool\"]",
+		"bin = [\"bin/tool.exe\"]",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("the manifest lacks %q:\n%s", want, out)
+		}
+	}
+
+	if strings.Contains(out, `os = "linux", arch = "arm64"`) {
+		t.Fatalf("the manifest has a platform that supported_envs leaves out:\n%s", out)
+	}
+}
+
+func TestB302AnAquaEntryOkuCannotReadIsRefused(t *testing.T) {
+	m := newMachine(t)
+	recipeServer{aqua: `packages:
+  - type: github_release
+    repo_owner: owner
+    repo_name: tool
+    asset: tool-{{title .OS}}.tar.gz
+`}.start(t, &m)
+
+	_, err := m.run(t, "", "add", "aqua:owner/tool", "--yes")
+	if err == nil || !strings.Contains(err.Error(), "oku has no match for {{title .OS}}") {
+		t.Fatalf("want a refusal that names the template, got %v", err)
+	}
+
+	_, err = m.run(t, "", "add", "aqua:owner/none", "--yes")
+	if err == nil || !strings.Contains(err.Error(), "the aqua registry has no entry for it") {
+		t.Fatalf("want a missing entry named, got %v", err)
 	}
 }

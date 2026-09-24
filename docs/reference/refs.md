@@ -27,6 +27,7 @@ refs to lists.
 | `go:host/path` | A Go program, such as `go:golang.org/x/tools/gopls`. |
 | `cargo:name` | A crate on crates.io. |
 | `cask:name` | A Homebrew cask, which oku translates into a manifest. An `@` is part of the name, as in `cask:temurin@21`, so a cask ref takes no version. |
+| `aqua:owner/repo` | The GitHub repo's entry in the aqua registry, which oku translates into a manifest. |
 | `scoop:name`, `scoop:bucket/name` | A Scoop manifest, which oku translates into a manifest. oku looks up a bare name in the `main` bucket, then `extras`. |
 | `core/ripgrep` | The package `ripgrep` in your source `core`, see [Sources and aliases](#sources-and-aliases). |
 
@@ -34,10 +35,12 @@ The registry refs `npm:`, `pypi:`, `go:` and `cargo:` have no manifest, so oku
 always infers one. How each installs, and the runtime it needs, is in
 [npm, PyPI, Go and cargo](../guides/npm-pypi-go-cargo.md).
 
-`cask:` and `scoop:` read a recipe of Homebrew or Scoop once, and oku writes a
-manifest of its own from it, see
+`cask:`, `scoop:` and `aqua:` read a recipe of Homebrew, Scoop or the aqua
+registry once, and oku writes a manifest of its own from it, see
 [Recipes of other package managers](manifest.md#recipes-of-other-package-managers).
-Neither needs brew or scoop on the machine. `scoop:<bucket>/name` takes any
+None needs brew, scoop or aqua on the machine. `aqua:owner/repo` and
+`github:owner/repo` are separate sources, and oku reads only the one the ref
+names. `scoop:<bucket>/name` takes any
 bucket that Scoop knows by name, such as `extras`, `versions` or `java`, except
 `nonportable`.
 

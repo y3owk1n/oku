@@ -43,6 +43,9 @@ const (
 	Cask
 	// Scoop is a Scoop manifest, translated the same way.
 	Scoop
+	// Aqua is a GitHub repo's entry in the aqua registry, translated the same
+	// way.
+	Aqua
 )
 
 // Target is the kind of file Fetch reads a ref as. It sets the file names Fetch
@@ -201,6 +204,13 @@ func ParseIn(dir, s string) (Ref, error) {
 				"%s: want scoop:name or scoop:bucket/name, with a bucket that Scoop knows by name", s,
 			)
 		}
+	case strings.HasPrefix(body, "aqua:"):
+		r.Kind = Aqua
+		r.Location = strings.TrimPrefix(body, "aqua:")
+
+		if !codebergRe.MatchString(r.Location) {
+			return Ref{}, fmt.Errorf("%s: want aqua:owner/repo, such as aqua:BurntSushi/ripgrep", s)
+		}
 	case strings.HasPrefix(body, "git+"):
 		r.Kind = Git
 		r.Location, r.Fragment, _ = strings.Cut(strings.TrimPrefix(body, "git+"), "#")
@@ -252,6 +262,8 @@ func (r Ref) String() string {
 		s = "cask:" + s
 	case Scoop:
 		s = "scoop:" + s
+	case Aqua:
+		s = "aqua:" + s
 	}
 
 	if r.Fragment != "" {

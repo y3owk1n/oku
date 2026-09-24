@@ -234,6 +234,17 @@ vlc = { ref = "cask:vlc", when = { os = "darwin" } }
 vlc-windows = { ref = "scoop:extras/vlc", when = { os = "windows" } }
 ```
 
+A repo whose release files oku cannot match to your machine may have an
+entry in the [aqua registry](https://github.com/aquaproj/aqua-registry), which
+names the file of each platform:
+
+```sh
+oku add aqua:cli/cli
+```
+
+oku reads the registry only for an `aqua:` ref. A `github:` ref always infers
+from the release.
+
 How each part of a recipe translates is in the
 [manifest reference](../reference/manifest.md#recipes-of-other-package-managers).
 
