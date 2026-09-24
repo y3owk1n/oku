@@ -203,6 +203,12 @@ order step in `prd/product.md`.
   Without `regex` the values joined with `join`
   are the version, with it the values one per line are what it reads. `json`
   beside another `from` fails.
+- B340 [5] After an npm step installs its tree, oku finds the packages with
+  an install script or a `binding.gyp`. For an `npm:` ref it names them in
+  the translated manifest's `scripts` and asks again, listing them, before
+  any runs. A manifest that leaves one out gets a warning, and a name in
+  `scripts` that is no package of the tree fails the build. A wrapper whose
+  program is a native binary runs it directly, not through its interpreter.
 - B182 [2] oku pins a package whose `when` leaves out the host, with its deps,
   for the lock platforms that `when` matches, and installs nothing of it.
   `sync` does that when the lock has no entry for its ref, or with `[lock]`
