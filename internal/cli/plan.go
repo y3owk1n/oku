@@ -26,6 +26,7 @@ type planFlags struct {
 	bins       []string
 	verbose    bool
 	acceptKey  bool
+	when       platform.When
 }
 
 // planned is what add would do for one ref. oku finds it without installing
@@ -70,7 +71,7 @@ func runPlan(cmd *cobra.Command, opts Options, args []string, flags planFlags) e
 	var plans []planned
 
 	for _, arg := range args {
-		e, req, locked, err := addRequest(cmd, opts, arg)
+		e, req, locked, err := addRequest(cmd, opts, arg, flags.when)
 		if err != nil {
 			return err
 		}
@@ -199,7 +200,7 @@ func (e env) planFrom(
 		req.platforms = slices.DeleteFunc(slices.Clone(req.platforms), func(p platform.Platform) bool {
 			return !m.Supports(p)
 		})
-		req.lockOnly = !m.Supports(host)
+		req.lockOnly = req.lockOnly || !m.Supports(host)
 	}
 
 	m, release, _, err := e.pickRelease(ctx, opts, req, fetched)

@@ -518,3 +518,53 @@ func TestB326InferenceForALockPlatformNamesThatPlatform(t *testing.T) {
 		t.Fatalf("want the error to name %s and not this machine, got %v", other, err)
 	}
 }
+
+func TestB330AddTakesWhen(t *testing.T) {
+	m := newMachine(t)
+	host := platform.Host()
+	other := otherPlatform()
+
+	ref, _ := m.twoPlatformManifest(t, other)
+	list := filepath.Join(m.config, "oku.toml")
+
+	out, err := m.run(t, "", "add", ref, "--when", "os="+host.OS)
+	if err != nil {
+		t.Fatalf("add --when for this machine: %v\n%s", err, out)
+	}
+
+	body, _ := os.ReadFile(list)
+	if !strings.Contains(string(body), `when = { os = "`+host.OS+`" }`) || !exists(m.profile("bin", "tool")) {
+		t.Fatalf("add --when did not install tool and keep the when:\n%s", body)
+	}
+
+	_, err = m.run(t, "", "remove", "tool")
+	must(t, err)
+
+	// A when for the other platform alone has nothing to pin without [lock].
+	if _, err := m.run(t, "", "add", ref, "--when", "os="+other.OS); err == nil ||
+		!strings.Contains(err.Error(), "nothing to pin") {
+		t.Fatalf("want add refused without a lock platform, got %v", err)
+	}
+
+	must(t, os.WriteFile(list, []byte(fmt.Sprintf("[lock]\nplatforms = [%q]\n", other.String())), 0o644))
+
+	out, err = m.run(t, "", "add", ref, "--when", "os="+other.OS)
+	if err != nil || !strings.Contains(out, "pinned and not installed on "+host.String()) {
+		t.Fatalf("add --when for the other platform: %v\n%s", err, out)
+	}
+
+	body, _ = os.ReadFile(list)
+	locked, _ := os.ReadFile(filepath.Join(m.config, "oku.lock"))
+
+	if !strings.Contains(string(body), `when = { os = "`+other.OS+`" }`) ||
+		!strings.Contains(string(locked), "[package.platform."+other.String()+"]") ||
+		exists(m.profile("bin", "tool")) {
+		t.Fatalf("add --when did not pin tool for %s alone:\n%s\n%s", other, body, locked)
+	}
+
+	for flag, want := range map[string]string{"os=plan9": "matches no platform", "darwin": "key=value"} {
+		if _, err := m.run(t, "", "add", ref, "--when", flag); err == nil || !strings.Contains(err.Error(), want) {
+			t.Fatalf("--when %s: want %q, got %v", flag, want, err)
+		}
+	}
+}

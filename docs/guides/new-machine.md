@@ -221,6 +221,16 @@ fd = { ref = "github:sharkdp/fd", when = [{ os = "darwin" }, { os = "linux" }] }
 - `oku sync` does not install a package whose `when` does not match the
   machine. An entry for it in the lock from another machine stays.
 
+`oku add --when` writes the `when` for you. Give it once per table:
+
+```sh
+oku add github:rxhanson/Rectangle --when os=darwin
+oku add github:sharkdp/fd --when os=darwin --when os=linux
+```
+
+When `--when` leaves out the machine you run it on, `add` pins the package
+for the `[lock]` platforms it matches and installs nothing, as `sync` does.
+
 Settings tables need no `when`. oku skips `[defaults]` off macOS,
 `[registry]` off Windows and `[dconf]` off Linux, see
 [OS settings](os-settings.md).
