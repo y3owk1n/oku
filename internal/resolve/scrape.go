@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/y3owk1n/oku/internal/manifest"
@@ -142,7 +143,7 @@ var (
 	)
 )
 
-// sparkle returns the newest macOS release of the Sparkle appcast at v.Repo by
+// sparkle returns the newest macOS release of the Sparkle appcast at v.Repo,
 // its sparkle:shortVersionString, and its sparkle:version after v.Join when
 // that is set. It skips an item on a channel, such as beta, or for another
 // system.
@@ -154,12 +155,15 @@ func (r *Resolver) sparkle(ctx context.Context, v manifest.Version) (Release, er
 		return Release{}, fmt.Errorf("%s: %w", what, err)
 	}
 
-	newest := ""
+	// Sparkle takes the item with the highest build, sparkle:version, as the
+	// newest. oku does the same, and compares short versions only when an item
+	// names no build. An old item may give a commit as its short version.
+	var newest, newestBuild string
 
 	for _, item := range sparkleItemRe.FindAllString(text, -1) {
 		// A feed that WinSparkle shares marks the items of other systems.
 		m := sparkleShortRe.FindStringSubmatch(item)
-		if m == nil || strings.Contains(item, "<sparkle:channel>") ||
+		if m == nil || offChannel(item) ||
 			strings.Contains(item, `sparkle:os="`) && !strings.Contains(item, `sparkle:os="macos"`) {
 			continue
 		}
@@ -167,19 +171,38 @@ func (r *Resolver) sparkle(ctx context.Context, v manifest.Version) (Release, er
 		// A feed may add the build to the short version, as "1.165.1 (87405)".
 		version, _, _ := strings.Cut(strings.TrimSpace(m[1]+m[2]), " ")
 
+		build := ""
+		if b := sparkleBuildRe.FindStringSubmatch(item); b != nil {
+			build = strings.TrimSpace(b[1] + b[2])
+		}
+
 		// With join, the version is the short version and the build, such as
 		// "1.2+345".
 		if v.Join != "" {
-			build := sparkleBuildRe.FindStringSubmatch(item)
-			if build == nil {
+			if build == "" {
 				continue
 			}
 
-			version += v.Join + build[1] + build[2]
+			version += v.Join + build
 		}
 
-		if scrapedRe.MatchString(version) && (newest == "" || Compare(version, newest) > 0) {
-			newest = version
+		if !scrapedRe.MatchString(version) {
+			continue
+		}
+
+		var newer bool
+
+		switch {
+		case newest == "":
+			newer = true
+		case build != "" && newestBuild != "":
+			newer = Compare(build, newestBuild) > 0
+		default:
+			newer = Compare(version, newest) > 0
+		}
+
+		if newer {
+			newest, newestBuild = version, build
 		}
 	}
 
@@ -188,4 +211,15 @@ func (r *Resolver) sparkle(ctx context.Context, v manifest.Version) (Release, er
 	}
 
 	return Release{Version: newest, Tag: newest}, nil
+}
+
+var sparkleChannelRe = regexp.MustCompile(`<sparkle:channel>\s*([^<]*?)\s*</sparkle:channel>`)
+
+// offChannel reports whether a Sparkle item is on a channel that users opt
+// into, such as beta. Some feeds, such as OrbStack's, put every release on a
+// channel named stable or release, which counts as no channel.
+func offChannel(item string) bool {
+	m := sparkleChannelRe.FindStringSubmatch(item)
+
+	return m != nil && !slices.Contains([]string{"stable", "release"}, strings.ToLower(m[1]))
 }

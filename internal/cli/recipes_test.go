@@ -404,7 +404,7 @@ func TestB295ScriptsThatOnlySetUpTheAppAreLeftOutAndNamed(t *testing.T) {
 	}
 }
 
-func TestB297ASparkleFeedGivesItsNewestMacOSVersionOffAChannel(t *testing.T) {
+func TestB297ASparkleFeedGivesItsNewestMacOSVersionOffABetaChannel(t *testing.T) {
 	m := newMachine(t)
 	ruby := strings.Replace(caskRuby, "strategy :json do |json|\n      json[\"version\"]\n    end",
 		"strategy :sparkle, &:short_version", 1)
@@ -416,7 +416,8 @@ func TestB297ASparkleFeedGivesItsNewestMacOSVersionOffAChannel(t *testing.T) {
 	server.appcast = `<rss><channel>
 <item><title>1.2.0</title><enclosure url="x" sparkle:shortVersionString="1.2.0" sparkle:version="120"/></item>
 <item><title>1.4.0 beta</title><sparkle:channel>beta</sparkle:channel><sparkle:shortVersionString>1.4.0</sparkle:shortVersionString></item>
-<item><title>1.3.0</title><sparkle:shortVersionString>1.3.0</sparkle:shortVersionString></item>
+<item><title>1.3.0</title><sparkle:channel>stable</sparkle:channel><sparkle:version>130</sparkle:version><sparkle:shortVersionString>1.3.0</sparkle:shortVersionString></item>
+<item><title>Build 5</title><sparkle:version>5</sparkle:version><sparkle:shortVersionString>663205b5 (2024-12-20)</sparkle:shortVersionString></item>
 <item><title>1.4.0 for Windows</title><enclosure url="y" sparkle:os="windows" sparkle:shortVersionString="1.4.0"/></item>
 </channel></rss>`
 	server.start(t, &m)
@@ -426,8 +427,10 @@ func TestB297ASparkleFeedGivesItsNewestMacOSVersionOffAChannel(t *testing.T) {
 		t.Fatalf("add: %v\n%s", err, out)
 	}
 
-	// 1.3.0 is the newest macOS release off the beta channel, although it
-	// comes after 1.2.0.
+	// 1.3.0 is the newest macOS release off the beta channel. Its channel,
+	// stable, counts as none, as OrbStack's feed has it. oku ranks the items by
+	// build, so an old one whose short version is a commit, as Ghostty's feed
+	// has, does not win.
 	if got := m.toolOutput(t); got != "tool 1.3.0" {
 		t.Fatalf("tool printed %q, want 1.3.0", got)
 	}
