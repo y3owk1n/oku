@@ -1312,6 +1312,7 @@ wrote oku.pkg.toml
 | `npm:`, `pypi:`, `go:`, `cargo:` | `npm`, `pypi`, `go`, `crates`, see [Registry packages](#registry-packages) |
 | `cask:`, `scoop:` | the recipe's own rule, see [Recipes of other package managers](#recipes-of-other-package-managers) |
 | `aqua:` | `github-releases` of the repo, see [Recipes of other package managers](#recipes-of-other-package-managers) |
+| `winget:` | `github-releases` for a download from GitHub releases, else a fixed `value` |
 | a URL of a download | a fixed `value`, see [A URL of the download](#a-url-of-the-download) |
 
 With `@version` oku reads that version's release. It tries the tag `version`,
@@ -1491,6 +1492,22 @@ release file of each platform:
 | `checksum` of type `github_release` with sha256 | `sha256_url` |
 | `version_prefix` | `strip_prefix` |
 | `type: http` with a `url` | That `url` as the download, and the repo's releases as the version source |
+
+`oku add winget:Publisher.Package` reads the newest version of a package of
+[winget's community manifests](https://github.com/microsoft/winget-pkgs).
+winget records no rule for new versions, so the manifest follows the GitHub
+releases its download comes from, or pins that version with its sha256.
+
+| The installer says | The manifest gets |
+|---|---|
+| `Architecture` `x64`, `arm64`, `x86` or `neutral` | One `[[artifact]]` per arch, for Windows |
+| `InstallerType: portable` | The program itself, named after its first command |
+| `zip` with `NestedInstallerType: portable` | `bin` from `NestedInstallerFiles`, with `PortableCommandAlias` as the name. A folder named after the version becomes `strip`. |
+| `msi` or `wix` | The programs that `Commands` names, or else the one named after the package. oku opens the MSI to find them, on Windows only. |
+| `exe`, `inno`, `nullsoft`, `burn`, `msix`, `appx` | Nothing. These installers run when they install, so oku refuses an arch that has only them. |
+
+When an arch has several installers, oku takes one it can place, then one for
+the user's scope, then one for English.
 
 ```toml
 # Translated from the Homebrew cask obsidian.

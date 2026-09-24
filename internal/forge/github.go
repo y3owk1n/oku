@@ -243,3 +243,24 @@ func (g *github) page(ctx context.Context, url, accept string) ([]byte, string, 
 
 	return body, next, nil
 }
+
+// GitHubDir lists the names in the folder dir of a github.com repo at commit.
+// A repo too large for Files, such as winget-pkgs, is read one folder at a time.
+func (h Hosts) GitHubDir(ctx context.Context, repo, commit, dir string) ([]string, error) {
+	g, _ := h.GitHub("").(*github)
+
+	var entries []struct {
+		Name string `json:"name"`
+	}
+
+	if err := g.json(ctx, "/repos/"+repo+"/contents/"+dir+"?ref="+commit, &entries); err != nil {
+		return nil, err
+	}
+
+	names := make([]string, len(entries))
+	for i, e := range entries {
+		names[i] = e.Name
+	}
+
+	return names, nil
+}
