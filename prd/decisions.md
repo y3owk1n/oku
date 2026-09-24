@@ -1314,3 +1314,23 @@ major. winget's own client refuses a major above 1. The aqua registry changes
 its format only in a new major. crates.io, the Homebrew API, Scoop, npm, the Go
 proxy and Sparkle feeds have no format version, so oku reads them leniently
 and checks the fields it needs.
+
+## D83. A list sets variables with values, never with a script
+
+`[env]` in the global list or a project's list sets variables with strings,
+`${NAME}` and `${NAME:-default}`, unsets with `false`, prepends to list
+variables such as `PATH`, and names required variables with a hint. It never
+runs a command. Why: direnv's `.envrc` is a script, so it can do anything, and
+mise's `[env]` has templates and directives that run code. A list the user
+reviews at `oku allow` should say everything it does, and the hook takes a few
+milliseconds because it only reads files.
+
+Later sources win: the shell, global packages, the global list, the project's
+packages, the project's list. Leaving a project gives each variable back the
+value it had before, which the hook keeps in `OKU_HOOK_SAVED`, and removes the
+entries it prepended, which it keeps in `OKU_HOOK_ADDED`. Why: a user's
+`AWS_PROFILE` or `PAGER` should hold its own value again after they leave a
+project, as it does in direnv. A list may not set `PATH` other than by `prepend`, or the variables of
+`ReservedEnv`, since those control the shell. Only the list itself sets
+variables, and oku refuses `[env]` in an included list, since the hook reads
+one file and would otherwise ignore a shared list's variables with no error.
