@@ -2,6 +2,7 @@
 package forge
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -115,6 +116,10 @@ type Hosts struct {
 // GH_ENTERPRISE_TOKEN to an Enterprise Server only. When the variable is not
 // set, oku asks the gh CLI for its login to that host.
 func (h Hosts) GitHub(host string) Forge {
+	return checked{Forge: h.github(host), name: "GitHub"}
+}
+
+func (h Hosts) github(host string) *github {
 	if host != "" {
 		return &github{
 			http:  h.HTTP,
@@ -188,12 +193,12 @@ func (h Hosts) Open(scheme, location string) (Forge, string, error) {
 
 		return h.GitHub(host), repo, nil
 	case "codeberg":
-		return h.gitea("codeberg.org"), location, nil
+		return checked{Forge: h.gitea("codeberg.org"), name: "Codeberg"}, location, nil
 	case KindGitea:
 		// An owner on these servers may have a dot, so the host is always there.
 		host, repo, _ := strings.Cut(location, "/")
 
-		return h.gitea(host), repo, nil
+		return checked{Forge: h.gitea(host), name: host}, repo, nil
 	case KindGitLab:
 		host, repo := Split(location)
 		if host == "gitlab.com" {
@@ -207,7 +212,9 @@ func (h Hosts) Open(scheme, location string) (Forge, string, error) {
 			env = "GITLAB_SERVER_TOKEN"
 		}
 
-		return &gitlab{http: h.HTTP, host: host, token: os.Getenv(env)}, repo, nil
+		return checked{
+			Forge: &gitlab{http: h.HTTP, host: host, token: os.Getenv(env)}, name: cmp.Or(host, "GitLab"),
+		}, repo, nil
 	default:
 		return nil, "", fmt.Errorf("%q is not a forge oku knows", scheme)
 	}

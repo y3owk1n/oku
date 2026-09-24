@@ -16,6 +16,7 @@ import (
 	"github.com/y3owk1n/oku/internal/forge"
 	"github.com/y3owk1n/oku/internal/manifest"
 	"github.com/y3owk1n/oku/internal/platform"
+	"github.com/y3owk1n/oku/internal/shape"
 )
 
 // CaskAPI is where Homebrew publishes its casks as JSON.
@@ -86,6 +87,17 @@ func (inf *Inferrer) FromCask(ctx context.Context, token, api string) (string, e
 	var c caskJSON
 	if err := json.Unmarshal(data, &c); err != nil {
 		return "", fmt.Errorf("read the cask %s: %w", token, err)
+	}
+
+	// The Homebrew API promises no format, so oku checks what it reads.
+	if err := shape.Check(
+		"the Homebrew API's answer for the cask "+token,
+		shape.Field{Name: "url", Has: c.URL != ""},
+		shape.Field{Name: "version", Has: c.Version != ""},
+		shape.Field{Name: "ruby_source_path", Has: c.RubySourcePath != ""},
+		shape.Field{Name: "tap_git_head", Has: c.TapGitHead != ""},
+	); err != nil {
+		return "", err
 	}
 
 	switch {

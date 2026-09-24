@@ -1677,8 +1677,8 @@ func newNightlyServer(t *testing.T) *nightlyServer {
 
 			fmt.Fprintf(
 				w,
-				`{"draft": false, "prerelease": true, "published_at": "2026-01-01T00:00:00Z",`+
-					`"assets": [{"browser_download_url": %q, "digest": "sha256:%s"}]}`,
+				`{"tag_name": "nightly", "draft": false, "prerelease": true, "published_at": "2026-01-01T00:00:00Z",`+
+					`"assets": [{"name": "tool.tar.gz", "browser_download_url": %q, "digest": "sha256:%s"}]}`,
 				ns.URL+"/dl/tool.tar.gz", ns.digest,
 			)
 		case "/api/repos/owner/tool/commits/nightly":

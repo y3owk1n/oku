@@ -49,24 +49,37 @@ func pypiMachine(t *testing.T, versions map[string]string) machine {
 
 	m := newMachine(t)
 
-	var releases []string
+	var names, files []string
 
 	for version, uploaded := range versions {
-		releases = append(releases, fmt.Sprintf(
-			`%q: [{"upload_time_iso_8601": %q, "yanked": %t}]`,
+		names = append(names, fmt.Sprintf("%q", version))
+		files = append(files, fmt.Sprintf(
+			`{"filename": "tool-%s-py3-none-any.whl", "upload-time": %q, "yanked": %t}`,
 			version, strings.TrimSuffix(uploaded, " yanked"), strings.HasSuffix(uploaded, "yanked"),
 		))
 	}
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/pypi/tool/json" {
+		switch r.URL.Path {
+		case "/pypi/tool/json":
+			_, _ = fmt.Fprint(w, `{"info": {"name": "tool", "summary": "A tool", "version": "1.0.0"}}`)
+		case "/simple/tool/":
+			// As PyPI does, the index answers a request it saw before with 304 and
+			// no media type, which oku's cache has to keep.
+			w.Header().Set("ETag", `"simple"`)
+
+			if r.Header.Get("If-None-Match") == `"simple"` {
+				w.WriteHeader(http.StatusNotModified)
+
+				return
+			}
+
+			w.Header().Set("Content-Type", "application/vnd.pypi.simple.v1+json")
+			_, _ = fmt.Fprintf(w, `{"meta": {"api-version": "1.4"}, "name": "tool", "versions": [%s], "files": [%s]}`,
+				strings.Join(names, ","), strings.Join(files, ","))
+		default:
 			http.NotFound(w, r)
-
-			return
 		}
-
-		_, _ = fmt.Fprintf(w, `{"info": {"name": "tool", "summary": "A tool", "version": "1.0.0"},
-"releases": {%s}}`, strings.Join(releases, ","))
 	}))
 	t.Cleanup(server.Close)
 
@@ -183,5 +196,31 @@ func TestB257ThePythonPackageFollowsReleasesAndSkipsPrereleasesAndYanked(t *test
 
 	if got := m.toolOutput(t); !strings.HasPrefix(got, "tool 1.2.0rc1 ") {
 		t.Fatalf("add @1.2.0rc1 took %q", got)
+	}
+}
+
+func TestB307AnIndexThatDoesNotAnswerInTheSimpleAPIsJSONIsRefused(t *testing.T) {
+	m := pypiMachine(t, map[string]string{"1.0.0": "2026-01-02T03:04:05Z"})
+
+	// An index that does not know the type answers in HTML, as PyPI does for
+	// an unknown version of it.
+	html := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/pypi/tool/json":
+			_, _ = fmt.Fprint(w, `{"info": {"name": "tool", "summary": "A tool", "version": "1.0.0"}}`)
+		case "/simple/tool/":
+			w.Header().Set("Content-Type", "text/html")
+			_, _ = fmt.Fprint(w, "<html></html>")
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(html.Close)
+
+	m.opts.PyPIIndex = html.URL
+
+	_, err := m.run(t, "", "add", "pypi:tool", "--yes")
+	if err == nil || !strings.Contains(err.Error(), "lacks the Simple API's version 1 in JSON") {
+		t.Fatalf("want the answer refused, got %v", err)
 	}
 }

@@ -16,11 +16,16 @@ import (
 	"github.com/y3owk1n/oku/internal/forge"
 	"github.com/y3owk1n/oku/internal/manifest"
 	"github.com/y3owk1n/oku/internal/platform"
+	"github.com/y3owk1n/oku/internal/shape"
 )
 
 // aquaRegistry is the repo of the aqua registry, which records how thousands
 // of GitHub repos name their release files.
 const aquaRegistry = "aquaproj/aqua-registry"
+
+// aquaMajor is the major version of the registry whose format oku reads. The
+// registry changes its format only in a new major.
+const aquaMajor = "v4."
 
 // aquaPackage is one package of the aqua registry, or one of its overrides.
 type aquaPackage struct {
@@ -63,7 +68,19 @@ type aquaChecksum struct {
 // from its entry in the aqua registry, which names the release files of each
 // platform. The manifest follows the repo's releases.
 func (inf *Inferrer) FromAqua(ctx context.Context, repo string) (string, error) {
-	data, err := inf.Hosts.GitHub("").File(ctx, aquaRegistry, "HEAD", "pkgs/"+repo+"/registry.yaml")
+	latest, err := inf.Hosts.GitHub("").Release(ctx, aquaRegistry, "")
+	if err != nil {
+		return "", fmt.Errorf("read the newest release of the aqua registry: %w", err)
+	}
+
+	if !strings.HasPrefix(latest.Tag, aquaMajor) {
+		return "", fmt.Errorf(
+			"aqua:%s: the aqua registry is at %s, whose format this oku does not read. Check for a newer oku",
+			repo, latest.Tag,
+		)
+	}
+
+	data, err := inf.Hosts.GitHub("").File(ctx, aquaRegistry, latest.Tag, "pkgs/"+repo+"/registry.yaml")
 	if errors.Is(err, forge.ErrNotFound) {
 		return "", fmt.Errorf("aqua:%s: the aqua registry has no entry for it", repo)
 	}
@@ -81,6 +98,14 @@ func (inf *Inferrer) FromAqua(ctx context.Context, repo string) (string, error) 
 	}
 
 	for _, p := range registry.Packages {
+		if err := shape.Check(
+			"the aqua registry's entry for "+repo,
+			shape.Field{Name: "type", Has: p.Type != "" || p.VersionConstraint == "false"},
+			shape.Field{Name: "repo_owner and repo_name", Has: p.RepoOwner != "" && p.RepoName != ""},
+		); err != nil {
+			return "", err
+		}
+
 		if strings.EqualFold(p.RepoOwner+"/"+p.RepoName, repo) {
 			r, err := p.recipe()
 			if err != nil {

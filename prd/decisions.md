@@ -1293,3 +1293,24 @@ of a version in their URLs, as Homebrew's `version.csv` and Scoop's
 templates (D61). A filter syntax such as `{{version | nodots}}` would add that
 logic. Why `+`: a version holds no comma, and `+` is one of the characters a
 version may hold.
+
+## D82. oku refuses an answer it cannot trust, and pins formats that have versions
+
+Each reader of an outside source checks the fields it acts on before it
+writes a manifest or picks a version, and fails with the source's name when
+one is missing. Where a source versions its format, oku asks for one version
+and refuses another: GitHub's REST API by `X-GitHub-Api-Version`, PyPI's Simple
+API by media type and `meta.api-version`, winget by `ManifestVersion`, and the
+aqua registry by the major of its release tag. Why: a source that changes its
+format decodes into empty fields, and a manifest from half an answer installs
+the wrong thing or nothing. A clear failure at `add` or `update` is safer, and
+`oku.lock` still installs what it pins, since it holds each translated
+manifest's text.
+
+Why these pins: GitHub retires a version 24 months after the next one ships,
+and answers it with 410. PyPI deprecates the `releases` list of its JSON API
+and recommends the Simple API, whose spec has a client fail on an unknown
+major. winget's own client refuses a major above 1. The aqua registry changes
+its format only in a new major. crates.io, the Homebrew API, Scoop, npm, the Go
+proxy and Sparkle feeds have no format version, so oku reads them leniently
+and checks the fields it needs.

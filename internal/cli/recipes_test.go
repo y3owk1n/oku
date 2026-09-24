@@ -1,6 +1,7 @@
 package cli_test
 
 import (
+	"cmp"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -29,6 +30,8 @@ type recipeServer struct {
 	// aqua is the aqua registry's entry for owner/tool. The server's GitHub API
 	// lists versions as releases of owner/tool, with a "v" in their tags.
 	aqua string
+	// aquaTag is the aqua registry's newest release, v4.300.0 when empty.
+	aquaTag string
 	// winget maps a version of the winget package Owner.Tool to the text of its
 	// installer manifest.
 	winget map[string]string
@@ -66,7 +69,9 @@ func (s recipeServer) start(t *testing.T, m *machine) string {
 		parts := strings.Split(r.URL.Path, "/")
 
 		switch {
-		case r.URL.Path == "/raw/aquaproj/aqua-registry/HEAD/pkgs/owner/tool/registry.yaml" && s.aqua != "":
+		case r.URL.Path == "/api/repos/aquaproj/aqua-registry/releases/latest":
+			_, _ = fmt.Fprintf(w, `{"tag_name": %q, "assets": []}`, cmp.Or(s.aquaTag, "v4.300.0"))
+		case r.URL.Path == "/raw/aquaproj/aqua-registry/v4.300.0/pkgs/owner/tool/registry.yaml" && s.aqua != "":
 			_, _ = fmt.Fprint(w, fill(s.aqua))
 		case r.URL.Path == "/api/repos/owner/tool/releases":
 			var releases []string
@@ -684,6 +689,7 @@ func TestB302AnAquaEntryOkuCannotReadIsRefused(t *testing.T) {
 // wingetZip is the installer manifest of Owner.Tool at version 1.10.0, a zip of
 // the program in a folder named after the version, for two arches.
 const wingetZip = `PackageIdentifier: Owner.Tool
+ManifestVersion: 1.12.0
 PackageVersion: 1.10.0
 InstallerType: zip
 NestedInstallerType: portable
@@ -741,6 +747,7 @@ func TestB303AWingetPackageOffGitHubPinsItsVersionAndDigest(t *testing.T) {
 	m := newMachine(t)
 	recipeServer{winget: map[string]string{
 		"2.0.0": `PackageIdentifier: Owner.Tool
+ManifestVersion: 1.12.0
 PackageVersion: 2.0.0
 InstallerType: portable
 Commands:
@@ -773,6 +780,7 @@ func TestB303AWingetPackageThatOnlyHasASetupProgramIsRefused(t *testing.T) {
 	m := newMachine(t)
 	recipeServer{winget: map[string]string{
 		"1.0.0": `PackageIdentifier: Owner.Tool
+ManifestVersion: 1.12.0
 PackageVersion: 1.0.0
 InstallerType: inno
 Installers:
@@ -867,5 +875,51 @@ func TestB305AScoopURLWithADerivedVersionFollowsTheVersion(t *testing.T) {
 
 	if !strings.Contains(out, `/dl/{{version_nodots}}/win/tool.zip"`) || strings.Contains(out, "It pins") {
 		t.Fatalf("the manifest does not follow the version with {{version_nodots}}:\n%s", out)
+	}
+}
+
+func TestB306AnAnswerThatLacksWhatOkuNeedsFailsAndNamesIt(t *testing.T) {
+	m := newMachine(t)
+	json := strings.Replace(caskJSON, `"url": "SERVER/dl/1.2.0/mac-arm64/tool.tar.gz",`, "", 1)
+	recipeServer{casks: map[string][2]string{"tool": {json, caskRuby}}}.start(t, &m)
+
+	_, err := m.run(t, "", "add", "cask:tool", "--yes")
+	if err == nil || !strings.Contains(err.Error(),
+		"the Homebrew API's answer for the cask tool lacks url, which oku needs, and its format may have changed") {
+		t.Fatalf("want the missing url named, got %v", err)
+	}
+
+	if exists(m.profile("bin", "tool")) {
+		t.Fatal("oku installed from half an answer")
+	}
+}
+
+func TestB307ASourceAtAFormatVersionOkuDoesNotReadIsRefused(t *testing.T) {
+	for name, tc := range map[string]struct {
+		server recipeServer
+		ref    string
+		want   string
+	}{
+		"winget 2": {
+			server: recipeServer{winget: map[string]string{
+				"1.0.0": strings.Replace(wingetZip, "ManifestVersion: 1.12.0", "ManifestVersion: 2.0.0", 1),
+			}},
+			ref:  "winget:Owner.Tool",
+			want: "lacks ManifestVersion 1",
+		},
+		"aqua v5": {
+			server: recipeServer{aqua: "packages: []\n", aquaTag: "v5.0.0"},
+			ref:    "aqua:owner/tool",
+			want:   "the aqua registry is at v5.0.0, whose format this oku does not read",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			m := newMachine(t)
+			tc.server.start(t, &m)
+
+			if _, err := m.run(t, "", "add", tc.ref, "--yes"); err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("want %q, got %v", tc.want, err)
+			}
+		})
 	}
 }

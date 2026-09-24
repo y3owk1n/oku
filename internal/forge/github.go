@@ -10,6 +10,11 @@ import (
 	"time"
 )
 
+// githubVersion is the version of GitHub's REST API that oku asks github.com
+// for. GitHub keeps a version for 24 months after the next one ships, and then
+// answers it with 410 Gone.
+const githubVersion = "2026-03-10"
+
 // maxBody is the most bytes a forge reads from one answer. 100 releases of
 // astral-sh/uv, each with all its assets, were 8 MB in September 2026.
 const maxBody = 32 << 20
@@ -205,6 +210,11 @@ func (g *github) page(ctx context.Context, url, accept string) ([]byte, string, 
 		req.Header.Set("Authorization", "Bearer "+g.token)
 	}
 
+	// An Enterprise Server may not know this version, so oku sends it none.
+	if g.host == "" && strings.HasPrefix(url, g.api) {
+		req.Header.Set("X-GitHub-Api-Version", githubVersion)
+	}
+
 	resp, err := g.http.Do(req)
 	if err != nil {
 		return nil, "", err
@@ -221,6 +231,10 @@ func (g *github) page(ctx context.Context, url, accept string) ([]byte, string, 
 		// GitHub's secondary limit, for too many requests in a short time.
 		return nil, "", fmt.Errorf(
 			"GitHub asked oku to slow down, try again in %s seconds", resp.Header.Get("Retry-After"),
+		)
+	case resp.StatusCode == http.StatusGone && g.host == "":
+		return nil, "", fmt.Errorf(
+			"GitHub no longer serves version %s of its API, which this oku asks for. Update oku", githubVersion,
 		)
 	case resp.StatusCode != http.StatusOK:
 		return nil, "", fmt.Errorf("server returned %s", resp.Status)
@@ -247,7 +261,7 @@ func (g *github) page(ctx context.Context, url, accept string) ([]byte, string, 
 // GitHubDir lists the names in the folder dir of a github.com repo at commit.
 // A repo too large for Files, such as winget-pkgs, is read one folder at a time.
 func (h Hosts) GitHubDir(ctx context.Context, repo, commit, dir string) ([]string, error) {
-	g, _ := h.GitHub("").(*github)
+	g := h.github("")
 
 	var entries []struct {
 		Name string `json:"name"`

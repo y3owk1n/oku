@@ -11,6 +11,8 @@ import (
 	"net/http"
 	"slices"
 	"time"
+
+	"github.com/y3owk1n/oku/internal/shape"
 )
 
 // Registry is where npm packages are published.
@@ -58,7 +60,7 @@ func Read(ctx context.Context, client *http.Client, registry, name string) (Pack
 
 	req.Header.Set("User-Agent", "oku")
 	// This form leaves out each version's readme and scripts.
-	req.Header.Set("Accept", "application/vnd.npm.install-v1+json")
+	req.Header.Set("Accept", "application/vnd.npm.install-v1+json; q=1.0, application/json; q=0.8, */*")
 
 	resp, err := client.Do(req)
 	if err != nil {
@@ -93,6 +95,20 @@ func Read(ctx context.Context, client *http.Client, registry, name string) (Pack
 	}
 
 	pkg := Package{Latest: found.Tags["latest"], Versions: map[string]Version{}}
+	downloads := true
+
+	for _, published := range found.Versions {
+		downloads = downloads && published.Dist.Tarball != ""
+	}
+
+	if err := shape.Check(
+		"the npm registry's answer for "+name,
+		shape.Field{Name: "the latest version", Has: pkg.Latest != ""},
+		shape.Field{Name: "the versions", Has: len(found.Versions) > 0},
+		shape.Field{Name: "a version's download", Has: downloads},
+	); err != nil {
+		return Package{}, err
+	}
 
 	for version, published := range found.Versions {
 		v := Version{

@@ -32,10 +32,12 @@ func next() http.RoundTripper {
 	return http.DefaultTransport
 }
 
-// kept is one answer on disk. Link holds the next page of a list.
+// kept is one answer on disk. Link holds the next page of a list, and Type the
+// media type, which a reader may check.
 type kept struct {
 	ETag string `json:"etag"`
 	Link string `json:"link,omitempty"`
+	Type string `json:"type,omitempty"`
 	Body []byte `json:"body"`
 }
 
@@ -50,7 +52,9 @@ func (r revalidator) RoundTrip(req *http.Request) (*http.Response, error) {
 
 	var old kept
 
-	if data, err := os.ReadFile(path); err == nil && json.Unmarshal(data, &old) == nil {
+	// oku asks again in full for an answer kept without its media type, as an
+	// older oku kept it.
+	if data, err := os.ReadFile(path); err == nil && json.Unmarshal(data, &old) == nil && old.Type != "" {
 		req = req.Clone(req.Context())
 		req.Header.Set("If-None-Match", old.ETag)
 	}
@@ -66,6 +70,7 @@ func (r revalidator) RoundTrip(req *http.Request) (*http.Response, error) {
 
 		resp.StatusCode, resp.Status = http.StatusOK, "200 OK"
 		resp.Header.Set("Link", old.Link)
+		resp.Header.Set("Content-Type", old.Type)
 		resp.Body = io.NopCloser(bytes.NewReader(old.Body))
 		resp.ContentLength = int64(len(old.Body))
 	case resp.StatusCode == http.StatusOK && resp.Header.Get("ETag") != "":
@@ -80,7 +85,10 @@ func (r revalidator) RoundTrip(req *http.Request) (*http.Response, error) {
 		resp.Body = io.NopCloser(bytes.NewReader(body))
 
 		if len(body) <= maxBody {
-			keep(path, kept{ETag: resp.Header.Get("ETag"), Link: resp.Header.Get("Link"), Body: body})
+			keep(path, kept{
+				ETag: resp.Header.Get("ETag"), Link: resp.Header.Get("Link"),
+				Type: resp.Header.Get("Content-Type"), Body: body,
+			})
 		}
 	}
 

@@ -14,6 +14,7 @@ import (
 	"github.com/y3owk1n/oku/internal/forge"
 	"github.com/y3owk1n/oku/internal/manifest"
 	"github.com/y3owk1n/oku/internal/platform"
+	"github.com/y3owk1n/oku/internal/shape"
 )
 
 // scoopBuckets are the buckets that Scoop knows by name, and the repo of each.
@@ -102,6 +103,14 @@ func (inf *Inferrer) FromScoop(ctx context.Context, name string) (string, error)
 	var s scoopJSON
 	if err := json.Unmarshal(data, &s); err != nil {
 		return "", fmt.Errorf("read the Scoop manifest %s: %w", name, err)
+	}
+
+	if err := shape.Check(
+		"the Scoop manifest "+from+"/"+name,
+		shape.Field{Name: "version", Has: s.Version != ""},
+		shape.Field{Name: "url", Has: s.URL != nil || len(s.Arch) > 0},
+	); err != nil {
+		return "", err
 	}
 
 	r, err := s.recipe(from, name)

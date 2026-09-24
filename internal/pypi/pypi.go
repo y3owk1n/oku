@@ -11,6 +11,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/y3owk1n/oku/internal/shape"
 )
 
 // Index is where Python packages are published.
@@ -41,74 +43,103 @@ type Package struct {
 	Versions map[string]Version
 }
 
+// simpleType is the media type of version 1 of the Simple API in JSON, PEP 691.
+const simpleType = "application/vnd.pypi.simple.v1+json"
+
 // Read returns the versions of the package called name. An empty index means
-// Index.
+// Index. The versions and their files come from the Simple API in JSON, which
+// has a format version. The name, summary and latest version come from the
+// JSON API, which deprecates its own list of versions.
 func Read(ctx context.Context, client *http.Client, index, name string) (Package, error) {
 	if index == "" {
 		index = Index
 	}
 
-	url := strings.TrimRight(index, "/") + "/pypi/" + Normalize(name) + "/json"
+	base := strings.TrimRight(index, "/")
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		return Package{}, err
-	}
-
-	req.Header.Set("User-Agent", "oku")
-
-	resp, err := client.Do(req)
-	if err != nil {
-		return Package{}, err
-	}
-	defer resp.Body.Close()
-
-	switch {
-	case resp.StatusCode == http.StatusNotFound:
-		return Package{}, ErrNotFound
-	case resp.StatusCode != http.StatusOK:
-		return Package{}, fmt.Errorf("the index returned %s", resp.Status)
-	}
-
-	var found struct {
+	var info struct {
 		Info struct {
 			Name    string `json:"name"`
 			Summary string `json:"summary"`
 			Version string `json:"version"`
 		} `json:"info"`
-		Releases map[string][]struct {
-			Uploaded time.Time `json:"upload_time_iso_8601"`
-			Yanked   bool      `json:"yanked"`
-		} `json:"releases"`
 	}
 
-	body, err := io.ReadAll(io.LimitReader(resp.Body, maxBody+1))
+	if _, err := get(ctx, client, base+"/pypi/"+Normalize(name)+"/json", "", &info); err != nil {
+		return Package{}, err
+	}
+
+	var simple struct {
+		Meta struct {
+			APIVersion string `json:"api-version"`
+		} `json:"meta"`
+		Versions []string `json:"versions"`
+		Files    []struct {
+			Filename string          `json:"filename"`
+			Uploaded time.Time       `json:"upload-time"`
+			Yanked   json.RawMessage `json:"yanked"`
+		} `json:"files"`
+	}
+
+	kind, err := get(ctx, client, base+"/simple/"+Normalize(name)+"/", simpleType, &simple)
 	if err != nil {
 		return Package{}, err
 	}
 
-	if len(body) > maxBody {
-		return Package{}, fmt.Errorf("the index answered with more than %d bytes", maxBody)
-	}
+	// PEP 691 has a client fail on a major version it does not know. An index
+	// that does not know the type answers with another one, such as HTML.
+	major, _, _ := strings.Cut(simple.Meta.APIVersion, ".")
 
-	if err := json.Unmarshal(body, &found); err != nil {
-		return Package{}, fmt.Errorf("read the index's answer: %w", err)
+	if err := shape.Check(
+		"the index's answer for "+name,
+		shape.Field{Name: "the name", Has: info.Info.Name != ""},
+		shape.Field{Name: "the latest version", Has: info.Info.Version != ""},
+		shape.Field{Name: "the Simple API's version 1 in JSON", Has: strings.HasPrefix(kind, simpleType) && major == "1"},
+	); err != nil {
+		return Package{}, err
 	}
 
 	pkg := Package{
-		Name: found.Info.Name, Summary: found.Info.Summary, Latest: found.Info.Version,
+		Name: info.Info.Name, Summary: info.Info.Summary, Latest: info.Info.Version,
 		Versions: map[string]Version{},
 	}
 
-	for version, files := range found.Releases {
-		// A version with no files cannot be installed.
-		if len(files) == 0 {
+	files := map[string][]Version{}
+
+	for _, f := range simple.Files {
+		version := fileVersion(f.Filename)
+		if version == "" {
+			continue
+		}
+
+		// yanked is false, or true or the reason when the file was yanked.
+		yanked := len(f.Yanked) > 0 && string(f.Yanked) != "false"
+		files[version] = append(files[version], Version{Uploaded: f.Uploaded, Yanked: yanked})
+	}
+
+	versions := simple.Versions
+	if versions == nil {
+		// An index at version 1.0 lists no versions, only files.
+		for version := range files {
+			versions = append(versions, version)
+		}
+	}
+
+	for _, version := range versions {
+		// A version with no files cannot be installed. A wheel spells a version
+		// with "_" for "-".
+		found := files[version]
+		if found == nil {
+			found = files[strings.ReplaceAll(version, "-", "_")]
+		}
+
+		if len(found) == 0 {
 			continue
 		}
 
 		v := Version{Yanked: true}
 
-		for _, file := range files {
+		for _, file := range found {
 			v.Yanked = v.Yanked && file.Yanked
 
 			if file.Uploaded.After(v.Uploaded) {
@@ -120,6 +151,78 @@ func Read(ctx context.Context, client *http.Client, index, name string) (Package
 	}
 
 	return pkg, nil
+}
+
+// fileVersion returns the version a file of a release names: the second part
+// of a wheel's name, or what follows the last "-" of a source archive's.
+func fileVersion(filename string) string {
+	if stem, ok := strings.CutSuffix(filename, ".whl"); ok {
+		if parts := strings.Split(stem, "-"); len(parts) >= 5 {
+			return parts[1]
+		}
+
+		return ""
+	}
+
+	for _, ext := range []string{".tar.gz", ".zip", ".tar.bz2", ".tar.xz", ".tgz"} {
+		if stem, ok := strings.CutSuffix(filename, ext); ok {
+			if i := strings.LastIndex(stem, "-"); i > 0 {
+				return stem[i+1:]
+			}
+		}
+	}
+
+	return ""
+}
+
+// get reads url into into, asking for the media type accept when it is set,
+// and returns the media type of the answer.
+func get(ctx context.Context, client *http.Client, url, accept string, into any) (string, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return "", err
+	}
+
+	req.Header.Set("User-Agent", "oku")
+
+	if accept != "" {
+		req.Header.Set("Accept", accept)
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	switch {
+	case resp.StatusCode == http.StatusNotFound:
+		return "", ErrNotFound
+	case resp.StatusCode != http.StatusOK:
+		return "", fmt.Errorf("the index returned %s", resp.Status)
+	}
+
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxBody+1))
+	if err != nil {
+		return "", err
+	}
+
+	if len(body) > maxBody {
+		return "", fmt.Errorf("the index answered with more than %d bytes", maxBody)
+	}
+
+	kind := resp.Header.Get("Content-Type")
+
+	// An answer in another media type has nothing to decode.
+	if accept != "" && !strings.HasPrefix(kind, accept) {
+		return kind, nil
+	}
+
+	if err := json.Unmarshal(body, into); err != nil {
+		return "", fmt.Errorf("read the index's answer: %w", err)
+	}
+
+	return kind, nil
 }
 
 var (
