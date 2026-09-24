@@ -85,6 +85,7 @@ manifest change.
 | `tag` | no | One tag that upstream moves, such as `"nightly"`. Only with `github-releases`, `gitea-releases` or `gitlab-releases`, and not with `strip_prefix`. See [Follow a moving tag](#follow-a-moving-tag). |
 | `branch` | with `git-branch` | The branch to follow, such as `"main"`. See [Follow a branch](#follow-a-branch). |
 | `regex` | with `redirect` or `page` | Finds the version, see [Follow a download URL](#follow-a-download-url). Not with `sparkle`. |
+| `json` | no | Paths into the JSON or the property list at `repo`, with `page` only. See [Read fields of a feed](#read-fields-of-a-feed). |
 | `join` | no | What joins the groups of `regex` into the version, `.` by default. `+` keeps the parts apart for [`{{version_part1}}`](#template-variables) and the rest. With `sparkle` it joins the short version and the build. One of `.`, `+`, `-` and `_`. |
 
 | `from` | `repo` | Reads |
@@ -267,6 +268,31 @@ regex = '"host_version":\[(\d+),(\d+),(\d+)\]'
   of each version, and `oku manifest lint` warns.
 - `strip_prefix`, `tag` and `branch` do not apply.
 
+
+#### Read fields of a feed
+
+With `json`, `page` reads fields of a JSON answer, or of an XML property list
+such as Apple's update feeds, in place of the whole text:
+
+```toml
+[version]
+from = "page"
+repo = "https://data.services.jetbrains.com/products/releases?code=IIU&latest=true&type=release"
+json = ["IIU.*.version", "IIU.*.build"]
+join = "+"
+```
+
+- A path is keys and list indexes joined by dots, such as `releases.0.version`.
+  A `*` goes through every item of a list. The paths with a `*` must go
+  through the same list, and oku takes the newest version of the items.
+- Without `regex`, the values of the paths joined with `join` are the version.
+  An item that lacks one of them counts for nothing. A value that is a list,
+  such as `[0, 0, 413]`, is its items joined with dots, `0.0.413`.
+- With `regex`, the values, one per line, are the text that `regex` reads, as
+  in `regex = '^(\S+)\n.*/production/([0-9a-f]+)/'` over a version and a URL.
+- A property list's dict is read as keys, an array as a list, and a string,
+  an integer or a date as its text, so `json = ["version", "build"]` reads
+  `<key>build</key><integer>2349</integer>` too.
 ### Follow a Sparkle feed
 
 Many macOS apps announce updates in a Sparkle feed, an XML file that lists
@@ -1510,6 +1536,7 @@ which translates it again.
 | A cask's livecheck, or Scoop's checkver, that reads GitHub releases | `from = "github-releases"` |
 | One that follows a redirect | `from = "redirect"` with a `regex`. Without a regex, the regex finds the version in the file name of the download. |
 | One that matches a regex at a URL, or reads one JSON key there | `from = "page"` with a `regex` |
+| A `strategy :json` or `:xml` block that reads fields of the feed, of its items in a loop, or of a property list, and returns them joined with commas, or a block of one line such as `json["releases"]&.map { \|r\| r["version"] }` or `json.dig("full", "host_version")&.join(".")` | `from = "page"` with [`json`](#read-fields-of-a-feed), and a `regex` when the block matches one. Any other Ruby in the block leaves the version pinned. |
 | One that reads a Sparkle feed for its short version | `from = "sparkle"` |
 | No rule at all, and a download from GitHub releases | `from = "github-releases"` of that repo |
 | A cask's `#{version.csv.first}`, `#{version.major}`, `#{version.no_dots}` and the like | `{{version_part1}}`, `{{version_major}}`, `{{version_nodots}}` and the like. A cask's version `1.2.3,45` becomes `1.2.3+45`. |

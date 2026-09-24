@@ -190,6 +190,19 @@ order step in `prd/product.md`.
 - B336 [4] `scoop:owner/repo/name` translates the Scoop manifest `name`
   from the bucket in that GitHub repo, from `bucket/` or the top, and names
   the bucket when it lacks the manifest.
+- B338 [4] A cask livecheck whose `strategy :json` or `:xml` block reads
+  fields of the feed, fields of each item of a list, a regex match over a
+  field, or keys of a property list, and returns them joined with commas,
+  translates into `from = "page"` with `json` and, for a match, a `regex`,
+  and so does a block of one line that reads a field, a field of each item,
+  or a list joined with dots. A
+  `#{version...}` in the livecheck URL takes the cask's version.
+- B339 [4] `from = "page"` with `json` reads the values at those paths of a
+  JSON answer or an XML property list, one candidate per item of a `*`
+  list, and takes the newest. A list value is its items joined with dots.
+  Without `regex` the values joined with `join`
+  are the version, with it the values one per line are what it reads. `json`
+  beside another `from` fails.
 - B182 [2] oku pins a package whose `when` leaves out the host, with its deps,
   for the lock platforms that `when` matches, and installs nothing of it.
   `sync` does that when the lock has no entry for its ref, or with `[lock]`

@@ -872,7 +872,8 @@ func (e env) artifactVersions(
 	}
 
 	m.Versions, m.Tags = map[string]string{}, map[string]string{}
-	found := map[manifest.Version]resolve.Release{}
+	// A version source is its printed form, since it holds a list.
+	found := map[string]resolve.Release{}
 	// The digests that hosts report for every platform's release, so oku checks
 	// each platform's download against its own.
 	digests := map[string]string{}
@@ -892,7 +893,7 @@ func (e env) artifactVersions(
 		}
 
 		if release.Version == "" {
-			release = found[source]
+			release = found[fmt.Sprintf("%#v", source)]
 		}
 
 		if release.Version == "" {
@@ -910,7 +911,7 @@ func (e env) artifactVersions(
 				return resolve.Release{}, fmt.Errorf("%s for %s: %w", m.Package.Name, p, err)
 			}
 
-			found[source] = release
+			found[fmt.Sprintf("%#v", source)] = release
 		}
 
 		m.Versions[p.String()] = release.Version

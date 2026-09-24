@@ -6,6 +6,7 @@ import (
 	"path"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/y3owk1n/oku/internal/manifest"
@@ -86,6 +87,9 @@ type recipeBin struct {
 // follow is a translated [version] table.
 type follow struct {
 	from, repo, regex, join, stripPrefix string
+	// json holds the paths of version.json, one per line, so that a follow
+	// stays comparable.
+	json string
 }
 
 // versionPattern stands for a version inside a regex that oku builds.
@@ -277,6 +281,15 @@ func (f follow) toml(sep string) string {
 	var b strings.Builder
 
 	fmt.Fprintf(&b, "from = %q%srepo = %q%s", f.from, sep, f.repo, sep)
+
+	if f.json != "" {
+		quoted := strings.Split(f.json, "\n")
+		for i, p := range quoted {
+			quoted[i] = strconv.Quote(p)
+		}
+
+		fmt.Fprintf(&b, "json = [%s]%s", strings.Join(quoted, ", "), sep)
+	}
 
 	if f.regex != "" {
 		fmt.Fprintf(&b, "regex = %q%s", f.regex, sep)

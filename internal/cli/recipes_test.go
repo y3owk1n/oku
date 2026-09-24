@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -1034,5 +1035,163 @@ func TestB336AScoopRefReadsABucketOnGitHub(t *testing.T) {
 	if _, err := m.run(t, "", "manifest", "init", "--from", "scoop:someone/scoop-tools/other", "-o", "-"); err == nil ||
 		!strings.Contains(err.Error(), "no bucket of someone/scoop-tools has it") {
 		t.Fatalf("want a missing manifest named with its bucket, got %v", err)
+	}
+}
+
+func TestB338ALivecheckBlockThatReadsFieldsOfAFeedTranslates(t *testing.T) {
+	json := strings.NewReplacer(
+		`"version": "1.2.0"`, `"version": "1.2.0,45"`,
+		"/dl/1.2.0/", "/dl/45/",
+	).Replace(caskJSON)
+
+	for name, tc := range map[string]struct{ livecheck, want string }{
+		"a list": {
+			livecheck: `  livecheck do
+    url "SERVER/releases.json"
+    strategy :json do |json|
+      json["TOOL"]&.map do |release|
+        version = release["version"]
+        build = release["build"]
+        next if version.blank? || build.blank?
+
+        "#{version},#{build}"
+      end
+    end
+  end`,
+			want: "[version]\nfrom = \"page\"\nrepo = \"SERVER/releases.json\"\njson = [\"TOOL.*.version\", \"TOOL.*.build\"]\njoin = \"+\"\n",
+		},
+		"a field and a match": {
+			livecheck: `  livecheck do
+    url "SERVER/update.json"
+    regex(%r{/production/(\h+)/}i)
+    strategy :json do |json, regex|
+      ver = json["name"] || json["version"]
+      next unless ver
+
+      match = json["url"]&.match(regex)
+      next if match.blank?
+
+      "#{ver},#{match[1]}"
+    end
+  end`,
+			want: "json = [\"name\", \"url\"]\nregex = \"^([^\\\\n]*)\\\\n[^\\\\n]*?(?i:/production/([0-9a-fA-F]+)/)[^\\\\n]*\"\njoin = \"+\"\n",
+		},
+		"a property list": {
+			livecheck: `  livecheck do
+    url "SERVER/update#{version.major}.xml"
+    strategy :xml do |xml|
+      version = xml.elements["//key[text()='version']"]&.next_element&.text
+      build = xml.elements["//key[text()='build']"]&.next_element&.text
+      next if version.blank? || build.blank?
+
+      "#{version.strip},#{build.strip}"
+    end
+  end`,
+			want: "repo = \"SERVER/update1.xml\"\njson = [\"version\", \"build\"]\njoin = \"+\"\n",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			m := newMachine(t)
+			ruby := strings.NewReplacer(
+				"#{version}/#{os}", "#{version.csv.second}/#{os}",
+				`  livecheck do
+    url "SERVER/latest.json"
+    strategy :json do |json|
+      json["version"]
+    end
+  end`, tc.livecheck,
+			).Replace(caskRuby)
+			url := recipeServer{casks: map[string][2]string{"tool": {json, ruby}}}.start(t, &m)
+
+			out, err := m.run(t, "", "manifest", "init", "--from", "cask:tool", "-o", "-")
+			if err != nil {
+				t.Fatalf("init: %v\n%s", err, out)
+			}
+
+			if !strings.Contains(out, strings.ReplaceAll(tc.want, "SERVER", url)) {
+				t.Fatalf("the manifest lacks %q:\n%s", tc.want, out)
+			}
+		})
+	}
+}
+
+func TestB339APageSourceReadsFieldsOfAJSONFeedOrAPropertyList(t *testing.T) {
+	m := newMachine(t)
+	archive, _ := m.archive(t, "tool", map[string]string{"tool": "#!/bin/sh\necho tool\n"})
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/releases.json":
+			fmt.Fprint(w, `{"TOOL": [{"version": "1.3.0", "build": 46}, {"version": "1.4.0", "build": 47}, {"version": "1.2.0"}]}`)
+		case "/update.json":
+			fmt.Fprint(w, `{"url": "https://dl.example.com/production/abc123/tool.zip", "name": "2.0.1"}`)
+		case "/host.json":
+			fmt.Fprint(w, `{"full": {"host_version": [0, 0, 413]}}`)
+		case "/update.xml":
+			fmt.Fprint(w, `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>build</key><integer>2349</integer>
+  <key>version</key><string> 5.8.1 </string>
+</dict></plist>`)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(server.Close)
+
+	for source, want := range map[string]string{
+		`repo = "SERVER/releases.json"` + "\njson = [\"TOOL.*.version\", \"TOOL.*.build\"]\njoin = \"+\"":                            "1.4.0+47",
+		`repo = "SERVER/update.json"` + "\njson = [\"name\", \"url\"]\nregex = '^(\\S+)\\n.*/production/([0-9a-f]+)/'\njoin = \"+\"": "2.0.1+abc123",
+		`repo = "SERVER/update.xml"` + "\njson = [\"version\", \"build\"]\njoin = \"+\"":                                             "5.8.1+2349",
+		`repo = "SERVER/host.json"` + "\njson = [\"full.host_version\"]":                                                             "0.0.413",
+	} {
+		ref := filepath.Join(m.fixtures, "tool.toml")
+		must(t, os.WriteFile(ref, []byte(fmt.Sprintf(`[package]
+name = "tool"
+[version]
+from = "page"
+%s
+[[artifact]]
+url = "file://%s"
+bin = ["tool"]
+`, strings.ReplaceAll(source, "SERVER", server.URL), archive)), 0o644))
+
+		out, err := m.run(t, "", "add", ref, "--plan")
+		if err != nil || !strings.Contains(out, "version    "+want) {
+			t.Fatalf("%s: want version %s, got %v\n%s", source, want, err, out)
+		}
+	}
+
+	// json belongs to the page source.
+	ref := filepath.Join(m.fixtures, "tool.toml")
+	must(t, os.WriteFile(ref, []byte(fmt.Sprintf(`[package]
+name = "tool"
+[version]
+from = "github-releases"
+repo = "owner/tool"
+json = ["version"]
+[[artifact]]
+url = "file://%s"
+bin = ["tool"]
+`, archive)), 0o644))
+
+	if out, err := m.run(t, "", "manifest", "lint", ref); err == nil || !strings.Contains(out, `version.json needs version.from = "page"`) {
+		t.Fatalf("want json refused beside github-releases, got %v\n%s", err, out)
+	}
+}
+
+func TestB338AOneLineLivecheckBlockTranslates(t *testing.T) {
+	m := newMachine(t)
+	ruby := strings.Replace(caskRuby, `      json["version"]`, `      json.dig("full", "host_version")&.join(".")`, 1)
+	url := recipeServer{casks: map[string][2]string{"tool": {caskJSON, ruby}}}.start(t, &m)
+
+	out, err := m.run(t, "", "manifest", "init", "--from", "cask:tool", "-o", "-")
+	if err != nil {
+		t.Fatalf("init: %v\n%s", err, out)
+	}
+
+	if want := "repo = \"" + url + "/latest.json\"\njson = [\"full.host_version\"]\n"; !strings.Contains(out, want) {
+		t.Fatalf("the manifest lacks %q:\n%s", want, out)
 	}
 }
