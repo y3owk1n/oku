@@ -109,6 +109,11 @@ order step in `prd/product.md`.
   that the global list names.
 - B9 [1] Two packages exposing the same `bin` name fail the second install
   with an error naming both.
+- B289 [1] `oku add <ref> --plan` prints the version, the download or build
+  for this machine, how oku checks it, the programs, and whether the manifest
+  runs commands. It checks that the files add downloads are there, and fails
+  where add would fail. It writes no list, lock, store entry or generation,
+  and does not wait for another oku process. `--json` prints the same fields.
 
 ## Refs, list and lock
 
@@ -381,6 +386,9 @@ order step in `prd/product.md`.
   fails and lists the asset names it saw.
 - B27 [4] `oku manifest init --from <repo>` writes the inferred manifest to a
   file.
+- B290 [4] `oku add <ref> --manifest` prints the manifest `add` would use. One
+  that oku infers covers every platform, and `oku add` of the saved file
+  installs the same package.
 - B112 [4] `oku add --asset <glob>` and `--bin <name>` choose the asset and the
   program of an inferred manifest. When inference fails, the error names the
   flag to pass.
