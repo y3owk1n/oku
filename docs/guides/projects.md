@@ -173,14 +173,36 @@ encrypted one and gitignore the other.
 The file syntax is in
 [the \[\[env.file\]\] reference](../reference/oku-toml.md#envfile).
 
+### Switch environments
+
+`oku.<env>.toml` beside `oku.toml` sets variables for one environment, and
+`OKU_ENV` picks it. `oku.local.toml` holds your own values, and you gitignore
+it:
+
+```toml
+# oku.staging.toml
+[env]
+API_URL = "https://staging.example.com"
+AWS_PROFILE = "api-staging"
+```
+
+```
+$ OKU_ENV=staging oku exec ./deploy.sh
+$ export OKU_ENV=staging    # the hook applies it at the next prompt
+```
+
+Each holds `[env]` alone. The order and the rules are in
+[the reference](../reference/oku-toml.md#okuenvtoml-and-okulocaltoml).
+
 ### Why you have to allow a project
 
 A cloned repo could hold an `oku.toml` that puts its own `make` or `git` ahead
 of yours. So the hook does nothing for a project until you run `oku allow`.
 
-- The allow belongs to the `oku.toml` as it is now, and to each `.env` file
-  it loads that git tracks. After any edit, including a `git pull` that
-  changes one of them, the hook stops and asks again.
+- The allow belongs to the `oku.toml` as it is now, and to each
+  `oku.<env>.toml`, `oku.local.toml` and `.env` file that git tracks. After
+  any edit, including a `git pull` that changes one of them, the hook stops
+  and asks again.
 - `oku deny` removes the allow.
 - `oku allow` and `oku deny` take a directory, and default to the project you
   are in. Both fail when there is no `oku.toml` in the directory or above it.

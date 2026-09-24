@@ -125,6 +125,7 @@ What oku does not do:
 | A project's `mise.toml` | A [project](projects.md) `oku.toml` |
 | `[env]` and `_.path` in `mise.toml` | `[env]`, with `PATH = { prepend = [...] }` |
 | `_.file` in `mise.toml` | `[[env.file]]` |
+| `MISE_ENV` with `mise.<env>.toml`, and `mise.local.toml` | `OKU_ENV` with `oku.<env>.toml`, and `oku.local.toml`, for `[env]` alone |
 | `mise install` | `oku sync` |
 | `mise upgrade`, `mise outdated` | `oku update`, `oku outdated` |
 | `mise.lock` | `oku.lock`, which is always there and pins every download |

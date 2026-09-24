@@ -597,3 +597,25 @@ func WriteFile(path string, data []byte) error {
 
 	return nil
 }
+
+// ReadOverlay parses the list at path that sets variables over a project's
+// oku.toml, such as oku.local.toml. It holds [env] and nothing else.
+func ReadOverlay(path string) (*List, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("read %s: %w", path, err)
+	}
+
+	var raw map[string]any
+	if err := toml.Unmarshal(data, &raw); err != nil {
+		return nil, fmt.Errorf("parse %s: %w", path, err)
+	}
+
+	for key := range raw {
+		if key != "env" {
+			return nil, fmt.Errorf("%s holds %s, and a list over oku.toml holds [env] alone", path, key)
+		}
+	}
+
+	return Parse(data, path)
+}

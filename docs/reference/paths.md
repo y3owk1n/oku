@@ -155,6 +155,7 @@ outside these places.
 | `GITHUB_TOKEN`, `GH_ENTERPRISE_TOKEN`, `CODEBERG_TOKEN`, `GITEA_TOKEN`, `GITLAB_TOKEN`, `GITLAB_SERVER_TOKEN` | Tokens for forge APIs and downloads, each sent to its own host only. See [tokens per host](refs.md#tokens-per-host). |
 | `SOPS_AGE_KEY_FILE` | The age key file for [secrets](oku-toml.md#secrets). Without it oku reads `sops/age/keys.txt` in your config directory: `~/.config/sops/age/keys.txt`, or `%APPDATA%\sops\age\keys.txt` on Windows. oku passes the same path to `sops`. |
 | `OKU_PARALLEL` | How many packages `sync` and `update` install at once. Default `8`. A number from 1 up, so `OKU_PARALLEL=1` installs one after another. |
+| `OKU_ENV` | Names the project's `oku.<env>.toml`, whose [`[env]`](oku-toml.md#okuenvtoml-and-okulocaltoml) the hook, `oku exec` and `oku env` apply over the `oku.toml`. |
 | `NO_COLOR` | Any value turns colour off on a terminal. |
 | `FORCE_COLOR` | Any value turns colour on for a pipe, such as a pager. |
 | `COLUMNS` | The width under `FORCE_COLOR`. |
@@ -170,7 +171,7 @@ oku sets these for others:
 | `OKU_SHELL` | The shell of `oku shell`, to the refs it holds. |
 | `OKU_PREFIX`, `OKU_SRC`, `OKU_JOBS` | A build's steps, see the [manifest reference](manifest.md). |
 | `GIT_TERMINAL_PROMPT=0` | Every `git` oku runs. |
-| `OKU_HOOK_PATH`, `OKU_HOOK_KEYS`, `OKU_HOOK_HINT` | Your shell, by the hook, to undo what it applied. |
+| `OKU_HOOK_SAVED`, `OKU_HOOK_ADDED`, `OKU_HOOK_HINT` | Your shell, by the hook, to undo what it applied. The hook removes `OKU_HOOK_PATH` and `OKU_HOOK_KEYS`, the state of an older oku. |
 
 The install scripts read `OKU_INSTALL_DIR` and `OKU_VERSION`, see
 [Getting started](../getting-started.md).
