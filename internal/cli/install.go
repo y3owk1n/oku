@@ -363,7 +363,7 @@ func inferredHints(req request, inferred infer.Inferred) string {
 	}
 
 	if inferred.Asset != "" {
-		fmt.Fprintf(&b, "\nit chose the asset %s for this machine", inferred.Asset)
+		fmt.Fprintf(&b, "\nit chose the asset %s for %s", inferred.Asset, infer.Machine(req.target()))
 	}
 
 	if len(inferred.Others) > 0 {

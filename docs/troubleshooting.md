@@ -130,6 +130,7 @@ with `--bin`. See [Fix a wrong pick](guides/add-packages.md#fix-a-wrong-pick-wit
 | Message | Fix |
 |---|---|
 | `no release asset fits this machine (darwin-arm64)`, then the files of the release | No file name says your OS and CPU. Pass one of the listed files to `--asset`. |
+| `no release asset fits linux-amd64-glibc`, with a platform that is not yours | oku pins the package for a `[lock]` platform, and no file name says that OS and CPU. Leave the platform out of the package's `when`, or write a manifest. |
 | `cannot tell which file is the program, executables found: ...` | The download holds several programs and none has the repo's name. Pass one to `--bin`. |
 | `no file in it is executable` | Write a manifest, see [Publish a manifest](guides/publish-a-manifest.md). |
 | `it chose the asset <file> for this machine` | The install failed. The next lines list the other files that fit, and the `oku add --asset` command that picks one. `--verbose` adds the manifest oku inferred. |

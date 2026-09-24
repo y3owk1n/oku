@@ -562,6 +562,9 @@ order step in `prd/product.md`.
   runs through a runtime only has to not be a web page. For a web page oku says so, and for the
   page of a repo names the forge ref to add. A compressed download that does
   not decompress fails with the reason.
+- B326 [4] An inference error for a `[lock]` platform names that platform,
+  and says "this machine" only for the host. It suggests `--asset` only for
+  the host, and for a `[lock]` platform the package's `when` or a manifest.
 - B120 [4] Inference takes a macOS universal build for both darwin arches and a
   `windows-gnu` asset for Windows, and never reads a signature file as the
   checksum file.

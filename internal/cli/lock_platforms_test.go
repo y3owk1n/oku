@@ -4,6 +4,8 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -478,5 +480,41 @@ func TestB190SyncCompletesTheBuildPinsThatAnOlderOkuDidNotWrite(t *testing.T) {
 
 	if got := m.storeEntries(t); len(got) != len(before) {
 		t.Fatalf("sync built again to pin: %v", got)
+	}
+}
+
+func TestB326InferenceForALockPlatformNamesThatPlatform(t *testing.T) {
+	m := newMachine(t)
+	other := otherPlatform()
+
+	archive, _ := m.archive(t, "tool", map[string]string{"tool": script})
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/repos/owner/tool/commits/HEAD":
+			_, _ = w.Write([]byte("5555555555555555555555555555555555555555"))
+		case "/api/repos/owner/tool/releases/latest":
+			fmt.Fprintf(w, `{"tag_name": "v1.4.0", "assets": [{"name": %q, "browser_download_url": "file://%s"}]}`,
+				hostAssetName(), archive)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(server.Close)
+
+	m.opts.GitHubAPI = server.URL + "/api"
+	m.opts.GitHubRaw = server.URL + "/raw"
+
+	// The package is for the other platform alone, and its release has nothing for it.
+	must(t, os.MkdirAll(m.config, 0o755))
+	must(t, os.WriteFile(filepath.Join(m.config, "oku.toml"), []byte(fmt.Sprintf(
+		"[lock]\nplatforms = [%q]\n\n[packages]\ntool = { ref = \"github:owner/tool\", when = { os = %q } }\n",
+		other.String(), other.OS,
+	)), 0o644))
+
+	_, err := m.run(t, "", "sync")
+	if err == nil || !strings.Contains(err.Error(), "no release asset fits "+other.String()) ||
+		strings.Contains(err.Error(), "this machine") || strings.Contains(err.Error(), "--asset") {
+		t.Fatalf("want the error to name %s and not this machine, got %v", other, err)
 	}
 }

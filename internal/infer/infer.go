@@ -176,10 +176,15 @@ func (inf *Inferrer) Manifest(
 	if i := slices.IndexFunc(chosen, func(c choice) bool { return c.Matches(host) }); i >= 0 {
 		result.Asset, result.Others = chosen[i].asset, chosen[i].others
 	} else {
+		// --asset picks a file for the host, so a [lock] platform needs another way.
+		fix := "name one with --asset"
+		if host != platform.Host() {
+			fix = "leave " + host.String() + " out of the package's when, or write a manifest for it"
+		}
+
 		return Inferred{}, fmt.Errorf(
-			"%w this machine (%s)\nrelease %s of %s has: %s\n"+
-				"name one with --asset",
-			ErrNoAsset, host, rel.Tag, repo, strings.Join(names, ", "),
+			"%w %s\nrelease %s of %s has: %s\n%s",
+			ErrNoAsset, Machine(host), rel.Tag, repo, strings.Join(names, ", "), fix,
 		)
 	}
 
@@ -228,8 +233,8 @@ func (inf *Inferrer) Manifest(
 		switch {
 		case err != nil && isHost && len(c.others) > 0:
 			return Inferred{}, fmt.Errorf(
-				"%s: %w\nthese assets fit this machine too: %s\nchoose one with --asset",
-				c.asset, err, strings.Join(c.others, ", "),
+				"%s: %w\nthese assets fit %s too: %s\nchoose one with --asset",
+				c.asset, err, Machine(host), strings.Join(c.others, ", "),
 			)
 		case err != nil && isHost:
 			return Inferred{}, fmt.Errorf("%s: %w", c.asset, err)
@@ -263,8 +268,8 @@ func (inf *Inferrer) Manifest(
 
 			if len(c.others) > 0 {
 				fmt.Fprintf(
-					&b, "# These assets fit this machine too: %s\n# Choose one with --asset.\n",
-					strings.Join(c.others, ", "),
+					&b, "# These assets fit %s too: %s\n# Choose one with --asset.\n",
+					host, strings.Join(c.others, ", "),
 				)
 			}
 		}
@@ -1011,4 +1016,14 @@ func quoteAll(items []string) string {
 	}
 
 	return strings.Join(quoted, ", ")
+}
+
+// Machine names p for a message: "this machine (darwin-arm64)" when p is the
+// host, else the platform alone, such as for a platform of [lock].
+func Machine(p platform.Platform) string {
+	if p == platform.Host() {
+		return "this machine (" + p.String() + ")"
+	}
+
+	return p.String()
 }

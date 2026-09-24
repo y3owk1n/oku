@@ -152,7 +152,9 @@ allowed /home/you/work/api
 You may encrypt a `.env` file in the repo with [sops or age](secrets.md).
 `secret = true` makes oku decrypt it. `scope = "exec"` loads a file for
 `oku exec` only, so its values never reach your shell, its history or a
-program you start there:
+program you start there. A coding agent that you start from a shell gets
+every variable that shell exported, and `unless` does not remove them. Keep a
+token that an agent must not see in a file of scope `"exec"`:
 
 ```toml
 [[env.file]]
