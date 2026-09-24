@@ -18,6 +18,7 @@ import (
 	"github.com/y3owk1n/oku/internal/profile"
 	"github.com/y3owk1n/oku/internal/service"
 	"github.com/y3owk1n/oku/internal/store"
+	"github.com/y3owk1n/oku/internal/tempdir"
 	"github.com/y3owk1n/oku/internal/ui"
 )
 
@@ -438,7 +439,7 @@ func (e env) applyAsRoot(
 	// JSON holds many quotes, and the Windows consent prompt does not keep the
 	// quotes of an argument. So on Windows the change goes through a file.
 	if runtime.GOOS == "windows" {
-		file, err := os.CreateTemp("", "oku-change-*.json")
+		file, err := tempdir.File("change", ".json")
 		if err != nil {
 			return err
 		}

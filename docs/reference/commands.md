@@ -658,7 +658,8 @@ that oku did not write.
 oku gc [--keep N] [--dry-run]
 ```
 
-Deletes store paths that no generation of any profile uses, and nothing else.
+Deletes store paths that no generation of any profile uses, and what a killed
+oku process left in the system's temporary directory.
 
 | Flag | Effect |
 |---|---|
@@ -678,8 +679,11 @@ freed 4.6 MiB from 1 store path
 - A dep counts as used while any generation holds a package that depends on
   it.
 - After `oku setup --system` it checks the shared store and the old one.
-- It does not touch the cache directory, `oku.toml`, `oku.lock`, or the
-  temporary directory of an install that is still running.
+- In the system's temporary directory it deletes the `oku-*` entries whose
+  oku process has ended, such as a half-done build. On macOS it first
+  detaches a disk image that such a process left mounted. It skips the
+  entries of a process that still runs and those of another user.
+- It does not touch the cache directory, `oku.toml` or `oku.lock`.
 - It refuses to run while an unfinished change waits to be put back.
 - You cannot roll back to a deleted generation.
 

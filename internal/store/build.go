@@ -31,6 +31,7 @@ import (
 	"github.com/y3owk1n/oku/internal/pypi"
 	"github.com/y3owk1n/oku/internal/sandbox"
 	"github.com/y3owk1n/oku/internal/status"
+	"github.com/y3owk1n/oku/internal/tempdir"
 )
 
 // outputTail is how many lines of a failed step's output the error shows.
@@ -116,7 +117,7 @@ func (s *Store) Build(
 		return Realized{}, err
 	}
 
-	work, err := os.MkdirTemp("", "oku-build-")
+	work, err := tempdir.Dir("build")
 	if err != nil {
 		return Realized{}, err
 	}

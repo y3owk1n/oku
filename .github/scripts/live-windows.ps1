@@ -438,6 +438,40 @@ Check 'the copy of the msi that msiexec leaves behind is gone' {
     -not (Get-ChildItem "$env:XDG_DATA_HOME\oku\store\gh-*\pkg\*.msi")
 }
 
+# Two .msi downloads in one sync unpack at once, and Windows Installer runs one
+# installation at a time, so oku runs msiexec for one after the other.
+$msiProject = Join-Path $root 'msi-project'
+New-Item -ItemType Directory -Force $msiProject | Out-Null
+$msiRefs = foreach ($name in 'msi-a', 'msi-b') {
+    Set-Content (Join-Path $fixtures "$name.toml") @"
+[package]
+name = "$name"
+[version]
+value = "2.101.0"
+[[artifact]]
+match = { os = "windows", arch = "amd64" }
+url = "https://github.com/cli/cli/releases/download/v{{version}}/gh_{{version}}_windows_amd64.msi"
+sha256 = "9ba92256a431d254706844ee1991f6f4a9559a3c3646ff7ae7fe23724bfaef83"
+data = true
+"@
+    "$name = '$((Join-Path $fixtures "$name.toml") -replace '\\', '/')'"
+}
+Set-Content (Join-Path $msiProject 'oku.toml') ("[packages]`n" + ($msiRefs -join "`n") + "`n")
+Set-Location $msiProject
+Oku sync
+Set-Location $root
+Check 'two .msi downloads unpack in one sync' {
+    (Get-Content (Join-Path $msiProject 'oku.lock') -Raw) -match "msi-a[\s\S]*msi-b"
+}
+
+# A temporary directory that an ended oku process left, which gc removes.
+$ended = Start-Process cmd -ArgumentList '/c', 'exit' -PassThru -Wait -WindowStyle Hidden
+$leftover = Join-Path $env:TEMP "oku-build-$($ended.Id)-1"
+New-Item -ItemType Directory -Force $leftover | Out-Null
+Set-Content (Join-Path $leftover 'half') 'unpacked'
+Oku gc
+Check 'gc removes a temporary directory that an ended oku process left' { -not (Test-Path $leftover) }
+
 # A .7z download, made by 7-Zip on Windows, so it carries no unix modes.
 Set-Content (Join-Path $fixtures 'sevenzip.toml') @'
 [package]

@@ -6,11 +6,13 @@ import (
 	"maps"
 	"path/filepath"
 	"slices"
+	"strings"
 
 	"github.com/spf13/cobra"
 
 	"github.com/y3owk1n/oku/internal/profile"
 	"github.com/y3owk1n/oku/internal/status"
+	"github.com/y3owk1n/oku/internal/tempdir"
 	"github.com/y3owk1n/oku/internal/ui"
 )
 
@@ -149,23 +151,59 @@ func runGC(cmd *cobra.Command, keep int, dryRun bool) error {
 		}
 	}
 
-	if len(unused) == 0 {
+	// gc holds the lock of the busy package, so an oku process that changes the
+	// machine does not use these.
+	leftovers, err := tempdir.Stale()
+	if err != nil {
+		return err
+	}
+
+	for _, path := range leftovers {
+		size := tempdir.Size(path)
+
+		if !dryRun {
+			if err := tempdir.Remove(path); err != nil {
+				return fmt.Errorf("delete %s: %w", path, err)
+			}
+		}
+
+		freed += size
+		fmt.Fprintln(out, mark(fmt.Sprintf(
+			"%s %s, left by an oku process that ended (%s)", verb, path, status.Size(size),
+		)))
+	}
+
+	if len(unused) == 0 && len(leftovers) == 0 {
 		fmt.Fprintln(out, mark("nothing to delete, every store path is used by a generation"))
 
 		return nil
 	}
 
-	noun := "store paths"
-	if len(unused) == 1 {
-		noun = "store path"
+	var counts []string
+
+	for _, c := range []struct {
+		n            int
+		one, several string
+	}{
+		{len(unused), "store path", "store paths"},
+		{len(leftovers), "temporary file", "temporary files"},
+	} {
+		switch {
+		case c.n == 1:
+			counts = append(counts, "1 "+c.one)
+		case c.n > 1:
+			counts = append(counts, fmt.Sprintf("%d %s", c.n, c.several))
+		}
 	}
+
+	noun := strings.Join(counts, " and ")
 
 	summary := "freed"
 	if dryRun {
 		summary = "would free"
 	}
 
-	fmt.Fprintln(out, mark(fmt.Sprintf("%s %s from %d %s", summary, status.Size(freed), len(unused), noun)))
+	fmt.Fprintln(out, mark(fmt.Sprintf("%s %s from %s", summary, status.Size(freed), noun)))
 
 	return nil
 }

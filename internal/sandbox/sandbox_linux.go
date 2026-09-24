@@ -15,6 +15,8 @@ import (
 	"syscall"
 
 	"golang.org/x/sys/unix"
+
+	"github.com/y3owk1n/oku/internal/tempdir"
 )
 
 // specEnv carries the Spec to the init process.
@@ -166,7 +168,7 @@ func Init() error {
 // hide mounts an empty tmpfs over home and binds the kept paths inside it back
 // into place.
 func hide(home string, keep []string) error {
-	stash, err := os.MkdirTemp("", "oku-sandbox-")
+	stash, err := tempdir.Dir("sandbox")
 	if err != nil {
 		return err
 	}

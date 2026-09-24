@@ -15,12 +15,16 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/bodgit/sevenzip"
 	"github.com/cavaliergopher/cpio"
 	"github.com/cavaliergopher/rpm"
 	"github.com/klauspost/compress/zstd"
 	"github.com/ulikunitz/xz"
+
+	"github.com/y3owk1n/oku/internal/tempdir"
 )
 
 var (
@@ -194,14 +198,26 @@ func unrpm(f *os.File, root *os.Root, strip int) error {
 	}
 }
 
+// images holds a lock per disk image file, because hdiutil refuses to attach
+// an image a second time while it is attached.
+var images sync.Map
+
 // undmg copies the files of a macOS disk image. It mounts the image read-only
 // without opening it in Finder, and runs nothing from it.
-func undmg(src, dest string) error {
+func undmg(src, dest string) (err error) {
 	if runtime.GOOS != "darwin" {
 		return errors.New("a .dmg can only be unpacked on macOS")
 	}
 
-	mount, err := os.MkdirTemp("", "oku-dmg-")
+	lock, _ := images.LoadOrStore(src, &sync.Mutex{})
+	lock.(*sync.Mutex).Lock()
+	defer lock.(*sync.Mutex).Unlock()
+
+	if err := detachLeftovers(src); err != nil {
+		return err
+	}
+
+	mount, err := tempdir.Dir("dmg")
 	if err != nil {
 		return err
 	}
@@ -217,9 +233,42 @@ func undmg(src, dest string) error {
 	if out, err := attach.CombinedOutput(); err != nil {
 		return fmt.Errorf("mount the disk image: %w: %s", err, strings.TrimSpace(string(out)))
 	}
-	defer exec.Command("/usr/bin/hdiutil", "detach", "-force", mount).Run() //nolint:errcheck
+
+	defer func() {
+		out, detachErr := exec.Command("/usr/bin/hdiutil", "detach", "-force", mount).CombinedOutput()
+		if detachErr != nil {
+			err = errors.Join(err, fmt.Errorf(
+				"detach the disk image at %s: %w: %s", mount, detachErr, strings.TrimSpace(string(out)),
+			))
+		}
+	}()
 
 	return copyImage(mount, dest)
+}
+
+// detachLeftovers detaches the image at src where an oku process that has
+// exited left it mounted. hdiutil would refuse to attach it again.
+func detachLeftovers(src string) error {
+	points, err := tempdir.Mounted(src)
+	if err != nil {
+		return err
+	}
+
+	for _, point := range points {
+		if !strings.HasPrefix(filepath.Base(point), "oku-dmg-") {
+			return fmt.Errorf("the disk image %s is mounted at %s, eject it and try again", src, point)
+		}
+
+		if pid, alive := tempdir.Owner(point); alive {
+			return fmt.Errorf("oku process %d has the disk image %s mounted, try again when it ends", pid, src)
+		}
+
+		if err := tempdir.Remove(point); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // copyImage copies a mounted image. It leaves out Finder's hidden files and
@@ -289,14 +338,53 @@ func unmsi(src, dest string) error {
 	}
 	defer os.Remove(named)
 
-	out, err := exec.Command("msiexec", "/a", named, "/qn", "/norestart", "TARGETDIR="+dest).
-		CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("msiexec /a: %w: %s", err, strings.TrimSpace(string(out)))
+	if err := administrativeInstall(named, dest); err != nil {
+		return err
 	}
 
 	// The administrative install also puts a copy of the package into dest.
 	return os.Remove(filepath.Join(dest, "package.msi"))
+}
+
+// msiexec is held while msiexec runs. Windows Installer runs one installation
+// at a time and fails a second one with errBusyInstaller.
+var msiexec sync.Mutex
+
+// errBusyInstaller is the exit code of msiexec while another installation
+// runs, ERROR_INSTALL_ALREADY_RUNNING.
+const errBusyInstaller = 1618
+
+// administrativeInstall runs "msiexec /a" for the package at named. While
+// another program, such as Windows Update, installs something, it waits and
+// tries again for a few minutes.
+func administrativeInstall(named, dest string) error {
+	msiexec.Lock()
+	defer msiexec.Unlock()
+
+	const tries, wait = 60, 3 * time.Second
+
+	for try := 1; ; try++ {
+		out, err := exec.Command("msiexec", "/a", named, "/qn", "/norestart", "TARGETDIR="+dest).
+			CombinedOutput()
+
+		var exit *exec.ExitError
+		if errors.As(err, &exit) && exit.ExitCode() == errBusyInstaller && try < tries {
+			time.Sleep(wait)
+
+			continue
+		}
+
+		if errors.As(err, &exit) && exit.ExitCode() == errBusyInstaller {
+			return errors.New("msiexec /a: another installation is still running after 3 minutes, " +
+				"try again when it ends")
+		}
+
+		if err != nil {
+			return fmt.Errorf("msiexec /a: %w: %s", err, strings.TrimSpace(string(out)))
+		}
+
+		return nil
+	}
 }
 
 // unpkg expands a macOS installer package into its payload files. pkgutil

@@ -18,6 +18,7 @@ import (
 	"filippo.io/age/armor"
 
 	"github.com/y3owk1n/oku/internal/status"
+	"github.com/y3owk1n/oku/internal/tempdir"
 )
 
 // ageIntro starts a binary age file.
@@ -114,7 +115,7 @@ func (d Decrypter) sops(ctx context.Context, s Source) ([]byte, error) {
 		)
 	}
 
-	dir, err := os.MkdirTemp("", "oku-sops-*")
+	dir, err := tempdir.Dir("sops")
 	if err != nil {
 		return nil, err
 	}
