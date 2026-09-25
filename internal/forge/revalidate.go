@@ -84,8 +84,9 @@ func (r revalidator) revalidate(req *http.Request) (*http.Response, error) {
 		resp.Body = io.NopCloser(bytes.NewReader(old.Body))
 		resp.ContentLength = int64(len(old.Body))
 	case resp.StatusCode == http.StatusOK && resp.Header.Get("ETag") != "":
-		// A forge refuses an answer over maxBody, so more is not worth reading.
-		body, err := io.ReadAll(io.LimitReader(resp.Body, maxBody+1))
+		// Every reader of this client refuses an answer over maxAnswer, so more is
+		// not worth reading.
+		body, err := io.ReadAll(io.LimitReader(resp.Body, maxAnswer+1))
 		resp.Body.Close()
 
 		if err != nil {
@@ -94,7 +95,7 @@ func (r revalidator) revalidate(req *http.Request) (*http.Response, error) {
 
 		resp.Body = io.NopCloser(bytes.NewReader(body))
 
-		if len(body) <= maxBody {
+		if len(body) <= maxAnswer {
 			keep(path, kept{
 				ETag: resp.Header.Get("ETag"), Link: resp.Header.Get("Link"),
 				Type: resp.Header.Get("Content-Type"), Body: body,
@@ -127,8 +128,9 @@ func keep(path string, answer kept) {
 
 type answersKey struct{}
 
-// maxAnswer is the most of an answer that answers keeps. It is the largest
-// limit of any reader of this client, which the npm and PyPI readers have.
+// maxAnswer is the most of an answer that the client reads and keeps. It is
+// the largest limit of any reader of this client, which the npm and PyPI
+// readers have.
 const maxAnswer = 64 << 20
 
 // answers holds the GET answers of one command, by URL and Accept.
