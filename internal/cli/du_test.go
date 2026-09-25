@@ -2,10 +2,12 @@ package cli_test
 
 import (
 	"encoding/json"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/y3owk1n/oku/internal/status"
 )
@@ -114,4 +116,78 @@ func TestB345DuPackagesSaysWhatKeepsEachStorePath(t *testing.T) {
 			t.Fatalf("du --packages = %v, want %v", state, want)
 		}
 	}
+}
+
+func TestB348GCCacheDeletesDownloadsNoKeptStorePathWasMadeFrom(t *testing.T) {
+	m := newMachine(t)
+	_, keepSum := m.archive(t, "keep", map[string]string{"keep": script})
+	_, goneSum := m.archive(t, "gone", map[string]string{"gone": script})
+
+	for _, args := range [][]string{
+		{"add", m.namedManifest(t, "keep", "keep", "keep")},
+		{"add", m.namedManifest(t, "gone", "gone", "gone")},
+		{"remove", "gone"},
+	} {
+		_, err := m.run(t, "", args...)
+		must(t, err)
+	}
+
+	// A download less than a day old may belong to a run that has not written
+	// its lock yet, so the cache is made two days old, but for one new file.
+	downloads := filepath.Join(m.cache, "downloads")
+	old := time.Now().Add(-48 * time.Hour)
+
+	must(t, filepath.WalkDir(downloads, func(path string, _ fs.DirEntry, err error) error {
+		must(t, err)
+
+		return os.Chtimes(path, old, old)
+	}))
+
+	fresh := filepath.Join(downloads, strings.Repeat("f", 64))
+	must(t, os.WriteFile(fresh, []byte("new"), 0o644))
+
+	// With every generation kept, gone's generation still holds its download.
+	var before struct {
+		GCCacheFrees int64 `json:"gc_cache_frees"`
+	}
+	must(t, json.Unmarshal([]byte(m.stdout(t, "du", "--json")), &before))
+
+	if before.GCCacheFrees == 0 {
+		t.Fatal("du says gc --cache frees nothing, but the index by url is old")
+	}
+
+	out, err := m.run(t, "", "gc", "--keep", "1", "--cache")
+	must(t, err)
+
+	switch {
+	case !exists(filepath.Join(downloads, keepSum)):
+		t.Fatalf("gc --cache deleted the download of keep, which generation 3 uses:\n%s", out)
+	case exists(filepath.Join(downloads, goneSum)):
+		t.Fatalf("gc --cache kept the download of gone, which no kept generation uses:\n%s", out)
+	case exists(filepath.Join(downloads, "by-url")) && len(m.entries(t, filepath.Join(downloads, "by-url"))) > 0:
+		t.Fatalf("gc --cache kept the old index by url:\n%s", out)
+	case !exists(fresh):
+		t.Fatalf("gc --cache deleted a download less than a day old:\n%s", out)
+	}
+
+	// Without --cache, gc leaves the cache alone.
+	stray := filepath.Join(downloads, strings.Repeat("a", 64))
+	must(t, os.WriteFile(stray, []byte("old"), 0o644))
+	must(t, os.Chtimes(stray, old, old))
+
+	_, err = m.run(t, "", "gc")
+	must(t, err)
+
+	if !exists(stray) {
+		t.Fatal("gc without --cache deleted a download")
+	}
+}
+
+func (m machine) entries(t *testing.T, dir string) []os.DirEntry {
+	t.Helper()
+
+	entries, err := os.ReadDir(dir)
+	must(t, err)
+
+	return entries
 }

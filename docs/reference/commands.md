@@ -715,7 +715,7 @@ that oku did not write.
 ### oku gc
 
 ```
-oku gc [--keep N] [--dry-run]
+oku gc [--keep N] [--cache] [--dry-run]
 ```
 
 Deletes store paths that no generation of any profile uses, and what a killed
@@ -724,6 +724,7 @@ oku process left in the system's temporary directory.
 | Flag | Effect |
 |---|---|
 | `--keep N` | First deletes all generations of each profile except the newest N. The active generation always stays. N is at least 1. |
+| `--cache` | Also deletes the downloads in the cache that no kept store path was made from, see below. |
 | `--dry-run` | Prints what would be deleted and deletes nothing. |
 
 ```
@@ -746,7 +747,22 @@ freed 4.6 MiB from 1 store path
   oku process has ended, such as a half-done build. On macOS it first
   detaches a disk image that such a process left mounted. It skips the
   entries of a process that still runs and those of another user.
-- It does not touch the cache directory, `oku.toml` or `oku.lock`.
+- Without `--cache` it does not touch the cache directory. It never touches
+  `oku.toml` or `oku.lock`.
+- With `--cache` it keeps each download that a kept store path was made from,
+  as its `oku-meta.toml` records. So oku can install any generation you can
+  roll back to again offline. It deletes the other downloads, such as old
+  versions and the downloads of other lock platforms, and the index of
+  downloads by url. It skips a file less than a day old, which a run that has
+  not written its lock yet may need. It leaves `git/` and `api/` alone.
+
+```
+$ oku gc --keep 1 --cache
+removed generation 1
+removed ripgrep-14.0.3-4c8fe21b8d1d13c4 (4.6 MiB)
+removed 38 files from the download cache (1.9 GiB)
+freed 1.9 GiB from 1 store path and 38 cached files
+```
 - It refuses to run while an unfinished change waits to be put back.
 - You cannot roll back to a deleted generation.
 
@@ -767,8 +783,11 @@ apps       ~/Applications               1.9 GiB    4 apps
 fonts      ~/Library/Fonts              31.5 MiB   12 fonts
 other      ~/.local/share/oku           1.2 MiB    logs, secrets, trust
 total                                   11.5 GiB
-`oku gc` frees 1.2 GiB, and deleting ~/.cache/oku is safe
+`oku gc` frees 1.2 GiB, and `oku gc --cache` frees 2.8 GiB
 ```
+
+The last line says what `oku gc` frees, and what `oku gc --cache` frees, which
+includes it.
 
 | Area | What it holds |
 |---|---|
@@ -1320,7 +1339,7 @@ that prints no data, `--json` changes nothing.
 | `oku service list` | A list of `name`, `package`, `installed`, `enabled`, `running`, `system`, `detail`. |
 | `oku service status <name>` | One such object. |
 | `oku doctor` | `problems`, and `checks`, a list of `status` and `message`. |
-| `oku du` | `areas`, a list of `area`, `paths`, `bytes`, then `total` and `gc_frees`, all in bytes. |
+| `oku du` | `areas`, a list of `area`, `paths`, `bytes`, then `total`, `gc_frees` and `gc_cache_frees`, all in bytes. |
 | `oku du --packages` | A list of `name`, `version`, `path`, `bytes`, `profiles`, `dep_of`, `old`, `unused`. |
 
 - A result with nothing in it prints `[]`, never `null`.

@@ -66,7 +66,18 @@ the apps and fonts it copied out of the store, and the rest of its data.
 				return e.duPackages(cmd, paths)
 			}
 
-			return e.duAreas(cmd, areas, paths)
+			// What gc --cache deletes, with every generation kept.
+			used := map[string]bool{}
+			for path := range holders {
+				used[path] = true
+			}
+
+			stale, err := e.staleDownloads(used)
+			if err != nil {
+				return err
+			}
+
+			return e.duAreas(cmd, areas, paths, stale)
 		},
 	}
 
@@ -353,10 +364,15 @@ func (e env) measureAreas(
 	return areas, nil
 }
 
-// duAreas prints one row per area, the total, and what gc and deleting the
-// cache give back.
-func (e env) duAreas(cmd *cobra.Command, areas []area, paths []storePath) error {
-	var total, frees int64
+// duAreas prints one row per area, the total, and what gc and gc --cache give
+// back. stale holds the cached files that gc --cache deletes beside what gc
+// does.
+func (e env) duAreas(cmd *cobra.Command, areas []area, paths []storePath, stale map[string]int64) error {
+	var total, frees, staleBytes int64
+
+	for _, n := range stale {
+		staleBytes += n
+	}
 
 	for _, a := range areas {
 		total += a.Bytes
@@ -374,10 +390,11 @@ func (e env) duAreas(cmd *cobra.Command, areas []area, paths []storePath) error 
 
 	if wantJSON(cmd) {
 		return printJSON(cmd, struct {
-			Areas   []area `json:"areas"`
-			Total   int64  `json:"total"`
-			GCFrees int64  `json:"gc_frees"`
-		}{areas, total, frees})
+			Areas        []area `json:"areas"`
+			Total        int64  `json:"total"`
+			GCFrees      int64  `json:"gc_frees"`
+			GCCacheFrees int64  `json:"gc_cache_frees"`
+		}{areas, total, frees, frees + staleBytes})
 	}
 
 	out := cmd.OutOrStdout()
@@ -407,11 +424,8 @@ func (e env) duAreas(cmd *cobra.Command, areas []area, paths []storePath) error 
 		next = append(next, "`oku gc` frees "+status.Size(frees))
 	}
 
-	if i := slices.IndexFunc(
-		areas,
-		func(a area) bool { return a.Area == "cache" },
-	); areas[i].Bytes > 0 {
-		next = append(next, "deleting "+s.Home(e.cache)+" is safe")
+	if staleBytes > 0 {
+		next = append(next, "`oku gc --cache` frees "+status.Size(frees+staleBytes))
 	}
 
 	if len(next) > 0 {

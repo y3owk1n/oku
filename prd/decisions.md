@@ -1499,3 +1499,21 @@ the one that builds is often a dependency of a dependency.
 An install script often puts a native program where the package's script was.
 A wrapper that would run such a file through its interpreter runs it
 directly.
+
+## D94. gc --cache keeps the downloads of kept store paths
+
+`oku gc --cache` deletes the downloads that no kept store path was made from,
+by the digest in each store path's `oku-meta.toml`. It also deletes the index
+of downloads by url and partial downloads. It skips files less than a day old,
+and leaves `git/` and `api/` alone. Plain `gc` still leaves the cache alone.
+Why: on one machine, half of a 12 GiB cache held downloads that nothing
+installed there needs. They were old versions, the downloads of other lock
+platforms that oku only fetched to pin their digest, and one-off `oku shell`
+packages. With the downloads of every kept store path in the cache, any
+generation the user can roll back to also installs again offline. This follows
+D23, where gc removes rollback material only when asked. The digest in the meta
+covers deps and generations from before generations saved a lock. A file under
+a day old may belong to a run that has not written its lock yet, and the index
+by url exists for that run. `api/` holds
+ETags that keep oku under forge rate limits, and a deleted clone in `git/`
+costs a full clone.
