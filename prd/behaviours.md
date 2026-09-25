@@ -207,6 +207,8 @@ order step in `prd/product.md`.
   Without `regex` the values joined with `join`
   are the version, with it the values one per line are what it reads. `json`
   beside another `from` fails.
+- B358 [5] `sync` of an `npm:` package whose build is in the store installs
+  no tree and runs no build.
 - B340 [5] After an npm step installs its tree, oku finds the packages with
   an install script or a `binding.gyp`. For an `npm:` ref it installs the
   tree once with no scripts before it asks, names them in the translated
