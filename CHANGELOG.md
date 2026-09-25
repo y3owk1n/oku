@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.8.1](https://github.com/y3owk1n/oku/compare/v0.8.0...v0.8.1) (2026-09-25)
+
+
+### Bug Fixes
+
+* **infer:** refuse npm packages with dependencies and pypi packages without their runtime ([#262](https://github.com/y3owk1n/oku/issues/262)) ([2dbedb0](https://github.com/y3owk1n/oku/commit/2dbedb0bd5bd172c6fa44f594b6a9bb49ab5f6a8))
+* **shellhook:** clear the paths bash and zsh remember before each prompt ([#260](https://github.com/y3owk1n/oku/issues/260)) ([d121d2c](https://github.com/y3owk1n/oku/commit/d121d2ce131114acaa05919e64bca6932192b4a2))
+
 ## [0.8.0](https://github.com/y3owk1n/oku/compare/v0.7.0...v0.8.0) (2026-09-24)
 
 
