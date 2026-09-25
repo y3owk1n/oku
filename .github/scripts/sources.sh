@@ -18,8 +18,8 @@ export XDG_STATE_HOME="$root/state"
 oku="$root/oku"
 go build -o "$oku" ./cmd/oku || exit 1
 
-# A pypi: package runs through the python that [runtimes] names, so the global
-# list names the example one of this checkout.
+# oku refuses a pypi: package unless [runtimes] names a python, so the global
+# list names the example python of this checkout.
 mkdir -p "$XDG_CONFIG_HOME/oku"
 printf '[runtimes]\npython = "%s"\n' "$PWD/examples/runtimes/python.toml" >"$XDG_CONFIG_HOME/oku/oku.toml"
 
