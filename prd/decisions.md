@@ -1480,9 +1480,14 @@ the version pinned.
 After an npm step installs its tree with `--ignore-scripts`, oku reads the
 `package.json` of every package in it and finds those with a `preinstall`,
 `install` or `postinstall` script or a `binding.gyp`. For an `npm:` ref, the
-manifest is oku's own translation, so oku translates it again with those names
-in `scripts` and runs the build approval again, which lists them. A manifest
-of the user's is left as it is, with a warning. Why: packages such as esbuild
+manifest is oku's own translation. Before the build approval, oku runs the npm
+step alone into a temporary directory, with no scripts, translates the package
+again with those names in `scripts`, and asks once, listing them. That first
+install runs no code of the package, so it comes before the approval, as the
+install for another platform's pin does. Until 2026-09-25 oku built the
+translation without scripts first and asked a second time, which printed two
+approval lines that read the same and left a build that only `gc` removed.
+oku leaves a manifest of the user's as it is, and warns. Why: packages such as esbuild
 and opencode-ai download or build their native program in an
 install script, and without it they install and then fail at run time.
 Naming them keeps D69's rule that a manifest says whose code runs, and the
