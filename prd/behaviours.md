@@ -462,6 +462,20 @@ order step in `prd/product.md`.
   and takes the smaller of the rest when the host reports sizes. A comment
   lists every other asset that fits the host, in any format, and leaves out a
   universal build beside one for the arch.
+- B349 [4] Among assets that fit a platform in the same format, inference
+  takes one named after the repo, as `atuin-x86_64-apple-darwin.tar.gz`,
+  before one of another program, as `atuin-server-x86_64-apple-darwin.tar.gz`,
+  whatever their sizes.
+- B350 [4] `oku add --asset <glob>` with a glob that names several assets
+  takes the best of them on every platform. The other platforms take the
+  asset of the same program as the host's. When that program is another one
+  of the repo, as `atuin-server` of `atuinsh/atuin`, the package takes that
+  program's name and does not replace the package named after the repo.
+  `oku.toml` records the glob as `asset`.
+- B351 [4] `sync` and `update` infer with the `asset` and `bin` of the
+  package's entry in `oku.toml`, under the entry's name. When the entry's
+  `asset` or `bin` changes, they infer again. For an entry without them, they
+  infer the way `oku.lock` recorded.
 - B222 [4] Inference takes a `.deb`, `.rpm`, `.msi`, `.dmg`, `.pkg` or
   AppImage asset when no archive or single binary fits, a `.dmg` before a
   `.pkg`. An installer's format names its OS, and one that names no arch fits
