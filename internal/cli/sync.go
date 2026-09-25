@@ -28,7 +28,7 @@ import (
 
 const (
 	dryRunFlag  = "dry-run"
-	dryRunUsage = "check everything and print what would change, without changing the machine"
+	dryRunUsage = "check everything and print what would change, and change only the store and the cache"
 	lockedFlag  = "locked"
 	rebuildFlag = "rebuild"
 )
