@@ -63,6 +63,10 @@ order step in `prd/product.md`.
   shows what changed from that one, and starts the line with `from <n>,`
   when it is not the one numbered before, as after a rollback. `--json`
   gives it as `from`.
+- B346 [3] A generation whose replaced generation `gc` deleted says
+  `replaced <n>, which is deleted` in place of what changed. A number is never
+  used twice, so after `gc` the next change takes the number after the
+  highest one.
 - B242 [1] When several packages no longer match `oku.lock`, `sync` and
   `update` finish the others, list every drifted package, and end with one
   `oku update` that names them all, with the names the command was given.
@@ -420,6 +424,9 @@ order step in `prd/product.md`.
 - B23 [3] `oku gc` deletes store paths referenced by no generation of any
   profile, and nothing else. `--keep N` first deletes all but the newest N
   generations and the active one. `--dry-run` deletes nothing.
+- B347 [3] When `gc --keep` deletes generations and no store path becomes
+  unused, it ends with `every store path is still used by a generation`,
+  never with `nothing to delete`.
 - B344 [3] `oku du` gives the size of the store, the profiles, the cache, the
   apps and fonts oku placed, and the rest of its data, and a total that is
   their sum. A file with several hard links counts once. What it says `oku gc`
