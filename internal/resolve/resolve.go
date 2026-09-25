@@ -514,8 +514,11 @@ func branchHead(ctx context.Context, v manifest.Version) (Release, error) {
 		return Release{}, fmt.Errorf("%s: %w: %s", what, err, strings.TrimSpace(string(out)))
 	}
 
+	// git log would fetch the commit's tree, which the clone left out, and so
+	// ask the host a second time. for-each-ref reads only the commit.
 	out, err := exec.CommandContext(
-		ctx, "git", "-C", dir, "log", "-1", "--format=%H %ct", "refs/heads/"+v.Branch,
+		ctx, "git", "-C", dir, "for-each-ref", "--format=%(objectname) %(committerdate:unix)",
+		"refs/heads/"+v.Branch,
 	).Output()
 	if err != nil {
 		return Release{}, fmt.Errorf("%s: %w", what, err)
