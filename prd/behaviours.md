@@ -420,6 +420,13 @@ order step in `prd/product.md`.
 - B23 [3] `oku gc` deletes store paths referenced by no generation of any
   profile, and nothing else. `--keep N` first deletes all but the newest N
   generations and the active one. `--dry-run` deletes nothing.
+- B344 [3] `oku du` gives the size of the store, the profiles, the cache, the
+  apps and fonts oku placed, and the rest of its data, and a total that is
+  their sum. A file with several hard links counts once. What it says `oku gc`
+  frees is what a following `oku gc` frees. It changes nothing.
+- B345 [3] `oku du --packages` lists every store path with the profiles that
+  hold it, and marks one that only old generations hold and one that no
+  generation holds.
 
 ## Publishing
 
@@ -1086,6 +1093,6 @@ order step in `prd/product.md`.
 - B104 [5] A `patch` step applies a unified diff to the source, the same on
   every OS. A hunk that does not fit fails the build and names the file.
 - B103 [11] With `--json`, `list`, `info`, `why`, `generations`, `search`,
-  `source list`, `cache list`, `key list`, `service list`, `service status` and
-  `doctor` print JSON on stdout. An empty result is `[]`, and exit codes do not
+  `source list`, `cache list`, `key list`, `service list`, `service status`,
+  `du` and `doctor` print JSON on stdout. An empty result is `[]`, and exit codes do not
   change.
