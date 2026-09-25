@@ -81,7 +81,8 @@ type Install struct {
 	// Completions.
 	RawCompletions any         `toml:"completions"`
 	Completions    Completions `toml:"-"`
-	App            []string    `toml:"app"`
+	RawApp         []any       `toml:"app"`
+	App            []AppEntry  `toml:"-"`
 	Font           []string    `toml:"font"`
 }
 

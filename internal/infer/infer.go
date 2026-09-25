@@ -8,9 +8,11 @@ import (
 	"errors"
 	"fmt"
 	"path"
+	"regexp"
 	"slices"
 	"strings"
 
+	xdg "github.com/y3owk1n/oku/internal/desktop"
 	"github.com/y3owk1n/oku/internal/forge"
 	"github.com/y3owk1n/oku/internal/platform"
 )
@@ -20,10 +22,14 @@ import (
 // private repo.
 type Inspector func(ctx context.Context, url string, auth forge.Auth) ([]File, error)
 
-// File is one regular file of an unpacked asset.
+// File is one regular file of an unpacked asset. Text holds the text of a
+// Linux desktop entry or of an app bundle's Info.plist, and GUI marks a
+// Windows program that opens no console.
 type File struct {
 	Path       string
 	Executable bool
+	Text       string
+	GUI        bool
 }
 
 var errNoRelease = errors.New("has no release")
@@ -181,10 +187,20 @@ func (inf *Inferrer) Manifest(
 	}
 
 	// The asset --asset picks may hold another program of the repo, as
-	// atuin-server of atuin. Any other name stays the repo's, so the command
-	// of a package added before keeps its name.
+	// tool-server of tool. Any other name stays the repo's, so the command of
+	// a package added before keeps its name.
 	if rest, ok := strings.CutPrefix(picked, program); ok && rest != "" && !isAlnum(rest[0]) {
 		program = picked
+	}
+
+	// A repo's name may add a suffix to its program's, as "tool.zig" or
+	// "tool-rs". When the host's asset is named after the part before it, that
+	// part is the program.
+	if i := slices.IndexFunc(chosen, func(c choice) bool { return c.Matches(host) }); i >= 0 && opts.Asset == "" {
+		if short := stem(chosen[i].asset); short != "" && len(short) < len(program) &&
+			strings.HasPrefix(program, short) && !isAlnum(program[len(short)]) {
+			program = short
+		}
 	}
 
 	name := cmp.Or(opts.Name, program)
@@ -228,19 +244,21 @@ func (inf *Inferrer) Manifest(
 		fmt.Fprintf(&b, "strip_prefix = %q\n", prefix)
 	}
 
-	// Assets with the same ending come from the same packaging step, so oku opens
-	// one of them for all. A zip for Windows is often laid out unlike the tar
-	// archives next to it. oku opens an asset for the host and the lock platforms
-	// only, and a platform outside the lock gets an artifact when its asset has
-	// the ending of one it opened anyway.
+	// Assets of one OS with the same ending come from the same packaging step, so
+	// oku opens one of them for all. A zip for Windows is often laid out unlike
+	// the tar archives next to it, and a zip for macOS may add an app bundle.
+	// oku opens an asset for the host and the lock platforms only, and a
+	// platform outside the lock gets an artifact when its asset has the ending
+	// of one it opened anyway.
 	layouts := map[string]layout{}
+	anyOS := map[string]layout{}
 	hostDone := false
 
 	for _, c := range chosen {
 		isHost := c.Matches(host) && !hostDone
 		kind := ending(c.asset)
 
-		if _, known := layouts[kind]; known || !isHost && !c.pinned(opts.Platforms) {
+		if _, known := layouts[kind+" "+c.OS]; known || !isHost && !c.pinned(opts.Platforms) {
 			continue
 		}
 
@@ -260,7 +278,11 @@ func (inf *Inferrer) Manifest(
 			continue
 		}
 
-		layouts[kind] = l
+		layouts[kind+" "+c.OS] = l
+
+		if _, known := anyOS[kind]; !known {
+			anyOS[kind] = l
+		}
 
 		if isHost {
 			hostDone = true
@@ -272,9 +294,17 @@ func (inf *Inferrer) Manifest(
 	for _, c := range chosen {
 		isHost := c.Matches(host) && !hostDone
 
-		l, known := layouts[ending(c.asset)]
+		kind := ending(c.asset)
+
+		l, known := layouts[kind+" "+c.OS]
 		if !known {
-			continue
+			// An app bundle is macOS's, so the layout of another OS gives none.
+			l, known = anyOS[kind]
+			l.app = nil
+
+			if !known || len(l.bins) == 0 {
+				continue
+			}
 		}
 
 		b.WriteString("\n")
@@ -426,11 +456,22 @@ func choose(
 		chosen = append(chosen, choice{Selector: t.Selector, asset: fits[0], others: others})
 	}
 
+	// Another program of the release is no build of this package. When some
+	// platform has an asset of pkg, a platform with only another program's
+	// gets no artifact, unless --asset picked it. An installer such as a .deb
+	// is named after the distro's package, so its name says nothing.
+	if slices.ContainsFunc(chosen, func(c choice) bool { return sibling(c.asset, pkg) == 0 }) {
+		chosen = slices.DeleteFunc(chosen, func(c choice) bool {
+			return sibling(c.asset, pkg) == 1 && installerOS(strings.ToLower(c.asset)) == "" &&
+				(glob == "" || c.Selector != platform.Selector(host))
+		})
+	}
+
 	return chosen, pkg, nil
 }
 
 // stem returns the part of an asset's name before its version or platform, as
-// "atuin-server" of "atuin-server-x86_64-apple-darwin.tar.gz", or "" when the
+// "tool-server" of "tool-server-x86_64-apple-darwin.tar.gz", or "" when the
 // name starts with one.
 func stem(asset string) string {
 	lower := strings.ToLower(asset)
@@ -575,21 +616,22 @@ func pick(names []string, sizes map[string]int64, pkg string, t target) []string
 		fits = append(fits, name)
 	}
 
-	// A build for the arch sorts before a universal one. A command line build
-	// sorts before a desktop app, which holds no program to link. A tar archive
-	// keeps file modes, so it sorts before a zip, and both sort before an
-	// installer, whose paths are the ones of an install tree. An asset named
-	// after the package sorts before one of another program of the same release,
-	// as "atuin-x86_64" before "atuin-server-x86_64". A smaller asset
+	// An asset named after the package sorts before one of another program of
+	// the same release, as "tool-x86_64" before "tool-server-x86_64", in any
+	// format and for any arch. A build for the arch sorts before a universal
+	// one. A command line build sorts before a desktop app, which holds no
+	// program to link. A tar archive keeps file modes, so it sorts before a
+	// zip, and both sort before an installer, whose paths are the ones of an
+	// install tree. A smaller asset
 	// sorts before a larger one, because a desktop app with a plain name still
 	// bundles far more than a command line tool. A shorter name sorts before variants such as
 	// "-debug".
 	slices.SortFunc(fits, func(a, b string) int {
 		return cmp.Or(
+			cmp.Compare(sibling(a, pkg), sibling(b, pkg)),
 			cmp.Compare(t.fat(a), t.fat(b)),
 			cmp.Compare(desktop(a), desktop(b)),
 			cmp.Compare(rank(a), rank(b)),
-			cmp.Compare(sibling(a, pkg), sibling(b, pkg)),
 			smaller(sizes[a], sizes[b]),
 			cmp.Compare(len(a), len(b)),
 			strings.Compare(a, b),
@@ -673,7 +715,7 @@ func rank(name string) int {
 }
 
 // sibling is 1 for an asset of another program than pkg, as
-// "atuin-server-x86_64" is for atuin.
+// "tool-server-x86_64" is for tool.
 func sibling(name, pkg string) int {
 	if stem(name) == pkg {
 		return 0
@@ -903,14 +945,24 @@ func findLayout(files []File, name string, named []string, archive bool) (layout
 	}
 
 	if !archive {
+		var l layout
+
 		switch len(wants) {
 		case 0:
-			return layout{bins: []string{name}}, nil
+			l.bins = []string{name}
 		case 1:
-			return layout{bins: wants}, nil
+			l.bins = wants
 		default:
-			return layout{}, errors.New("the download is a single program, so --bin names one")
+			return l, errors.New("the download is a single program, so --bin names one")
 		}
+
+		// A Windows program for the GUI is an app, which oku stores under the
+		// bin's name.
+		if len(files) == 1 && files[0].GUI {
+			l.app = []string{l.bins[0] + ".exe"}
+		}
+
+		return l, nil
 	}
 
 	var l layout
@@ -943,8 +995,20 @@ func findLayout(files []File, name string, named []string, archive bool) (layout
 	}
 
 	// plain are the files that are not executable. A zip made on Windows keeps
-	// no modes, so its programs are among them.
-	var executables, plain []string
+	// no modes, so its programs are among them. inBundle are the programs of
+	// an app bundle, which the app runs, and some of which work in a terminal.
+	var executables, plain, inBundle []string
+
+	// mains are the programs that open each bundle's app, which its Info.plist
+	// names.
+	mains := map[string]string{}
+
+	for _, f := range files {
+		rel := inside(f.Path)
+		if bundle := bundleOf(rel); bundle != "" && rel == bundle+"/Contents/Info.plist" {
+			mains[bundle] = bundleExecutable(f.Text)
+		}
+	}
 
 	for _, f := range files {
 		// Some archives mark every file executable, so a man page is recognised by
@@ -953,6 +1017,10 @@ func findLayout(files []File, name string, named []string, archive bool) (layout
 		case bundle != "":
 			if !slices.Contains(l.app, bundle) {
 				l.app = append(l.app, bundle)
+			}
+
+			if rel := inside(f.Path); f.Executable && bundleProgram(rel, bundle) {
+				inBundle = append(inBundle, rel)
 			}
 		case strings.HasSuffix(f.Path, ".1"):
 			l.man = append(l.man, inside(f.Path))
@@ -986,7 +1054,38 @@ func findLayout(files []File, name string, named []string, archive bool) (layout
 			return found[0]
 		}
 
+		// --bin may name any program of a bundle.
+		for _, p := range inBundle {
+			if named && program(p) == want {
+				return p
+			}
+		}
+
 		return ""
+	}
+
+	// A program of a bundle whose name starts with the package's is a
+	// command. The program that opens the app is one only when it has the
+	// package's name. A command replaces a program of the same name outside the
+	// bundle, so the command runs the app's own program.
+	commands := func() {
+		for _, p := range inBundle {
+			// A plist that oku cannot read leaves the program named after the
+			// bundle as the one that opens the app.
+			bundle := bundleOf(p)
+			main := cmp.Or(mains[bundle], strings.TrimSuffix(path.Base(bundle), ".app"))
+
+			base := path.Base(p)
+			if !strings.HasPrefix(strings.ToLower(base), name) || base == main && base != name {
+				continue
+			}
+
+			if i := slices.IndexFunc(l.bins, func(bin string) bool { return path.Base(bin) == base }); i >= 0 {
+				l.bins[i] = p
+			} else {
+				l.bins = append(l.bins, p)
+			}
+		}
 	}
 
 	for _, want := range wants {
@@ -1007,6 +1106,8 @@ func findLayout(files []File, name string, named []string, archive bool) (layout
 			main = executables[0]
 		case len(l.app) > 0:
 			// An app with helpers beside it is still an app.
+			commands()
+
 			return l, nil
 		case len(executables) == 0:
 			return l, errors.New("no file in it is executable\nwrite a manifest for it")
@@ -1020,7 +1121,10 @@ func findLayout(files []File, name string, named []string, archive bool) (layout
 
 		l.bins = append(l.bins, main)
 		l.bins = append(l.bins, siblings(main, executables, plain)...)
+		commands()
 	}
+
+	l.app = append(l.app, launched(files, l.bins, inside)...)
 
 	for i, bin := range l.bins {
 		l.bins[i] = strings.TrimSuffix(bin, ".exe")
@@ -1036,6 +1140,54 @@ func findLayout(files []File, name string, named []string, archive bool) (layout
 	}
 
 	return l, nil
+}
+
+var bundleExecutableRe = regexp.MustCompile(`<key>CFBundleExecutable</key>\s*<string>([^<]+)</string>`)
+
+// bundleExecutable returns the program an XML Info.plist says opens the app,
+// or "".
+func bundleExecutable(plist string) string {
+	if m := bundleExecutableRe.FindStringSubmatch(plist); m != nil {
+		return strings.TrimSpace(m[1])
+	}
+
+	return ""
+}
+
+// bundleProgram reports whether rel, a file of bundle, is where a bundle keeps
+// its programs: Contents/MacOS, or a bin directory under Contents/Resources.
+func bundleProgram(rel, bundle string) bool {
+	dir := path.Dir(strings.TrimPrefix(rel, bundle+"/"))
+
+	return dir == "Contents/MacOS" || strings.HasPrefix(dir, "Contents/Resources/") && path.Base(dir) == "bin"
+}
+
+// launched returns the apps of Linux and Windows among files: a desktop entry
+// that a desktop shows in its menu and that runs one of bins, and a Windows
+// program of bins for the GUI. inside maps a file's path to the package's.
+func launched(files []File, bins []string, inside func(string) string) []string {
+	var apps []string
+
+	for _, f := range files {
+		rel := inside(f.Path)
+
+		switch {
+		case bundleOf(rel) != "":
+		case strings.HasSuffix(rel, ".desktop") && f.Text != "":
+			fields := xdg.Parse(f.Text)
+			runs := program(xdg.Program(fields["Exec"]))
+
+			if xdg.Launches(fields) && slices.ContainsFunc(bins, func(bin string) bool {
+				return program(bin) == runs
+			}) {
+				apps = append(apps, rel)
+			}
+		case f.GUI && slices.Contains(bins, rel):
+			apps = append(apps, rel)
+		}
+	}
+
+	return apps
 }
 
 // siblings returns the programs in the directory of main whose names start

@@ -1,9 +1,11 @@
 package cli
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"maps"
+	"path"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -326,7 +328,11 @@ func (e env) planFrom(
 	p.Install = "download"
 	p.URL = artifact.URL
 	p.Commands = artifact.Completions.Generate != ""
-	p.Apps, p.Fonts = artifact.App, artifact.Font
+	p.Fonts = artifact.Font
+
+	for _, app := range artifact.App {
+		p.Apps = append(p.Apps, cmp.Or(app.Name, path.Base(app.Path)))
+	}
 
 	for _, bin := range artifact.Bin {
 		p.Programs = append(p.Programs, filepath.Base(bin))

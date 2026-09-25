@@ -267,10 +267,7 @@ patch = { file = "greet.patch" }
 run = "echo home=%USERPROFILE% > where.txt && go build -o hello.exe ."
 shell = "cmd"
 [[build.step]]
-install = { bin = ["hello.exe"], share = ["where.txt"], font = ["OkuLive.ttf"] }
-[[app]]
-name = "Oku Hello"
-exec = "bin/hello.exe"
+install = { bin = ["hello.exe"], share = ["where.txt"], font = ["OkuLive.ttf"], app = [{ path = "hello.exe", name = "Oku Hello" }] }
 "@
 
 Set-Location $root
@@ -394,10 +391,7 @@ needs = ["go"]
 run = "Copy-Item '$tickerGo' main.go; Set-Content go.mod 'module sysdemo'; go build -o sysdemo.exe .; Copy-Item (Join-Path `$env:SystemRoot 'Fonts/arial.ttf') OkuSystem.ttf"
 shell = "pwsh"
 [[build.step]]
-install = { bin = ["sysdemo.exe"], font = ["OkuSystem.ttf"] }
-[[app]]
-name = "Oku System Demo"
-exec = "bin/sysdemo.exe"
+install = { bin = ["sysdemo.exe"], font = ["OkuSystem.ttf"], app = [{ path = "sysdemo.exe", name = "Oku System Demo" }] }
 [[service]]
 name = "sysdemo"
 command = "bin/sysdemo.exe"

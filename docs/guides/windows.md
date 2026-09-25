@@ -63,7 +63,7 @@ back.
 
 | | Where |
 |---|---|
-| `[[app]]` | `%APPDATA%\Microsoft\Windows\Start Menu\Programs\oku-<name>.lnk`, a shortcut to the program in the store |
+| `app = [...]` | `%APPDATA%\Microsoft\Windows\Start Menu\Programs\oku-<name>.lnk`, a shortcut to the program in the store |
 | `font = [...]` | `%LOCALAPPDATA%\Microsoft\Windows\Fonts\<file>`, and a value `oku <file>` under `HKCU\Software\Microsoft\Windows NT\CurrentVersion\Fonts` |
 
 Windows shows a per-user font to programs only when the registry names it, so
@@ -71,7 +71,8 @@ oku writes that value and deletes it again with the font. oku creates the
 shortcut through `powershell`. `oku remove`, `oku rollback` and
 `oku self uninstall` take all of it away, as on the other systems.
 
-A macOS `app = [...]` bundle is not used on Windows.
+A Windows artifact names its program in `app`, as `app = ["bin/foo.exe"]`. See
+[Apps and fonts](../reference/manifest.md#apps-and-fonts).
 
 ## Place files in your home directory
 

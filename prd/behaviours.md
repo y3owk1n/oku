@@ -462,10 +462,10 @@ order step in `prd/product.md`.
   and takes the smaller of the rest when the host reports sizes. A comment
   lists every other asset that fits the host, in any format, and leaves out a
   universal build beside one for the arch.
-- B349 [4] Among assets that fit a platform in the same format, inference
-  takes one named after the repo, as `atuin-x86_64-apple-darwin.tar.gz`,
-  before one of another program, as `atuin-server-x86_64-apple-darwin.tar.gz`,
-  whatever their sizes.
+- B349 [4] Among assets that fit a platform, inference takes one named after
+  the repo, as `atuin-x86_64-apple-darwin.tar.gz`, before one of another
+  program, as `atuin-server-x86_64-apple-darwin.tar.gz`, whatever their
+  format, arch and sizes.
 - B350 [4] `oku add --asset <glob>` with a glob that names several assets
   takes the best of them on every platform. The other platforms take the
   asset of the same program as the host's. When that program is another one
@@ -476,12 +476,34 @@ order step in `prd/product.md`.
   package's entry in `oku.toml`, under the entry's name. When the entry's
   `asset` or `bin` changes, they infer again. For an entry without them, they
   infer the way `oku.lock` recorded.
+- B352 [4] Inference opens one asset of each OS and ending, so each OS's
+  artifact names its own apps. A Linux desktop entry that runs one of the
+  programs and shows in a menu is an `app`, and a Windows program for the GUI
+  subsystem is one too. A program of a macOS bundle replaces one of the same
+  name beside the bundle.
+- B353 [4] When one platform has an asset named after the repo, inference
+  gives no artifact to a platform that has only another program's asset. An
+  installer such as a `.deb` keeps its platform whatever its name.
+- B354 [8] An artifact's `app` names a bundle, a desktop entry or a program.
+  On Linux oku writes a desktop entry for each desktop entry or program, with
+  its name, the program it runs and its icon, and on Windows a Start Menu
+  shortcut. A table sets the name and icon the file does not say.
+- B355 [4] A manifest with a top-level `[[app]]` fails, and the error names
+  the artifact's `app`.
+- B356 [4] When a repo's name adds a suffix to the name of the host's asset, as
+  `skhd.zig` to `skhd-arm64-macos.tar.gz`, the part before the suffix names the
+  inferred program and package.
+- B357 [8] On macOS a command inside an app bundle of `app` runs the bundle's
+  copy in an Applications folder when that copy's `Info.plist` is this
+  build's, and the store's copy otherwise.
 - B222 [4] Inference takes a `.deb`, `.rpm`, `.msi`, `.dmg`, `.pkg` or
   AppImage asset when no archive or single binary fits, a `.dmg` before a
   `.pkg`. An installer's format names its OS, and one that names no arch fits
   amd64 and arm64 of that OS. An asset that holds `Name.app` gives
-  `app = ["Name.app"]`, the files inside the bundle are no program, and oku
-  does not strip a bundle at the top of the asset. A `.deb` or `.rpm` symlink
+  `app = ["Name.app"]`, and oku does not strip a bundle at the top of the
+  asset. A program of the bundle whose name starts with the package's is a
+  program, except the one `Info.plist` says opens the app, unless that one has
+  the package's name. A `.deb` or `.rpm` symlink
   to an absolute path names a file of the package.
 - B199 [4] When an install from a manifest oku inferred in the same run fails,
   the error says which asset oku chose for this machine, which other assets

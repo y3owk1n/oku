@@ -2046,6 +2046,13 @@ func TestB23GCDeletesOnlyStorePathsNoGenerationUses(t *testing.T) {
 func inferServer(t *testing.T, m *machine, assets map[string]string) {
 	t.Helper()
 
+	inferServerFor(t, m, "owner/tool", assets)
+}
+
+// inferServerFor fakes the GitHub repo that inferServer does, under another name.
+func inferServerFor(t *testing.T, m *machine, repo string, assets map[string]string) {
+	t.Helper()
+
 	var items []string
 	for name, file := range assets {
 		// GitHub reports the size of each asset, and inference compares them.
@@ -2067,16 +2074,16 @@ func inferServer(t *testing.T, m *machine, assets map[string]string) {
 	) + `]}`
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch r.URL.Path {
-		case "/api/repos/owner/tool/commits/HEAD":
+		switch strings.TrimPrefix(r.URL.Path, "/api/repos/"+repo) {
+		case "/commits/HEAD":
 			_, _ = w.Write([]byte("5555555555555555555555555555555555555555"))
-		case "/api/repos/owner/tool/releases/latest":
+		case "/releases/latest":
 			_, _ = w.Write([]byte(latest))
-		case "/api/repos/owner/tool/releases/tags/nightly":
+		case "/releases/tags/nightly":
 			_, _ = w.Write([]byte(nightly))
-		case "/api/repos/owner/tool/releases/tags/v1.3.0":
+		case "/releases/tags/v1.3.0":
 			_, _ = w.Write([]byte(strings.Replace(latest, "v1.4.0", "v1.3.0", 1)))
-		case "/api/repos/owner/tool/releases":
+		case "/releases":
 			_, _ = w.Write([]byte(`[{"tag_name": "v1.4.0"}]`))
 		default:
 			http.NotFound(w, r)
@@ -4985,7 +4992,7 @@ func TestB69EnvThatControlsOtherProgramsIsRejected(t *testing.T) {
 }
 
 // desktopManifest writes a package that ships a program, a macOS app bundle, a
-// Linux launcher and a font.
+// Linux desktop entry with an icon, and a font.
 func (m machine) desktopManifest(t *testing.T) string {
 	t.Helper()
 
@@ -4996,9 +5003,13 @@ func (m machine) desktopManifest(t *testing.T) string {
 			"Foo.app/Contents/MacOS/foo":  script,
 			"Foo.app/Contents/Info.plist": "<plist/>",
 			"fonts/Test.ttf":              "not really a font",
+			"share/applications/foo.desktop": "[Desktop Entry]\nType=Application\nName=Foo\n" +
+				"Exec=foo %U\nIcon=foo\n",
+			"share/icons/hicolor/48x48/apps/foo.png":   "small",
+			"share/icons/hicolor/256x256/apps/foo.png": "large",
 		},
-		"bin = [\"Foo.app/Contents/MacOS/foo\"]\napp = [\"Foo.app\"]\nfont = [\"fonts/Test.ttf\"]\n"+
-			"[[app]]\nname = \"Foo\"\nexec = \"bin/foo\"\n",
+		"bin = [\"Foo.app/Contents/MacOS/foo\"]\n"+
+			"app = [\"Foo.app\", \"share/applications/foo.desktop\"]\nfont = [\"fonts/Test.ttf\"]\n",
 	)
 }
 
@@ -5033,8 +5044,10 @@ func TestB70AppAppearsForTheUserAndRemoveAndRollbackTakeItAway(t *testing.T) {
 		entry, err := os.ReadFile(app)
 		must(t, err)
 
+		// The largest icon of the theme wins.
 		if !strings.Contains(string(entry), "Name=Foo") ||
-			!strings.Contains(string(entry), "/bin/foo") {
+			!strings.Contains(string(entry), "/bin/foo") ||
+			!strings.Contains(string(entry), "256x256/apps/foo.png") {
 			t.Fatalf("the desktop entry is:\n%s", entry)
 		}
 	}

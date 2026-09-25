@@ -31,8 +31,9 @@ type Manifest struct {
 	Artifacts []Artifact `toml:"artifact"`
 	Build     *Build     `toml:"build"`
 	Runtime   Runtime    `toml:"runtime"`
-	// Apps holds launcher entries for Linux desktops.
-	Apps []App `toml:"app"`
+	// OldApps is a top-level [[app]], which an artifact's app replaced. Parse
+	// refuses it.
+	OldApps []any `toml:"app"`
 	// Services holds long-running programs the OS's service manager can run.
 	Services []Service `toml:"service"`
 	// Env holds variables the shell hook exports while the package is installed.
@@ -166,9 +167,11 @@ type Artifact struct {
 	Lib     []string `toml:"lib"`
 	Include []string `toml:"include"`
 	Share   []string `toml:"share"`
-	// App holds macOS app bundles, such as "Foo.app". Font holds font files.
-	App  []string `toml:"app"`
-	Font []string `toml:"font"`
+	// RawApp is "app" as TOML gives it. Parse reads it into App, the desktop
+	// apps of the download. Font holds font files.
+	RawApp []any      `toml:"app"`
+	App    []AppEntry `toml:"-"`
+	Font   []string   `toml:"font"`
 	// Data marks a package that only holds files and exposes nothing, such as a
 	// repo of templates. A list reaches them with {{pkg.<name>}}.
 	Data bool `toml:"data"`
@@ -188,11 +191,19 @@ type Service struct {
 	When    platform.When `toml:"-"`
 }
 
-// App is a launcher entry for Linux desktops, from a [[app]] table.
-type App struct {
-	Name string `toml:"name"`
-	Exec string `toml:"exec"`
-	Icon string `toml:"icon"`
+// AppEntry is one entry of "app": a macOS bundle such as "Foo.app", a Linux
+// desktop entry such as "share/applications/foo.desktop", or a program that
+// gets a launcher, such as "bin/foo.exe". Name and Icon set what the file does
+// not say.
+type AppEntry struct {
+	Path string
+	Name string
+	Icon string
+}
+
+// Bundle reports whether e is a macOS app bundle.
+func (e AppEntry) Bundle() bool {
+	return strings.HasSuffix(strings.TrimSuffix(e.Path, "/"), ".app")
 }
 
 // Wrapper is a program that oku writes into the package. It runs Run with Args
@@ -300,6 +311,10 @@ func (m *Manifest) validate() error {
 				if err != nil {
 					errs = append(errs, fmt.Errorf("build.step[%d]: install.%w", i, err))
 				}
+
+				if step.Install.App, err = splitApp(step.Install.RawApp); err != nil {
+					errs = append(errs, fmt.Errorf("build.step[%d]: install.%w", i, err))
+				}
 			}
 
 			switch {
@@ -369,10 +384,11 @@ func (m *Manifest) validate() error {
 		m.Build.When = when
 	}
 
-	for i, app := range m.Apps {
-		if app.Name == "" || app.Exec == "" {
-			errs = append(errs, fmt.Errorf("app[%d]: name and exec are required", i))
-		}
+	if len(m.OldApps) > 0 {
+		errs = append(errs, errors.New(
+			"[[app]] is gone, name the app in the artifact's app, as "+
+				`app = [{ path = "bin/foo", name = "Foo" }]`,
+		))
 	}
 
 	for i := range m.Services {
@@ -812,9 +828,56 @@ func (a *Artifact) splitBin() error {
 		return err
 	}
 
-	a.Completions, err = parseCompletions(a.RawCompletions, binNames(a.Bin, a.Wrap))
+	if a.Completions, err = parseCompletions(a.RawCompletions, binNames(a.Bin, a.Wrap)); err != nil {
+		return err
+	}
+
+	a.App, err = splitApp(a.RawApp)
 
 	return err
+}
+
+// splitApp reads an "app" list. An entry is a path, or a table with path and
+// the name or icon of its launcher.
+func splitApp(raw []any) ([]AppEntry, error) {
+	entries := make([]AppEntry, 0, len(raw))
+
+	for i, value := range raw {
+		var e AppEntry
+
+		switch v := value.(type) {
+		case string:
+			e.Path = v
+		case map[string]any:
+			for key, field := range v {
+				_, ok := field.(string)
+
+				switch {
+				case key != "path" && key != "name" && key != "icon":
+					return nil, fmt.Errorf("app[%d]: unknown key %q, use path, name and icon", i, key)
+				case !ok:
+					return nil, fmt.Errorf("app[%d]: %s must be a string", i, key)
+				}
+			}
+
+			e.Path, _ = v["path"].(string)
+			e.Name, _ = v["name"].(string)
+			e.Icon, _ = v["icon"].(string)
+		default:
+			return nil, fmt.Errorf("app[%d]: want a path or a table with path", i)
+		}
+
+		switch {
+		case e.Path == "":
+			return nil, fmt.Errorf("app[%d]: path is required", i)
+		case e.Bundle() && (e.Name != "" || e.Icon != ""):
+			return nil, fmt.Errorf("app[%d]: a bundle names itself, so it takes no name or icon", i)
+		}
+
+		entries = append(entries, e)
+	}
+
+	return entries, nil
 }
 
 // splitBin reads a "bin" list. An entry is a path, or a table with name and

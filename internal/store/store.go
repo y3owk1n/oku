@@ -6,6 +6,7 @@ import (
 	"bufio"
 	"context"
 	"crypto/sha256"
+	"encoding/binary"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -22,6 +23,7 @@ import (
 
 	"github.com/pelletier/go-toml/v2"
 
+	"github.com/y3owk1n/oku/internal/expose"
 	"github.com/y3owk1n/oku/internal/forge"
 	"github.com/y3owk1n/oku/internal/infer"
 	"github.com/y3owk1n/oku/internal/manifest"
@@ -71,8 +73,8 @@ type Meta struct {
 	// VendorSHA256 is the digest of what the vendor steps of a build downloaded.
 	// For a build, URL and SHA256 are its source archive.
 	VendorSHA256 string `toml:"vendor_sha256,omitempty"`
-	// Launchers are the package's Linux desktop entries.
-	Launchers []manifest.App `toml:"launcher,omitempty"`
+	// Launchers are the package's desktop launchers for Linux and Windows.
+	Launchers []expose.Launcher `toml:"launcher,omitempty"`
 	// Services are the package's long-running programs.
 	Services []manifest.Service `toml:"service,omitempty"`
 }
@@ -134,6 +136,11 @@ func (s *Store) artifactPath(
 	deps []Dep,
 ) string {
 	extra := []string{sha256}
+
+	// A command of an app bundle names its store path.
+	if len(bundleCommands(a.App, a.Bin, a.Wrap, p.OS)) > 0 {
+		extra = append(extra, "app", s.dir)
+	}
 
 	if len(a.Wrap) > 0 {
 		extra = append(extra, "wrap", s.dir)
@@ -248,6 +255,13 @@ func (s *Store) Realize(
 		return Realized{}, err
 	}
 
+	for name, command := range bundleCommands(a.App, a.Bin, a.Wrap, p.OS) {
+		bundle := filepath.Join(final, "pkg", filepath.FromSlash(command[0]))
+		if err := writeAppCommand(filepath.Join(tmp, "bin", name), bundle, command[1]); err != nil {
+			return Realized{}, fmt.Errorf("bin %q: %w", name, err)
+		}
+	}
+
 	if err := writeWrappers(tmp, final, m, a, p, deps); err != nil {
 		return Realized{}, err
 	}
@@ -258,13 +272,30 @@ func (s *Store) Realize(
 		}
 	}
 
+	pkg := filepath.Join(tmp, "pkg")
+
+	apps, err := launchers(a.App, pkg, func(rel string) (string, error) {
+		if isFile(filepath.Join(pkg, filepath.FromSlash(rel))) {
+			return "pkg/" + rel, nil
+		}
+
+		if _, err := os.Lstat(filepath.Join(tmp, "bin", path.Base(rel))); err == nil {
+			return "bin/" + path.Base(rel), nil
+		}
+
+		return "", fmt.Errorf("it runs %s, which the package does not hold", rel)
+	}, func(rel string) (string, error) { return "pkg/" + rel, nil })
+	if err != nil {
+		return Realized{}, err
+	}
+
 	meta, err := toml.Marshal(Meta{
 		Name:      m.Package.Name,
 		Version:   m.Version.Value,
 		Platform:  p.String(),
 		URL:       a.URL,
 		SHA256:    a.SHA256,
-		Launchers: m.Apps,
+		Launchers: apps,
 		Services:  m.ServicesFor(p),
 	})
 	if err != nil {
@@ -539,8 +570,12 @@ func linkOutputs(tmp string, a manifest.Artifact) error {
 	}
 
 	for _, entry := range a.App {
-		if err := linkDir(tmp, entry, path.Join("apps", path.Base(entry))); err != nil {
-			return fmt.Errorf("app %q: %w", entry, err)
+		if !entry.Bundle() {
+			continue
+		}
+
+		if err := linkDir(tmp, entry.Path, path.Join("apps", path.Base(entry.Path))); err != nil {
+			return fmt.Errorf("app %q: %w", entry.Path, err)
 		}
 	}
 
@@ -909,7 +944,7 @@ func (s *Store) Inspect(ctx context.Context, url string) ([]infer.File, error) {
 			return nil, err
 		}
 
-		return []infer.File{{Path: path.Base(url), Executable: true}}, nil
+		return []infer.File{{Path: path.Base(url), Executable: true, GUI: windowsGUI(download)}}, nil
 	}
 
 	if err != nil {
@@ -933,15 +968,59 @@ func (s *Store) Inspect(ctx context.Context, url string) ([]infer.File, error) {
 			return err
 		}
 
-		files = append(files, infer.File{
+		file := infer.File{
 			Path:       filepath.ToSlash(rel),
 			Executable: info.Mode()&0o111 != 0 || strings.HasSuffix(p, ".exe"),
-		})
+		}
+
+		switch {
+		case (strings.HasSuffix(p, ".desktop") || strings.HasSuffix(filepath.ToSlash(rel), ".app/Contents/Info.plist")) &&
+			info.Size() < 1<<16:
+			data, err := os.ReadFile(p)
+			if err != nil {
+				return err
+			}
+
+			file.Text = string(data)
+		case strings.HasSuffix(strings.ToLower(p), ".exe"):
+			file.GUI = windowsGUI(p)
+		}
+
+		files = append(files, file)
 
 		return nil
 	})
 
 	return files, err
+}
+
+// windowsGUI reports whether the file at p is a Windows program for the GUI
+// subsystem, which opens no console. Its PE header says so.
+func windowsGUI(p string) bool {
+	f, err := os.Open(p)
+	if err != nil {
+		return false
+	}
+	defer f.Close()
+
+	head := make([]byte, 4096)
+	n, _ := io.ReadFull(f, head)
+	head = head[:n]
+
+	if len(head) < 0x40 || string(head[:2]) != "MZ" {
+		return false
+	}
+
+	// The optional header follows the 4-byte signature and the 20-byte file
+	// header, and its subsystem field is at offset 68 in PE32 and PE32+.
+	at := int(binary.LittleEndian.Uint32(head[0x3c:]))
+	if at < 0 || at+24+70 > len(head) || string(head[at:at+4]) != "PE\x00\x00" {
+		return false
+	}
+
+	const subsystemGUI = 2
+
+	return binary.LittleEndian.Uint16(head[at+24+68:]) == subsystemGUI
 }
 
 // Hashes downloads url into the cache and returns the two digests a manifest

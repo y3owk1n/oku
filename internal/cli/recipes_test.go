@@ -506,7 +506,7 @@ func TestB292AScoopManifestTranslatesItsArchesProgramsAndShortcuts(t *testing.T)
 		"# The arguments of tool-data.exe name folders of Scoop's, so oku runs it without them.",
 		"# oku runs no script of a recipe, so it left out pre_install, post_install.",
 		"[runtime]\ndeps = [\"scoop:extras/helper\"]",
-		"[[app]]\nname = \"Tool\"\nexec = \"bin/ToolGui.exe\"",
+		`app = [{ path = "gui/ToolGui.exe", name = "Tool" }]`,
 	} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("the manifest lacks %q:\n%s", want, out)
