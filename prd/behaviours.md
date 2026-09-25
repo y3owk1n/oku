@@ -307,6 +307,10 @@ order step in `prd/product.md`.
 - B250 [3] oku keeps each answer of a forge API with its ETag and asks again
   with `If-None-Match`. When the host answers 304, `update` uses the answer it
   kept, and a changed answer replaces it.
+- B359 [3] One command asks each version source once. Packages that share a
+  repo, a registry package or a git URL make one request or one git call
+  between them. So do inference and the version lookup of one package, and the
+  two lookups of `outdated`.
 - B251 [3] When GitHub answers 429, or 403 with `Retry-After`, oku stops and
   says how many seconds to wait.
 - B262 [3] `oku outdated` lists each package of `oku.lock` whose newest
