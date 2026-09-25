@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"bytes"
 	"compress/bzip2"
-	"compress/gzip"
 	"errors"
 	"fmt"
 	"io"
@@ -21,10 +20,10 @@ import (
 	"github.com/bodgit/sevenzip"
 	"github.com/cavaliergopher/cpio"
 	"github.com/cavaliergopher/rpm"
+	"github.com/klauspost/compress/gzip"
 	"github.com/klauspost/compress/zstd"
-	"github.com/ulikunitz/xz"
 
-	bcj "github.com/y3owk1n/oku/internal/xz"
+	"github.com/y3owk1n/oku/internal/xz"
 
 	"github.com/y3owk1n/oku/internal/tempdir"
 )
@@ -59,10 +58,8 @@ func decompress(r io.Reader) (io.Reader, error) {
 		return gzip.NewReader(buffered)
 	case bytes.HasPrefix(head, magicBzip2):
 		return bzip2.NewReader(buffered), nil
-	case bytes.HasPrefix(head, magicXZ) && xzFilterChain(buffered):
-		return bcj.NewReader(buffered, 1<<30)
 	case bytes.HasPrefix(head, magicXZ):
-		return xz.NewReader(buffered)
+		return xz.NewReader(buffered, 1<<30)
 	case bytes.HasPrefix(head, magicZstd):
 		decoder, err := zstd.NewReader(buffered)
 		if err != nil {
@@ -496,14 +493,4 @@ func expandPackages(dest string) error {
 	}
 
 	return nil
-}
-
-// xzFilterChain reports whether the first block of the xz stream in r uses more
-// than one filter, such as a BCJ filter before LZMA2. The block header follows
-// the 12 bytes of the stream header, and the low two bits of its flags hold the
-// number of filters less one.
-func xzFilterChain(r *bufio.Reader) bool {
-	head, err := r.Peek(14)
-
-	return err == nil && head[12] != 0 && head[13]&0x03 != 0
 }
