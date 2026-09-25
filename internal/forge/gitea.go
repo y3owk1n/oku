@@ -132,28 +132,32 @@ func (g *gitea) Release(ctx context.Context, repo, tag string) (Release, error) 
 // server gives by default.
 const giteaPage = 50
 
-// Releases reads the newest maxReleases releases, one page at a time.
+// Releases reads the newest maxReleases releases.
 func (g *gitea) Releases(ctx context.Context, repo string) ([]Release, error) {
-	var releases []Release
-
-	for page := 1; len(releases) < maxReleases; page++ {
-		var found []giteaRelease
-
-		err := g.json(ctx, repo, fmt.Sprintf("/releases?limit=%d&page=%d", giteaPage, page), &found)
+	return readReleases(ctx, giteaPage, func(ctx context.Context, page int) ([]Release, int, error) {
+		body, link, err := g.read(ctx, repo, fmt.Sprintf("/releases?limit=%d&page=%d", giteaPage, page))
 		if err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 
-		for _, release := range found {
-			releases = append(releases, release.release())
+		var found []giteaRelease
+		if err := json.Unmarshal(body, &found); err != nil {
+			return nil, 0, err
 		}
 
-		if len(found) < giteaPage {
-			break
+		releases := make([]Release, len(found))
+		for i, release := range found {
+			releases[i] = release.release()
 		}
-	}
 
-	return releases, nil
+		// A server that sends no Link header has more when the page is full.
+		last := lastPage(link)
+		if link == "" && len(found) == giteaPage {
+			last = -1
+		}
+
+		return releases, last, nil
+	})
 }
 
 func (g *gitea) TagCommit(ctx context.Context, repo, tag string) (Commit, error) {
@@ -185,11 +189,19 @@ func (g *gitea) Archive(ctx context.Context, repo, commit string) ([]byte, error
 }
 
 func (g *gitea) get(ctx context.Context, repo, path string) ([]byte, error) {
+	body, _, err := g.read(ctx, repo, path)
+
+	return body, err
+}
+
+// read returns the answer for path and the Link header, which names the other
+// pages of a list.
+func (g *gitea) read(ctx context.Context, repo, path string) ([]byte, string, error) {
 	req, err := http.NewRequestWithContext(
 		ctx, http.MethodGet, "https://"+g.host+"/api/v1/repos/"+repo+path, nil,
 	)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
 	req.Header.Set("User-Agent", "oku")
@@ -200,25 +212,25 @@ func (g *gitea) get(ctx context.Context, repo, path string) ([]byte, error) {
 
 	resp, err := g.http.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	defer resp.Body.Close()
 
 	switch {
 	case resp.StatusCode == http.StatusNotFound:
-		return nil, ErrNotFound
+		return nil, "", ErrNotFound
 	case resp.StatusCode != http.StatusOK:
-		return nil, fmt.Errorf("%s returned %s", g.host, resp.Status)
+		return nil, "", fmt.Errorf("%s returned %s", g.host, resp.Status)
 	}
 
 	body, err := io.ReadAll(io.LimitReader(resp.Body, maxBody+1))
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
 	if len(body) > maxBody {
-		return nil, fmt.Errorf("response is larger than %d bytes", maxBody)
+		return nil, "", fmt.Errorf("response is larger than %d bytes", maxBody)
 	}
 
-	return body, nil
+	return body, resp.Header.Get("Link"), nil
 }

@@ -25,6 +25,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -1353,13 +1354,21 @@ func TestB19AddStoresAFileInsideTheProjectRelativeToIt(t *testing.T) {
 // releaseServer fakes the GitHub releases API for owner/tool. The test changes
 // tags between calls, and hits counts the requests. Like GitHub it sends an
 // ETag and answers 304 to a request whose If-None-Match holds it, and
-// unchanged counts those answers.
+// unchanged counts those answers. Like GitHub its Link header names the next
+// and the last page, and nextOnly leaves out the last.
 type releaseServer struct {
 	*httptest.Server
 
 	tags      []string
 	hits      int
 	unchanged int
+	nextOnly  bool
+
+	// together holds each request for a page after the first until that many
+	// have been in flight at once, for up to a second. most records the most
+	// requests for later pages that were in flight at once.
+	together, inFlight, most int
+	mu                       sync.Mutex
 }
 
 func newReleaseServer(t *testing.T, tags ...string) *releaseServer {
@@ -1373,7 +1382,9 @@ func newReleaseServer(t *testing.T, tags ...string) *releaseServer {
 			return
 		}
 
+		rs.mu.Lock()
 		rs.hits++
+		rs.mu.Unlock()
 
 		// The server gives one page of the tags, the way GitHub does.
 		tags := rs.tags
@@ -1383,11 +1394,20 @@ func newReleaseServer(t *testing.T, tags ...string) *releaseServer {
 			from := min((page-1)*size, len(tags))
 			tags = tags[from:min(from+size, len(tags))]
 
-			// GitHub names the next page in the Link header, and oku follows it.
+			if page > 1 {
+				rs.arrive()
+			}
+
 			if from+size < len(rs.tags) {
-				w.Header().Set("Link", fmt.Sprintf(
-					`<%s%s?per_page=%d&page=%d>; rel="next"`, rs.URL, r.URL.Path, size, page+1,
-				))
+				link := fmt.Sprintf(`<%s%s?per_page=%d&page=%d>; rel="next"`, rs.URL, r.URL.Path, size, page+1)
+				if !rs.nextOnly {
+					link += fmt.Sprintf(
+						`, <%s%s?per_page=%d&page=%d>; rel="last"`,
+						rs.URL, r.URL.Path, size, (len(rs.tags)+size-1)/size,
+					)
+				}
+
+				w.Header().Set("Link", link)
 			}
 		}
 
@@ -1407,7 +1427,9 @@ func newReleaseServer(t *testing.T, tags ...string) *releaseServer {
 		w.Header().Set("ETag", etag)
 
 		if r.Header.Get("If-None-Match") == etag {
+			rs.mu.Lock()
 			rs.unchanged++
+			rs.mu.Unlock()
 
 			w.WriteHeader(http.StatusNotModified)
 
@@ -1419,6 +1441,31 @@ func newReleaseServer(t *testing.T, tags ...string) *releaseServer {
 	t.Cleanup(rs.Close)
 
 	return rs
+}
+
+// arrive counts a request for a later page in flight and waits until together
+// of them have been in flight at once.
+func (rs *releaseServer) arrive() {
+	rs.mu.Lock()
+	rs.inFlight++
+	rs.most = max(rs.most, rs.inFlight)
+	rs.mu.Unlock()
+
+	for deadline := time.Now().Add(time.Second); time.Now().Before(deadline); {
+		rs.mu.Lock()
+		enough := rs.most >= rs.together
+		rs.mu.Unlock()
+
+		if enough {
+			break
+		}
+
+		time.Sleep(5 * time.Millisecond)
+	}
+
+	rs.mu.Lock()
+	rs.inFlight--
+	rs.mu.Unlock()
 }
 
 func atoi(s string) int {
