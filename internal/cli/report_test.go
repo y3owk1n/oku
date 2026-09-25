@@ -452,6 +452,42 @@ func TestB241AGenerationShowsWhatChangedFromTheOneItReplaced(t *testing.T) {
 	}
 }
 
+func TestB346AGenerationWhoseParentGCDeletedSaysSoAndNumbersGoOn(t *testing.T) {
+	m := newMachine(t)
+
+	for _, name := range []string{"first", "second", "third"} {
+		_, err := m.run(t, "", "add", m.manifest(t, name, map[string]string{name: script}, `bin = ["`+name+`"]`))
+		must(t, err)
+	}
+
+	// gc keeps 3 as the newest and 1 as the active one, and deletes 2.
+	_, err := m.run(t, "", "rollback", "1")
+	must(t, err)
+
+	out, err := m.run(t, "", "gc", "--keep", "1")
+	must(t, err)
+
+	if !strings.Contains(out, "every store path is still used by a generation") ||
+		strings.Contains(out, "nothing to delete") {
+		t.Fatalf("B347: gc after deleting generations says:\n%s", out)
+	}
+
+	_, err = m.run(t, "", "add", m.manifest(t, "fourth", map[string]string{"fourth": script}, `bin = ["fourth"]`))
+	must(t, err)
+
+	out, err = m.run(t, "", "generations")
+	must(t, err)
+
+	lines := strings.Split(strings.TrimRight(out, "\n"), "\n")
+	if len(lines) != 3 ||
+		!strings.HasSuffix(lines[0], "+ first 1.2.3") ||
+		!strings.HasSuffix(lines[1], "replaced 2, which is deleted") ||
+		!strings.HasPrefix(strings.TrimSpace(lines[2]), "* 4") ||
+		!strings.HasSuffix(lines[2], "from 1, + fourth 1.2.3") {
+		t.Fatalf("generations after gc:\n%s", out)
+	}
+}
+
 func TestB242AnUpdateNamesEveryPackageThatDriftedFromTheLock(t *testing.T) {
 	m := newMachine(t)
 	first := m.manifest(t, "first", map[string]string{"first": script}, `bin = ["first"]`)

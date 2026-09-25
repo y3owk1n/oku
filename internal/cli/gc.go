@@ -151,7 +151,16 @@ func runGC(cmd *cobra.Command, keep int, dryRun bool) error {
 	}
 
 	if len(unused) == 0 && len(leftovers) == 0 {
-		fmt.Fprintln(out, mark("nothing to delete, every store path is used by a generation"))
+		// After deleted generations, "nothing to delete" would contradict the
+		// lines above it.
+		text := "nothing to delete, every store path is used by a generation"
+		for _, gone := range pruned {
+			if len(gone) > 0 {
+				text = "every store path is still used by a generation"
+			}
+		}
+
+		fmt.Fprintln(out, mark(text))
 
 		return nil
 	}

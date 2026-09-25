@@ -99,12 +99,28 @@ func newGenerationsCmd(opts Options) *cobra.Command {
 
 			for _, gen := range gens {
 				// A generation says what changed from the one it replaced, which after
-				// a rollback is not the one numbered before it.
-				base, prefix := previous, ""
-				if i := slices.IndexFunc(gens, func(g profile.Generation) bool {
-					return g.Number == gen.From
-				}); i >= 0 && gen.From != previous.Number {
-					base, prefix = gens[i], s.Dim("from "+strconv.Itoa(gen.From)+",")+" "
+				// a rollback is not the one numbered before it. A generation from an
+				// older oku does not record it, and replaced the one numbered before.
+				replaced := gen.From
+				if replaced == 0 {
+					replaced = gen.Number - 1
+				}
+
+				i := slices.IndexFunc(gens, func(g profile.Generation) bool {
+					return g.Number == replaced
+				})
+
+				var what string
+
+				switch {
+				case replaced > 0 && i < 0:
+					// gc deleted it, and a comparison with nothing would list
+					// everything as new.
+					what = s.Dim(fmt.Sprintf("replaced %d, which is deleted", replaced))
+				case i >= 0 && replaced != previous.Number:
+					what = s.Dim("from "+strconv.Itoa(replaced)+",") + " " + changes(s, gens[i], gen)
+				default:
+					what = changes(s, previous, gen)
 				}
 
 				marker, mark := " ", s.Dim
@@ -116,7 +132,7 @@ func newGenerationsCmd(opts Options) *cobra.Command {
 					marker + " " + strconv.Itoa(gen.Number),
 					gen.Created.Local().Format("2006-01-02 15:04"),
 					holds(gen),
-					prefix + changes(s, base, gen),
+					what,
 				}
 
 				if gen.Current {

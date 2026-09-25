@@ -201,6 +201,17 @@ rollback that only switched the profile would be undone by the next `sync`,
 because the lock would still hold the newer versions. The list is the user's
 file, so oku reports the disagreement and leaves the edit to them.
 
+Revisited 2026-09-25, and kept. Rollback is the machine's emergency undo. It
+needs no list and no network, and it lasts until the next `sync`. Git undoes
+the list. We weighed two other designs and dropped both. The first saved
+`oku.toml` in each generation and wrote it back on rollback. Most users keep
+the list in git, some share it with other machines, and git already undoes it,
+so oku should not edit it. The second made `sync` ask before it goes past a
+rollback. That is one more state for the user to learn, and `git revert` then
+`sync` already does the job. A change after a rollback builds on the active
+generation, `from <n>` shows the fork, and generation numbers only go up, as
+in Nix.
+
 ## D23. gc deletes only unused store paths, and only --keep deletes generations
 
 `oku gc` deletes only store paths that no generation uses. Generations are
