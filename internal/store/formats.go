@@ -85,6 +85,9 @@ func un7z(f *os.File, root *os.Root, strip int) error {
 		return err
 	}
 
+	files := &fileWriter{root: root}
+	defer files.close()
+
 	for _, entry := range archive.File {
 		name, ok, err := stripPath(entry.Name, strip)
 		if err != nil {
@@ -95,7 +98,7 @@ func un7z(f *os.File, root *os.Root, strip int) error {
 			continue
 		}
 
-		if err := unpackEntry(root, name, entry); err != nil {
+		if err := unpackEntry(files, name, entry); err != nil {
 			return fmt.Errorf("extract %s: %w", entry.Name, err)
 		}
 	}
@@ -158,6 +161,9 @@ func unrpm(f *os.File, root *os.Root, strip int) error {
 
 	archive := cpio.NewReader(payload)
 
+	files := &fileWriter{root: root}
+	defer files.close()
+
 	for {
 		hdr, err := archive.Next()
 		if errors.Is(err, io.EOF) {
@@ -190,7 +196,7 @@ func unrpm(f *os.File, root *os.Root, strip int) error {
 				err = writeSymlink(root, name, target)
 			}
 		case hdr.Mode.IsRegular():
-			err = writeFile(root, name, fs.FileMode(hdr.Mode.Perm()), hdr.ModTime, archive)
+			err = files.write(name, fs.FileMode(hdr.Mode.Perm()), hdr.ModTime, archive)
 		}
 
 		if err != nil {

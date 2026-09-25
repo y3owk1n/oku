@@ -118,6 +118,9 @@ func untar(r io.Reader, root *os.Root, strip int) error {
 func untarLinks(r io.Reader, root *os.Root, strip int, rooted bool) error {
 	tr := tar.NewReader(r)
 
+	files := &fileWriter{root: root}
+	defer files.close()
+
 	for {
 		hdr, err := tr.Next()
 		if errors.Is(err, io.EOF) {
@@ -141,7 +144,7 @@ func untarLinks(r io.Reader, root *os.Root, strip int, rooted bool) error {
 		case tar.TypeDir:
 			err = root.MkdirAll(name, 0o755)
 		case tar.TypeReg:
-			err = writeFile(root, name, hdr.FileInfo().Mode(), hdr.ModTime, tr)
+			err = files.write(name, hdr.FileInfo().Mode(), hdr.ModTime, tr)
 		case tar.TypeSymlink:
 			target := hdr.Linkname
 			if rooted {
@@ -181,6 +184,9 @@ func unzip(f *os.File, root *os.Root, strip int) error {
 		return err
 	}
 
+	files := &fileWriter{root: root}
+	defer files.close()
+
 	for _, entry := range zr.File {
 		name, ok, err := stripPath(entry.Name, strip)
 		if err != nil {
@@ -191,7 +197,7 @@ func unzip(f *os.File, root *os.Root, strip int) error {
 			continue
 		}
 
-		if err := unpackEntry(root, name, entry); err != nil {
+		if err := unpackEntry(files, name, entry); err != nil {
 			return fmt.Errorf("extract %s: %w", entry.Name, err)
 		}
 	}
@@ -206,11 +212,11 @@ type archiveEntry interface {
 	Open() (io.ReadCloser, error)
 }
 
-// unpackEntry writes one entry of a zip or a 7z archive under root.
-func unpackEntry(root *os.Root, name string, entry archiveEntry) error {
+// unpackEntry writes one entry of a zip or a 7z archive under the root of files.
+func unpackEntry(files *fileWriter, name string, entry archiveEntry) error {
 	mode := entry.Mode()
 	if mode.IsDir() {
-		return root.MkdirAll(name, 0o755)
+		return files.root.MkdirAll(name, 0o755)
 	}
 
 	rc, err := entry.Open()
@@ -225,10 +231,10 @@ func unpackEntry(root *os.Root, name string, entry archiveEntry) error {
 			return err
 		}
 
-		return writeSymlink(root, name, string(target))
+		return writeSymlink(files.root, name, string(target))
 	}
 
-	return writeFile(root, name, mode, entry.FileInfo().ModTime(), rc)
+	return files.write(name, mode, entry.FileInfo().ModTime(), rc)
 }
 
 // rootedLink returns target as a link relative to the directory of name, when
@@ -274,23 +280,40 @@ func stripPath(name string, n int) (string, bool, error) {
 	return name, name != ".", nil
 }
 
-// writeFile keeps the time the archive gives the file. make compares the times
-// of a source tree, and a release tarball relies on its generated files, such as
+// fileWriter writes the files of one archive under root. os.Root opens each
+// directory on the way to a file, one at a time. An archive lists the files of
+// a directory together, so the writer keeps the directory of the last file open
+// and most files cost one open.
+type fileWriter struct {
+	root *os.Root
+	name string
+	dir  *os.Root
+}
+
+// write keeps the time the archive gives the file. make compares the times of a
+// source tree, and a release tarball relies on its generated files, such as
 // aclocal.m4, being newer than their inputs. With the time of the unpacking,
 // make sees them as stale and runs autotools, which the machine may not have.
-func writeFile(
-	root *os.Root,
-	name string,
-	mode fs.FileMode,
-	modified time.Time,
-	r io.Reader,
-) error {
-	if err := root.MkdirAll(path.Dir(name), 0o755); err != nil {
-		return err
+func (w *fileWriter) write(name string, mode fs.FileMode, modified time.Time, r io.Reader) error {
+	if dir := path.Dir(name); w.dir == nil || dir != w.name {
+		w.close()
+
+		if err := w.root.MkdirAll(dir, 0o755); err != nil {
+			return err
+		}
+
+		opened, err := w.root.OpenRoot(dir)
+		if err != nil {
+			return err
+		}
+
+		w.name, w.dir = dir, opened
 	}
 
+	base := path.Base(name)
+
 	// Owner read and write stay set so oku can delete the file later.
-	f, err := root.OpenFile(name, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, mode.Perm()|0o600)
+	f, err := w.dir.OpenFile(base, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, mode.Perm()|0o600)
 	if err != nil {
 		return err
 	}
@@ -304,7 +327,14 @@ func writeFile(
 		return err
 	}
 
-	return root.Chtimes(name, modified, modified)
+	return w.dir.Chtimes(base, modified, modified)
+}
+
+func (w *fileWriter) close() {
+	if w.dir != nil {
+		w.dir.Close()
+		w.dir = nil
+	}
 }
 
 // writeSymlink refuses a target that is absolute or resolves outside the
