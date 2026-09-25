@@ -34,8 +34,7 @@ var errNoClones = errors.New("the filesystem cannot clone files")
 
 // Shared is one file of a store path whose content lives under LinksDir.
 type Shared struct {
-	Key  string
-	Size int64
+	Key string
 	// Mode is the file's mode when it entered the store. A hard link shares the
 	// mode of every file it links, which has no write bits.
 	Mode fs.FileMode
@@ -88,9 +87,13 @@ func (s *Store) Share(path string) (int64, error) {
 			return nil //nolint:nilerr
 		}
 
-		shared, n, err := sh.share(file, key, info)
-		if err != nil || !shared {
+		if err := os.MkdirAll(sh.links, 0o755); err != nil {
 			return err
+		}
+
+		shared, n := sh.share(file, filepath.Join(sh.links, key), info)
+		if !shared {
+			return nil
 		}
 
 		saved += n
@@ -100,7 +103,7 @@ func (s *Store) Share(path string) (int64, error) {
 			return err
 		}
 
-		fmt.Fprintf(&record, "%s %o %d %s\n", key, info.Mode().Perm(), info.Size(), filepath.ToSlash(rel))
+		fmt.Fprintf(&record, "%s %o %s\n", key, info.Mode().Perm(), filepath.ToSlash(rel))
 
 		return nil
 	})
@@ -153,21 +156,23 @@ func (s *Store) Unshared() ([]string, error) {
 
 // hasBig reports whether dir holds a file large enough to share.
 func hasBig(dir string) bool {
-	found := errors.New("found")
+	found := false
 
-	err := filepath.WalkDir(dir, func(_ string, entry fs.DirEntry, err error) error {
+	_ = filepath.WalkDir(dir, func(_ string, entry fs.DirEntry, err error) error {
 		if err != nil || !entry.Type().IsRegular() {
 			return nil //nolint:nilerr
 		}
 
 		if info, err := entry.Info(); err == nil && info.Size() >= shareMin {
-			return found
+			found = true
+
+			return fs.SkipAll
 		}
 
 		return nil
 	})
 
-	return errors.Is(err, found)
+	return found
 }
 
 // SharedFiles returns the shared files of the store path path by their paths
@@ -187,19 +192,17 @@ func (s *Store) SharedFiles(path string) (map[string]Shared, error) {
 
 	lines := bufio.NewScanner(f)
 	for lines.Scan() {
-		fields := strings.SplitN(lines.Text(), " ", 4)
-		if len(fields) != 4 {
+		fields := strings.SplitN(lines.Text(), " ", 3)
+		if len(fields) != 3 {
 			continue
 		}
 
-		mode, errMode := strconv.ParseUint(fields[1], 8, 32)
-		size, errSize := strconv.ParseInt(fields[2], 10, 64)
-
-		if errMode != nil || errSize != nil {
+		mode, err := strconv.ParseUint(fields[1], 8, 32)
+		if err != nil {
 			continue
 		}
 
-		files[fields[3]] = Shared{Key: fields[0], Size: size, Mode: fs.FileMode(mode)}
+		files[fields[2]] = Shared{Key: fields[0], Mode: fs.FileMode(mode)}
 	}
 
 	if err := lines.Err(); err != nil {
@@ -271,21 +274,10 @@ type sharer struct {
 	hardLinks bool
 }
 
-// share makes file one copy with the file under links that has the same key,
-// and makes file that file when there is none. It reports whether file shares
-// the content under links now, and the bytes that saved. It fails only when it
-// cannot create links.
-func (sh *sharer) share(file, key string, info fs.FileInfo) (bool, int64, error) {
-	if err := os.MkdirAll(sh.links, 0o755); err != nil {
-		return false, 0, err
-	}
-
-	shared, saved := sh.link(file, filepath.Join(sh.links, key), info)
-
-	return shared, saved, nil
-}
-
-func (sh *sharer) link(file, entry string, info fs.FileInfo) (bool, int64) {
+// share makes file one copy with entry, the file under links with the same
+// key, and makes file the entry when there is none. It reports whether file
+// shares the entry's content now, and the bytes that saved.
+func (sh *sharer) share(file, entry string, info fs.FileInfo) (bool, int64) {
 	err := os.Link(file, entry)
 	if err == nil {
 		return true, 0

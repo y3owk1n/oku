@@ -539,7 +539,8 @@ shell = "pwsh"
     Oku add (Join-Path $fixtures "$name.toml") --yes
 }
 
-$store = Join-Path $env:XDG_DATA_HOME 'oku\store'
+# setup --system above moved the store to the shared root.
+$store = Join-Path $shared 'store'
 $dataB = (Get-Item "$store\share-b-*\data.bin").FullName
 $dataLinks = (fsutil hardlink list $dataB) -join "`n"
 Check 'two store paths share one data file' { $dataLinks -match 'share-a-' }

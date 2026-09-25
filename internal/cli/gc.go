@@ -141,7 +141,10 @@ func runGC(cmd *cobra.Command, keep int, dryRun, cache bool) error {
 	}
 
 	// Store paths from before oku shared files get their identical files shared.
-	sharedPaths, saved := 0, int64(0)
+	var (
+		sharedPaths int
+		saved       int64
+	)
 
 	for _, st := range e.stores() {
 		paths, err := st.Unshared()
