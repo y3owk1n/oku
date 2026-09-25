@@ -1,5 +1,49 @@
 # Changelog
 
+## [0.8.0](https://github.com/y3owk1n/oku/compare/v0.7.0...v0.8.0) (2026-09-24)
+
+
+### Features
+
+* **add:** show what an add would do with --plan and print its manifest with --manifest ([#228](https://github.com/y3owk1n/oku/issues/228)) ([cd008d1](https://github.com/y3owk1n/oku/commit/cd008d1871b390b1f4eeaace3a7c3fd2466a3694))
+* **add:** take --when and pin for the lock platforms it matches ([#250](https://github.com/y3owk1n/oku/issues/250)) ([2e52133](https://github.com/y3owk1n/oku/commit/2e52133db51be7e771aa3b60cbcd3bc7ee0f82f2))
+* **add:** translate Homebrew casks and Scoop manifests into oku manifests ([#229](https://github.com/y3owk1n/oku/issues/229)) ([246c76d](https://github.com/y3owk1n/oku/commit/246c76d250ecb196bef0c76023fd907136399a9f))
+* **add:** translate the aqua registry's entry for a repo with aqua: ([#232](https://github.com/y3owk1n/oku/issues/232)) ([a34807e](https://github.com/y3owk1n/oku/commit/a34807e29cc671f83124d4002b504e1a67e65371))
+* **add:** translate winget packages with winget: ([#233](https://github.com/y3owk1n/oku/issues/233)) ([96ee6bb](https://github.com/y3owk1n/oku/commit/96ee6bbf9ba9f922b3d7cadd99059f4c236f5390))
+* **env:** apply oku.&lt;env&gt;.toml by OKU_ENV and oku.local.toml over a project's list ([#243](https://github.com/y3owk1n/oku/issues/243)) ([f8ebf8f](https://github.com/y3owk1n/oku/commit/f8ebf8ffaf8f03a16a4199266e6b0e4816bcee4b))
+* **env:** decrypt secret .env files, and load exec-scoped ones for oku exec only ([#241](https://github.com/y3owk1n/oku/issues/241)) ([670a722](https://github.com/y3owk1n/oku/commit/670a7225f6543480a7946e44b4c77b6aa4f95b51))
+* **env:** load .env files with [[env.file]], and allow the ones git tracks ([#240](https://github.com/y3owk1n/oku/issues/240)) ([8fbf7fb](https://github.com/y3owk1n/oku/commit/8fbf7fbb18fc76965285c5e09dd6ede08d5b364c))
+* **env:** set variables from [env] in oku.toml and restore them on leave ([#239](https://github.com/y3owk1n/oku/issues/239)) ([9a6a98a](https://github.com/y3owk1n/oku/commit/9a6a98a4d724c2d283e5f9e050a244429bdbe282))
+* **forge:** refuse an outside answer oku cannot trust, and pin versioned formats ([#236](https://github.com/y3owk1n/oku/issues/236)) ([4f018ba](https://github.com/y3owk1n/oku/commit/4f018ba8c7af32c0db67b10a03a645dd9fcc69bf))
+* **infer:** follow casks whose livecheck block reads fields of a feed ([#256](https://github.com/y3owk1n/oku/issues/256)) ([398c475](https://github.com/y3owk1n/oku/commit/398c4754502dd2aeacabd445d72f61ee4d2c95ab))
+* **infer:** read a download's version from its folder when the file names none ([#247](https://github.com/y3owk1n/oku/issues/247)) ([99770c1](https://github.com/y3owk1n/oku/commit/99770c1c56fb4bf0f0ba50f7d710e0136ac51ceb))
+* **infer:** read a Scoop manifest from any bucket on GitHub ([#254](https://github.com/y3owk1n/oku/issues/254)) ([679de91](https://github.com/y3owk1n/oku/commit/679de918c38756e209485bcd7fcdd954b31bbdbe))
+* **infer:** translate a cask of another Homebrew tap from its Ruby ([#255](https://github.com/y3owk1n/oku/issues/255)) ([74e67d1](https://github.com/y3owk1n/oku/commit/74e67d14b19eae6198ae63031bf6f036b6de5dfd))
+* **manifest:** follow a vendor's download URL for new versions ([#225](https://github.com/y3owk1n/oku/issues/225)) ([e825a0a](https://github.com/y3owk1n/oku/commit/e825a0a61fc402054bcd40649ca3dbed87b7b879))
+* **manifest:** let a dep take when, so each platform pins its own version ([#252](https://github.com/y3owk1n/oku/issues/252)) ([9f1f46c](https://github.com/y3owk1n/oku/commit/9f1f46c3512efdd0f794064017d7b135546cd5d7))
+* **manifest:** let each artifact follow releases or tags on its own ([#230](https://github.com/y3owk1n/oku/issues/230)) ([6a73c54](https://github.com/y3owk1n/oku/commit/6a73c54a84687f61e10f05e2c2b037ac449cd972))
+* **manifest:** name the parts of a version for download URLs ([#234](https://github.com/y3owk1n/oku/issues/234)) ([53f9a17](https://github.com/y3owk1n/oku/commit/53f9a17aa855d258ecb47138feda8c72b83e0a1a))
+* **store:** download a private GitHub release file through the API ([#253](https://github.com/y3owk1n/oku/issues/253)) ([dfdc982](https://github.com/y3owk1n/oku/commit/dfdc98220fd4de82c2a4f4c10c498e7a1fe61ee9))
+* **store:** name the install scripts of an npm package's tree and ask ([#257](https://github.com/y3owk1n/oku/issues/257)) ([48f7c00](https://github.com/y3owk1n/oku/commit/48f7c0089bd23e129487b32bf21ed2f04ac2a8d3))
+* **store:** unpack an installer package that ships inside a disk image ([#231](https://github.com/y3owk1n/oku/issues/231)) ([9a81747](https://github.com/y3owk1n/oku/commit/9a8174718fb59e94e07ece370e1aeac6c37c0135))
+* **store:** unpack xz files whose filter chain has a BCJ or Delta filter ([#248](https://github.com/y3owk1n/oku/issues/248)) ([deaf2f4](https://github.com/y3owk1n/oku/commit/deaf2f413529ac0b71dbc9e97b49f1986897a977))
+
+
+### Bug Fixes
+
+* **hook:** set OKU_PROJECT while a project applies, for prompts ([#244](https://github.com/y3owk1n/oku/issues/244)) ([c2514a4](https://github.com/y3owk1n/oku/commit/c2514a4059439d2272751eaddf41a88b0112f0c6))
+* **infer:** name the platform an inference is for, and say agents inherit the shell ([#246](https://github.com/y3owk1n/oku/issues/246)) ([2edb250](https://github.com/y3owk1n/oku/commit/2edb250d0cf0ba66753f48cc5dea50083f6f02b4))
+* **resolve:** read a Sparkle feed's stable channel and rank items by build ([#235](https://github.com/y3owk1n/oku/issues/235)) ([fed9e0c](https://github.com/y3owk1n/oku/commit/fed9e0cc37e1e121c2acc2b99844959528d2dcf5))
+* **store:** count weak, re-exported, lazy and upward library loads in the link check ([#249](https://github.com/y3owk1n/oku/issues/249)) ([3ad4a67](https://github.com/y3owk1n/oku/commit/3ad4a6719dd9a476efd6ba5f561c51c05c06499b))
+* **store:** pin pypi wheels for a fixed platform, and share go vendor digests across when ([#251](https://github.com/y3owk1n/oku/issues/251)) ([5ef72d7](https://github.com/y3owk1n/oku/commit/5ef72d7dc780b396c5365280a5935fdb1674e09a))
+* **store:** recover from disk images and temp files a killed run left ([#227](https://github.com/y3owk1n/oku/issues/227)) ([b17e8a3](https://github.com/y3owk1n/oku/commit/b17e8a3a923824a539911ae0e02bd0ed2de442ad))
+* **store:** refuse a download that is no archive and no program ([#245](https://github.com/y3owk1n/oku/issues/245)) ([70ba1d2](https://github.com/y3owk1n/oku/commit/70ba1d2ff4cf3e518fca8a221d1c04db2207dcfb))
+
+
+### Documentation
+
+* show recipe refs, update feeds and source checks in the README ([#238](https://github.com/y3owk1n/oku/issues/238)) ([9c8c05d](https://github.com/y3owk1n/oku/commit/9c8c05d400a9360a397ca2060e9257840125c7ac))
+
 ## [0.7.0](https://github.com/y3owk1n/oku/compare/v0.6.1...v0.7.0) (2026-09-23)
 
 
