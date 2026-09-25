@@ -335,6 +335,10 @@ shutil.rmtree(moved, ignore_errors=True)
 // on every platform, go and cargo, and the same of them for host and p, since
 // a step with a when may run on one and not the other.
 func VendorPortable(b *manifest.Build, host, p platform.Platform) bool {
+	if b == nil {
+		return false
+	}
+
 	found := false
 
 	for _, step := range b.Steps {
@@ -364,6 +368,10 @@ func VendorPortable(b *manifest.Build, host, p platform.Platform) bool {
 // are told, and no command of the manifest before them, because a command for p
 // may not run here.
 func CanCrossVendor(b *manifest.Build, p platform.Platform) bool {
+	if b == nil {
+		return false
+	}
+
 	last := -1
 
 	for i, step := range b.Steps {

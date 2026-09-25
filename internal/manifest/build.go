@@ -154,6 +154,10 @@ func (s Step) Impure() bool {
 // CommandSteps returns the steps that run a program on p, with their positions:
 // run steps, vendor steps and install steps that generate completions.
 func (b *Build) CommandSteps(p platform.Platform) map[int]Step {
+	if b == nil {
+		return nil
+	}
+
 	found := map[int]Step{}
 
 	for i, step := range b.Steps {
