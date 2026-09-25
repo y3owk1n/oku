@@ -787,6 +787,9 @@ The code:
 - loads the completions of your installed programs and of `oku`
 - runs `oku env` before each prompt, which applies an allowed project's
   environment
+- in bash and zsh, clears the paths the shell remembers for programs before
+  each prompt. In a shell that was open already, a program you add runs from
+  the profile, and one you remove runs from the next directory on `PATH`
 - in PowerShell, wraps your `prompt` function and keeps `$LASTEXITCODE`
 
 Completions come from the profile's `share/completions`.

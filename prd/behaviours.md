@@ -792,6 +792,10 @@ order step in `prd/product.md`.
   `share/completions` for bash, zsh and fish, and the completions of `oku`
   itself in every shell. In zsh the hook registers the package files by name
   once `compinit` has run, whether the hook line comes before or after it.
+- B341 [7] In bash and zsh the hook clears the paths the shell remembers for
+  programs before each prompt. After `add`, `remove`, `rollback` or `sync` in
+  an open shell, a program runs from the new generation, and a removed program
+  runs from the next directory on `PATH` that has it.
 
 ## Apps, fonts, services
 

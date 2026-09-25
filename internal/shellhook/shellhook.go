@@ -191,11 +191,16 @@ func pathSetup(shell string, dirs []string) string {
 	return b.String()
 }
 
+// promptHook returns the code that runs before each prompt. bash and zsh
+// remember where they found each command. The hook clears those paths, so a
+// program that a new generation removed, added or moved never runs from its old
+// path.
 func promptHook(shell string) (string, error) {
 	switch shell {
 	case "bash":
 		return `_oku_hook() {
   local status=$?
+  hash -r
   command -v oku >/dev/null 2>&1 && eval "$(oku env --shell bash)"
   return $status
 }
@@ -207,6 +212,7 @@ esac
 	case "zsh":
 		return `_oku_hook() {
   _oku_complete
+  rehash
   command -v oku >/dev/null 2>&1 && eval "$(oku env --shell zsh)"
 }
 typeset -ag precmd_functions

@@ -164,6 +164,25 @@ Check 'leaving the project restores STAGE and drops its PATH entry' {
     (($env:PATH -split ';') -notcontains (Join-Path $project 'scripts'))
 }
 
+# A second fd comes after the profile on PATH, as a global npm package would.
+# The shell runs the profile's fd first. After oku removes fd, the next prompt
+# makes fd run the second one. After oku adds it back, the profile's fd runs again.
+$other = Join-Path $root 'other'
+New-Item -ItemType Directory -Force $other | Out-Null
+Set-Content (Join-Path $other 'fd.cmd') '@echo other fd'
+$withoutOther = $env:PATH
+$env:PATH = "$env:PATH;$other"
+& fd --version | Out-Null
+Oku remove fd
+prompt | Out-Null
+$fdVersion = & fd --version
+Check 'after remove the next prompt runs the fd behind the profile' { $fdVersion -eq 'other fd' }
+Oku add github:sharkdp/fd
+prompt | Out-Null
+$fdVersion = & fd --version
+Check 'after add the next prompt runs the fd of the profile again' { $fdVersion -match '^fd \d' }
+$env:PATH = $withoutOther
+
 # doctor, without the profile on PATH and then with it. The hook above already
 # put it there, so the first check takes it out again.
 $withProfile = $env:PATH
