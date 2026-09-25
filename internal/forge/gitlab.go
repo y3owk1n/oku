@@ -7,7 +7,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"regexp"
 	"strings"
 	"time"
 )
@@ -53,8 +52,6 @@ func (r gitlabRelease) release() Release {
 
 	return out
 }
-
-var nextPageRe = regexp.MustCompile(`<([^>]+)>;\s*rel="next"`)
 
 func (g *gitlab) Kind() string { return KindGitLab }
 
@@ -135,10 +132,12 @@ func (g *gitlab) Files(ctx context.Context, repo, commit string) ([]string, erro
 			Type string `json:"type"`
 		}
 
-		var err error
-		if next, err = g.json(ctx, next, &tree); err != nil {
+		link, err := g.json(ctx, next, &tree)
+		if err != nil {
 			return nil, err
 		}
+
+		next = nextPage(link, g.web()+"/")
 
 		for _, item := range tree {
 			if item.Type == "blob" {
@@ -163,29 +162,31 @@ func (g *gitlab) Release(ctx context.Context, repo, tag string) (Release, error)
 	return found.release(), err
 }
 
-// Releases reads the newest maxReleases releases, following the "next" link of
-// each page.
+// gitlabPage is the releases oku asks for in one answer, the most GitLab gives.
+const gitlabPage = 100
+
+// Releases reads the newest maxReleases releases.
 func (g *gitlab) Releases(ctx context.Context, repo string) ([]Release, error) {
-	var releases []Release
+	return readReleases(ctx, gitlabPage, func(ctx context.Context, page int) ([]Release, int, error) {
+		at := fmt.Sprintf("%s/releases?per_page=%d", g.project(repo), gitlabPage)
+		if page > 1 {
+			at += fmt.Sprintf("&page=%d", page)
+		}
 
-	next := g.project(repo) + "/releases?per_page=100"
-
-	for next != "" && len(releases) < maxReleases {
 		var found []gitlabRelease
 
-		after, err := g.json(ctx, next, &found)
+		link, err := g.json(ctx, at, &found)
 		if err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 
-		for _, release := range found {
-			releases = append(releases, release.release())
+		releases := make([]Release, len(found))
+		for i, release := range found {
+			releases[i] = release.release()
 		}
 
-		next = after
-	}
-
-	return releases, nil
+		return releases, lastPage(link), nil
+	})
 }
 
 func (g *gitlab) TagCommit(ctx context.Context, repo, tag string) (Commit, error) {
@@ -205,15 +206,15 @@ func (g *gitlab) Archive(ctx context.Context, repo, commit string) ([]byte, erro
 	return body, err
 }
 
-// json decodes the answer for at into into and returns the URL of the next
-// page, or "".
+// json decodes the answer for at into into and returns the Link header, which
+// names the other pages of a list.
 func (g *gitlab) json(ctx context.Context, at string, into any) (string, error) {
-	body, next, err := g.get(ctx, at)
+	body, link, err := g.get(ctx, at)
 	if err != nil {
 		return "", err
 	}
 
-	return next, json.Unmarshal(body, into)
+	return link, json.Unmarshal(body, into)
 }
 
 func (g *gitlab) get(ctx context.Context, at string) ([]byte, string, error) {
@@ -252,12 +253,5 @@ func (g *gitlab) get(ctx context.Context, at string) ([]byte, string, error) {
 		return nil, "", fmt.Errorf("response is larger than %d bytes", maxBody)
 	}
 
-	// A next page on another host would get the token, so oku does not follow it.
-	next := ""
-	if m := nextPageRe.FindStringSubmatch(resp.Header.Get("Link")); m != nil &&
-		strings.HasPrefix(m[1], g.web()+"/") {
-		next = m[1]
-	}
-
-	return body, next, nil
+	return body, resp.Header.Get("Link"), nil
 }

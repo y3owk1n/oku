@@ -302,8 +302,11 @@ order step in `prd/product.md`.
 - B118 [3] `add <ref>@<version>` finds a version that is not on the first page
   of the host's release list.
 - B200 [3] `github-releases`, `gitea-releases` and `gitlab-releases` read the
-  newest 1000 releases, one page after another, so a repo whose newest 100
-  releases belong to another stream still yields the version `add` wants.
+  newest 1000 releases, so a repo whose newest 100 releases belong to another
+  stream still yields the version `add` wants.
+- B360 [3] When the first page of a host's release list names the last page,
+  oku asks for the other pages at once, four at a time. When it names only the
+  next page, oku reads one page after another.
 - B250 [3] oku keeps each answer of a forge API with its ETag and asks again
   with `If-None-Match`. When the host answers 304, `update` uses the answer it
   kept, and a changed answer replaces it.

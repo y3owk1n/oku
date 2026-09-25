@@ -10,6 +10,8 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
+	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -78,6 +80,102 @@ type Asset struct {
 // streams, such as a stable and a nightly one, needs more than one page for the
 // older stream to show.
 const maxReleases = 1000
+
+// pagesAtOnce is the most pages of one list that oku asks for at the same time.
+const pagesAtOnce = 4
+
+var (
+	nextPageRe = regexp.MustCompile(`<([^>]+)>;\s*rel="next"`)
+	lastPageRe = regexp.MustCompile(`<([^>]+)>;\s*rel="last"`)
+)
+
+// nextPage returns the URL of the next page that link names, or "". A next
+// page on another host would get the token, so oku does not follow it.
+func nextPage(link, prefix string) string {
+	if m := nextPageRe.FindStringSubmatch(link); m != nil && strings.HasPrefix(m[1], prefix) {
+		return m[1]
+	}
+
+	return ""
+}
+
+// lastPage reads the Link header of one page of a list. It returns the number
+// of the last page, -1 when there is a next page but the header names no last
+// one, and 0 when this page is the last.
+func lastPage(link string) int {
+	if m := lastPageRe.FindStringSubmatch(link); m != nil {
+		if at, err := url.Parse(m[1]); err == nil {
+			if n, err := strconv.Atoi(at.Query().Get("page")); err == nil {
+				return n
+			}
+		}
+	}
+
+	if nextPageRe.MatchString(link) {
+		return -1
+	}
+
+	return 0
+}
+
+// readReleases reads a list of releases with size releases to a page, up to
+// maxReleases.
+// read returns one page and the last page, as lastPage gives it. When the first
+// page names the last one, oku asks for the others at once, a few at a time.
+// Otherwise it reads one page after another.
+func readReleases(
+	ctx context.Context,
+	size int,
+	read func(ctx context.Context, page int) ([]Release, int, error),
+) ([]Release, error) {
+	releases, last, err := read(ctx, 1)
+	if err != nil {
+		return nil, err
+	}
+
+	most := maxReleases / size
+
+	if last > 1 {
+		pages := make([][]Release, min(last, most)+1)
+		errs := make([]error, len(pages))
+
+		var wg sync.WaitGroup
+
+		limit := make(chan struct{}, pagesAtOnce)
+
+		for page := 2; page < len(pages); page++ {
+			wg.Go(func() {
+				limit <- struct{}{}
+				defer func() { <-limit }()
+
+				pages[page], _, errs[page] = read(ctx, page)
+			})
+		}
+
+		wg.Wait()
+
+		if err := cmp.Or(errs...); err != nil {
+			return nil, err
+		}
+
+		for _, found := range pages[2:] {
+			releases = append(releases, found...)
+		}
+
+		return releases, nil
+	}
+
+	for page := 2; last < 0 && page <= most; page++ {
+		var found []Release
+		if found, last, err = read(ctx, page); err != nil {
+			return nil, err
+		}
+
+		releases = append(releases, found...)
+	}
+
+	return releases, nil
+}
 
 // Auth is the Authorization header for the downloads of one host. The zero
 // value sends nothing.

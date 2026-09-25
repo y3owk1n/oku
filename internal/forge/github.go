@@ -132,33 +132,31 @@ func (g *github) Release(ctx context.Context, repo, tag string) (Release, error)
 // gives. Each page is one request of the rate limit.
 const releasePage = 100
 
-// Releases reads the newest maxReleases releases, following the "next" link of
-// each page.
+// Releases reads the newest maxReleases releases.
 func (g *github) Releases(ctx context.Context, repo string) ([]Release, error) {
-	var releases []Release
+	return readReleases(ctx, releasePage, func(ctx context.Context, page int) ([]Release, int, error) {
+		at := fmt.Sprintf("%s/repos/%s/releases?per_page=%d", g.api, repo, releasePage)
+		if page > 1 {
+			at += fmt.Sprintf("&page=%d", page)
+		}
 
-	next := fmt.Sprintf("%s/repos/%s/releases?per_page=%d", g.api, repo, releasePage)
-
-	for next != "" && len(releases) < maxReleases {
-		var found []githubRelease
-
-		body, after, err := g.page(ctx, next, "application/vnd.github+json")
+		body, link, err := g.page(ctx, at, "application/vnd.github+json")
 		if err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 
+		var found []githubRelease
 		if err := json.Unmarshal(body, &found); err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 
-		for _, release := range found {
-			releases = append(releases, release.release())
+		releases := make([]Release, len(found))
+		for i, release := range found {
+			releases[i] = release.release()
 		}
 
-		next = after
-	}
-
-	return releases, nil
+		return releases, lastPage(link), nil
+	})
 }
 
 func (g *github) TagCommit(ctx context.Context, repo, tag string) (Commit, error) {
@@ -195,8 +193,8 @@ func (g *github) get(ctx context.Context, url, accept string) ([]byte, error) {
 	return body, err
 }
 
-// page reads url and returns the body and the URL of the next page, or "". A
-// next page on another host would get the token, so oku does not follow it.
+// page reads url and returns the body and the Link header, which names the
+// other pages of a list.
 func (g *github) page(ctx context.Context, url, accept string) ([]byte, string, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
@@ -252,13 +250,7 @@ func (g *github) page(ctx context.Context, url, accept string) ([]byte, string, 
 		return nil, "", fmt.Errorf("response is larger than %d bytes", maxBody)
 	}
 
-	next := ""
-	if m := nextPageRe.FindStringSubmatch(resp.Header.Get("Link")); m != nil &&
-		strings.HasPrefix(m[1], g.api+"/") {
-		next = m[1]
-	}
-
-	return body, next, nil
+	return body, resp.Header.Get("Link"), nil
 }
 
 // GitHubDir lists the names in the folder dir of a github.com repo at commit.
