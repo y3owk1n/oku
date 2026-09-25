@@ -154,7 +154,7 @@ profiles   ~/.local/share/oku/profiles  2.1 MiB    2 profiles, 14 generations
 cache      ~/.cache/oku                 640.0 MiB  downloads 600.0 MiB, git 38.0 MiB, api 2.0 MiB
 other      ~/.local/share/oku           1.0 MiB    logs, secrets, trust
 total                                   2.0 GiB
-`oku gc` frees 312.0 MiB, and deleting ~/.cache/oku is safe
+`oku gc` frees 312.0 MiB, and `oku gc --cache` frees 820.0 MiB
 ```
 
 `oku du --packages` lists each store path, largest first, with the profile or
@@ -191,13 +191,25 @@ deleted generations and no store path became unused, it says
 You cannot roll back to a deleted generation. You can add a deleted package
 again, and oku reuses its download when the cache still has it.
 
-gc does not touch `oku.toml`, `oku.lock`, the download cache, or an install
-that is still running. It refuses to run while an earlier change is
+gc does not touch `oku.toml`, `oku.lock`, or an install that is still running. It refuses to run while an earlier change is
 unfinished, until `oku sync` has put the machine back.
 
-The download cache lives in `~/.cache/oku`. Deleting it is safe, and oku
-downloads again when it needs a file. [Paths](../reference/paths.md) lists
-every directory.
+The download cache lives in `~/.cache/oku`, and plain gc leaves it alone.
+`oku gc --cache` also deletes the downloads that no kept store path was made
+from, such as old versions and the downloads of your other lock platforms:
+
+```
+$ oku gc --keep 1 --cache
+removed generation 1
+removed ripgrep-14.0.3-4c8fe21b8d1d13c4 (4.6 MiB)
+removed 38 files from the download cache (1.9 GiB)
+freed 1.9 GiB from 1 store path and 38 cached files
+```
+
+It keeps the download of every kept store path, so you can install any
+generation you can roll back to again offline. Deleting the whole cache is
+also safe, and oku downloads again when it needs a file.
+[Paths](../reference/paths.md) lists every directory.
 
 ## Remove a package
 

@@ -7,8 +7,10 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"net/http"
 	"os"
 	"path"
@@ -111,6 +113,43 @@ func (s *Store) download(
 	}
 
 	return dest, got, nil
+}
+
+// StaleDownloads returns the files of the download cache that no install
+// needs, with their sizes: each download whose digest is not in keep, the
+// entries of the index by url, and partial downloads. It skips a file less than
+// a day old, which may belong to a run that has not written its lock yet.
+func (s *Store) StaleDownloads(keep map[string]bool) (map[string]int64, error) {
+	dir := filepath.Join(s.cache, "downloads")
+	stale := map[string]int64{}
+
+	err := filepath.WalkDir(dir, func(path string, entry fs.DirEntry, err error) error {
+		switch {
+		case errors.Is(err, fs.ErrNotExist):
+			return nil
+		case err != nil:
+			return err
+		case entry.IsDir():
+			return nil
+		}
+
+		info, err := entry.Info()
+		if err != nil {
+			return err
+		}
+
+		inIndex := filepath.Dir(path) != dir
+		if time.Since(info.ModTime()) >= recentDownload && (inIndex || !keep[entry.Name()]) {
+			stale[path] = info.Size()
+		}
+
+		return nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("read download cache: %w", err)
+	}
+
+	return stale, nil
 }
 
 // Reachable reports an error when url serves no download, the error that a

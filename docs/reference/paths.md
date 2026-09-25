@@ -232,4 +232,5 @@ stale lock.
 ## The cache
 
 Deleting the cache directory is safe. oku downloads again when it needs to.
-`oku gc` does not touch the cache.
+`oku gc` leaves the cache alone. `oku gc --cache` deletes the downloads that
+no kept store path was made from, see [`oku gc`](commands.md#oku-gc).
