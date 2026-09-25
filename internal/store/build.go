@@ -417,6 +417,9 @@ func (s *Store) Build(
 
 	result.MissingDeps = s.missingDeps(prefix, opts.RuntimeDeps)
 
+	// A store path that shares nothing still works, and gc shares it later.
+	_, _ = s.Share(prefix)
+
 	return result, nil
 }
 

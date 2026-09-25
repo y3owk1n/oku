@@ -1517,3 +1517,48 @@ a day old may belong to a run that has not written its lock yet, and the index
 by url exists for that run. `api/` holds
 ETags that keep oku under forge rate limits, and a deleted clone in `git/`
 costs a full clone.
+
+## D95. The store keeps one copy of each identical file
+
+When a download, a build or a cache entry becomes a store path, oku hashes each
+file of 8 KiB or more with its exec bit, and looks the hash up in
+`store/.links/`. The first file with a hash becomes a hard link there. A later
+file with the same bytes becomes a clone of it where the filesystem clones
+(APFS, btrfs, XFS), and keeps its own mode and time. Elsewhere, ext4 and NTFS
+among them, it becomes a hard link, and the shared file loses its write bits.
+`store/.links/paths/` records which files each store path shares, with the mode
+each had. `oku gc` shares the files of store paths from before this, and
+deletes what no record names any more. It and `oku du` count a shared file
+once, and a file that a kept store path shares frees nothing.
+
+Why: rollback stays a link flip with no download (D3), and every generation
+stays a working rollback target until the user deletes it (D23). So old
+versions stay on disk, and the way to make them cheaper is to share what they
+have in common. Nix, Guix, OSTree and pnpm all keep one copy per file, and none
+of them keeps a generation as a lock alone to download again on rollback. On
+2026-09-26 one 12 GB store held 0.83 GB of identical files, most of it one
+version under several store paths: three go-1.26.8 paths of 259 MB each,
+because the store hash includes the manifest's sha and each profile reached go
+through a different manifest. Sharing files removes that without changing
+which store path a package gets. Consecutive versions share most of their files
+too, which Nix's manual puts at 25 to 35% of a store.
+
+A clone shares blocks and not the file, so a write through one store path never
+reaches another, and nothing about the file changes. A hard link shares one
+file, so it must not be writable, as in Nix and Guix. The exec bit is part of
+the hash because every hard link of a file has one mode. 8 KiB is Guix's floor,
+since most small files are unique and each one would cost an entry. The
+records keep what `gc` says it frees true, and let `cache push` write each
+file with its own mode, so an entry does not depend on what else the store
+held.
+
+Some files stay apart. A file with extended attributes would take another
+file's, apart from Linux's `security.` ones, which the kernel sets by path. A
+repo's files for `[files]` are not shared, since the home links into them. On
+Windows a program or library, any file that starts with `MZ`, is not shared,
+since Windows refuses to delete a hard link to a program that runs. Go's
+`os.RemoveAll` deletes a read-only file on Windows without clearing the
+attribute, so deleting one store path leaves another's file read-only. A
+package that writes to its own files in place fails with permission denied
+where the store hard links. It can still create files, since directories stay
+writable.

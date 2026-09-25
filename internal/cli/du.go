@@ -49,7 +49,7 @@ the apps and fonts it copied out of the store, and the rest of its data.
 			}
 
 			done := status.Start(cmd.Context(), "measuring what oku keeps on disk")
-			m := meter{seen: map[fileID]bool{}}
+			m := meter{seen: map[fileID]bool{}, shared: map[string]bool{}}
 			paths, err := e.measureStore(&m, holders)
 
 			var areas []area
@@ -162,8 +162,10 @@ func (e env) storeHolders(
 type storePath struct {
 	path string
 	// store is the directory of the store that holds the path.
-	store   string
-	size    int64
+	store string
+	size  int64
+	// frees is what gc frees when it deletes the path.
+	frees   int64
 	holders *holders
 	// unused reports that no generation holds the path, so gc deletes it.
 	unused bool
@@ -192,17 +194,24 @@ func (e env) measureStore(m *meter, holders map[string]*holders) ([]storePath, e
 		}
 
 		for _, entry := range entries {
-			if !entry.IsDir() {
+			// The index of shared files holds the same files as the store paths.
+			if !entry.IsDir() || entry.Name() == store.LinksDir {
 				continue
 			}
 
 			path := filepath.Join(st.Dir(), entry.Name())
-			_, gone := unused[path]
+			frees, gone := unused[path]
+
+			files, err := st.SharedFiles(path)
+			if err != nil {
+				return nil, err
+			}
 
 			paths = append(paths, storePath{
 				path:    path,
 				store:   st.Dir(),
-				size:    m.size(path),
+				size:    m.storeSize(path, files),
+				frees:   frees,
 				holders: holders[path],
 				unused:  gone,
 			})
@@ -246,7 +255,7 @@ func (e env) measureAreas(
 
 			switch {
 			case p.unused:
-				unused += p.size
+				unused += p.frees
 			case p.holders != nil && !p.holders.active:
 				old += p.size
 			}
@@ -384,7 +393,7 @@ func (e env) duAreas(cmd *cobra.Command, areas []area, paths []storePath, stale 
 
 	for _, p := range paths {
 		if p.unused {
-			frees += p.size
+			frees += p.frees
 		}
 	}
 
@@ -535,15 +544,22 @@ func (e env) duPackages(cmd *cobra.Command, paths []storePath) error {
 	return tab.Write(out)
 }
 
-// meter adds up the bytes of files. A file with more hard links than one
-// counts once, at the first path the meter reads.
+// meter adds up the bytes of files. A file with more hard links than one, and
+// a content that store paths share, counts once, at the first path the meter
+// reads.
 type meter struct {
-	seen map[fileID]bool
+	seen   map[fileID]bool
+	shared map[string]bool
 }
 
 // size is the bytes of the files under path, or of path itself when it is a
 // file. What it cannot read counts as nothing.
 func (m *meter) size(path string) int64 {
+	return m.storeSize(path, nil)
+}
+
+// storeSize is size of a store path whose shared files are files.
+func (m *meter) storeSize(path string, files map[string]store.Shared) int64 {
 	var size int64
 
 	_ = filepath.WalkDir(path, func(file string, entry fs.DirEntry, err error) error {
@@ -556,7 +572,19 @@ func (m *meter) size(path string) int64 {
 			return nil
 		}
 
-		if id, linked := idOf(file, info); linked {
+		id, linked := idOf(file, info)
+
+		if rel, err := filepath.Rel(path, file); err == nil {
+			if f, ok := files[filepath.ToSlash(rel)]; ok {
+				if m.shared[f.Key] {
+					return nil
+				}
+
+				m.shared[f.Key] = true
+			}
+		}
+
+		if linked {
 			if m.seen[id] {
 				return nil
 			}

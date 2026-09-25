@@ -67,6 +67,10 @@ The old generation still points at the old folders, so `oku rollback` needs
 no download and finishes at once. `oku gc` deletes store
 folders that no generation uses any more.
 
+Old versions cost less than a full copy each. When two store folders hold a
+file with the same bytes, the disk keeps it once, so a new version only adds
+the files that changed.
+
 ## Glossary
 
 ### list

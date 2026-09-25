@@ -721,7 +721,9 @@ oku gc [--keep N] [--cache] [--dry-run]
 ```
 
 Deletes store paths that no generation of any profile uses, and what a killed
-oku process left in the system's temporary directory.
+oku process left in the system's temporary directory. It also makes the store
+paths from before oku shared files keep one copy of the files they have in
+common, see [the store](paths.md#the-store).
 
 | Flag | Effect |
 |---|---|
@@ -741,6 +743,18 @@ freed 4.6 MiB from 1 store path
   path is used by a generation`. When `--keep` deleted generations and no
   store path became unused, it prints `every store path is still used by a
   generation`.
+- The size of a store path is what deleting it frees. A file that a kept
+  store path shares counts as nothing, and a file that several deleted store
+  paths share counts once.
+- The first `oku gc` after an upgrade shares the files of older store paths,
+  which reads each file once. It says how many store paths and what that saved,
+  and `--dry-run` says how many it would share:
+
+  ```
+  $ oku gc
+  shared the identical files of 109 store paths (830.4 MiB)
+  freed 830.4 MiB from identical files
+  ```
 - The kept generations keep their numbers, and no number is used twice.
 - A dep counts as used while any generation holds a package that depends on
   it.
@@ -793,7 +807,7 @@ includes it.
 
 | Area | What it holds |
 |---|---|
-| `store` | Every store path. `unused` is what `oku gc` deletes. `only in old generations` is what `oku gc --keep` can free once those generations go. After `oku setup --system` there is a row for the shared store and one for the old store. |
+| `store` | Every store path, with a file that store paths share counted once. `unused` is what `oku gc` frees. `only in old generations` is what `oku gc --keep` can free once those generations go. After `oku setup --system` there is a row for the shared store and one for the old store. |
 | `profiles` | The generations of every profile. |
 | `cache` | Downloads, `git+` clones and API answers. |
 | `apps`, `fonts` | The copies oku placed outside the store, from the ledger. Absent when there are none. |
