@@ -425,6 +425,11 @@ order step in `prd/product.md`.
 - B23 [3] `oku gc` deletes store paths referenced by no generation of any
   profile, and nothing else. `--keep N` first deletes all but the newest N
   generations and the active one. `--dry-run` deletes nothing.
+- B348 [3] `oku gc --cache` also deletes each download in the cache that no
+  kept store path was made from, and the index of downloads by url, and keeps
+  the download of every kept store path. It skips a file less than a day old.
+  `oku gc` without `--cache` leaves the cache alone. `oku du` says what
+  `oku gc --cache` frees.
 - B347 [3] When `gc --keep` deletes generations and no store path becomes
   unused, it ends with `every store path is still used by a generation`,
   never with `nothing to delete`.
