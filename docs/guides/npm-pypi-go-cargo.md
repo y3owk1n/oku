@@ -119,16 +119,18 @@ it was when that version was published, and runs no install scripts.
 its program in a platform package, as typescript 7 does.
 
 Some packages need an install script, which downloads or builds a native
-binary, such as esbuild's and opencode-ai's own. After npm installs the tree,
-oku looks for packages with an install script or a `binding.gyp`. For an
-`npm:` ref it names them in the manifest's `scripts` and asks again, and the
-approval lists them before any runs:
+binary, such as esbuild's and opencode-ai's own. For an `npm:` ref, oku first
+installs the tree into a temporary directory with no scripts, and looks for
+packages with an install script or a `binding.gyp`. It names them in the
+manifest's `scripts`, and the one approval lists them before any runs:
 
 ```
 vendor npm, which installs esbuild and its dependencies and runs the install scripts of esbuild
 ```
 
-`--yes` approves them too. A script that puts a native program where the
+`--yes` approves them too. `oku add npm:<name> --manifest` changes nothing,
+so it cannot install the tree, and its manifest names no scripts. It says so
+on stderr. A script that puts a native program where the
 package's script was makes the program run directly, not through node. A
 manifest of your own names its scripts itself, and oku warns about the
 packages with install scripts that it leaves out. See

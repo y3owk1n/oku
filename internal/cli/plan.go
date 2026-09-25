@@ -15,6 +15,7 @@ import (
 	"github.com/y3owk1n/oku/internal/manifest"
 	"github.com/y3owk1n/oku/internal/platform"
 	"github.com/y3owk1n/oku/internal/ref"
+	"github.com/y3owk1n/oku/internal/store"
 	"github.com/y3owk1n/oku/internal/ui"
 )
 
@@ -91,6 +92,17 @@ func runPlan(cmd *cobra.Command, opts Options, args []string, flags planFlags) e
 			}
 
 			fmt.Fprint(cmd.OutOrStdout(), string(fetched.Data))
+
+			// Only an install of the tree shows which of its packages have install
+			// scripts, and --manifest installs nothing.
+			if m, err := manifest.Parse(fetched.Data, req.ref.String()); err == nil &&
+				req.ref.Kind == ref.NPM && store.CanCrossVendor(m.Build, platform.Host()) {
+				warn(
+					cmd.ErrOrStderr(),
+					"this manifest names no install scripts, since oku finds them when npm installs the tree. `oku add %s` names them in scripts and asks first.",
+					arg,
+				)
+			}
 
 			continue
 		}
