@@ -91,7 +91,8 @@ func NewRootCmd(opts Options) *cobra.Command {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		PersistentPreRun: func(cmd *cobra.Command, _ []string) {
-			cmd.SetContext(status.With(cmd.Context(), status.New(cmd.ErrOrStderr())))
+			ctx := status.With(cmd.Context(), status.New(cmd.ErrOrStderr()))
+			cmd.SetContext(resolve.WithMemo(forge.WithAnswers(ctx)))
 		},
 	}
 

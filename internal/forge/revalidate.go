@@ -2,6 +2,7 @@ package forge
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -9,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sync"
 )
 
 // Revalidating returns a client that keeps each GET answer with an ETag under
@@ -46,6 +48,14 @@ func (r revalidator) RoundTrip(req *http.Request) (*http.Response, error) {
 		return next().RoundTrip(req)
 	}
 
+	if a, ok := req.Context().Value(answersKey{}).(*answers); ok {
+		return a.get(req, r.revalidate)
+	}
+
+	return r.revalidate(req)
+}
+
+func (r revalidator) revalidate(req *http.Request) (*http.Response, error) {
 	// The same URL gives a sha, raw bytes or JSON depending on Accept.
 	sum := sha256.Sum256([]byte(req.URL.String() + "\n" + req.Header.Get("Accept")))
 	path := filepath.Join(r.dir, hex.EncodeToString(sum[:]))
@@ -113,4 +123,76 @@ func keep(path string, answer kept) {
 	if closeErr := tmp.Close(); err == nil && closeErr == nil {
 		_ = os.Rename(tmp.Name(), path)
 	}
+}
+
+type answersKey struct{}
+
+// maxAnswer is the most of an answer that answers keeps. It is the largest
+// limit of any reader of this client, which the npm and PyPI readers have.
+const maxAnswer = 64 << 20
+
+// answers holds the GET answers of one command, by URL and Accept.
+type answers struct {
+	mu    sync.Mutex
+	byKey map[string]*answer
+}
+
+type answer struct {
+	once   sync.Once
+	status string
+	code   int
+	header http.Header
+	body   []byte
+	err    error
+}
+
+// WithAnswers returns a context in which a revalidating client asks the host
+// once for each URL, and gives a repeat the same answer. Inference and the
+// version lookup of one package read the same registry document, as do the
+// packages that share a repo.
+func WithAnswers(ctx context.Context) context.Context {
+	return context.WithValue(ctx, answersKey{}, &answers{byKey: map[string]*answer{}})
+}
+
+func (a *answers) get(
+	req *http.Request,
+	ask func(*http.Request) (*http.Response, error),
+) (*http.Response, error) {
+	key := req.URL.String() + "\n" + req.Header.Get("Accept")
+
+	a.mu.Lock()
+
+	x := a.byKey[key]
+	if x == nil {
+		x = &answer{}
+		a.byKey[key] = x
+	}
+
+	a.mu.Unlock()
+
+	x.once.Do(func() {
+		resp, err := ask(req)
+		if err != nil {
+			x.err = err
+
+			return
+		}
+		defer resp.Body.Close()
+
+		x.status, x.code, x.header = resp.Status, resp.StatusCode, resp.Header
+		x.body, x.err = io.ReadAll(io.LimitReader(resp.Body, maxAnswer+1))
+	})
+
+	if x.err != nil {
+		return nil, x.err
+	}
+
+	return &http.Response{
+		Status:        x.status,
+		StatusCode:    x.code,
+		Header:        x.header.Clone(),
+		Body:          io.NopCloser(bytes.NewReader(x.body)),
+		ContentLength: int64(len(x.body)),
+		Request:       req,
+	}, nil
 }

@@ -12,6 +12,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 	"unicode"
 
@@ -262,8 +263,53 @@ func ceiling(part, op string) (string, error) {
 	return strings.Join(out, "."), nil
 }
 
+type memoKey struct{}
+
+// memo holds the releases that List found during one command, by version source.
+type memo struct {
+	mu    sync.Mutex
+	lists map[string]*listing
+}
+
+type listing struct {
+	once     sync.Once
+	releases []Release
+	err      error
+}
+
+// WithMemo returns a context in which List asks each version source once.
+// Packages of one command that share a source, and a second lookup of one
+// package, cost no more requests. It covers git tags and branches, which
+// forge.WithAnswers does not see.
+func WithMemo(ctx context.Context) context.Context {
+	return context.WithValue(ctx, memoKey{}, &memo{lists: map[string]*listing{}})
+}
+
 // List returns the releases of v, newest first.
 func (r *Resolver) List(ctx context.Context, v manifest.Version) ([]Release, error) {
+	m, _ := ctx.Value(memoKey{}).(*memo)
+	if m == nil {
+		return r.list(ctx, v)
+	}
+
+	key := fmt.Sprintf("%#v", v)
+
+	m.mu.Lock()
+
+	l := m.lists[key]
+	if l == nil {
+		l = &listing{}
+		m.lists[key] = l
+	}
+
+	m.mu.Unlock()
+
+	l.once.Do(func() { l.releases, l.err = r.list(ctx, v) })
+
+	return l.releases, l.err
+}
+
+func (r *Resolver) list(ctx context.Context, v manifest.Version) ([]Release, error) {
 	defer status.Start(ctx, "looking up the versions of %s", v.Repo)()
 
 	if v.Tag != "" {
