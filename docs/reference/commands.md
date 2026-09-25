@@ -669,6 +669,7 @@ generation it replaced.
 | `and N more` | The rest of a change with more than six parts. |
 | `empty` | A first generation that holds nothing. |
 | `from N, ...` | The generation after a rollback, which replaced generation N. |
+| `replaced N, which is deleted` | A generation whose replaced generation `oku gc --keep` deleted. |
 
 Generations from an older oku do not record what they replaced, so they
 compare with the one numbered before.
@@ -700,8 +701,11 @@ generation 1 is active, 1 package: - fd
   ``~/.config/oku/oku.toml does not list fzf, so `oku sync` will remove it
   again. Run `oku add github:junegunn/fzf` to keep it.``
 - It writes no new generation. After `oku rollback 1`, `oku rollback 3` goes
-  forward again. The next command that changes something writes the next
-  number.
+  forward again. The next command that changes something builds on
+  generation 1 and writes the number after the highest, and 2 and 3 stay.
+- It lasts until the next `oku sync`, which applies the list again. To undo a
+  change for good, undo it in the list, see
+  [Rollback or git](../guides/undo-and-clean-up.md#rollback-or-git).
 
 It fails for a number that does not exist, for the active generation, and
 with no number when the oldest is active. It also fails, before it changes
@@ -731,7 +735,10 @@ freed 4.6 MiB from 1 store path
 
 - Old generations keep their packages, so a plain `oku gc` usually finds
   little. With nothing to delete it prints `nothing to delete, every store
-  path is used by a generation`.
+  path is used by a generation`. When `--keep` deleted generations and no
+  store path became unused, it prints `every store path is still used by a
+  generation`.
+- The kept generations keep their numbers, and no number is used twice.
 - A dep counts as used while any generation holds a package that depends on
   it.
 - After `oku setup --system` it checks the shared store and the old one.

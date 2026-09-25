@@ -31,7 +31,8 @@ holds, and what changed from the one before it:
 
 A change with more than six parts ends in `and N more`. After a rollback, the
 next generation replaces an older one, and its line starts with that number,
-such as `from 1, + hello 1.0.0`.
+such as `from 1, + hello 1.0.0`. When `oku gc` deleted the generation a line
+replaced, the line says so, as in `replaced 2, which is deleted`.
 
 ## Roll back the last change
 
@@ -79,8 +80,24 @@ generation 3 is active, 2 packages: + fd 10.5.0, ripgrep 14.1.1 -> 15.2.0
 ```
 
 A rollback writes no new generation. After `oku rollback 1`, generations 2
-and 3 still exist, so `oku rollback 3` goes forward again. The next change
-writes the next free number.
+and 3 still exist, so `oku rollback 3` goes forward again.
+
+A change made while generation 1 is active builds on 1, not on 3. It takes the
+next number, and 2 and 3 stay as they were:
+
+```
+$ oku rollback 1
+$ oku add ./qux.toml
+$ oku generations
+  1  2026-09-25 12:01  1 package   + hello 1.0.0
+  2  2026-09-25 12:01  2 packages  + bar 1.0.0
+  3  2026-09-25 12:01  3 packages  + baz 1.0.0
+* 4  2026-09-25 12:02  2 packages  from 1, + qux 1.0.0
+```
+
+`oku rollback 3` still reaches the other line. Numbers only go up: a change
+takes the number after the highest generation, also after `oku gc` deleted
+older ones, so a number always names the same generation.
 
 A rollback fails, and changes nothing, when:
 
@@ -90,6 +107,24 @@ A rollback fails, and changes nothing, when:
 - the oldest generation is active and you gave no number
 - an app or a font of that generation would overwrite a file that oku did not
   write
+
+## Rollback or git
+
+`oku rollback` puts the machine back in one step. It needs no network and does
+not read your list, so it works when a new version broke something or a
+source is down. It lasts until the next `oku sync`, which installs what your
+list names again.
+
+To undo a change for good, undo it in the list. When `~/.config/oku` is a git
+repo:
+
+```
+$ git -C ~/.config/oku revert HEAD
+$ oku sync
+```
+
+The sync downloads nothing while the store still holds the old versions.
+They stay until `oku gc --keep` deletes the generations that use them.
 
 ## A change that fails undoes itself
 
@@ -145,9 +180,13 @@ freed 4.5 MiB from 1 store path
   [dep](../how-oku-works.md#runtime-dep) counts as used while a package that
   needs it is.
 - `--dry-run` prints what it would delete and deletes nothing.
+- The kept generations keep their numbers, and the next change takes the
+  number after the highest.
 
 With nothing to delete it says
-`nothing to delete, every store path is used by a generation`.
+`nothing to delete, every store path is used by a generation`. When it
+deleted generations and no store path became unused, it says
+`every store path is still used by a generation`.
 
 You cannot roll back to a deleted generation. You can add a deleted package
 again, and oku reuses its download when the cache still has it.
