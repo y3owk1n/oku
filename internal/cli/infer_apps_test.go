@@ -105,10 +105,10 @@ func TestB353AReleaseWithOnlyAnotherProgramForAPlatformLeavesItOut(t *testing.T)
 	// The other program is a single binary for the host's arch, and the
 	// package's own build is universal. A .deb carries the distro's name.
 	inferServer(t, &m, map[string]string{
-		"tool-v1.4.0-universal-apple-darwin.tar.gz": tool,
+		"tool-v1.4.0-universal-apple-darwin.tar.gz":                             tool,
 		strings.Replace(assetFor(darwinArm, ".tar.gz"), "tool-", "toolkit-", 1): helper,
 		strings.Replace(assetFor(linuxArm, ".tar.gz"), "tool-", "toolkit-", 1):  helper,
-		"sometool_1.4.0_amd64.deb": tool,
+		"sometool_1.4.0_amd64.deb":                                              tool,
 	})
 
 	out, err := m.run(t, "", "add", "github:owner/tool", "--manifest")

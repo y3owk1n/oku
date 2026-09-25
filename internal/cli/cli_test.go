@@ -7257,3 +7257,28 @@ func TestB340AnNPMPackageWhoseTreeHasInstallScriptsNamesThemAndAsks(t *testing.T
 		t.Fatalf("the translated manifest in oku.lock does not name native-dep:\n%s", locked)
 	}
 }
+
+func TestB358SyncOfAnNPMPackageInTheStoreRunsNoNPM(t *testing.T) {
+	m := newMachine(t)
+	npmServerWith(t, &m, "", true, "1.1.0")
+
+	must(t, os.MkdirAll(m.config, 0o755))
+	must(t, os.WriteFile(
+		filepath.Join(m.config, "config.toml"),
+		[]byte(fmt.Sprintf("[runtimes]\nnode = %q\n", m.fakeNode(t))), 0o644,
+	))
+
+	out, err := m.run(t, "", "add", "npm:@scope/tool@1.1.0", "--yes")
+	if err != nil || !strings.Contains(out, "building") {
+		t.Fatalf("add should build the package: %v\n%s", err, out)
+	}
+
+	// The build is in the store, so sync neither installs the tree again nor
+	// looks for its install scripts.
+	out, err = m.run(t, "", "sync", "--yes")
+	must(t, err)
+
+	if strings.Contains(out, "building") {
+		t.Fatalf("sync built the package again:\n%s", out)
+	}
+}
