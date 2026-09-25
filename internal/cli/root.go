@@ -111,6 +111,7 @@ func NewRootCmd(opts Options) *cobra.Command {
 		newGenerationsCmd(opts),
 		newRollbackCmd(opts),
 		newGCCmd(),
+		newDuCmd(),
 		newServiceCmd(opts),
 		newHookCmd(opts),
 		newEnvCmd(opts),
@@ -173,7 +174,7 @@ func groupCommands(root *cobra.Command) {
 			},
 		},
 		{"Finding packages", []string{"search", "source"}},
-		{"Generations", []string{"generations", "rollback", "gc"}},
+		{"Generations", []string{"generations", "rollback", "gc", "du"}},
 		{"Projects and shells", []string{"hook", "env", "allow", "deny"}},
 		{"Services and caches", []string{"service", "cache", "key"}},
 		{"Publishing", []string{"manifest"}},
@@ -492,9 +493,14 @@ func (e env) profile() *profile.Profile {
 		return e.globalProfile()
 	}
 
-	sum := sha256.Sum256([]byte(e.project))
+	return profile.Open(e.data, projectProfile(e.project))
+}
 
-	return profile.Open(e.data, "project-"+hex.EncodeToString(sum[:])[:12])
+// projectProfile is the name of the profile of the project in dir.
+func projectProfile(dir string) string {
+	sum := sha256.Sum256([]byte(dir))
+
+	return "project-" + hex.EncodeToString(sum[:])[:12]
 }
 
 func (e env) store() *store.Store {

@@ -7,7 +7,7 @@ behind the commands, see the [guides](../README.md).
 |---|---|
 | [Packages](#packages) | [`add`](#oku-add), [`remove`](#oku-remove), [`update`](#oku-update), [`outdated`](#oku-outdated), [`list`](#oku-list), [`info`](#oku-info), [`why`](#oku-why), [`which`](#oku-which), [`shell`](#oku-shell) |
 | [The machine](#the-machine) | [`sync`](#oku-sync), [`service`](#oku-service), [`setup`](#oku-setup) |
-| [History](#history) | [`generations`](#oku-generations), [`rollback`](#oku-rollback), [`gc`](#oku-gc) |
+| [History](#history) | [`generations`](#oku-generations), [`rollback`](#oku-rollback), [`gc`](#oku-gc), [`du`](#oku-du) |
 | [Projects](#projects) | [`allow`, `deny`](#oku-allow-oku-deny), [`hook`](#oku-hook), [`env`](#oku-env), [`exec`](#oku-exec) |
 | [Manifests](#manifests) | [`manifest init`](#oku-manifest-init), [`lint`](#oku-manifest-lint), [`test`](#oku-manifest-test), [`bump`](#oku-manifest-bump), [`hash`](#oku-manifest-hash) |
 | [Sources, caches and keys](#sources-caches-and-keys) | [`source`](#oku-source), [`search`](#oku-search), [`cache`](#oku-cache), [`key`](#oku-key) |
@@ -743,6 +743,57 @@ freed 4.6 MiB from 1 store path
 - It refuses to run while an unfinished change waits to be put back.
 - You cannot roll back to a deleted generation.
 
+### oku du
+
+```
+oku du [--packages]
+```
+
+Shows how much disk oku uses and where. It reads and changes nothing.
+
+```
+$ oku du
+store      ~/.local/share/oku/store     6.2 GiB    142 paths, 1.2 GiB unused, 2.9 GiB only in old generations
+profiles   ~/.local/share/oku/profiles  8.1 MiB    3 profiles, 41 generations
+cache      ~/.cache/oku                 3.4 GiB    downloads 3.3 GiB, api 52.0 MiB
+apps       ~/Applications               1.9 GiB    4 apps
+fonts      ~/Library/Fonts              31.5 MiB   12 fonts
+other      ~/.local/share/oku           1.2 MiB    logs, secrets, trust
+total                                   11.5 GiB
+`oku gc` frees 1.2 GiB, and deleting ~/.cache/oku is safe
+```
+
+| Area | What it holds |
+|---|---|
+| `store` | Every store path. `unused` is what `oku gc` deletes. `only in old generations` is what `oku gc --keep` can free once those generations go. After `oku setup --system` there is a row for the shared store and one for the old store. |
+| `profiles` | The generations of every profile. |
+| `cache` | Downloads, `git+` clones and API answers. |
+| `apps`, `fonts` | The copies oku placed outside the store, from the ledger. Absent when there are none. |
+| `other` | The rest of the data directory, such as secrets, services and logs. |
+| `temporary` | What killed oku processes left in the system's temporary directory, which `oku gc` also deletes. Absent when there is none. |
+
+A file with more than one hard link counts once, so the links of a Windows
+generation count in the store.
+
+| Flag | Effect |
+|---|---|
+| `--packages` | Lists each store path instead, largest first, with its size and what keeps it. |
+
+```
+$ oku du --packages
+firefox-156.0-724bce82a5308f1f        506.6 MiB  global
+firefox-155.0.2-f70cc181a8c66932      498.3 MiB  old: global
+rust-1.98.1-53fb62887997e999          434.9 MiB  dep of eza, pngquant
+gopls-0.23.0-8a1c3e2f40b9d7a6         39.1 MiB   ~/code/api, ~/code/web
+fd-10.4.0-4c8fe21b8d1d13c4            3.1 MiB    unused
+```
+
+The last column names the profiles whose generations hold the path, and the
+packages that depend on it. A project shows as its directory once you have
+[allowed](#oku-allow-oku-deny) it, and as `project-<hash>` before. `old:`
+marks a path that only generations other than the active ones hold, and
+`unused` one that no generation holds.
+
 ## Projects
 
 ### oku allow, oku deny
@@ -1262,11 +1313,14 @@ that prints no data, `--json` changes nothing.
 | `oku service list` | A list of `name`, `package`, `installed`, `enabled`, `running`, `system`, `detail`. |
 | `oku service status <name>` | One such object. |
 | `oku doctor` | `problems`, and `checks`, a list of `status` and `message`. |
+| `oku du` | `areas`, a list of `area`, `paths`, `bytes`, then `total` and `gc_frees`, all in bytes. |
+| `oku du --packages` | A list of `name`, `version`, `path`, `bytes`, `profiles`, `dep_of`, `old`, `unused`. |
 
 - A result with nothing in it prints `[]`, never `null`.
 - `created` is an RFC 3339 time in UTC.
 - `commit`, `vendor_sha256`, `signing_key`, `shadowed_by`, `from`, `link`,
-  `source`, `prior` and `detail` are absent when empty.
+  `source`, `prior`, `detail` and the `version` of `du --packages` are absent
+  when empty.
 - `--json` always has the full values, never a cut column.
 
 ```

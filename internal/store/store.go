@@ -860,6 +860,11 @@ func (s *Store) Tree(name string, download func() ([]byte, int, error)) (string,
 	return final, nil
 }
 
+// Dir is the directory that holds the store paths.
+func (s *Store) Dir() string {
+	return s.dir
+}
+
 // Holding returns the store path that file is in, or false for a file outside
 // the store.
 func (s *Store) Holding(file string) (string, bool) {
