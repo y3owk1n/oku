@@ -321,12 +321,13 @@ func (s *Store) Build(
 			}
 
 			// npm installed the tree, so oku can tell which of its packages have
-			// install scripts, and whether scripts names packages it holds.
-			if err == nil && *step.Vendor == "npm" && step.Package != "" && !opts.VendorOnly {
+			// install scripts, and whether scripts names packages it holds. The
+			// tree of another platform may lack a package that scripts names.
+			if err == nil && *step.Vendor == "npm" && step.Package != "" {
 				all, scripted := npmTree(filepath.Join(prefix, "lib", "node_modules"))
 
 				for _, name := range step.Scripts {
-					if !slices.Contains(all, name) {
+					if !opts.VendorOnly && !slices.Contains(all, name) {
 						err = fmt.Errorf("scripts names %s, which is not a package of the tree of %s", name, step.Package)
 					}
 				}
@@ -372,7 +373,7 @@ func (s *Store) Build(
 	}
 
 	if opts.VendorOnly {
-		return Realized{VendorSHA256: result.VendorSHA256}, nil
+		return Realized{VendorSHA256: result.VendorSHA256, UnnamedScripts: result.UnnamedScripts}, nil
 	}
 
 	// The check comes after the build on purpose. The vendored files decide what
@@ -960,8 +961,9 @@ type BuildOptions struct {
 	// build aside first, and puts it back when the new one fails.
 	Rebuild bool
 	// VendorOnly runs the vendor steps alone, for a platform that may not be the
-	// host, and returns their digest. It builds nothing and keeps nothing. Only a
-	// build that CanCrossVendor accepts may ask for it.
+	// host, with no install scripts, and returns their digest and the packages of
+	// an npm tree that have install scripts. It builds nothing and keeps nothing.
+	// Only a build that CanCrossVendor accepts may ask for it.
 	VendorOnly bool
 }
 

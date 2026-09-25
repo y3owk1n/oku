@@ -208,9 +208,10 @@ order step in `prd/product.md`.
   are the version, with it the values one per line are what it reads. `json`
   beside another `from` fails.
 - B340 [5] After an npm step installs its tree, oku finds the packages with
-  an install script or a `binding.gyp`. For an `npm:` ref it names them in
-  the translated manifest's `scripts` and asks again, listing them, before
-  any runs. A manifest that leaves one out gets a warning, and a name in
+  an install script or a `binding.gyp`. For an `npm:` ref it installs the
+  tree once with no scripts before it asks, names them in the translated
+  manifest's `scripts`, and asks once, listing them, before any runs. One
+  build runs them and leaves one store path. A manifest that leaves one out gets a warning, and a name in
   `scripts` that is no package of the tree fails the build. A wrapper whose
   program is a native binary runs it directly, not through its interpreter.
 - B182 [2] oku pins a package whose `when` leaves out the host, with its deps,

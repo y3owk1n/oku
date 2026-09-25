@@ -511,6 +511,23 @@ func (e env) installFrom(
 			SHA256:       meta.SHA256,
 		}, previous, m, host)
 	case build:
+		// The tree of an npm: package may hold install scripts. oku installs it in
+		// a temporary directory with no scripts to find them, then translates the
+		// package again with them named. The one approval lists them, and the one
+		// build runs them.
+		if req.ref.Kind == ref.NPM && req.npmScripts == nil && store.CanCrossVendor(m.Build, host) {
+			found, err := e.store().Build(ctx, m, host, store.BuildOptions{
+				Deps: deps.prefixes, Log: req.log, NPMRegistry: opts.NPMRegistry, VendorOnly: true,
+			})
+			if err != nil {
+				return installed{}, fmt.Errorf("%s: %w", m.Package.Name, err)
+			}
+
+			if len(found.UnnamedScripts) > 0 {
+				return installed{unnamedScripts: found.UnnamedScripts}, nil
+			}
+		}
+
 		if err := req.approve(m, host, nil); err != nil {
 			return installed{}, err
 		}

@@ -7210,17 +7210,24 @@ func TestB340AnNPMPackageWhoseTreeHasInstallScriptsNamesThemAndAsks(t *testing.T
 	_, err = m.run(t, "", "remove", "tool")
 	must(t, err)
 
-	// 1.2.0 pulls in native-dep, which builds when npm installs it. The approval
-	// names it before its script runs.
+	// 1.2.0 pulls in native-dep, which builds when npm installs it. The one
+	// approval names it before its script runs, and one build runs it.
 	m.opts.Interactive = yes()
 
-	out, err = m.run(t, "y\ny\n", "add", "npm:@scope/tool@1.2.0")
+	out, err = m.run(t, "y\n", "add", "npm:@scope/tool@1.2.0")
 	if err != nil {
 		t.Fatalf("add 1.2.0: %v\n%s", err, out)
 	}
 
-	if !strings.Contains(out, "runs the install scripts of native-dep") {
-		t.Fatalf("the approval does not name native-dep:\n%s", out)
+	if strings.Count(out, "run them?") != 1 || !strings.Contains(out, "runs the install scripts of native-dep") {
+		t.Fatalf("add 1.2.0 should ask once, naming native-dep:\n%s", out)
+	}
+
+	builds, err := filepath.Glob(filepath.Join(m.data, "store", "tool-1.2.0-*"))
+	must(t, err)
+
+	if len(builds) != 1 {
+		t.Fatalf("add 1.2.0 left %d builds in the store, want 1: %v", len(builds), builds)
 	}
 
 	ran, err := filepath.Glob(filepath.Join(m.data, "store", "*", "lib", "node_modules", "native-dep", "postinstall-ran"))
