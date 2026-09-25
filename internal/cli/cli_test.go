@@ -3140,6 +3140,21 @@ func TestB127AnNPMPackageRunsTheNodeOnPathWhenNoneIsConfigured(t *testing.T) {
 	}
 }
 
+func TestB342AddRefusesAnNPMPackageWithDependenciesWithoutANode(t *testing.T) {
+	m := newMachine(t)
+	npmServerWith(t, &m, "", true, "1.1.0")
+
+	_, err := m.run(t, "", "add", "npm:@scope/tool")
+	if err == nil || !strings.Contains(err.Error(), "runtimes.node") ||
+		!strings.Contains(err.Error(), "examples/runtimes/node.toml") {
+		t.Fatalf("want add to fail and point at runtimes.node, got %v", err)
+	}
+
+	if exists(m.profile("bin", "tool")) || exists(filepath.Join(m.config, "oku.lock")) {
+		t.Fatal("a refused add installed the package or wrote the lock")
+	}
+}
+
 func TestB120ManifestInitReadsUniversalAndWindowsGnuAssets(t *testing.T) {
 	m := newMachine(t)
 	archive, _ := m.archive(t, "release", map[string]string{"tool": script})

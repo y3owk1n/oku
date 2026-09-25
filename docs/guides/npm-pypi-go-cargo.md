@@ -136,16 +136,26 @@ packages with install scripts that it leaves out. See
 
 ### Without runtimes.node
 
-The programs run the `node` on your `PATH`, and `oku add` says so:
+A package with no dependencies, such as prettier, runs the `node` on your
+`PATH`, and `oku add` says so:
 
 ```
 its programs run the node on PATH. To pin one, set runtimes.node in config.toml to the ref of a package that provides node
+example: https://github.com/y3owk1n/oku/blob/main/examples/runtimes/node.toml
+guide: https://github.com/y3owk1n/oku/blob/main/docs/guides/npm-pypi-go-cargo.md#name-the-toolchains-in-runtimes
 ```
 
-`[runtimes]` in `oku.toml` works as well as `config.toml`. Without a node
-package there is also no npm, so oku installs the package's own download and
-none of its dependencies. That works when the download bundles its code, and
-the inferred manifest says so in a comment.
+`[runtimes]` in `oku.toml` works as well as `config.toml`.
+
+A package that lists dependencies needs the npm of a node package to install
+them, so `oku add` stops without one:
+
+```
+oku: the npm package repomix lists dependencies, and only the npm of a node package installs them
+set runtimes.node in ~/.config/oku/oku.toml to the ref of a package that provides node and npm
+example: https://github.com/y3owk1n/oku/blob/main/examples/runtimes/node.toml
+guide: https://github.com/y3owk1n/oku/blob/main/docs/guides/npm-pypi-go-cargo.md#name-the-toolchains-in-runtimes
+```
 
 ## PyPI packages
 
@@ -179,9 +189,16 @@ the newest. `@version` still takes one.
 
 ### Without runtimes.python
 
-The build and the programs use the `python3` that the build finds on its
-`PATH`. On macOS that is `/usr/bin/python3` from the Command Line Tools, which
-may be too old for a package. uv then says which python the package needs.
+`oku add` stops. Without a python package, oku would write the path of the
+`python3` on your `PATH` into each program, and an upgrade of that python would
+break them:
+
+```
+oku: pypi:ruff needs python
+set runtimes.python in ~/.config/oku/oku.toml to the ref of a package that provides python3
+example: https://github.com/y3owk1n/oku/blob/main/examples/runtimes/python.toml
+guide: https://github.com/y3owk1n/oku/blob/main/docs/guides/npm-pypi-go-cargo.md#name-the-toolchains-in-runtimes
+```
 
 ## Go programs
 
@@ -247,8 +264,7 @@ terminal, pass `--yes` after you have read the commands. Builds run in a
   `node.exe`, so the node package needs only `node.exe` in its `bin`.
 - An `npm:` package fails without `runtimes.node`, because Windows cannot run
   a script through `PATH`. The error names the key to set.
-- A `pypi:` package needs `runtimes.python`, because Windows has no system
-  python. The build says so without one. Each console script becomes a
+- Each console script of a `pypi:` package becomes a
   [shim](../how-oku-works.md#shim).
 - `rust.toml` does not build on Windows, because it runs the installer's
   `install.sh`. Leave `rust` out of `[runtimes]` there, and a `cargo:` package

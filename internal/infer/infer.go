@@ -38,6 +38,10 @@ var ErrWebPage = errors.New("a web page")
 // ErrNoAsset reports that a release has no asset for the platform asked for.
 var ErrNoAsset = errors.New("no release asset fits")
 
+// ErrNeedsNPM reports an npm package that lists dependencies while no node
+// package provides the npm that installs them.
+var ErrNeedsNPM = errors.New("and only the npm of a node package installs them")
+
 // Inferrer reads releases from a forge.
 type Inferrer struct {
 	Hosts   forge.Hosts

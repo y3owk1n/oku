@@ -413,15 +413,33 @@ alone, such as one you opened in Finder, so eject it and run the command again.
 When another oku process is copying the same image, run the command again once
 that process ends.
 
-## npm programs cannot find node
+## npm or PyPI packages need a runtime
 
 Without `[runtimes] node`, an `npm:` program runs the `node` on your `PATH`,
-and `oku add` says so. On Windows the add fails instead:
+and `oku add` says so. The add fails for a package that lists dependencies,
+and on Windows for every `npm:` package:
 
 ```
-oku: npm:prettier needs node, and Windows cannot run a script through PATH
-set runtimes.node in ~/.config/oku/oku.toml to the ref of a package that provides node
+oku: the npm package repomix lists dependencies, and only the npm of a node package installs them
+set runtimes.node in ~/.config/oku/oku.toml to the ref of a package that provides node and npm
+example: https://github.com/y3owk1n/oku/blob/main/examples/runtimes/node.toml
+guide: https://github.com/y3owk1n/oku/blob/main/docs/guides/npm-pypi-go-cargo.md#name-the-toolchains-in-runtimes
 ```
+
+A `pypi:` package always needs `[runtimes] python`:
+
+```
+oku: pypi:ruff needs python
+set runtimes.python in ~/.config/oku/oku.toml to the ref of a package that provides python3
+example: https://github.com/y3owk1n/oku/blob/main/examples/runtimes/python.toml
+guide: https://github.com/y3owk1n/oku/blob/main/docs/guides/npm-pypi-go-cargo.md#name-the-toolchains-in-runtimes
+```
+
+Copy the example next to your `oku.toml`, name it in `[runtimes]`, and run the
+add again. An npm package that an older oku installed without its
+dependencies fails with `Cannot find package`. Name the node the same way and
+run `oku update <name>`, which installs the package again with its
+dependencies.
 
 See [npm, PyPI, Go and cargo packages](guides/npm-pypi-go-cargo.md).
 
