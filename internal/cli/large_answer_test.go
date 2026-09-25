@@ -59,4 +59,3 @@ func TestB361ARegistryDocumentOver32MBIsReadWhole(t *testing.T) {
 		t.Fatalf("add --plan did not find version 1.0.0:\n%s", out)
 	}
 }
-
