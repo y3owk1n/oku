@@ -119,9 +119,11 @@ it was when that version was published, and runs no install scripts.
 its program in a platform package, as typescript 7 does.
 
 Some packages need an install script, which downloads or builds a native
-binary, such as esbuild's and opencode-ai's own. For an `npm:` ref, oku first
-installs the tree into a temporary directory with no scripts, and looks for
-packages with an install script or a `binding.gyp`. It names them in the
+binary, such as esbuild's and opencode-ai's own. For an `npm:` ref that it
+builds, oku first installs the tree into a temporary directory with no scripts,
+and looks for packages with an install script or a `binding.gyp`. oku looked
+for them when it made a build that is in the store, so `oku sync` of that build
+installs nothing. It names them in the
 manifest's `scripts`, and the one approval lists them before any runs:
 
 ```
