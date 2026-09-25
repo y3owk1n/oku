@@ -148,7 +148,7 @@ with `--bin`. See [Fix a wrong pick](guides/add-packages.md#fix-a-wrong-pick-wit
 | `cannot tell which file is the program, executables found: ...` | The download holds several programs and none has the repo's name. Pass one to `--bin`. |
 | `no file in it is executable` | Write a manifest, see [Publish a manifest](guides/publish-a-manifest.md). |
 | `it chose the asset <file> for this machine` | The install failed. The next lines list the other files that fit, and the `oku add --asset` command that picks one. `--verbose` adds the manifest oku inferred. |
-| `--asset "<glob>" names 0 assets, want one of: ...` | The glob matches no file. Pick a name from the list. It must match exactly one. |
+| `--asset "<glob>" names 0 assets for <platform>, want one of: ...` | The glob matches no file that fits your machine. Pick a name from the list. |
 | `--asset and --bin apply when oku infers a manifest, and <ref> has one` | The ref has a manifest, so these flags do nothing. Drop them. |
 | `--asset and --bin do not apply, <ref> names its programs` | An `npm:`, `pypi:`, `go:` or `cargo:` ref. The registry names the download. |
 | `--asset and --bin do not apply, <ref> names its downloads and programs` | A `cask:` or `scoop:` ref. The recipe names the download. |

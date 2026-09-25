@@ -63,6 +63,9 @@ type Options struct {
 	// Platforms are the ones the lock pins besides host. Manifest opens an asset
 	// for those and for host, and for no other platform.
 	Platforms []platform.Platform
+	// Name is the package's name in the list, which the manifest takes. Without
+	// it the manifest is named after its program.
+	Name string
 }
 
 // target is one platform the inferred manifest may cover. A linux target with an
@@ -170,10 +173,21 @@ func (inf *Inferrer) Manifest(
 		digests[asset.Name] = asset.Digest
 	}
 
-	chosen, err := choose(names, sizes, host, opts.Asset)
+	program := strings.ToLower(path.Base(repo))
+
+	chosen, picked, err := choose(names, sizes, program, host, opts.Asset)
 	if err != nil {
 		return Inferred{}, err
 	}
+
+	// The asset --asset picks may hold another program of the repo, as
+	// atuin-server of atuin. Any other name stays the repo's, so the command
+	// of a package added before keeps its name.
+	if rest, ok := strings.CutPrefix(picked, program); ok && rest != "" && !isAlnum(rest[0]) {
+		program = picked
+	}
+
+	name := cmp.Or(opts.Name, program)
 
 	var result Inferred
 
@@ -191,8 +205,6 @@ func (inf *Inferrer) Manifest(
 			ErrNoAsset, Machine(host), rel.Tag, repo, strings.Join(names, ", "), fix,
 		)
 	}
-
-	name := strings.ToLower(path.Base(repo))
 
 	// The version starts at the tag's first digit, so "v1.2.0" and "jq-1.8.1" both
 	// work. A tag without a digit is kept whole.
@@ -232,7 +244,7 @@ func (inf *Inferrer) Manifest(
 			continue
 		}
 
-		l, err := inf.layoutOf(ctx, server.Auth(), urls[c.asset], c.asset, name, opts.Bins)
+		l, err := inf.layoutOf(ctx, server.Auth(), urls[c.asset], c.asset, program, opts.Bins)
 
 		switch {
 		case err != nil && isHost && len(c.others) > 0:
@@ -337,15 +349,19 @@ func (inf *Inferrer) layoutOf(
 	return findLayout(files, name, bins, isArchive(asset))
 }
 
-// choose lists the artifacts to write, in the order of targets. sizes holds the
-// bytes of each asset, or 0 when the host does not say. A glob puts the asset it
-// names first, for the host alone.
+// choose lists the artifacts to write, in the order of targets, and returns the
+// program they hold. sizes holds the bytes of each asset, or 0 when the host
+// does not say. pkg is the program to prefer. A glob that names one asset
+// takes it for the host. One that names more takes the best of them on every
+// platform. The program is then the one the host's asset is named after, and
+// the other platforms prefer its assets.
 func choose(
 	names []string,
 	sizes map[string]int64,
+	pkg string,
 	host platform.Platform,
 	glob string,
-) ([]choice, error) {
+) ([]choice, string, error) {
 	var chosen []choice
 
 	if glob != "" {
@@ -354,7 +370,7 @@ func choose(
 		for _, name := range names {
 			ok, err := path.Match(glob, name)
 			if err != nil {
-				return nil, fmt.Errorf("--asset %q: %w", glob, err)
+				return nil, "", fmt.Errorf("--asset %q: %w", glob, err)
 			}
 
 			if ok {
@@ -362,12 +378,28 @@ func choose(
 			}
 		}
 
+		// A glob that names several assets limits every platform to them.
+		all := names
+		if len(named) > 1 {
+			names, named = named, nil
+
+			for _, t := range targets() {
+				if fits := pick(names, sizes, pkg, t); t.Matches(host) && len(fits) > 0 {
+					named = fits[:1]
+
+					break
+				}
+			}
+		}
+
 		if len(named) != 1 {
-			return nil, fmt.Errorf(
-				"--asset %q names %d assets, want one of: %s",
-				glob, len(named), strings.Join(names, ", "),
+			return nil, "", fmt.Errorf(
+				"--asset %q names %d assets for %s, want one of: %s",
+				glob, len(named), Machine(host), strings.Join(all, ", "),
 			)
 		}
+
+		pkg = cmp.Or(stem(named[0]), pkg)
 
 		chosen = append(chosen, choice{
 			Selector: platform.Selector(host),
@@ -378,7 +410,7 @@ func choose(
 	written := map[platform.Selector]bool{}
 
 	for _, t := range targets() {
-		fits := pick(names, sizes, t)
+		fits := pick(names, sizes, pkg, t)
 		if len(fits) == 0 || written[t.Selector] || glob != "" && t.Matches(host) {
 			continue
 		}
@@ -394,7 +426,47 @@ func choose(
 		chosen = append(chosen, choice{Selector: t.Selector, asset: fits[0], others: others})
 	}
 
-	return chosen, nil
+	return chosen, pkg, nil
+}
+
+// stem returns the part of an asset's name before its version or platform, as
+// "atuin-server" of "atuin-server-x86_64-apple-darwin.tar.gz", or "" when the
+// name starts with one.
+func stem(asset string) string {
+	lower := strings.ToLower(asset)
+
+	for i := 1; i < len(lower); i++ {
+		if !strings.ContainsRune("-_.", rune(lower[i-1])) {
+			continue
+		}
+
+		if startsWithTag(lower[i:]) {
+			return lower[:i-1]
+		}
+	}
+
+	return ""
+}
+
+// startsWithTag reports whether name starts with a version or a platform word.
+func startsWithTag(name string) bool {
+	version := strings.TrimPrefix(name, "v")
+	if version != "" && version[0] >= '0' && version[0] <= '9' {
+		return true
+	}
+
+	for _, groups := range []map[string][]string{osWords, archWords, fatWords, libcWords} {
+		for _, words := range groups {
+			for _, word := range words {
+				after, ok := strings.CutPrefix(name, word)
+				if ok && (after == "" || !isAlnum(after[0])) {
+					return true
+				}
+			}
+		}
+	}
+
+	return false
 }
 
 // wanted returns the release for version, or the newest one for "". It tries
@@ -477,7 +549,7 @@ func targets() []target {
 // arch words in the name. A linux target also requires its libc word, or no libc
 // word when it has none. Elsewhere "gnu" names a toolchain, as in
 // "x86_64-pc-windows-gnu".
-func pick(names []string, sizes map[string]int64, t target) []string {
+func pick(names []string, sizes map[string]int64, pkg string, t target) []string {
 	var fits []string
 
 	for _, name := range names {
@@ -506,7 +578,9 @@ func pick(names []string, sizes map[string]int64, t target) []string {
 	// A build for the arch sorts before a universal one. A command line build
 	// sorts before a desktop app, which holds no program to link. A tar archive
 	// keeps file modes, so it sorts before a zip, and both sort before an
-	// installer, whose paths are the ones of an install tree. A smaller asset
+	// installer, whose paths are the ones of an install tree. An asset named
+	// after the package sorts before one of another program of the same release,
+	// as "atuin-x86_64" before "atuin-server-x86_64". A smaller asset
 	// sorts before a larger one, because a desktop app with a plain name still
 	// bundles far more than a command line tool. A shorter name sorts before variants such as
 	// "-debug".
@@ -515,6 +589,7 @@ func pick(names []string, sizes map[string]int64, t target) []string {
 			cmp.Compare(t.fat(a), t.fat(b)),
 			cmp.Compare(desktop(a), desktop(b)),
 			cmp.Compare(rank(a), rank(b)),
+			cmp.Compare(sibling(a, pkg), sibling(b, pkg)),
 			smaller(sizes[a], sizes[b]),
 			cmp.Compare(len(a), len(b)),
 			strings.Compare(a, b),
@@ -595,6 +670,16 @@ func rank(name string) int {
 	default:
 		return 2
 	}
+}
+
+// sibling is 1 for an asset of another program than pkg, as
+// "atuin-server-x86_64" is for atuin.
+func sibling(name, pkg string) int {
+	if stem(name) == pkg {
+		return 0
+	}
+
+	return 1
 }
 
 // fat is 1 for an asset that fits t as a universal build only.

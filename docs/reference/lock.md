@@ -67,7 +67,7 @@ One `[[package]]` per package of the list, sorted by name.
 | `tag_commit` | The full commit a moving tag pointed at for that version. |
 | `inferred` | `true` for a package whose manifest oku inferred. |
 | `manifest` | The full text of the inferred manifest. Other machines install from this text, and only `oku update` infers again. |
-| `asset`, `bin` | The `--asset` and `--bin` the package was added with. `oku update` infers the next version with them. |
+| `asset`, `bin` | The `--asset` and `--bin` the package was added with. `oku update` infers the next version with them, unless its entry in `oku.toml` names others. |
 | `platform.<name>` | One [platform entry](#platform-entries) per platform that has resolved this package. |
 | `dep` | The packages this one depends on, as [dep entries](#dep-entries). |
 

@@ -123,6 +123,32 @@ func TestB198InferencePrefersTheSmallerAssetAndNoneNamedAsAnApp(t *testing.T) {
 	}
 }
 
+func TestB349InferencePrefersTheAssetNamedAfterTheRepoOverAnotherProgram(t *testing.T) {
+	m := newMachine(t)
+
+	// The other program is smaller, so only its name tells it apart.
+	tool, _ := m.archive(t, "tool", map[string]string{
+		"tool": script, "resources.bin": strings.Repeat("x", 1<<16),
+	})
+	server, _ := m.archive(t, "server", map[string]string{"tool-server": script})
+
+	name := hostAssetName()
+	serverName := strings.Replace(name, "tool-", "tool-server-", 1)
+
+	inferServer(t, &m, map[string]string{name: tool, serverName: server})
+
+	out, err := m.run(t, "", "manifest", "init", "--from", "owner/tool", "-o", "-")
+	must(t, err)
+
+	if got := hostArtifact(t, out); !strings.Contains(got, "/tool.tar.gz") {
+		t.Fatalf("the artifact should be the asset named after the repo:\n%s", out)
+	}
+
+	if !strings.Contains(out, "fit "+platform.Host().String()+" too: "+serverName) {
+		t.Fatalf("the manifest should list the other program's asset:\n%s", out)
+	}
+}
+
 func TestB199AFailedInstallFromAnInferredManifestSaysWhatToTypeInstead(t *testing.T) {
 	m := newMachine(t)
 	archive, _ := m.archive(t, "release", map[string]string{"tool": script})
@@ -314,5 +340,121 @@ func TestB223InferenceOpensAssetsForTheHostAndTheLockPlatformsOnly(t *testing.T)
 
 	if !strings.Contains(out, matchOf(third)) {
 		t.Fatalf("with [lock] naming %s the manifest should cover it:\n%s", third, out)
+	}
+}
+
+// twoProgramRelease serves a release of owner/tool that holds the programs tool
+// and tool-server, each for the host and for otherPlatform.
+func twoProgramRelease(t *testing.T, m *machine) {
+	t.Helper()
+
+	tool, _ := m.archive(t, "tool", map[string]string{"tool": "#!/bin/sh\necho tool\n"})
+	server, _ := m.archive(
+		t,
+		"server",
+		map[string]string{"tool-server": "#!/bin/sh\necho server\n"},
+	)
+	other := assetFor(otherPlatform(), ".tar.gz")
+
+	inferServer(t, m, map[string]string{
+		hostAssetName(): tool, other: tool,
+		serverAsset(hostAssetName()): server, serverAsset(other): server,
+	})
+}
+
+func serverAsset(name string) string {
+	return strings.Replace(name, "tool-", "tool-server-", 1)
+}
+
+func TestB350AnAssetGlobPicksAnotherProgramOfTheReleaseOnEveryPlatform(t *testing.T) {
+	m := newMachine(t)
+	twoProgramRelease(t, &m)
+
+	for _, args := range [][]string{
+		{"add", "github:owner/tool"},
+		{"add", "github:owner/tool", "--asset", "tool-server-*"},
+	} {
+		if out, err := m.run(t, "", args...); err != nil {
+			t.Fatalf("%v: %v\n%s", args, err, out)
+		}
+	}
+
+	if tool, server := m.output(
+		t,
+		"tool",
+	), m.output(
+		t,
+		"tool-server",
+	); tool != "tool" ||
+		server != "server" {
+		t.Fatalf("tool printed %q and tool-server printed %q", tool, server)
+	}
+
+	listed, err := os.ReadFile(filepath.Join(m.config, "oku.toml"))
+	must(t, err)
+
+	for _, want := range []string{
+		`tool = "github:owner/tool"`,
+		`tool-server = { ref = "github:owner/tool", asset = "tool-server-*" }`,
+	} {
+		if !strings.Contains(string(listed), want) {
+			t.Fatalf("oku.toml should hold %s:\n%s", want, listed)
+		}
+	}
+
+	// The other platform downloads the server's own archive too.
+	locked, err := os.ReadFile(filepath.Join(m.config, "oku.lock"))
+	must(t, err)
+
+	// The lock holds the manifest as a TOML string, with its quotes escaped.
+	_, server, _ := strings.Cut(string(locked), "name = 'tool-server'")
+	match := strings.ReplaceAll(matchOf(otherPlatform()), `"`, `\"`)
+
+	if !strings.Contains(server, match) || strings.Contains(server, "/tool.tar.gz") {
+		t.Fatalf("tool-server should download its own archive on %s:\n%s", otherPlatform(), locked)
+	}
+}
+
+func TestB351SyncInfersWithTheAssetOfTheListEntry(t *testing.T) {
+	m := newMachine(t)
+	twoProgramRelease(t, &m)
+
+	// The glob fits both programs, and inference takes the one named after the repo.
+	listPath := filepath.Join(m.config, "oku.toml")
+	must(t, os.MkdirAll(m.config, 0o755))
+	must(t, os.WriteFile(listPath, []byte(
+		"[packages]\nserver = { ref = \"github:owner/tool\", asset = \"tool-*\" }\n",
+	), 0o644))
+
+	if out, err := m.run(t, "", "sync"); err != nil {
+		t.Fatalf("sync: %v\n%s", err, out)
+	}
+
+	if got := m.output(t, "tool"); got != "tool" {
+		t.Fatalf("tool printed %q", got)
+	}
+
+	// sync infers again when the list names another asset, and keeps the list's name.
+	must(t, os.WriteFile(listPath, []byte(
+		"[packages]\nserver = { ref = \"github:owner/tool\", asset = \"tool-server-*\" }\n",
+	), 0o644))
+
+	if out, err := m.run(t, "", "sync"); err != nil {
+		t.Fatalf("sync after the asset changed: %v\n%s", err, out)
+	}
+
+	if got := m.output(t, "tool-server"); got != "server" {
+		t.Fatalf("tool-server printed %q", got)
+	}
+
+	// An entry without an asset keeps the one the lock recorded.
+	must(t, os.WriteFile(listPath, []byte("[packages]\nserver = \"github:owner/tool\"\n"), 0o644))
+
+	if out, err := m.run(t, "", "update", "server"); err != nil {
+		t.Fatalf("update: %v\n%s", err, out)
+	}
+
+	if got := m.output(t, "tool-server"); got != "server" {
+		t.Fatalf("after update tool-server printed %q", got)
 	}
 }

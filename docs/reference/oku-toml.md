@@ -68,7 +68,8 @@ oku ignores a key it does not know at the top of the file and inside a
 ### [packages]
 
 Each key is a package name, and it must equal the `name` in the manifest that
-the [ref](refs.md) points at. A name that contains `.` needs quotes, as in
+the [ref](refs.md) points at. A manifest oku infers takes the key as its
+name. A name that contains `.` needs quotes, as in
 `"node.js" = "..."`.
 
 The value is a ref:
@@ -86,12 +87,15 @@ or a table:
 | `version` | string | An exact version, a prefix such as `"22"`, or a range such as `"^1.4"`. See [Pin a version](refs.md#pin-a-version). `oku add <ref>@<version>` writes it. |
 | `when` | table or array of tables | Installs the package only on matching machines. See [when](#when). |
 | `service` | boolean | `true` runs the package's services now and at every login. `oku add --service` writes it. See [Services](../guides/services.md). |
+| `asset` | string | For a repo with no manifest, the glob that picks its release asset. `oku add --asset` writes it. See [Fix a wrong pick](../guides/add-packages.md#fix-a-wrong-pick-with---asset-and---bin). |
+| `bin` | array of strings | For a repo with no manifest, the programs inside the asset. `oku add --bin` writes it. |
 | `system` | boolean | `true` puts the package's apps, fonts and services in [system scope](../how-oku-works.md#system-scope). A plain `oku sync` lists those files and skips them, and `oku sync --system` applies them. `oku add --system` writes it. See [System-wide](../guides/system-wide.md). |
 
 ```toml
 [packages]
 fd = { ref = "github:sharkdp/fd", version = "10.2.0" }
 postgres = { ref = "github:you/recipes#postgres", service = true, system = true }
+atuin-server = { ref = "github:atuinsh/atuin", asset = "atuin-server-*" }
 ```
 
 A relative file ref, such as `"./recipes/fd.toml"`, starts at the directory of
