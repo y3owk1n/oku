@@ -603,6 +603,12 @@ order step in `prd/product.md`.
   directory, with no scripts, and adds nothing to the store.
 - B127 [4] Without `runtimes.node`, the programs of an npm package run the
   `node` on `PATH`, and `add` says how to pin one.
+- B342 [4] Without `runtimes.node`, `add` refuses an npm package that lists
+  dependencies, installs nothing, and names `runtimes.node`, the example
+  manifest of a node and the guide.
+- B343 [4] Without `runtimes.python`, `add` refuses a pypi package, installs
+  nothing, and names `runtimes.python`, the example manifest of a python and
+  the guide.
 - B186 [4] A download that is the program itself may list one table `bin`
   instead of a path. The file keeps the name it has in the URL, without the
   suffix of a compression, and `run` or `args` name it as `{{pkg}}/<name>`.
