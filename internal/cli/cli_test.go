@@ -849,13 +849,10 @@ func TestB178ParallelEnvLimitsHowManyPackagesInstallAtOnce(t *testing.T) {
 
 	t.Setenv("OKU_PARALLEL", "many")
 
-	if _, err := m.run(
-		t,
-		"",
-		"sync",
-	); err == nil ||
-		!strings.Contains(err.Error(), "OKU_PARALLEL") {
-		t.Fatalf("want an error that names OKU_PARALLEL, got %v", err)
+	for _, command := range []string{"sync", "outdated"} {
+		if _, err := m.run(t, "", command); err == nil || !strings.Contains(err.Error(), "OKU_PARALLEL") {
+			t.Fatalf("%s: want an error that names OKU_PARALLEL, got %v", command, err)
+		}
 	}
 }
 

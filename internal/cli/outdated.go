@@ -60,12 +60,17 @@ func (e env) outdated(cmd *cobra.Command, opts Options) error {
 		return err
 	}
 
+	n, err := parallel()
+	if err != nil {
+		return err
+	}
+
 	found := make([]staleness, len(locked.Packages))
 
 	// Each package asks its own host, so they ask at once, a few at a time.
 	var wg sync.WaitGroup
 
-	limit := make(chan struct{}, 8)
+	limit := make(chan struct{}, n)
 
 	host := platform.Host().String()
 

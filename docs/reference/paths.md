@@ -155,7 +155,7 @@ outside these places.
 | `HOME` | Your home directory, for the default directories and `{{home}}`. |
 | `GITHUB_TOKEN`, `GH_ENTERPRISE_TOKEN`, `CODEBERG_TOKEN`, `GITEA_TOKEN`, `GITLAB_TOKEN`, `GITLAB_SERVER_TOKEN` | Tokens for forge APIs and downloads, each sent to its own host only. See [tokens per host](refs.md#tokens-per-host). |
 | `SOPS_AGE_KEY_FILE` | The age key file for [secrets](oku-toml.md#secrets). Without it oku reads `sops/age/keys.txt` in your config directory: `~/.config/sops/age/keys.txt`, or `%APPDATA%\sops\age\keys.txt` on Windows. oku passes the same path to `sops`. |
-| `OKU_PARALLEL` | How many packages `sync` and `update` install at once. Default `8`. A number from 1 up, so `OKU_PARALLEL=1` installs one after another. |
+| `OKU_PARALLEL` | How many packages `sync` and `update` install, and `outdated` looks up, at once. Default `16`. A number from 1 up, so `OKU_PARALLEL=1` installs one after another. |
 | `OKU_ENV` | Names the project's `oku.<env>.toml`, whose [`[env]`](oku-toml.md#okuenvtoml-and-okulocaltoml) the hook, `oku exec` and `oku env` apply over the `oku.toml`. |
 | `NO_COLOR` | Any value turns colour off on a terminal. |
 | `FORCE_COLOR` | Any value turns colour on for a pipe, such as a pager. |

@@ -262,6 +262,8 @@ ripgrep  14.1.1  14.1.1  15.2.0  github:BurntSushi/ripgrep
 - When every package is at its newest version, oku says so.
 - When a version source cannot answer, oku lists the rest and ends with an
   error that names the package.
+- oku looks up 16 packages at once, or the number in
+  [`OKU_PARALLEL`](paths.md#environment-variables).
 
 `--json` prints only the packages that have a newer version, which suits a bot
 that opens a pull request. See [CI](../guides/ci.md).
@@ -480,8 +482,8 @@ Use it for a build from an older oku that has no `vendor_sha256` in the lock,
 or after a change on the machine that a build depends on, such as a new
 compiler.
 
-`sync` and `update` install 8 packages at once. [`OKU_PARALLEL`](paths.md#environment-variables)
-sets another number. Builds from source run one at a time. A package that the
+`sync` and `update` install 16 packages at once.
+[`OKU_PARALLEL`](paths.md#environment-variables) sets another number. Builds from source run one at a time. A package that the
 store holds at the locked version needs no request to its server, so a sync
 with nothing to do works offline.
 
