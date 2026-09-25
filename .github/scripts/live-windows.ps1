@@ -549,7 +549,8 @@ Check 'the shared data file is read-only' { (Get-Item $dataB).IsReadOnly }
 $programLinks = (fsutil hardlink list (Get-Item "$store\share-b-*\bin\share-b.exe").FullName) -join "`n"
 Check 'a program is not shared' { $programLinks -notmatch 'share-a-' }
 
-$pinger = Start-Process "$bin\share-b.exe" -ArgumentList '-n', '30', '127.0.0.1' -PassThru -WindowStyle Hidden
+# The program runs from the store, since every shim is a link to one file.
+$pinger = Start-Process (Get-Item "$store\share-b-*\bin\share-b.exe").FullName -ArgumentList '-n', '30', '127.0.0.1' -PassThru -WindowStyle Hidden
 Oku remove share-a
 Oku gc --keep 1
 Check 'gc deletes a store path while a program of the other one runs' { -not (Test-Path "$store\share-a-*") }
