@@ -203,14 +203,23 @@ func reconcile(
 	frozen, _ := cmd.Flags().GetBool(lockedFlag)
 
 	for _, name := range slices.Sorted(maps.Keys(wanted)) {
-		r := wanted[name].ref
+		r, entry := wanted[name].ref, wanted[name].entry
 		previous, _ := locked.Find(name)
-		platforms, strict := e.lockPlatforms(all.own, wanted[name].entry.When)
+
+		// When the entry names another asset or other programs than the lock,
+		// sync infers again, as it does for a changed ref. For an entry that
+		// names none, it infers the way the lock recorded.
+		if entry.Asset != "" && entry.Asset != previous.Asset ||
+			len(entry.Bins) > 0 && !slices.Equal(entry.Bins, previous.Bins) {
+			previous.Ref = ""
+		}
+
+		platforms, strict := e.lockPlatforms(all.own, entry.When)
 		fresh := update && (len(names) == 0 || slices.Contains(names, name))
 
 		// oku does not install a package for another platform. It keeps the lock
 		// entry, or pins the package again when the entry has to change.
-		lockOnly := !wanted[name].entry.When.Matches(host)
+		lockOnly := !entry.When.Matches(host)
 		if lockOnly && !needsLock(previous, r.String(), platforms, strict, fresh) {
 			if previous.Name != "" {
 				next.Set(previous)
@@ -248,7 +257,10 @@ func reconcile(
 			name: name, fresh: fresh, locksManifest: locksManifest,
 			req: request{
 				ref:             r,
-				when:            wanted[name].entry.When,
+				name:            name,
+				asset:           entry.Asset,
+				bins:            entry.Bins,
+				when:            entry.When,
 				fit:             fit,
 				platforms:       platforms,
 				strictPlatforms: strict,
@@ -260,8 +272,8 @@ func reconcile(
 				acceptDigest:    fresh,
 				acceptKey:       flags.acceptKey,
 				keepVersion:     !fresh && previous.Ref == r.String(),
-				service:         wanted[name].entry.Service,
-				system:          wanted[name].entry.System,
+				service:         entry.Service,
+				system:          entry.System,
 				verbose:         flags.verbose,
 				approve:         e.approver(cmd, opts, flags),
 				log:             buildLog(cmd, flags),

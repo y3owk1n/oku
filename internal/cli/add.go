@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -141,10 +142,10 @@ func (e env) parseRef(arg string) (ref.Ref, error) {
 }
 
 // addRequest reads the ref of arg and what oku.toml and oku.lock say about it
-// into the request that add installs. The env it returns has the runtimes that
-// a registry package runs through.
+// into the request that add installs with asset. The env it returns has the
+// runtimes that a registry package runs through.
 func addRequest(
-	cmd *cobra.Command, opts Options, arg string, when platform.When,
+	cmd *cobra.Command, opts Options, arg string, when platform.When, asset string,
 ) (env, request, *lock.Lock, error) {
 	e, err := scopedEnv(cmd, opts)
 	if err != nil {
@@ -161,14 +162,7 @@ func addRequest(
 		return e, request{}, nil, err
 	}
 
-	// The manifest names the package, so the lock entry to reuse is found by ref.
-	var previous lock.Package
-
-	for _, pkg := range locked.Packages {
-		if pkg.Ref == r.String() {
-			previous = pkg
-		}
-	}
+	previous := previousOf(locked, r, asset)
 
 	own, err := list.Read(e.listPath())
 	if err != nil {
@@ -201,12 +195,32 @@ func addRequest(
 	return e, request{
 		ref:             r,
 		previous:        previous,
+		name:            previous.Name,
+		asset:           asset,
 		platforms:       platforms,
 		strictPlatforms: strict,
 		fit:             fitNarrow,
 		when:            when,
 		lockOnly:        lockOnly,
 	}, locked, nil
+}
+
+// previousOf returns the lock entry that add of r with asset replaces. The
+// manifest names the package, so add finds the entry by ref. One release may
+// hold several programs, each a package with its own asset. With asset, the
+// entry is the one of that asset. Without one, it is the package named after
+// the repo, or the one added without an asset.
+func previousOf(locked *lock.Lock, r ref.Ref, asset string) lock.Package {
+	repo := strings.ToLower(path.Base(r.Location))
+
+	for _, pkg := range locked.Packages {
+		if pkg.Ref == r.String() && (asset != "" && pkg.Asset == asset ||
+			asset == "" && (pkg.Name == repo || pkg.Asset == "")) {
+			return pkg
+		}
+	}
+
+	return lock.Package{}
 }
 
 // notFound turns a missing file into a hint when arg looks like a bare name.
@@ -241,13 +255,13 @@ func runAdd(
 		return false, err
 	}
 
-	e, req, locked, err := addRequest(cmd, opts, arg, when)
+	e, req, locked, err := addRequest(cmd, opts, arg, when, asset)
 	if err != nil {
 		return false, err
 	}
 
 	r := req.ref
-	req.fromSource, req.asset, req.bins = fromSource, asset, bins
+	req.fromSource, req.bins = fromSource, bins
 	req.service, req.acceptKey, req.system = enable, flags.acceptKey, system
 	req.verbose, req.approve, req.log = flags.verbose, e.approver(cmd, opts, flags), buildLog(cmd, flags)
 
@@ -292,6 +306,8 @@ func runAdd(
 				Service: enable,
 				System:  system,
 				When:    entryWhen,
+				Asset:   got.lock.Asset,
+				Bins:    got.lock.Bins,
 			},
 		)
 		if err != nil {

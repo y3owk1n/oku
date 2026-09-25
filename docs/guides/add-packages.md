@@ -319,16 +319,35 @@ the release file with a glob, and `--bin` names the program inside it:
 oku add github:owner/repo --asset 'tool-*-macos.zip' --bin tool-cli
 ```
 
-- `--asset` must match exactly one file of the release. A glob that matches
-  none fails and lists every file the release has.
+- A glob that matches one file takes it for your machine. One that matches
+  more takes the best of them on every platform. A glob that matches none
+  fails and lists every file the release has.
+- The other platforms take the file of the same program as yours. When that
+  program is another one of the repo, such as `atuin-server` of
+  `atuinsh/atuin`, the package takes that program's name. It does not replace
+  the package named after the repo.
 - `--bin` is the file name of a program inside the download. Give it once per
   program, as in `--bin node --bin npm`. It also works for a URL of a
   download.
-- oku records both in `oku.lock`, so `oku update` infers the next version the
-  same way. Pass them again to change them.
+- oku records both in `oku.toml` and `oku.lock`, so `oku sync` on another
+  machine and `oku update` infer the same way. Pass them again, or edit
+  `asset` and `bin` in `oku.toml`, to change them.
 - Both describe one download, so pass one ref with them.
 - Both apply to an inferred manifest only. A ref with a manifest fails with
   `--asset and --bin apply when oku infers a manifest`.
+
+A release that ships several programs gives a package for each:
+
+```sh
+oku add github:atuinsh/atuin
+oku add github:atuinsh/atuin --asset 'atuin-server-*'
+```
+
+```toml
+[packages]
+atuin = "github:atuinsh/atuin"
+atuin-server = { ref = "github:atuinsh/atuin", asset = "atuin-server-*" }
+```
 
 When an install from an inferred manifest fails, the error names the file oku
 chose, lists the other files that fit your machine, and gives the

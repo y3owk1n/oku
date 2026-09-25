@@ -103,9 +103,11 @@ type request struct {
 	// again. "oku sync" sets it.
 	keepVersion bool
 	// asset and bins name the asset and the programs for an inferred manifest.
-	// "--asset" and "--bin" set them.
+	// "--asset" and "--bin", or the list entry, set them.
 	asset string
 	bins  []string
+	// name is the package's name in the list, which an inferred manifest takes.
+	name string
 	// verbose adds the inferred manifest to an error from it.
 	verbose bool
 	// service enables the package's services.
@@ -1257,6 +1259,7 @@ func (e env) manifestData(
 					Asset:     req.inferAsset(),
 					Bins:      req.inferBins(),
 					Platforms: req.platforms,
+					Name:      req.name,
 				},
 			)
 

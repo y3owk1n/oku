@@ -34,6 +34,10 @@ type Entry struct {
 	// System puts the package's apps, fonts and services in system scope, for
 	// every user of the machine. Applying it needs administrator rights.
 	System bool
+	// Asset and Bins are the "--asset" and "--bin" oku infers the package's
+	// manifest with.
+	Asset string
+	Bins  []string
 }
 
 // File is one entry of [files]: a path in the home directory that oku writes.
@@ -412,7 +416,7 @@ func toFile(value any) (File, error) {
 	return f, err
 }
 
-// toEntry accepts the short form "ref" and the table form { ref, version, when }.
+// toEntry accepts the short form "ref" and the table form { ref, version, when, ... }.
 func toEntry(value any) (Entry, error) {
 	switch v := value.(type) {
 	case string:
@@ -424,9 +428,24 @@ func toEntry(value any) (Entry, error) {
 		e.Version, _ = v["version"].(string)
 		e.Service, _ = v["service"].(bool)
 		e.System, _ = v["system"].(bool)
+		e.Asset, _ = v["asset"].(string)
 
 		if e.Ref == "" {
 			return e, errors.New("ref is required")
+		}
+
+		bins, ok := v["bin"].([]any)
+		if !ok && v["bin"] != nil {
+			return e, errors.New("bin wants an array of program names")
+		}
+
+		for _, bin := range bins {
+			name, ok := bin.(string)
+			if !ok {
+				return e, errors.New("bin wants an array of program names")
+			}
+
+			e.Bins = append(e.Bins, name)
 		}
 
 		var err error
@@ -454,11 +473,25 @@ func Delete(path, name string) error {
 func Line(name string, entry Entry) string {
 	value := fmt.Sprintf("%q", entry.Ref)
 
-	if entry.Version != "" || entry.Service || entry.System || len(entry.When) > 0 {
+	if entry.Version != "" || entry.Service || entry.System || len(entry.When) > 0 ||
+		entry.Asset != "" || len(entry.Bins) > 0 {
 		fields := []string{fmt.Sprintf("ref = %q", entry.Ref)}
 
 		if entry.Version != "" {
 			fields = append(fields, fmt.Sprintf("version = %q", entry.Version))
+		}
+
+		if entry.Asset != "" {
+			fields = append(fields, fmt.Sprintf("asset = %q", entry.Asset))
+		}
+
+		if len(entry.Bins) > 0 {
+			quoted := make([]string, len(entry.Bins))
+			for i, bin := range entry.Bins {
+				quoted[i] = fmt.Sprintf("%q", bin)
+			}
+
+			fields = append(fields, "bin = ["+strings.Join(quoted, ", ")+"]")
 		}
 
 		if entry.Service {

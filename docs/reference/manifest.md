@@ -1408,8 +1408,11 @@ With several candidates for one platform, it prefers, in order:
    `app`, `gui`, `installer`, `setup` or `.app.` in its name.
 2. A tar archive over a zip, both over a single binary, that over an installer,
    and a `.dmg` over a `.pkg`.
-3. The smaller asset, when the host reports sizes.
-4. The shortest name.
+3. An asset named after the repo over one of another program in the same
+   release, so `atuin-x86_64-apple-darwin.tar.gz` over
+   `atuin-server-x86_64-apple-darwin.tar.gz`.
+4. The smaller asset, when the host reports sizes.
+5. The shortest name.
 
 When other assets fit your machine as well, in any format, a comment in the
 manifest lists them.

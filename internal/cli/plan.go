@@ -72,12 +72,12 @@ func runPlan(cmd *cobra.Command, opts Options, args []string, flags planFlags) e
 	var plans []planned
 
 	for _, arg := range args {
-		e, req, locked, err := addRequest(cmd, opts, arg, flags.when)
+		e, req, locked, err := addRequest(cmd, opts, arg, flags.when, flags.asset)
 		if err != nil {
 			return err
 		}
 
-		req.fromSource, req.asset, req.bins = flags.fromSource, flags.asset, flags.bins
+		req.fromSource, req.bins = flags.fromSource, flags.bins
 		req.acceptKey, req.verbose = flags.acceptKey, flags.verbose
 
 		if flags.manifest {
