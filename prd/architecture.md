@@ -96,7 +96,7 @@ include = []
 man = ["doc/rg.1"]
 completions = { fish = "complete/rg.fish" }
 share = []
-app = []                    # "Foo.app", or a [[app]] table on linux and windows
+app = []                    # "Foo.app", a .desktop, or a program with { path, name, icon }
 font = []
 
 [build]
@@ -127,11 +127,6 @@ deps = []
 
 [env]
 RIPGREP_CONFIG_PATH = "{{prefix}}/share/rg/config"
-
-[[app]]                     # linux and windows launcher entries
-name = "Foo"
-exec = "bin/foo"
-icon = "share/icons/foo.png"
 
 [[service]]
 name = "food"
