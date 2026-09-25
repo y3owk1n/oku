@@ -311,6 +311,8 @@ order step in `prd/product.md`.
 - B250 [3] oku keeps each answer of a forge API with its ETag and asks again
   with `If-None-Match`. When the host answers 304, `update` uses the answer it
   kept, and a changed answer replaces it.
+- B361 [3] oku reads a registry answer of up to 64 MB whole, with or without
+  an ETag, so an npm or PyPI package with thousands of versions resolves.
 - B359 [3] One command asks each version source once. Packages that share a
   repo, a registry package or a git URL make one request or one git call
   between them. So do inference and the version lookup of one package, and the
