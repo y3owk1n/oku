@@ -654,15 +654,17 @@ func needsLock(
 	})
 }
 
-// parallelEnv names the variable that sets how many packages install at once.
+// parallelEnv names the variable that sets how many packages install, or look
+// up their versions, at once.
 const parallelEnv = "OKU_PARALLEL"
 
-// parallel returns how many packages install at once. Most of an install is
-// waiting for a server, so the default does not follow the number of cores.
+// parallel returns how many packages install, or look up their versions, at
+// once. Most of that time goes to waiting for a server, and builds run one at a
+// time, so the default does not follow the number of cores.
 func parallel() (int, error) {
 	value := os.Getenv(parallelEnv)
 	if value == "" {
-		return 8, nil
+		return 16, nil
 	}
 
 	n, err := strconv.Atoi(value)
