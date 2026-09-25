@@ -201,7 +201,7 @@ With no names it updates every package of the list.
 
 | Flag | Effect |
 |---|---|
-| `--dry-run` | Checks everything and prints what would change, without changing the machine. See [A dry run](#a-dry-run). |
+| `--dry-run` | Checks everything and prints what would change. It changes only the store and the cache. See [A dry run](#a-dry-run). |
 | `--system` | Also applies system-scope apps, fonts and services, which needs administrator rights. |
 | `--yes`, `-y` | Approves build commands without asking. |
 | `--accept-key` | Accepts a changed `signing_key`. |
@@ -413,7 +413,7 @@ tables.
 
 | Flag | Effect |
 |---|---|
-| `--dry-run` | Checks everything and prints what would change, without changing the machine. See [A dry run](#a-dry-run). |
+| `--dry-run` | Checks everything and prints what would change. It changes only the store and the cache. See [A dry run](#a-dry-run). |
 | `--locked` | Fails when `oku.lock` would change. For CI. |
 | `--rebuild <name>` | Builds the package again even though the store holds its build. Repeat the flag, or separate names with commas. |
 | `--system` | Also applies system-scope apps, fonts and services, which needs administrator rights. |

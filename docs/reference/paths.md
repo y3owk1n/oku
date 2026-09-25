@@ -182,11 +182,11 @@ The install scripts read `OKU_INSTALL_DIR` and `OKU_VERSION`, see
 
 `add`, `remove`, `sync`, `update` and `rollback` work in two parts.
 
-1. oku checks everything it can without changing the machine. It downloads,
-   verifies and builds into the store, builds the new generation beside the
-   active one, decrypts secrets in memory, and checks that no app, font or
-   file would overwrite one it did not write. A failure here leaves the
-   machine as it was.
+1. oku checks everything it can before it moves `current` or sets up anything.
+   It downloads, verifies and builds into the store, builds the new generation
+   beside the active one, decrypts secrets in memory, and checks that no app,
+   font or file would overwrite one it did not write. A failure here leaves the
+   active generation, files and settings as they were.
 2. oku writes `pending.toml`, moves `current`, sets up apps, fonts, services,
    files and settings, writes `oku.toml` and `oku.lock`, and deletes
    `pending.toml`. When a step fails, oku undoes the steps before it, deletes
