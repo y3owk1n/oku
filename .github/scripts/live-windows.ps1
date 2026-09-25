@@ -600,9 +600,17 @@ Oku add gitlab:gitlab-org/cli --bin glab
 $glab = & "$bin\glab.exe" --version
 Check 'a gitlab: project installs from a zip with its program in a directory' { $glab -match '^glab \d' }
 
-Oku add gitea:gitea.com/gitea/tea
-$tea = (& "$bin\tea.exe" --version) -join "`n"
-Check 'a gitea: repo installs from a single .exe' { $tea -match '\d+\.\d+' }
+# gitea.com at times answers the runners with a 504 or a 409. That answer is
+# the server's, so the check is skipped then, and any other failure fails it.
+$added = (& $oku add gitea:gitea.com/gitea/tea 2>&1) -join "`n"
+if ($LASTEXITCODE -eq 0) {
+    $tea = (& "$bin\tea.exe" --version) -join "`n"
+    Check 'a gitea: repo installs from a single .exe' { $tea -match '\d+\.\d+' }
+} elseif ($added -match 'returned (5\d\d|409) ') {
+    Write-Host "skipped: a gitea: repo installs, because gitea.com failed:`n$added"
+} else {
+    throw "oku add gitea:gitea.com/gitea/tea exited with $LASTEXITCODE`n$added"
+}
 
 Oku add https://github.com/sharkdp/hyperfine/releases/download/v1.19.0/hyperfine-v1.19.0-x86_64-pc-windows-msvc.zip
 $hyperfine = & "$bin\hyperfine.exe" --version
