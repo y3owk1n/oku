@@ -110,6 +110,22 @@ when it cannot.
 
 ## Free disk space
 
+`oku du` shows how much each of oku's directories holds, before you delete anything:
+
+```
+$ oku du
+store      ~/.local/share/oku/store     1.4 GiB    84 paths, 312.0 MiB unused, 900.0 MiB only in old generations
+profiles   ~/.local/share/oku/profiles  2.1 MiB    2 profiles, 14 generations
+cache      ~/.cache/oku                 640.0 MiB  downloads 600.0 MiB, git 38.0 MiB, api 2.0 MiB
+other      ~/.local/share/oku           1.0 MiB    logs, secrets, trust
+total                                   2.0 GiB
+`oku gc` frees 312.0 MiB, and deleting ~/.cache/oku is safe
+```
+
+`oku du --packages` lists each store path, largest first, with the profile or
+package that keeps it. `old:` marks one that only old generations keep, which
+`--keep` below frees. See [`oku du`](../reference/commands.md#oku-du).
+
 Old generations keep their packages in the store, so rollback needs no
 download. That also means a plain `oku gc` usually finds little to delete. Drop
 old generations first with `--keep`:

@@ -6,6 +6,7 @@ variables it reads.
 ## The three directories
 
 oku writes under three directories of its own, and needs no root.
+[`oku du`](commands.md#oku-du) shows how much each one holds.
 
 | Directory | macOS and Linux | With the variable set | Windows |
 |---|---|---|---|

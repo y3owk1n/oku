@@ -88,38 +88,15 @@ func runGC(cmd *cobra.Command, keep int, dryRun bool) error {
 		}
 	}
 
+	// A dry run deleted nothing, so skip the generations it would have pruned.
+	holders, err := e.storeHolders(profiles, pruned)
+	if err != nil {
+		return err
+	}
+
 	used := map[string]bool{}
-
-	for _, prof := range profiles {
-		gens, err := prof.Generations()
-		if err != nil {
-			return err
-		}
-
-		for _, gen := range gens {
-			// A dry run deleted nothing, so skip the generations it would have pruned.
-			if slices.Contains(pruned[prof], gen.Number) {
-				continue
-			}
-
-			for _, pkg := range gen.Packages {
-				used[pkg.StorePath] = true
-
-				for _, dep := range pkg.Closure {
-					used[dep] = true
-				}
-			}
-
-			// A link of [files] from a remote list leads into the repo's files in
-			// the store.
-			for _, file := range gen.Files {
-				for _, st := range e.stores() {
-					if at, in := st.Holding(file.Link); in {
-						used[at] = true
-					}
-				}
-			}
-		}
+	for path := range holders {
+		used[path] = true
 	}
 
 	unused := map[string]int64{}
