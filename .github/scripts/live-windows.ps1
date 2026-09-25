@@ -662,8 +662,8 @@ Check 'the dep of a bin table stays out of the profile' { -not (Test-Path "$bin\
 # An npm package. Windows cannot run a script through PATH, so oku asks for a
 # node first, and then runs the package's programs through it.
 $refused = (& $oku add npm:prettier 2>&1) -join "`n"
-Check 'an npm package without runtimes.node is refused and the error names the key' {
-    ($LASTEXITCODE -ne 0) -and ($refused -match 'runtimes\.node')
+Check 'an npm package without runtimes.node is refused and the error names the key and the example' {
+    ($LASTEXITCODE -ne 0) -and ($refused -match 'runtimes\.node') -and ($refused -match 'examples/runtimes/node\.toml')
 }
 
 $configDir = Join-Path $env:XDG_CONFIG_HOME 'oku'
@@ -865,9 +865,9 @@ Oku add --yes cargo:hexyl
 $hexyl = & "$bin\hexyl.exe" --version
 Check 'a cargo: ref builds on Windows' { $hexyl -match '^hexyl \d' }
 
-# Python packages from PyPI with uv, through a python that the list names, since
-# a Windows build has no python of the system. ruff ships a binary, and httpie
-# console scripts, which become shims.
+# Python packages from PyPI with uv, through a python that the list names. oku
+# refuses a pypi: ref without one. ruff ships a binary, and httpie console
+# scripts, which become shims.
 $pythonToml = Join-Path $fixtures 'python.toml'
 Set-Content $pythonToml @'
 [package]
@@ -879,6 +879,10 @@ url = "https://github.com/astral-sh/python-build-standalone/releases/download/20
 strip = 1
 bin = ["python.exe"]
 '@
+$refused = (& $oku add pypi:ruff 2>&1) -join "`n"
+Check 'a pypi package without runtimes.python is refused and the error names the key and the example' {
+    ($LASTEXITCODE -ne 0) -and ($refused -match 'runtimes\.python') -and ($refused -match 'examples/runtimes/python\.toml')
+}
 Add-Content $listPath "`n[runtimes]`npython = '$($pythonToml -replace '\\', '/')'`n"
 Oku add --yes pypi:ruff pypi:httpie
 $ruff = & "$bin\ruff.exe" --version

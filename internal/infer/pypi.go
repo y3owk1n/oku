@@ -20,8 +20,8 @@ type PyPIOptions struct {
 	Index string
 	// Version is the version the user wrote after "@". Empty means the newest.
 	Version string
-	// Python is the package that provides python3, or none. Without one,
-	// the build and the programs use the python3 on the build's PATH.
+	// Python is the package that provides python3. The build and the programs
+	// use it.
 	Python manifest.Dep
 	// UV is the package that provides uv. Without one, the build uses UV.
 	UV manifest.Dep
@@ -62,16 +62,9 @@ func (inf *Inferrer) FromPyPI(ctx context.Context, name string, opts PyPIOptions
 		uvDep = manifest.Dep{Ref: UV}
 	}
 
-	uv := uvDep.TOML()
-	deps := uv
-
 	// The programs run through this python, so gc must keep it.
-	if opts.Python.Ref != "" {
-		fmt.Fprintf(&b, "\n[runtime]\ndeps = [%s]\n", opts.Python.TOML())
-		deps = opts.Python.TOML() + ", " + uv
-	}
-
-	fmt.Fprintf(&b, "\n[build]\ndeps = [%s]\n", deps)
+	fmt.Fprintf(&b, "\n[runtime]\ndeps = [%s]\n", opts.Python.TOML())
+	fmt.Fprintf(&b, "\n[build]\ndeps = [%s, %s]\n", opts.Python.TOML(), uvDep.TOML())
 	fmt.Fprintf(&b, "\n[[build.step]]\nvendor = \"pip\"\npackage = %q\n", name)
 
 	return b.String(), nil

@@ -20,7 +20,8 @@ type NPMOptions struct {
 	// wrote it after "@". Empty means the newest.
 	Version string
 	// Node is the package that provides node, or none. With one, every
-	// program runs through it. Without one, a program runs the node on PATH.
+	// program runs through it. Without one, a program runs the node on PATH,
+	// and a package that lists dependencies fails with ErrNeedsNPM.
 	Node manifest.Dep
 	// NodeName is the name of the package at Node.
 	NodeName string
@@ -85,11 +86,7 @@ func (inf *Inferrer) FromNPM(ctx context.Context, name string, opts NPMOptions) 
 	}
 
 	if published.Dependencies {
-		b.WriteString(
-			"\n# This package lists dependencies. oku installs its download and nothing else,\n" +
-				"# so it runs when the download bundles them. With runtimes.node in config.toml,\n" +
-				"# oku installs the dependencies too.\n",
-		)
+		return "", fmt.Errorf("the npm package %s lists dependencies, %w", name, ErrNeedsNPM)
 	}
 
 	url := swap(published.Tarball, version, "{{version}}")

@@ -1354,15 +1354,29 @@ func (e env) inferNPM(ctx context.Context, opts Options, req request) (string, e
 
 	if npmOpts.Node.Ref == "" && platform.Host().OS == "windows" {
 		return "", fmt.Errorf(
-			"%s needs node, and Windows cannot run a script through PATH\n"+
-				"set runtimes.node in %s to the ref of a package that provides node",
-			req.ref, e.listPath(),
+			"%s needs node, and Windows cannot run a script through PATH\n%s",
+			req.ref, runtimeHint("node", "node", e.listPath()),
 		)
 	}
 
 	text, err := e.inferrer(opts).FromNPM(ctx, req.ref.Location, npmOpts)
+	if errors.Is(err, infer.ErrNeedsNPM) {
+		return "", fmt.Errorf("%w\n%s", err, runtimeHint("node", "node and npm", e.listPath()))
+	}
 
 	return text, err
+}
+
+// runtimeHint tells the user to name a package for the runtime name in the list
+// at where. It links an example manifest and the guide.
+func runtimeHint(name, provides, where string) string {
+	return fmt.Sprintf(
+		"set runtimes.%s in %s to the ref of a package that provides %s\n"+
+			"example: https://github.com/y3owk1n/oku/blob/main/examples/runtimes/%s.toml\n"+
+			"guide: https://github.com/y3owk1n/oku/blob/main/docs/guides/npm-pypi-go-cargo.md"+
+			"#name-the-toolchains-in-runtimes",
+		name, where, provides, name,
+	)
 }
 
 // fromRegistry reports whether a ref of kind names a package of a registry,
@@ -1443,8 +1457,8 @@ func (e env) inferGo(ctx context.Context, opts Options, req request) (string, er
 }
 
 // inferPyPI writes the manifest of a pypi ref. uv installs the package, and the
-// programs run through the package that [runtimes] names for python, else
-// through the python3 on the build's PATH.
+// programs run through the package that [runtimes] names for python. An upgrade
+// of a python from PATH would break the programs, so oku requires that package.
 func (e env) inferPyPI(ctx context.Context, opts Options, req request) (string, error) {
 	if req.asset != "" || len(req.bins) > 0 {
 		return "", fmt.Errorf(
@@ -1455,6 +1469,12 @@ func (e env) inferPyPI(ctx context.Context, opts Options, req request) (string, 
 	python, _, err := e.runtime(ctx, opts, "python")
 	if err != nil {
 		return "", err
+	}
+
+	if python.Ref == "" {
+		return "", fmt.Errorf(
+			"%s needs python\n%s", req.ref, runtimeHint("python", "python3", e.listPath()),
+		)
 	}
 
 	uv, _, err := e.runtime(ctx, opts, "uv")
@@ -1708,10 +1728,8 @@ func reportInferredTogether(w io.Writer, all []installed) {
 // reportNodeRuntime warns that an npm package runs the node on PATH.
 func reportNodeRuntime(w io.Writer, got installed) {
 	if strings.HasPrefix(got.lock.Ref, "npm:") && !strings.Contains(got.inferred, "[runtime]") {
-		warn(
-			w, "its programs run the node on PATH. To pin one, set runtimes.node in config.toml "+
-				"to the ref of a package that provides node",
-		)
+		warn(w, "its programs run the node on PATH. To pin one, %s",
+			runtimeHint("node", "node", "config.toml"))
 	}
 }
 

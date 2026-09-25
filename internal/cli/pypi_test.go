@@ -134,6 +134,20 @@ func TestB256AddInstallsAPythonPackageAsOfItsUploadThroughTheListsPython(t *test
 	}
 }
 
+func TestB343AddRefusesAPythonPackageWithoutAPython(t *testing.T) {
+	m := newMachine(t)
+
+	_, err := m.run(t, "", "add", "pypi:tool", "--yes")
+	if err == nil || !strings.Contains(err.Error(), "pypi:tool needs python") ||
+		!strings.Contains(err.Error(), "examples/runtimes/python.toml") {
+		t.Fatalf("want add to fail and point at runtimes.python, got %v", err)
+	}
+
+	if exists(m.profile("bin", "tool")) || exists(filepath.Join(m.config, "oku.lock")) {
+		t.Fatal("a refused add installed the package or wrote the lock")
+	}
+}
+
 func TestB256TheInstallDigestIsTheSameUnderAnotherDirectory(t *testing.T) {
 	// A machine sets the directories of the whole test, so each gets its own.
 	var digests []string

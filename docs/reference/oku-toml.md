@@ -192,8 +192,8 @@ packages of registry refs.
 
 | Key | Used by | Without it |
 |---|---|---|
-| `node` | `npm:` packages run through it. For an npm package with dependencies oku runs this package's `npm`, so on macOS and Linux it lists `bin/npm` beside `bin/node`. | The programs run the `node` on `PATH`, and `oku add` says so. On Windows `oku add npm:` fails and names the key. |
-| `python` | `pypi:` packages build and run with it. The package provides `python3`. | The `python3` the build finds on its `PATH`. A Windows build fails without it. |
+| `node` | `npm:` packages run through it. For an npm package with dependencies oku runs this package's `npm`, so on macOS and Linux it lists `bin/npm` beside `bin/node`. | The programs run the `node` on `PATH`, and `oku add` says so. `oku add` fails and names the key for a package that lists dependencies, and on Windows for every `npm:` package. |
+| `python` | `pypi:` packages build and run with it. The package provides `python3`. | `oku add pypi:` fails and names the key. |
 | `uv` | Installs `pypi:` packages. | `github:astral-sh/uv`, as a build dep. |
 | `go` | Builds `go:` packages. | The `go` on `PATH`. |
 | `rust` | Builds `cargo:` packages. It provides `cargo` and `rustc`. | The `cargo` on `PATH`, rustup included. |
