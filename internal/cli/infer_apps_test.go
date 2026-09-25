@@ -212,3 +212,31 @@ func TestB357ACommandOfAnAppBundleRunsTheAppsCopy(t *testing.T) {
 		t.Fatal("foo ran another build of the app")
 	}
 }
+
+func TestB357ACommandOfABuiltAppBundleRunsTheAppsCopy(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("only macOS copies a bundle to an Applications folder")
+	}
+
+	m := newMachine(t)
+	ref := m.buildManifest(t, false, `needs = ["sh"]`, `[[build.step]]
+run = '''
+mkdir -p Tool.app/Contents/MacOS
+printf '#!/bin/sh\necho "$0"\n' > Tool.app/Contents/MacOS/tool
+chmod +x Tool.app/Contents/MacOS/tool
+echo plist > Tool.app/Contents/Info.plist
+'''
+shell = "sh"
+[[build.step]]
+install = { bin = ["Tool.app/Contents/MacOS/tool"], app = ["Tool.app"] }
+`)
+
+	if out, err := m.run(t, "", "add", ref, "--yes"); err != nil {
+		t.Fatalf("add: %v\n%s", err, out)
+	}
+
+	want := filepath.Join(os.Getenv("HOME"), "Applications", "Tool.app", "Contents", "MacOS", "tool")
+	if got := m.output(t, "tool"); got != want {
+		t.Fatalf("tool ran %s, want the app's copy at %s", got, want)
+	}
+}
