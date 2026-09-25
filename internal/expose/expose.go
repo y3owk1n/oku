@@ -85,7 +85,8 @@ type Ledger struct {
 	Items []Item `toml:"item"`
 }
 
-// Launcher is a desktop entry for Linux, from a manifest's [[app]] table.
+// Launcher is a desktop entry on Linux and a Start Menu shortcut on Windows,
+// which oku makes of an artifact's app. Exec and Icon are paths in the package.
 type Launcher struct {
 	Name string `toml:"name"`
 	Exec string `toml:"exec"`

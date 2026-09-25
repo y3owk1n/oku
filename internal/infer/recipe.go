@@ -59,7 +59,7 @@ type recipeArtifact struct {
 	apps   []string
 	fonts  []string
 	man    []string
-	// launchers are Start Menu shortcuts, each a name and a program in bin.
+	// launchers are Start Menu shortcuts, each a name and a program's path.
 	launchers [][2]string
 	// pathDirs are directories of the download whose programs are all
 	// programs of the package.
@@ -237,8 +237,6 @@ func (r recipe) text() (string, error) {
 		fmt.Fprintf(&b, "\n[version]\n%s", r.follow.toml("\n"))
 	}
 
-	var launchers [][2]string
-
 	for _, a := range r.artifacts {
 		fmt.Fprintf(&b, "\n[[artifact]]\nmatch = %s\n", matchTOML(a.sel))
 
@@ -261,16 +259,6 @@ func (r recipe) text() (string, error) {
 		}
 
 		b.WriteString(a.outputs())
-
-		for _, l := range a.launchers {
-			if !slices.Contains(launchers, l) {
-				launchers = append(launchers, l)
-			}
-		}
-	}
-
-	for _, l := range launchers {
-		fmt.Fprintf(&b, "\n[[app]]\nname = %q\nexec = %q\n", l[0], "bin/"+l[1])
 	}
 
 	return b.String(), nil
@@ -332,10 +320,23 @@ func (a recipeArtifact) outputs() string {
 		fmt.Fprintf(&b, "bin = [%s]\n", strings.Join(entries, ", "))
 	}
 
+	if len(a.apps)+len(a.launchers) > 0 {
+		entries := make([]string, 0, len(a.apps)+len(a.launchers))
+		for _, app := range a.apps {
+			entries = append(entries, fmt.Sprintf("%q", app))
+		}
+
+		for _, l := range a.launchers {
+			entries = append(entries, fmt.Sprintf("{ path = %q, name = %q }", l[1], l[0]))
+		}
+
+		fmt.Fprintf(&b, "app = [%s]\n", strings.Join(entries, ", "))
+	}
+
 	for _, out := range []struct {
 		key   string
 		paths []string
-	}{{"app", a.apps}, {"font", a.fonts}, {"man", a.man}} {
+	}{{"font", a.fonts}, {"man", a.man}} {
 		if len(out.paths) > 0 {
 			fmt.Fprintf(&b, "%s = [%s]\n", out.key, quoteAll(out.paths))
 		}

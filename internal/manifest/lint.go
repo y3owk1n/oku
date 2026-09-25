@@ -41,14 +41,14 @@ type schema struct {
 		Man         []string          `toml:"man"`
 		Completions any               `toml:"completions"`
 		Share       []string          `toml:"share"`
-		App         []string          `toml:"app"`
+		App         []any             `toml:"app"`
 		Font        []string          `toml:"font"`
 		Data        bool              `toml:"data"`
 	} `toml:"artifact"`
 	Build    Build             `toml:"build"`
 	Runtime  Runtime           `toml:"runtime"`
 	Env      map[string]string `toml:"env"`
-	Apps     []App             `toml:"app"`
+	OldApps  []any             `toml:"app"`
 	Services []Service         `toml:"service"`
 }
 

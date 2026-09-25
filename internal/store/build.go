@@ -393,9 +393,16 @@ func (s *Store) Build(
 		return Realized{}, errors.New("the build installed nothing, add an install step")
 	}
 
+	apps, err := buildLaunchers(build.Steps, p, src, prefix)
+	if err != nil {
+		os.RemoveAll(prefix)
+
+		return Realized{}, err
+	}
+
 	meta, err := toml.Marshal(Meta{
 		Name: m.Package.Name, Version: m.Version.Value, Platform: p.String(),
-		Impure: result.Impure, Launchers: m.Apps, Services: m.ServicesFor(p),
+		Impure: result.Impure, Launchers: apps, Services: m.ServicesFor(p),
 		URL: result.SourceURL, SHA256: result.SHA256, VendorSHA256: result.VendorSHA256,
 	})
 	if err == nil {
@@ -806,6 +813,39 @@ func runCommand(
 	return why, nil
 }
 
+// buildLaunchers returns the launchers of the app entries that the install
+// steps for p name. A launcher runs a program that an install step put in bin,
+// and its icon is copied to share/icons.
+func buildLaunchers(steps []manifest.Step, p platform.Platform, src, prefix string) ([]expose.Launcher, error) {
+	var apps []expose.Launcher
+
+	for _, step := range steps {
+		if step.Install == nil || !step.When.Matches(p) {
+			continue
+		}
+
+		got, err := launchers(step.Install.App, src, func(rel string) (string, error) {
+			name := path.Base(rel)
+			if _, err := os.Lstat(filepath.Join(prefix, "bin", name)); err != nil {
+				return "", fmt.Errorf("it runs %s, which no install step puts in bin", name)
+			}
+
+			return "bin/" + name, nil
+		}, func(rel string) (string, error) {
+			dest := path.Join("share", "icons", path.Base(rel))
+
+			return dest, copyInto(src, rel, prefix, dest, 0)
+		})
+		if err != nil {
+			return nil, err
+		}
+
+		apps = append(apps, got...)
+	}
+
+	return apps, nil
+}
+
 // installFiles copies the named files from src into the package layout.
 func installFiles(in manifest.Install, src, prefix string) error {
 	fonts, err := expandGlobs(src, "font", in.Font)
@@ -868,7 +908,12 @@ func installFiles(in manifest.Install, src, prefix string) error {
 		}
 	}
 
-	for _, bundle := range in.App {
+	for _, app := range in.App {
+		if !app.Bundle() {
+			continue
+		}
+
+		bundle := app.Path
 		if !filepath.IsLocal(filepath.FromSlash(bundle)) {
 			return fmt.Errorf("app %q points outside the source directory", bundle)
 		}
@@ -883,6 +928,13 @@ func installFiles(in manifest.Install, src, prefix string) error {
 			target,
 		); err != nil {
 			return fmt.Errorf("app %q: %w", bundle, err)
+		}
+	}
+
+	for name, command := range bundleCommands(in.App, in.Bin, in.Wrap, runtime.GOOS) {
+		bundle := filepath.Join(prefix, "apps", path.Base(command[0]))
+		if err := writeAppCommand(filepath.Join(prefix, "bin", name), bundle, command[1]); err != nil {
+			return fmt.Errorf("bin %q: %w", name, err)
 		}
 	}
 

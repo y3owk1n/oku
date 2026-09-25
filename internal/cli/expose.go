@@ -69,11 +69,6 @@ func (e env) wantedItems(
 			continue
 		}
 
-		launchers := make([]expose.Launcher, len(meta.Launchers))
-		for i, app := range meta.Launchers {
-			launchers[i] = expose.Launcher(app)
-		}
-
 		into := dirs
 		if pkg.System {
 			into = systemDirs(opts)
@@ -81,7 +76,7 @@ func (e env) wantedItems(
 
 		wanted = append(
 			wanted,
-			expose.Wanted(pkg.Name, pkg.StorePath, launchers, into, pkg.System)...,
+			expose.Wanted(pkg.Name, pkg.StorePath, meta.Launchers, into, pkg.System)...,
 		)
 	}
 

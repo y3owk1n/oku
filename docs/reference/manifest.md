@@ -54,7 +54,6 @@ completions = { fish = "complete/rg.fish", zsh = "complete/_rg" }
 | [`[build]`](#build) | no | How to build the package from source. |
 | [`[runtime]`](#runtime) | no | Other packages the installed package needs. |
 | [`[env]`](#env) | no | Variables the user's shell exports while the package is installed. |
-| [`[[app]]`](#apps-and-fonts) | no | A desktop launcher on Linux and Windows. |
 | [`[[service]]`](#service) | no | A long-running program the OS service manager can run. |
 
 A machine gets the package only when an artifact or the build fits it.
@@ -403,7 +402,7 @@ machine, so put specific entries before general ones.
 | `man` | see below | Man pages, see [Man pages](#man-pages). |
 | `completions` | see below | Shell completions, see [Completions](#completions). |
 | `lib`, `include`, `share` | see below | Files for the package's `lib`, `include` and `share`, see [Prebuilt libraries](#prebuilt-libraries). |
-| `app` | see below | macOS app bundles, such as `["Foo.app"]`, see [Apps and fonts](#apps-and-fonts). |
+| `app` | see below | The desktop apps of the download, such as `["Foo.app"]`, see [Apps and fonts](#apps-and-fonts). |
 | `font` | see below | Font files, see [Apps and fonts](#apps-and-fonts). |
 | `data` | see below | `true` for a package that only holds files, see [Data packages](#data-packages). |
 
@@ -745,28 +744,58 @@ font = ["fonts/ttf/*.ttf"]
 
 | Key | macOS | Linux | Windows |
 |---|---|---|---|
-| `app = ["Foo.app"]` in an artifact | Copies the bundle to `~/Applications/Foo.app`. | Not used. | Not used. |
-| `[[app]]` at the top level | Not used. | A desktop entry at `<data home>/applications/oku-<name>.desktop`. | A Start Menu shortcut, `oku-<name>.lnk`. |
+| `app = [...]` in an artifact | Copies a bundle to `~/Applications/Foo.app`. | Writes a desktop entry at `<data home>/applications/oku-<name>.desktop`. | Writes a Start Menu shortcut, `oku-<name>.lnk`. |
 | `font = [...]` in an artifact | Copies them to `~/Library/Fonts/`. | Copies them to `<data home>/fonts/oku/`. | Copies them to the user's font folder and names them in the registry. |
 
 `<data home>` is `$XDG_DATA_HOME`, or `~/.local/share`. The Windows paths are in
 [Windows](../guides/windows.md#place-apps-and-fonts).
 
-On Linux and Windows an app is a program plus a launcher. Ship the program with
-`bin` and describe the launcher in `[[app]]`:
+An entry of `app` is a path inside the download. Each artifact is for one
+platform, so it names what that platform's download holds:
 
 ```toml
-[[app]]
-name = "Foo"
-exec = "bin/foo"
-icon = "share/icons/foo.png"
+[[artifact]]
+match = { os = "darwin" }
+app = ["Foo.app"]
+
+[[artifact]]
+match = { os = "linux" }
+app = ["share/applications/foo.desktop"]
+
+[[artifact]]
+match = { os = "windows" }
+app = ["bin/foo.exe"]
+```
+
+| Entry | What oku does |
+|---|---|
+| A bundle, `Foo.app` | On macOS oku copies it to the Applications folder. |
+| A desktop entry, `*.desktop` | On Linux oku writes a desktop entry with its `Name`. Its `Exec` runs a file of the package or a program of `bin`. Its `Icon` is a file of the package or the name of an icon theme's file in it. oku takes an `.svg` first, then the largest image. |
+| Any other file | oku writes a launcher that runs it, named after the file. |
+
+A table sets what the file does not say:
+
+```toml
+app = [{ path = "bin/foo.exe", name = "Foo", icon = "share/foo.png" }]
 ```
 
 | Key | Required | Meaning |
 |---|---|---|
-| `name` | yes | The launcher's name. |
-| `exec` | yes | A path inside the installed package, normally `bin/<program>`. |
-| `icon` | no | A path inside the installed package. Windows ignores it, because a shortcut shows the icon of its program. |
+| `path` | yes | The path inside the download. |
+| `name` | no | The launcher's name, in place of the desktop entry's `Name` or the file's name. |
+| `icon` | no | A path inside the download. Windows ignores it, because a shortcut shows the icon of its program. |
+
+On macOS a `bin` entry inside a bundle of `app`, such as
+`bin = ["Foo.app/Contents/MacOS/foo"]`, runs the bundle's copy in
+`~/Applications` or `/Applications`. It does so only when that copy's
+`Info.plist` matches this build's. macOS grants permissions such as
+Accessibility to that copy, so the command gets the app's permissions. Without
+that copy, as in a [project](../guides/projects.md), the command runs the
+store's copy.
+
+A bundle names itself, so it takes no `name` or `icon`. The top-level
+`[[app]]` table of earlier versions is gone, and a manifest that has one fails
+with a message that names the artifact's `app`.
 
 - oku copies apps and fonts, because Finder, Spotlight and font services do not
   treat a symlink as installed. A macOS bundle keeps its code signature.
@@ -775,7 +804,9 @@ icon = "share/icons/foo.png"
 - Apps and fonts come from the user's global list only. A package in a
   [project](../guides/projects.md) installs its programs, and oku says that its
   apps and fonts were skipped.
-- A `[build]` installs them with `install = { app = [...], font = [...] }`.
+- A `[build]` installs them with `install = { app = [...], font = [...] }`. A
+  launcher there runs a program that an install step put in `bin`, and oku
+  copies its icon to `share/icons`.
 
 ### Patterns in font and man
 
@@ -1404,15 +1435,21 @@ again. `oku update` infers again.
 
 With several candidates for one platform, it prefers, in order:
 
-1. A command line build over a desktop app, which is an asset with `desktop`,
-   `app`, `gui`, `installer`, `setup` or `.app.` in its name.
-2. A tar archive over a zip, both over a single binary, that over an installer,
-   and a `.dmg` over a `.pkg`.
-3. An asset named after the repo over one of another program in the same
+1. An asset named after the repo over one of another program in the same
    release, so `atuin-x86_64-apple-darwin.tar.gz` over
-   `atuin-server-x86_64-apple-darwin.tar.gz`.
-4. The smaller asset, when the host reports sizes.
-5. The shortest name.
+   `atuin-server-x86_64-apple-darwin.tar.gz`, and `kitty-0.49.1.dmg` over
+   `kitten-darwin-arm64`, in any format and for any arch.
+2. A build for the arch over a universal one.
+3. A command line build over a desktop app, which is an asset with `desktop`,
+   `app`, `gui`, `installer`, `setup` or `.app.` in its name.
+4. A tar archive over a zip, both over a single binary, that over an installer,
+   and a `.dmg` over a `.pkg`.
+5. The smaller asset, when the host reports sizes.
+6. The shortest name.
+
+When one platform has an asset named after the repo, a platform that has only
+another program's asset gets no artifact. An installer such as a `.deb` is
+named after the distro's package, so its name does not count.
 
 When other assets fit your machine as well, in any format, a comment in the
 manifest lists them.
@@ -1439,11 +1476,14 @@ manifest lists them.
   so a Windows zip gets its own layout and the tar archives share one.
 - `oku add` opens assets for your machine and for the `[lock]` platforms only.
   Another platform gets an artifact when its asset has the ending of one oku
-  opened anyway. Otherwise oku leaves it out, as it leaves out a platform whose
+  opened anyway, without an app of the other OS. Otherwise oku leaves it out, as it leaves out a platform whose
   asset it cannot read. `oku manifest init` opens one for every platform,
   because a published manifest serves them all.
 - The program is the executable named after the repo, else the only
-  executable. In an archive with no executable files, which is what a zip made
+  executable. A repo's name may add a suffix to its program's, as
+  `skhd.zig` does. When the asset for your machine is named after the part
+  before the suffix, as `skhd-arm64-macos.tar.gz`, that part names the program
+  and the package. In an archive with no executable files, which is what a zip made
   on Windows is, it is the file named after the repo.
 - An executable next to the program is a program too when its name starts
   with the program's name and a `-`, such as `age-keygen` next to `age`. In a
@@ -1453,8 +1493,20 @@ manifest lists them.
 - Files ending in `.1` become `man`. With more than 8 of them only the
   program's own page is kept.
 - An asset that holds a macOS app bundle, `Name.app/Contents/...`, gives
-  `app = ["Name.app"]` and treats nothing inside the bundle as a program. A
-  program beside the bundle still becomes `bin`.
+  `app = ["Name.app"]`. A program of the bundle in `Contents/MacOS`, or in a
+  `bin` directory under `Contents/Resources`, becomes `bin` when its name
+  starts with the package's, as `omniwmctl` of `omniwm`. The program that opens
+  the app, which `CFBundleExecutable` in the bundle's `Info.plist` names, stays
+  out unless it has the package's name, as `kitty` does. A command replaces a
+  program of the same name beside the bundle, so the command runs the app's
+  own program.
+- A Linux desktop entry, `*.desktop`, becomes `app` when it runs one of the
+  programs and a desktop shows it in its menu, which leaves out one with
+  `Terminal=true`, `NoDisplay=true` or `Hidden=true`.
+- A Windows program for the GUI subsystem, which opens no console, becomes
+  `app` as well as `bin`. Its PE header says which subsystem it is for.
+- oku opens one asset of each OS and ending, so an artifact never names an app
+  of another OS.
 
 ### How inference finds a checksum
 
@@ -1532,7 +1584,7 @@ which translates it again.
 | A cask's `app`, `binary`, `font`, `manpage`, `app_image` | `app`, `bin`, `font`, `man`, and `bin` for an AppImage |
 | A cask's `.pkg` or `suite` | The apps that the package installs into Applications, or the apps in the suite. The programs the cask links, found where the package puts them. With no app and no such program, the programs under its `bin` folders, or else the one program named after the cask. oku opens the download to find them, on macOS only. |
 | A cask's `artifact` that moves a folder | The folder in the download, for a `binary` inside it |
-| Scoop's `bin`, `extract_dir`, `shortcuts` | `bin`, `strip`, and a program with an [`[[app]]`](#apps-and-fonts) launcher for each shortcut |
+| Scoop's `bin`, `extract_dir`, `shortcuts` | `bin`, `strip`, and an [`app`](#apps-and-fonts) entry with the shortcut's name for each shortcut |
 | Scoop's `bin` with arguments | A [`bin` table](#run-a-program-through-an-interpreter) with `run` and `args` |
 | Scoop's `env_add_path` | Every program in that folder of the download, which oku opens to find them |
 | Scoop's `depends` | [`[runtime] deps`](#runtime) on `scoop:` refs, without 7zip, lessmsi, innounp and dark, which Scoop needs only to unpack |

@@ -3,6 +3,7 @@ package store
 import (
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 
@@ -159,4 +160,61 @@ func writeScript(dest string, words, path []string) error {
 
 func shellQuote(word string) string {
 	return "'" + strings.ReplaceAll(word, "'", `'\''`) + "'"
+}
+
+// bundleCommands returns the programs of bins and wraps that live in one of
+// the app bundles of apps, by the name bin gives them, with the bundle and the
+// path inside it. Only macOS copies a bundle to an Applications folder.
+func bundleCommands(apps []manifest.AppEntry, bins []string, wraps []manifest.Wrapper, goos string) map[string][2]string {
+	if goos != "darwin" {
+		return nil
+	}
+
+	named := map[string]string{}
+	for _, bin := range bins {
+		named[path.Base(bin)] = bin
+	}
+
+	for _, w := range wraps {
+		if w.Path != "" {
+			named[w.Name] = w.Path
+		}
+	}
+
+	commands := map[string][2]string{}
+
+	for name, file := range named {
+		for _, app := range apps {
+			bundle := strings.TrimSuffix(app.Path, "/")
+			if rest, ok := strings.CutPrefix(file, bundle+"/"); ok && app.Bundle() {
+				commands[name] = [2]string{bundle, rest}
+			}
+		}
+	}
+
+	return commands
+}
+
+// writeAppCommand replaces the program dest with a script that runs the copy
+// of bundle in an Applications folder. macOS grants permissions such as
+// Accessibility to that copy, so the command and the app share them. A copy
+// counts when its Info.plist is the one of bundle, which is this build, and
+// otherwise the script runs the program in bundle itself.
+func writeAppCommand(dest, bundle, inside string) error {
+	if err := os.Remove(dest); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+
+	name := shellQuote(filepath.Base(bundle))
+	program := shellQuote(inside)
+	plist := shellQuote(filepath.Join(bundle, "Contents", "Info.plist"))
+
+	script := "#!/bin/sh\n" +
+		`for app in "$HOME"/Applications/` + name + " /Applications/" + name + "; do\n" +
+		`	if cmp -s "$app"/Contents/Info.plist ` + plist + "; then\n" +
+		`		exec "$app"/` + program + ` "$@"` + "\n" +
+		"\tfi\ndone\n" +
+		"exec " + shellQuote(filepath.Join(bundle, filepath.FromSlash(inside))) + ` "$@"` + "\n"
+
+	return os.WriteFile(dest, []byte(script), 0o755)
 }

@@ -394,7 +394,7 @@ func (a *recipeArtifact) scoopOutputs(part scoopJSON) error {
 		}
 	}
 
-	// A shortcut runs a program, which the launcher reaches through bin.
+	// A shortcut runs a program, which the artifact's app names and bin exposes.
 	for _, shortcut := range part.Shortcuts {
 		if len(shortcut) < 2 || len(shortcut) > 2 && shortcut[2] != "" ||
 			!strings.EqualFold(path.Ext(shortcut[0]), ".exe") {
@@ -409,10 +409,7 @@ func (a *recipeArtifact) scoopOutputs(part scoopJSON) error {
 			a.bins = append(a.bins, recipeBin{path: program})
 		}
 
-		a.launchers = append(
-			a.launchers,
-			[2]string{path.Base(winPath(shortcut[1])), path.Base(program)},
-		)
+		a.launchers = append(a.launchers, [2]string{path.Base(winPath(shortcut[1])), program})
 	}
 
 	if len(a.bins) == 0 && len(a.pathDirs) == 0 {

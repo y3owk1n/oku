@@ -264,11 +264,15 @@ func TestB174InferencePrefersTheCommandLineBuildAndTheChecksumsOfItsOwnOS(t *tes
 	}
 }
 
-func TestB222InferenceTakesAnAppBundleAsAnAppAndNotAsAProgram(t *testing.T) {
+func TestB222InferenceTakesAnAppBundleAsAnAppAndItsCommandAsAProgram(t *testing.T) {
 	m := newMachine(t)
 	archive, _ := m.archive(t, "app", map[string]string{
-		"Tool.app/Contents/MacOS/tool":   script,
-		"Tool.app/Contents/Info.plist":   "<plist/>",
+		"Tool.app/Contents/MacOS/tool":        script,
+		"Tool.app/Contents/MacOS/toolctl":     script,
+		"Tool.app/Contents/MacOS/tool_server": script,
+		"Tool.app/Contents/MacOS/helper":      script,
+		"Tool.app/Contents/Info.plist": "<plist><dict><key>CFBundleExecutable</key>" +
+			"<string>tool_server</string></dict></plist>",
 		"Tool.app/Contents/Frameworks/x": "helper",
 	})
 
@@ -277,9 +281,18 @@ func TestB222InferenceTakesAnAppBundleAsAnAppAndNotAsAProgram(t *testing.T) {
 	out, err := m.run(t, "", "manifest", "init", "--from", "owner/tool", "-o", "-")
 	must(t, err)
 
-	if !strings.Contains(out, `app = ["Tool.app"]`) || strings.Contains(out, "bin =") ||
-		strings.Contains(out, "strip =") {
+	if !strings.Contains(out, `app = ["Tool.app"]`) || strings.Contains(out, "strip =") {
 		t.Fatalf("the bundle should be an app at the top of the package:\n%s", out)
+	}
+
+	// A program whose name starts with the package's is a command. The one
+	// that opens the app, and the others, are not.
+	bins := out[strings.Index(out, "bin ="):]
+	bins = bins[:strings.Index(bins, "\n")]
+
+	if !strings.Contains(bins, "MacOS/tool\"") || !strings.Contains(bins, "MacOS/toolctl\"") ||
+		strings.Contains(bins, "tool_server") || strings.Contains(bins, "helper") {
+		t.Fatalf("the bundle's commands should be tool and toolctl:\n%s", out)
 	}
 }
 
