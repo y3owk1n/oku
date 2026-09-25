@@ -136,3 +136,24 @@ func TestB290AddManifestPrintsAManifestThatAddsTheSamePackage(t *testing.T) {
 		t.Fatalf("tool printed %q", got)
 	}
 }
+
+func TestB290AddManifestPrintsTheManifestOfAnNPMPackageWithNoDeps(t *testing.T) {
+	m := newMachine(t)
+	npmServer(t, &m, "", "1.0.0")
+
+	var stdout, stderr bytes.Buffer
+
+	cmd := cli.NewRootCmd(m.opts)
+	cmd.SetArgs([]string{"add", "npm:@scope/tool", "--manifest"})
+	cmd.SetOut(&stdout)
+	cmd.SetErr(&stderr)
+	must(t, cmd.Execute())
+
+	if !strings.Contains(stdout.String(), "[[artifact]]") {
+		t.Fatalf("the manifest has no artifact:\n%s", stdout.String())
+	}
+
+	if strings.Contains(stderr.String(), "install scripts") {
+		t.Fatalf("a package with no deps has no install scripts to warn of:\n%s", stderr.String())
+	}
+}
