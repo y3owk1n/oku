@@ -2,6 +2,7 @@ package cli_test
 
 import (
 	"archive/tar"
+	"bufio"
 	"bytes"
 	"compress/gzip"
 	"context"
@@ -6726,6 +6727,67 @@ func TestB93InstallScriptPutsOneBinaryInPlaceAndEditsNothing(t *testing.T) {
 
 	if exists(filepath.Join(other, ".local", "bin", "oku")) {
 		t.Fatal("a refused install left a binary behind")
+	}
+}
+
+func TestB341HookFindsProgramsOfANewGeneration(t *testing.T) {
+	m := newMachine(t)
+
+	manifest := m.manifest(t, "tool", map[string]string{"tool": script}, `bin = ["tool"]`)
+	_, err := m.run(t, "", "add", manifest)
+	must(t, err)
+
+	// The hook runs the binary for its completions, so the fake one must run.
+	must(t, os.WriteFile(m.exe, []byte("#!/bin/sh\n"), 0o755))
+
+	// A second tool comes after the profile on PATH, as a global npm package would.
+	other := t.TempDir()
+	otherTool := []byte("#!/bin/sh\necho other tool\n")
+	must(t, os.WriteFile(filepath.Join(other, "tool"), otherTool, 0o755))
+
+	for _, shell := range []string{"bash", "zsh"} {
+		path, err := exec.LookPath(shell)
+		if err != nil {
+			continue
+		}
+
+		code, err := m.run(t, "", "hook", shell)
+		must(t, err)
+
+		// The shell runs tool and waits while oku changes the profile. Then it runs
+		// the hook, as its next prompt would, and runs tool again.
+		session := code + "\ntool\nread _; _oku_hook; tool\nread _; _oku_hook; tool"
+		cmd := exec.Command(path, "-c", session)
+		cmd.Env = []string{"PATH=/usr/bin:/bin:" + other, "HOME=" + t.TempDir()}
+		out, write := io.Pipe()
+		cmd.Stdout, cmd.Stderr = write, write
+		stdin, err := cmd.StdinPipe()
+		must(t, err)
+		must(t, cmd.Start())
+
+		lines := bufio.NewReader(out)
+		for i, step := range []struct {
+			args []string
+			want string
+		}{
+			{nil, "hello from tool"},
+			{[]string{"remove", "tool"}, "other tool"},
+			{[]string{"add", manifest}, "hello from tool"},
+		} {
+			if i > 0 {
+				_, err := m.run(t, "", step.args...)
+				must(t, err)
+				_, err = io.WriteString(stdin, "\n")
+				must(t, err)
+			}
+
+			line, err := lines.ReadString('\n')
+			if err != nil || strings.TrimSpace(line) != step.want {
+				t.Fatalf("%s after %v: want %q, got %q %v", shell, step.args, step.want, line, err)
+			}
+		}
+
+		must(t, cmd.Wait())
 	}
 }
 

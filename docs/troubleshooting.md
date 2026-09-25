@@ -99,6 +99,20 @@ oku: ls is not from oku, PATH runs /bin/ls
 `oku search ls` looks for a package that provides it
 ```
 
+## A program fails with No such file or directory
+
+bash and zsh remember where they found each program. A shell that ran a
+program before `oku remove` can keep using its old path after you install
+another copy:
+
+```
+bash: ~/.local/share/oku/profiles/global/current/bin/repomix: No such file or directory
+```
+
+The hook clears the remembered paths before each prompt. The hook of an older
+oku does not, so in a shell that loaded it, run `hash -r` in bash or `rehash`
+in zsh, or open a new terminal.
+
 ## GitHub rate limit reached
 
 ```
