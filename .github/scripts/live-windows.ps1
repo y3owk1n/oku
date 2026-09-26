@@ -303,14 +303,14 @@ Check 'the Start Menu has a shortcut to the program in the store' {
 Check 'the font is in the user font folder and in the registry' {
     (Test-Path $font) -and ((Get-ItemProperty $fontsKey).'oku OkuLive.ttf' -eq $font)
 }
-# NTFS cannot clone a file, so the font is a plain copy of the one in the store,
-# and writing to it leaves the store alone (B379).
+# NTFS cannot clone a file, so the font is a plain copy of the one in the store:
+# the same bytes, and no link to it (B379). Windows keeps a registered font open,
+# so nothing here writes to it.
 Check 'the font is a copy of its own, not a link into the store' {
     $stored = Get-ChildItem -Recurse -Filter OkuLive.ttf (Join-Path $env:XDG_DATA_HOME 'oku\store') |
         Select-Object -First 1
-    $before = (Get-FileHash $stored.FullName).Hash
-    Set-Content $font 'the user changed it'
-    (-not (Get-Item $font).LinkType) -and ((Get-FileHash $stored.FullName).Hash -eq $before)
+    (-not (Get-Item $font).LinkType) -and
+    ((Get-FileHash $font).Hash -eq (Get-FileHash $stored.FullName).Hash)
 }
 
 Oku remove hello
