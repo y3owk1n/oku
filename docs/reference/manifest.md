@@ -210,7 +210,7 @@ source = { git = "https://github.com/someone/tool", tag = "{{tag}}" }
   the first seven characters of the newest commit. `{{tag}}` is the branch.
 - On github.com, gitlab.com and codeberg.org oku reads that commit from the
   host's API, in one request that revalidates with an ETag. On any other host it
-  clones the branch without files, which takes seconds on each lookup.
+  clones the branch without files, which takes about three seconds each time.
 - `oku.lock` records the commit. `oku sync` fetches that commit, so every
   machine builds the same source after the branch has newer commits. The host
   must serve a commit by its id, which GitHub, GitLab and Gitea do.

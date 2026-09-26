@@ -87,8 +87,9 @@ type Asset struct {
 // older stream to show.
 const maxReleases = 1000
 
-// maxTags is the most tags a forge lists. A repo tags every release and some
-// tag more often than that, so the cap is higher than for releases.
+// maxTags is the most tags a forge lists. A repository tags at least every
+// release, and many tag more often, so this cap is higher than the one for
+// releases.
 const maxTags = 2000
 
 // pagesAtOnce is the most pages of one list that oku asks for at the same time.

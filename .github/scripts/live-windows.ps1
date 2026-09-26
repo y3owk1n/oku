@@ -742,8 +742,8 @@ if ($LASTEXITCODE -eq 0) {
     throw "oku add gitea:gitea.com/gitea/tea exited with $LASTEXITCODE`n$added"
 }
 
-# A git-tags source on github.com: oku lists the tags through the API and never
-# runs git for it (B381).
+# A git-tags source on github.com. oku lists the tags through the API and runs
+# no git for it (B381).
 Set-Content (Join-Path $fixtures 'rgtags.toml') @'
 [package]
 name = "rgtags"

@@ -364,8 +364,8 @@ order step in `prd/product.md`.
 - B382 [3] With `version.from = "git-branch"` on those hosts, oku reads the
   newest commit of the branch through the host's API, and names the same version
   as a clone of the branch gives.
-- B383 [3] On any other host, and when the API refuses the answer, oku asks git
-  instead and the lookup still works.
+- B383 [3] On any other host, and when the API gives an error, oku asks git
+  instead and picks the same version.
 - B280 [3] With `version.from = "redirect"`, `add` follows the redirects of
   `repo` past hops without a version, and installs the version that `regex`
   finds in the first URL it matches. `sync` installs the locked version

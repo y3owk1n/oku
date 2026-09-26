@@ -680,7 +680,7 @@ func branchRelease(branch, sha string, date time.Time) (Release, error) {
 func cloneHead(ctx context.Context, v manifest.Version) (Release, error) {
 	if _, err := exec.LookPath("git"); err != nil {
 		return Release{}, errors.New(
-			`version.from = "git-branch" on a host that serves no API oku knows needs git on PATH`,
+			"oku reads a branch of this host with git, so it needs git on PATH",
 		)
 	}
 
@@ -754,7 +754,7 @@ func (r *Resolver) tags(ctx context.Context, url string) ([]string, error) {
 func gitTags(ctx context.Context, url string) ([]string, error) {
 	if _, err := exec.LookPath("git"); err != nil {
 		return nil, errors.New(
-			`version.from = "git-tags" on a host that serves no API oku knows needs git on PATH`,
+			"oku reads the tags of this host with git, so it needs git on PATH",
 		)
 	}
 

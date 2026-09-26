@@ -1685,12 +1685,13 @@ With `version.from = "git-tags"` or `"git-branch"` on github.com, gitlab.com or
 codeberg.org, oku lists the tags, or reads the newest commit of the branch,
 through that host's API. On any other host, and when the API gives an error or
 no tag at all, oku runs `git ls-remote` or clones the branch as before. The API
-answers carry an ETag, so a later lookup revalidates and costs the host nothing.
+answers carry an ETag, so a later lookup revalidates, and GitHub counts a 304
+against no rate limit.
 
 Why: `git ls-remote` measured 3.0 to 3.8 s against github.com and a bare clone
 of a branch 3 to 6 s, each on every lookup, with no cache of any kind. The same
 answers over the API took 0.34 to 0.79 s cold and a 304 after that. On one real
-list of 74 packages those lookups were the whole tail of `oku outdated`. The
+list of 74 packages `oku outdated` waited for those lookups last. The
 answers are the same: for four repos the API listed the identical tag set that
 `git ls-remote` did, 378, 86, 73 and 68 tags, and both ways named the same
 commit for a branch. git stays for every other host, for a private repository
