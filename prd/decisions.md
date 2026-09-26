@@ -1721,8 +1721,8 @@ A lookup asks the host for the newest page of its release list, 100 releases on
 GitHub and GitLab and 50 on Gitea, and picks the version from that. It reads the
 other pages only when that page holds no version the list allows, and then picks
 again from the whole list, up to 1000 releases. The memo of one command holds
-both, so a package that needs the whole list reads the later pages once for every
-package that shares the repo. A tag list stays whole.
+both, so oku reads the later pages once even when several packages share the
+repo. A tag list stays whole.
 
 Why: a repo with many releases cost a request and a parse for every page on
 every lookup, even though the version to install is almost always among the

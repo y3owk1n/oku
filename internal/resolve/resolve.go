@@ -152,8 +152,8 @@ func (r *Resolver) PickWaiting(
 		return release, waiting, err
 	}
 
-	// That page holds no version the list allows, as for a repo whose newest
-	// releases are all of another stream, so oku reads the other pages.
+	// That page holds no version the list allows, which happens when a repo's
+	// newest releases are all of another stream, so oku reads the other pages.
 	releases, _, err = r.listing(ctx, v, true)
 	if err != nil {
 		return Release{}, Release{}, err
@@ -417,7 +417,7 @@ func (r *Resolver) List(ctx context.Context, v manifest.Version) ([]Release, err
 
 // listing returns the releases of v, newest first, and whether the host has more
 // pages that oku has not read. With all false it reads the newest page of a
-// release list, which holds the version to install for nearly every package.
+// release list.
 func (r *Resolver) listing(
 	ctx context.Context,
 	v manifest.Version,

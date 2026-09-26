@@ -89,7 +89,7 @@ manifest change.
 
 | `from` | `repo` | Reads |
 |---|---|---|
-| `github-releases` | `owner/repo`, or `host/owner/repo` on a GitHub Enterprise Server | The newest page of releases, 100 of them. When none of those holds a version the list allows, the other pages too, up to 1000 releases. Skips drafts and prereleases. |
+| `github-releases` | `owner/repo`, or `host/owner/repo` on a GitHub Enterprise Server | The newest page of releases, 100 of them. When none of those holds a version the list allows, oku reads the other pages too, up to 1000 releases. Skips drafts and prereleases. |
 | `gitea-releases` | `host/owner/repo`, such as `codeberg.org/owner/repo` | The same on a Gitea or Forgejo server, 50 releases to a page. |
 | `gitlab-releases` | `group/project`, or `host/group/project` on a GitLab server of your own | The same on a GitLab server. Skips a release dated in the future, which GitLab calls upcoming. |
 | `git-tags` | a git URL | Every tag, up to 2000. On github.com, gitlab.com and codeberg.org oku reads them from the host's API. On any other host it runs `git ls-remote`, which needs `git` on `PATH`. |
