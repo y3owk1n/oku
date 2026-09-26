@@ -44,6 +44,9 @@ type Package struct {
 	// Latest is the version the "latest" tag names.
 	Latest   string
 	Versions map[string]Version
+	// Modified is when the package last changed, so every version was published
+	// no later than it.
+	Modified time.Time
 }
 
 // Read returns the versions of the package called name. An empty registry means
@@ -77,6 +80,7 @@ func Read(ctx context.Context, client *http.Client, registry, name string) (Pack
 
 	var found struct {
 		Tags     map[string]string `json:"dist-tags"`
+		Modified time.Time         `json:"modified"`
 		Versions map[string]struct {
 			Name string `json:"name"`
 			// Bin is a map, or one path for a program named after the package.
@@ -94,7 +98,9 @@ func Read(ctx context.Context, client *http.Client, registry, name string) (Pack
 		return Package{}, err
 	}
 
-	pkg := Package{Latest: found.Tags["latest"], Versions: map[string]Version{}}
+	pkg := Package{
+		Latest: found.Tags["latest"], Versions: map[string]Version{}, Modified: found.Modified,
+	}
 	downloads := true
 
 	for _, published := range found.Versions {
@@ -148,39 +154,8 @@ func Published(
 	client *http.Client,
 	registry, name, version string,
 ) (Publication, error) {
-	if registry == "" {
-		registry = Registry
-	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, registry+"/"+name, nil)
+	found, err := readFull(ctx, client, registry, name)
 	if err != nil {
-		return Publication{}, err
-	}
-
-	req.Header.Set("User-Agent", "oku")
-
-	resp, err := client.Do(req)
-	if err != nil {
-		return Publication{}, err
-	}
-	defer resp.Body.Close()
-
-	switch {
-	case resp.StatusCode == http.StatusNotFound:
-		return Publication{}, ErrNotFound
-	case resp.StatusCode != http.StatusOK:
-		return Publication{}, fmt.Errorf("the registry returned %s", resp.Status)
-	}
-
-	var found struct {
-		Time     map[string]time.Time `json:"time"`
-		Versions map[string]struct {
-			Dependencies map[string]string `json:"dependencies"`
-			Optional     map[string]string `json:"optionalDependencies"`
-		} `json:"versions"`
-	}
-
-	if err := json.NewDecoder(io.LimitReader(resp.Body, maxBody)).Decode(&found); err != nil {
 		return Publication{}, err
 	}
 
@@ -203,6 +178,60 @@ func Published(
 	slices.Sort(published.Dependencies)
 
 	return published, nil
+}
+
+// Times returns when each version of the package called name was published,
+// from the registry's full answer.
+func Times(
+	ctx context.Context,
+	client *http.Client,
+	registry, name string,
+) (map[string]time.Time, error) {
+	found, err := readFull(ctx, client, registry, name)
+
+	return found.Time, err
+}
+
+// full is the part of the registry's full answer that Published and Times read.
+type full struct {
+	Time     map[string]time.Time `json:"time"`
+	Versions map[string]struct {
+		Dependencies map[string]string `json:"dependencies"`
+		Optional     map[string]string `json:"optionalDependencies"`
+	} `json:"versions"`
+}
+
+func readFull(ctx context.Context, client *http.Client, registry, name string) (full, error) {
+	if registry == "" {
+		registry = Registry
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, registry+"/"+name, nil)
+	if err != nil {
+		return full{}, err
+	}
+
+	req.Header.Set("User-Agent", "oku")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return full{}, err
+	}
+	defer resp.Body.Close()
+
+	switch {
+	case resp.StatusCode == http.StatusNotFound:
+		return full{}, ErrNotFound
+	case resp.StatusCode != http.StatusOK:
+		return full{}, fmt.Errorf("the registry returned %s", resp.Status)
+	}
+
+	var found full
+	if err := json.NewDecoder(io.LimitReader(resp.Body, maxBody)).Decode(&found); err != nil {
+		return full{}, err
+	}
+
+	return found, nil
 }
 
 // BaseName returns "name" for "@scope/name".

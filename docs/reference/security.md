@@ -32,6 +32,39 @@ oku deletes a download that does not match, and installs nothing:
 oku: checksum mismatch for <url>: expected <digest>, download is <digest>
 ```
 
+## Minimum release age
+
+When an attacker publishes a version from a stolen account, the registry
+usually removes it within hours. On 2025-09-08 the malicious chalk 5.6.1 and debug
+4.4.2 were on npm for about two hours. So `add`, `update`, `sync` and
+`oku shell` take the newest version that came out at least a day ago, and
+leave a newer one waiting. [`oku outdated`](commands.md#oku-outdated) lists
+what waits and when oku takes it.
+
+- `[lock]` `min_release_age` in `oku.toml` sets the age for the list, and
+  `min_release_age` on a package sets it for that one. `"0"` turns it off. See
+  [`[lock]`](oku-toml.md#lock).
+- `--min-release-age 0` on `add`, `update`, `sync` or `oku shell` takes the
+  newest version for one run, such as for a security fix.
+- A version you name exactly, as in `oku add github:x/y@1.2.3`, and a version
+  that `oku.lock` pins skip the check.
+- It never takes a package back to an older version than `oku.lock` holds,
+  such as one you took with `--min-release-age 0`.
+- When every version that fits is too new and the package is new to the lock,
+  the command stops and names the version that passes first, and when.
+- A moving tag such as `nightly` and a `git-branch` are new by design and skip
+  the check.
+
+oku reads when each version came out from its source: the publish time of a
+GitHub, GitLab, Gitea or Forgejo release, the npm registry, PyPI and crates.io.
+The Go module proxy gives the time of the version's commit, which its author
+sets. `git-tags`, `page`, `redirect` and `sparkle` give no time, so oku takes
+the version and says that it could not check it.
+
+The packages that an `npm:` or `pypi:` build installs with it come from before
+that version was published, and a `go:` or `cargo:` build takes the versions
+its own lock file names. So the age of the version you add covers them too.
+
 ## Trust on first use
 
 When none of the four exists, oku accepts the download and says so:
@@ -301,6 +334,8 @@ How the maintainer rotates the key is in
 
 - A manifest that was malicious the first time you added it. Read manifests
   from sources you do not know.
+- A malicious version that nobody finds within the minimum release age, or a
+  release time that the source reports wrong.
 - A `sha256_url` on the same host as the download. It catches corruption and
   tampering after you locked, not a compromised host on first use.
 - A `signing_key` that was the attacker's at your first install. oku pins the

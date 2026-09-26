@@ -64,6 +64,10 @@ type Release struct {
 	Draft      bool
 	Prerelease bool
 	Assets     []Asset
+	// Published is when the release was published, or zero when the host does
+	// not say. The creation date of a release is its commit's, which its author
+	// sets.
+	Published time.Time
 }
 
 // Asset is one download of a release.

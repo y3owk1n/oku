@@ -49,6 +49,8 @@ type Options struct {
 	// Sleep replaces time.Sleep where a command waits, such as the check after
 	// "service start". Tests set it to a no-op.
 	Sleep func(time.Duration)
+	// Now replaces time.Now where oku measures how old a release is.
+	Now func() time.Time
 	// ReleaseRepo and ReleaseKey replace the GitHub repo that "oku self update"
 	// reads and the minisign key it trusts. Tests set them.
 	ReleaseRepo string
@@ -529,9 +531,16 @@ func (e env) fetcher(opts Options) *ref.Fetcher {
 }
 
 func (e env) resolver(opts Options) *resolve.Resolver {
+	return e.resolverAged(opts, 0)
+}
+
+// resolverAged is a resolver that passes over versions released less than age
+// ago.
+func (e env) resolverAged(opts Options, age time.Duration) *resolve.Resolver {
 	return &resolve.Resolver{
 		Hosts: e.fetcher(opts).Hosts, NPM: opts.NPMRegistry, PyPI: opts.PyPIIndex,
 		GoProxy: opts.GoProxy, Crates: opts.CratesAPI, CrateDownloads: opts.CrateDownloads,
+		MinAge: age, Now: opts.Now,
 	}
 }
 

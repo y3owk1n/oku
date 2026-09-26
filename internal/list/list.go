@@ -12,6 +12,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/pelletier/go-toml/v2"
 
@@ -38,6 +39,9 @@ type Entry struct {
 	// manifest with.
 	Asset string
 	Bins  []string
+	// MinReleaseAge replaces the list's minimum release age for this package, as
+	// ParseAge reads it. Empty keeps the list's.
+	MinReleaseAge string
 }
 
 // File is one entry of [files]: a path in the home directory that oku writes.
@@ -102,6 +106,9 @@ type List struct {
 	// LockPlatforms holds the platforms of [lock], which oku.lock pins every
 	// package for besides the host.
 	LockPlatforms []platform.Platform
+	// MinReleaseAge is [lock] min_release_age, as ParseAge reads it. Empty means
+	// DefaultReleaseAge.
+	MinReleaseAge string
 	// Env holds [env], the variables the list sets in the shell and for oku exec.
 	Env map[string]EnvValue
 	// EnvFiles holds [[env.file]], the .env files the list loads before Env, in
@@ -169,7 +176,7 @@ func Parse(data []byte, origin string) (*List, error) {
 		return nil, fmt.Errorf("%s: %w", origin, err)
 	}
 
-	if l.LockPlatforms, err = toLockPlatforms(raw.Lock); err != nil {
+	if l.LockPlatforms, l.MinReleaseAge, err = toLock(raw.Lock); err != nil {
 		return nil, fmt.Errorf("%s: %w", origin, err)
 	}
 
@@ -249,17 +256,52 @@ func Parse(data []byte, origin string) (*List, error) {
 	return l, nil
 }
 
-// toLockPlatforms reads the [lock] table.
-func toLockPlatforms(table map[string]any) ([]platform.Platform, error) {
+// DefaultReleaseAge is the minimum release age of a list that sets none.
+const DefaultReleaseAge = 24 * time.Hour
+
+// ParseAge reads a minimum release age: a whole number of hours, days or weeks,
+// such as 12h, 1d or 2w, or 0 for none.
+func ParseAge(text string) (time.Duration, error) {
+	if text == "0" {
+		return 0, nil
+	}
+
+	units := map[string]time.Duration{"h": time.Hour, "d": 24 * time.Hour, "w": 7 * 24 * time.Hour}
+
+	n, err := strconv.Atoi(text[:max(len(text)-1, 0)])
+	unit, ok := units[text[max(len(text)-1, 0):]]
+
+	if err != nil || !ok || n < 1 {
+		return 0, fmt.Errorf("want a number of hours, days or weeks, such as 12h, 1d or 2w, or 0, got %q", text)
+	}
+
+	return time.Duration(n) * unit, nil
+}
+
+// toLock reads the [lock] table.
+func toLock(table map[string]any) ([]platform.Platform, string, error) {
 	for key := range table {
-		if key != "platforms" {
-			return nil, fmt.Errorf("lock.%s is not a key of [lock], use platforms", key)
+		if key != "platforms" && key != "min_release_age" {
+			return nil, "", fmt.Errorf(
+				"lock.%s is not a key of [lock], use platforms or min_release_age", key,
+			)
+		}
+	}
+
+	age, ok := table["min_release_age"].(string)
+	if !ok && table["min_release_age"] != nil {
+		return nil, "", errors.New("lock.min_release_age wants a string such as \"1d\"")
+	}
+
+	if age != "" {
+		if _, err := ParseAge(age); err != nil {
+			return nil, "", fmt.Errorf("lock.min_release_age: %w", err)
 		}
 	}
 
 	names, ok := table["platforms"].([]any)
 	if !ok && table["platforms"] != nil {
-		return nil, errors.New("lock.platforms wants an array of platform names")
+		return nil, "", errors.New("lock.platforms wants an array of platform names")
 	}
 
 	platforms := make([]platform.Platform, 0, len(names))
@@ -269,13 +311,13 @@ func toLockPlatforms(table map[string]any) ([]platform.Platform, error) {
 
 		p, err := platform.Parse(text)
 		if err != nil {
-			return nil, fmt.Errorf("lock.platforms: %w", err)
+			return nil, "", fmt.Errorf("lock.platforms: %w", err)
 		}
 
 		platforms = append(platforms, p)
 	}
 
-	return platforms, nil
+	return platforms, age, nil
 }
 
 // toSettings reads the domains of one settings table.
@@ -434,6 +476,19 @@ func toEntry(value any) (Entry, error) {
 			return e, errors.New("ref is required")
 		}
 
+		age, ok := v["min_release_age"].(string)
+		if !ok && v["min_release_age"] != nil {
+			return e, errors.New("min_release_age wants a string such as \"1d\" or \"0\"")
+		}
+
+		if age != "" {
+			if _, err := ParseAge(age); err != nil {
+				return e, fmt.Errorf("min_release_age: %w", err)
+			}
+		}
+
+		e.MinReleaseAge = age
+
 		bins, ok := v["bin"].([]any)
 		if !ok && v["bin"] != nil {
 			return e, errors.New("bin wants an array of program names")
@@ -474,7 +529,7 @@ func Line(name string, entry Entry) string {
 	value := fmt.Sprintf("%q", entry.Ref)
 
 	if entry.Version != "" || entry.Service || entry.System || len(entry.When) > 0 ||
-		entry.Asset != "" || len(entry.Bins) > 0 {
+		entry.Asset != "" || len(entry.Bins) > 0 || entry.MinReleaseAge != "" {
 		fields := []string{fmt.Sprintf("ref = %q", entry.Ref)}
 
 		if entry.Version != "" {
@@ -504,6 +559,10 @@ func Line(name string, entry Entry) string {
 
 		if len(entry.When) > 0 {
 			fields = append(fields, "when = "+entry.When.TOML())
+		}
+
+		if entry.MinReleaseAge != "" {
+			fields = append(fields, fmt.Sprintf("min_release_age = %q", entry.MinReleaseAge))
 		}
 
 		value = "{ " + strings.Join(fields, ", ") + " }"

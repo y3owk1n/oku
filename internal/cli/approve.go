@@ -9,10 +9,12 @@ import (
 	"os"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 
+	"github.com/y3owk1n/oku/internal/list"
 	"github.com/y3owk1n/oku/internal/manifest"
 	"github.com/y3owk1n/oku/internal/platform"
 	"github.com/y3owk1n/oku/internal/status"
@@ -26,6 +28,8 @@ type buildFlags struct {
 	verbose bool
 	// acceptKey accepts a signing key that differs from the one in oku.lock.
 	acceptKey bool
+	// minReleaseAge replaces the list's minimum release age for this command.
+	minReleaseAge string
 }
 
 func (f *buildFlags) register(cmd *cobra.Command) {
@@ -35,6 +39,35 @@ func (f *buildFlags) register(cmd *cobra.Command) {
 		BoolVarP(&f.verbose, "verbose", "v", false, "show the output of build commands, and a manifest that oku inferred")
 	cmd.Flags().
 		BoolVar(&f.acceptKey, "accept-key", false, "accept a signing key that differs from the one in oku.lock")
+	cmd.Flags().StringVar(&f.minReleaseAge, minReleaseAgeFlag, "",
+		"take only versions released at least this long ago, such as 3d, or 0 for the newest")
+}
+
+const minReleaseAgeFlag = "min-release-age"
+
+// releaseAge is the minimum release age for the package that entry of own
+// names: --min-release-age, else the entry's, else the list's, else
+// list.DefaultReleaseAge.
+func releaseAge(cmd *cobra.Command, own *list.List, entry list.Entry) (time.Duration, error) {
+	text := entry.MinReleaseAge
+	if own != nil && text == "" {
+		text = own.MinReleaseAge
+	}
+
+	if flag := cmd.Flags().Lookup(minReleaseAgeFlag); flag != nil && flag.Changed {
+		text = flag.Value.String()
+	}
+
+	if text == "" {
+		return list.DefaultReleaseAge, nil
+	}
+
+	age, err := list.ParseAge(text)
+	if err != nil {
+		return 0, fmt.Errorf("min_release_age: %w", err)
+	}
+
+	return age, nil
 }
 
 // approver returns the check that install runs before a build, or before an

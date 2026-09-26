@@ -24,6 +24,9 @@ type gitlabRelease struct {
 	// Upcoming is true for a release dated in the future, which GitLab does not
 	// count as published.
 	Upcoming bool `json:"upcoming_release"`
+	// Released is when the release was published, or the date its author set
+	// for it.
+	Released time.Time `json:"released_at"`
 	Commit   struct {
 		ID string `json:"id"`
 	} `json:"commit"`
@@ -39,7 +42,7 @@ type gitlabRelease struct {
 }
 
 func (r gitlabRelease) release() Release {
-	out := Release{Tag: r.Tag, Commit: r.Commit.ID, Draft: r.Upcoming}
+	out := Release{Tag: r.Tag, Commit: r.Commit.ID, Draft: r.Upcoming, Published: r.Released}
 
 	for _, link := range r.Assets.Links {
 		at := link.Direct

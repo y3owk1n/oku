@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/y3owk1n/oku/internal/shape"
 )
@@ -45,6 +46,8 @@ type Version struct {
 	Yanked bool
 	// Programs are the names of the version's binaries.
 	Programs []string
+	// Published is when the version was published.
+	Published time.Time
 }
 
 // Crate is what crates.io lists for one crate, newest version first.
@@ -107,10 +110,11 @@ func Read(ctx context.Context, client *http.Client, api, name string) (Crate, er
 			Description string `json:"description"`
 		} `json:"crate"`
 		Versions []struct {
-			Number   string   `json:"num"`
-			Checksum string   `json:"checksum"`
-			Yanked   bool     `json:"yanked"`
-			Bins     []string `json:"bin_names"`
+			Number   string    `json:"num"`
+			Checksum string    `json:"checksum"`
+			Yanked   bool      `json:"yanked"`
+			Bins     []string  `json:"bin_names"`
+			Created  time.Time `json:"created_at"`
 		} `json:"versions"`
 	}
 
@@ -127,6 +131,7 @@ func Read(ctx context.Context, client *http.Client, api, name string) (Crate, er
 		summed = summed && v.Checksum != ""
 		c.Versions = append(c.Versions, Version{
 			Number: v.Number, SHA256: v.Checksum, Yanked: v.Yanked, Programs: v.Bins,
+			Published: v.Created,
 		})
 	}
 
