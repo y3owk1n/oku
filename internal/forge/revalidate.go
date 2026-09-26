@@ -6,11 +6,17 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"io"
+	"io/fs"
 	"net/http"
 	"os"
 	"path/filepath"
 	"sync"
+	"time"
+
+	"github.com/klauspost/compress/zstd"
 )
 
 // Revalidating returns a client that keeps each GET answer with an ETag under
@@ -24,6 +30,13 @@ func Revalidating(dir string) *http.Client {
 
 type revalidator struct{ dir string }
 
+// encoder and decoder pack and unpack the body of a kept answer. A release list
+// of 6.6 MB keeps as 0.4 MB, and both calls are safe from several goroutines.
+var (
+	encoder, _ = zstd.NewWriter(nil, zstd.WithEncoderLevel(zstd.SpeedFastest))
+	decoder, _ = zstd.NewReader(nil, zstd.WithDecoderMaxMemory(maxAnswer))
+)
+
 // next is the transport of http.DefaultClient, so a test that replaces it
 // reaches the forges through this cache too.
 func next() http.RoundTripper {
@@ -35,12 +48,44 @@ func next() http.RoundTripper {
 }
 
 // kept is one answer on disk. Link holds the next page of a list, and Type the
-// media type, which a reader may check.
+// media type, which a reader may check. Bytes is the length of the body before
+// compression, and an answer without it is from an older oku that kept the body
+// inside the JSON.
 type kept struct {
-	ETag string `json:"etag"`
-	Link string `json:"link,omitempty"`
-	Type string `json:"type,omitempty"`
-	Body []byte `json:"body"`
+	ETag  string `json:"etag"`
+	Link  string `json:"link,omitempty"`
+	Type  string `json:"type,omitempty"`
+	Bytes int    `json:"bytes"`
+	// Body is the answer itself. It does not go into the JSON, since a body of
+	// 30 MB costs a third more as base64 and another read of all of it to decode.
+	Body []byte `json:"-"`
+}
+
+// read loads the answer at path: one line of JSON, then the body as zstd.
+func read(path string) (kept, bool) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return kept{}, false
+	}
+
+	header, packed, found := bytes.Cut(data, []byte{'\n'})
+	if !found {
+		return kept{}, false
+	}
+
+	var answer kept
+	if json.Unmarshal(header, &answer) != nil || answer.Type == "" || answer.Bytes == 0 {
+		return kept{}, false
+	}
+
+	body, err := decoder.DecodeAll(packed, make([]byte, 0, answer.Bytes))
+	if err != nil || len(body) != answer.Bytes {
+		return kept{}, false
+	}
+
+	answer.Body = body
+
+	return answer, true
 }
 
 func (r revalidator) RoundTrip(req *http.Request) (*http.Response, error) {
@@ -60,11 +105,10 @@ func (r revalidator) revalidate(req *http.Request) (*http.Response, error) {
 	sum := sha256.Sum256([]byte(req.URL.String() + "\n" + req.Header.Get("Accept")))
 	path := filepath.Join(r.dir, hex.EncodeToString(sum[:]))
 
-	var old kept
-
-	// oku asks again in full for an answer kept without its media type, as an
-	// older oku kept it.
-	if data, err := os.ReadFile(path); err == nil && json.Unmarshal(data, &old) == nil && old.Type != "" {
+	// oku asks again in full for an answer it cannot read, such as one an older
+	// oku kept in another format.
+	old, have := read(path)
+	if have {
 		req = req.Clone(req.Context())
 		req.Header.Set("If-None-Match", old.ETag)
 	}
@@ -75,8 +119,13 @@ func (r revalidator) revalidate(req *http.Request) (*http.Response, error) {
 	}
 
 	switch {
-	case resp.StatusCode == http.StatusNotModified && old.ETag != "":
+	case resp.StatusCode == http.StatusNotModified && have:
 		resp.Body.Close()
+
+		// The age of the file says when oku last used the answer, which is what gc
+		// goes by.
+		now := time.Now()
+		_ = os.Chtimes(path, now, now)
 
 		resp.StatusCode, resp.Status = http.StatusOK, "200 OK"
 		resp.Header.Set("Link", old.Link)
@@ -98,7 +147,7 @@ func (r revalidator) revalidate(req *http.Request) (*http.Response, error) {
 		if len(body) <= maxAnswer {
 			keep(path, kept{
 				ETag: resp.Header.Get("ETag"), Link: resp.Header.Get("Link"),
-				Type: resp.Header.Get("Content-Type"), Body: body,
+				Type: resp.Header.Get("Content-Type"), Bytes: len(body), Body: body,
 			})
 		}
 	}
@@ -109,10 +158,13 @@ func (r revalidator) revalidate(req *http.Request) (*http.Response, error) {
 // keep writes an answer in one rename. The cache only saves requests, so a
 // failed write costs one request later and is not an error.
 func keep(path string, answer kept) {
-	data, err := json.Marshal(answer)
+	header, err := json.Marshal(answer)
 	if err != nil || os.MkdirAll(filepath.Dir(path), 0o755) != nil {
 		return
 	}
+
+	data := append(header, '\n')
+	data = encoder.EncodeAll(answer.Body, data)
 
 	tmp, err := os.CreateTemp(filepath.Dir(path), ".tmp-")
 	if err != nil {
@@ -124,6 +176,40 @@ func keep(path string, answer kept) {
 	if closeErr := tmp.Close(); err == nil && closeErr == nil {
 		_ = os.Rename(tmp.Name(), path)
 	}
+}
+
+// AnswerRetention is how long an answer that no command has used stays in the
+// cache. An answer costs one request to fetch again, and a machine that has not
+// looked a package up in a month is unlikely to want its old answer.
+const AnswerRetention = 30 * 24 * time.Hour
+
+// StaleAnswers returns the answers under dir that no command has read for
+// AnswerRetention, with their sizes. Reading an answer sets the time on its
+// file, so the age is the time since oku last used it.
+func StaleAnswers(dir string, now time.Time) (map[string]int64, error) {
+	entries, err := os.ReadDir(dir)
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, nil
+	}
+
+	if err != nil {
+		return nil, fmt.Errorf("read %s: %w", dir, err)
+	}
+
+	stale := map[string]int64{}
+
+	for _, entry := range entries {
+		info, err := entry.Info()
+		if err != nil || entry.IsDir() {
+			continue
+		}
+
+		if now.Sub(info.ModTime()) >= AnswerRetention {
+			stale[filepath.Join(dir, entry.Name())] = info.Size()
+		}
+	}
+
+	return stale, nil
 }
 
 type answersKey struct{}

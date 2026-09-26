@@ -14,6 +14,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/y3owk1n/oku/internal/forge"
 	"github.com/y3owk1n/oku/internal/profile"
 	"github.com/y3owk1n/oku/internal/status"
 	"github.com/y3owk1n/oku/internal/store"
@@ -266,37 +267,51 @@ func runGC(cmd *cobra.Command, r profile.Retention, dryRun, cache bool) error {
 		)))
 	}
 
-	var downloads map[string]int64
+	var downloads, answers map[string]int64
 
 	if cache {
 		if downloads, err = e.staleDownloads(used); err != nil {
 			return err
 		}
 
-		var size int64
-
-		for path, n := range downloads {
-			if !dryRun {
-				if err := os.Remove(path); err != nil && !errors.Is(err, fs.ErrNotExist) {
-					return fmt.Errorf("delete %s: %w", path, err)
-				}
-			}
-
-			size += n
+		if answers, err = forge.StaleAnswers(filepath.Join(e.cache, "api"), time.Now()); err != nil {
+			return err
 		}
 
 		// A cache holds hundreds of files, named after their digests, so one line
-		// counts them.
-		if len(downloads) > 0 {
-			freed += size
-			fmt.Fprintln(out, mark(fmt.Sprintf(
-				"%s %s from the download cache (%s)", verb, count(len(downloads), "file"), status.Size(size),
-			)))
+		// counts each kind.
+		for _, part := range []struct {
+			files map[string]int64
+			what  string
+			noun  string
+		}{
+			{downloads, "download cache", "file"},
+			{answers, "API cache", "answer"},
+		} {
+			var size int64
+
+			for path, n := range part.files {
+				if !dryRun {
+					if err := os.Remove(path); err != nil && !errors.Is(err, fs.ErrNotExist) {
+						return fmt.Errorf("delete %s: %w", path, err)
+					}
+				}
+
+				size += n
+			}
+
+			if len(part.files) > 0 {
+				freed += size
+				fmt.Fprintln(out, mark(fmt.Sprintf(
+					"%s %s from the %s (%s)",
+					verb, count(len(part.files), part.noun), part.what, status.Size(size),
+				)))
+			}
 		}
 	}
 
-	if len(unused) == 0 && len(leftovers) == 0 && len(downloads) == 0 && saved == 0 &&
-		len(goneProjects) == 0 {
+	if len(unused) == 0 && len(leftovers) == 0 && len(downloads) == 0 && len(answers) == 0 &&
+		saved == 0 && len(goneProjects) == 0 {
 		// After deleted generations, "nothing to delete" would contradict the
 		// lines above it.
 		text := "nothing to delete, every store path is used by a generation"
@@ -325,6 +340,7 @@ func runGC(cmd *cobra.Command, r profile.Retention, dryRun, cache bool) error {
 		{len(unused), "store path", "store paths"},
 		{len(leftovers), "temporary file", "temporary files"},
 		{len(downloads), "cached file", "cached files"},
+		{len(answers), "kept answer", "kept answers"},
 	} {
 		switch {
 		case c.n == 1:
