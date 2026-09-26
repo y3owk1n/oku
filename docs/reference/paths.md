@@ -129,7 +129,13 @@ On Windows a generation holds shims and hard links in place of symlinks, and
 ## Outside oku's directories
 
 An app, a font or a service only works where the OS reads it, so oku copies or
-writes those out of the store:
+writes those out of the store. Finder, Spotlight and the font services do not
+treat a symlinked bundle or font as installed, so it has to be a copy. On APFS,
+btrfs and XFS the copy is a clone of the file in the store, which shares its
+blocks on disk, so an app takes its size once and the copy adds nothing. On
+other filesystems, ext4 and NTFS among them, oku copies the bytes. The copy is
+yours either way. Writing to it leaves the store path alone, and deleting the
+store path leaves the copy whole.
 
 | | macOS | Linux | Windows |
 |---|---|---|---|

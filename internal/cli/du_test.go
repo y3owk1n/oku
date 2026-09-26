@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/y3owk1n/oku/internal/clone"
 	"github.com/y3owk1n/oku/internal/status"
 )
 
@@ -61,6 +62,29 @@ func TestB344DuSizesEachAreaAndWhatGCFrees(t *testing.T) {
 
 	if !strings.Contains(freed, "freed "+status.Size(got.GCFrees)) {
 		t.Fatalf("gc freed other than du said, %s:\n%s", status.Size(got.GCFrees), freed)
+	}
+}
+
+func TestB380DuSaysAClonedAppSharesTheStoresBlocks(t *testing.T) {
+	m := newMachine(t)
+
+	_, err := m.run(t, "", "add", m.desktopManifest(t))
+	must(t, err)
+
+	app, _ := m.exposedPaths()
+	note := "shares its blocks with the store"
+	out := m.stdout(t, "du")
+
+	if clone.Possible(filepath.Join(m.data, "store"), filepath.Dir(app)) {
+		if !strings.Contains(out, note) {
+			t.Fatalf("du said nothing about the clone:\n%s", out)
+		}
+
+		return
+	}
+
+	if strings.Contains(out, note) {
+		t.Fatalf("du claims a clone on a filesystem that cannot clone:\n%s", out)
 	}
 }
 

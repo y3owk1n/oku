@@ -14,6 +14,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/y3owk1n/oku/internal/clone"
 )
 
 const (
@@ -28,9 +30,6 @@ const (
 	// shareSuffix names the temporary file that replaces a file of a store path.
 	shareSuffix = ".oku-share"
 )
-
-// errNoClones reports a filesystem that cannot clone a file.
-var errNoClones = errors.New("the filesystem cannot clone files")
 
 // Shared is one file of a store path whose content lives under LinksDir.
 type Shared struct {
@@ -315,7 +314,7 @@ func (sh *sharer) share(file, entry string, info fs.FileInfo) (bool, int64) {
 			return true, info.Size()
 		}
 
-		if !errors.Is(err, errNoClones) {
+		if !errors.Is(err, clone.ErrUnsupported) {
 			return false, 0
 		}
 
@@ -346,7 +345,7 @@ func replaceWith(dest, source string, finish func(string) error) error {
 	var err error
 	if finish == nil {
 		err = os.Link(source, tmp)
-	} else if err = cloneFile(source, tmp); err == nil {
+	} else if err = clone.File(source, tmp); err == nil {
 		err = finish(tmp)
 	}
 
