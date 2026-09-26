@@ -1635,11 +1635,11 @@ and `min_release_age = "0"` on a package skips the check.
 
 Why: D97 let such a version pass, so the age covered none of the `git-tags`,
 `page` and `redirect` packages, which are about a fifth of one real list.
-Blocking them outright would stop each of them for good, so warn leaves the
+Refusing them outright would stop them on every update, so warn leaves the
 choice to the user, as a build approval does. Without a terminal nobody can
 answer, and a script should not take an unchecked version silently. A "no" is
 about one version, so it keeps the locked one and leaves the other packages
 alone, where a failure would stop the whole update. `--accept-unknown-age` is
-apart from `--yes`, which approves build commands, so that one answer does not
-stand for both. Sparkle feeds date each item with `pubDate`, so they count as
+apart from `--yes`, which approves build commands, so one flag does not answer
+both questions. Sparkle feeds date each item with `pubDate`, so they count as
 dated.
