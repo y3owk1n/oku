@@ -1659,3 +1659,23 @@ exists, so gc keeps its profile. Otherwise one gc run without the drive would
 delete the project's generations. A profile whose folder oku cannot place may
 belong to a project that still exists, so gc keeps it and says how many there
 are.
+
+## D101. A placed app or font is a clone of the store's file
+
+`oku` places an app bundle or a font by cloning the file in the store on a
+filesystem that clones, APFS, btrfs and XFS, and by copying its bytes on one
+that does not, ext4 and NTFS among them. Both give the user an independent file:
+a clone shares its blocks until either side writes. The clone keeps the modes
+and the symlinks of the bundle, and oku lets the owner write in every directory
+of the copy, which removing it again needs. `oku du` measures an app by its
+size, since no filesystem says which of a clone's blocks it shares, and says so
+where a clone is possible.
+
+Why: an app or a font has to be a real file, because Finder, Spotlight and the
+font services do not treat a symlink as installed (B70, B71), so every app was
+on disk twice, once in the store and once in `~/Applications`. On one machine
+that was 7.7 GiB of 26.2 GiB, and each update of a large app wrote its whole
+bundle again. The store already clones identical files (D95), so the same
+primitive covers this. Placing Ghostty measured 3.6 s and 157 MiB of disk as a
+copy, and 1.4 s and 63 MiB as a clone, with identical modes, symlinks and code
+signature.
