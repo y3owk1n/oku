@@ -1652,9 +1652,10 @@ forgets the project's `oku allow`. A profile from before the record takes the
 folder from `trust/allow.toml`, and one that neither names is kept.
 
 Why: a project profile is named after a hash of its folder, so a deleted or
-moved project left its profile, and every package only it used, in place for
-good. gc is where oku already frees what nothing uses. A folder on a volume
-that is not mounted is away, not gone, so gc keeps it, since removing it would
-lose the project's generations on the next gc run without the drive. A profile
-whose folder oku cannot place may belong to a project that still exists, so gc
-keeps it and says how many there are.
+moved project left its profile behind, and every package that only it used
+stayed in the store until the user deleted the profile by hand. gc is where oku
+already frees what nothing uses. A folder on a drive that is not mounted still
+exists, so gc keeps its profile. Otherwise one gc run without the drive would
+delete the project's generations. A profile whose folder oku cannot place may
+belong to a project that still exists, so gc keeps it and says how many there
+are.
