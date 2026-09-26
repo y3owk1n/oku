@@ -802,8 +802,8 @@ freed 4.6 MiB from 1 store path
   not written its lock yet may need. It leaves `git/` alone.
 - It also deletes a download that no install has used for two days, even when a
   kept store path was made from it, and `--older-than` sets that age. The
-  package still runs, because its store path holds the unpacked content, and
-  oku downloads the file again when it has to build or unpack it once more. An
+  package still runs, because its store path holds the unpacked content. oku
+  downloads the file again when it has to unpack or build it once more. An
   install that reads a download sets the time on its file, so a download in use
   stays.
 - With `--cache` it also deletes each answer in `api/` that no command has read

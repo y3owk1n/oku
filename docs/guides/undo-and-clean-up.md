@@ -212,7 +212,7 @@ removed 38 files from the download cache (1.9 GiB)
 freed 1.9 GiB from 1 store path and 38 cached files
 ```
 
-A package whose download went still runs, because its store path holds the
+A package whose download gc deleted still runs, because its store path holds the
 unpacked content. oku downloads the file again when it has to unpack or build it
 once more, since `oku.lock` pins its digest. `--older-than` sets how long a
 download stays, so `oku gc --cache --older-than 2w` keeps two weeks of them.
