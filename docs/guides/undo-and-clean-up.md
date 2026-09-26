@@ -176,6 +176,10 @@ freed 4.5 MiB from 1 store path
 - `--keep N` deletes every generation except the newest N, in every profile,
   projects included. The active generation always stays, even when it is older.
   N is at least 1.
+- `--older-than 30d` deletes the generations older than 30 days, and keeps the
+  newest of them, which was active 30 days ago. So you can always roll back to
+  how things were then. It takes days (`d`) or weeks (`w`). With `--keep` too,
+  a generation stays when either flag keeps it.
 - Then gc deletes each store path that no remaining generation uses. A
   [dep](../how-oku-works.md#runtime-dep) counts as used while a package that
   needs it is.

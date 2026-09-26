@@ -8,7 +8,9 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -21,9 +23,10 @@ import (
 
 func newGCCmd() *cobra.Command {
 	var (
-		keep   int
-		dryRun bool
-		cache  bool
+		keep      int
+		olderThan string
+		dryRun    bool
+		cache     bool
 	)
 
 	cmd := &cobra.Command{
@@ -33,6 +36,9 @@ func newGCCmd() *cobra.Command {
 
 Old generations keep their packages in the store so rollback needs no download.
 --keep deletes old generations first, which frees the packages only they use.
+--older-than deletes the generations older than a number of days or weeks, and
+keeps the one that was active then, so rollback reaches back that far. With
+both, a generation stays when either keeps it.
 --cache also deletes the downloads that no kept store path was made from.
 
 gc also shares the identical files of store paths that an older oku installed,
@@ -43,19 +49,50 @@ so the disk keeps each of them once.`,
 				return fmt.Errorf("--keep must be at least 1, got %d", keep)
 			}
 
-			return runGC(cmd, keep, dryRun, cache)
+			r := profile.Retention{Keep: keep}
+
+			if olderThan != "" {
+				age, err := parseAge(olderThan)
+				if err != nil {
+					return err
+				}
+
+				r.Since = time.Now().Add(-age)
+			}
+
+			return runGC(cmd, r, dryRun, cache)
 		},
 	}
 
 	cmd.Flags().
 		IntVar(&keep, "keep", 0, "first delete all but the newest N generations of each profile")
+	cmd.Flags().StringVar(
+		&olderThan, "older-than", "",
+		"first delete the generations older than this, such as 30d or 2w",
+	)
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "print what would be deleted and delete nothing")
 	cmd.Flags().BoolVar(&cache, "cache", false, "also delete the downloads that no kept store path was made from")
 
 	return cmd
 }
 
-func runGC(cmd *cobra.Command, keep int, dryRun, cache bool) error {
+// parseAge reads a number of days or weeks, such as 30d or 2w.
+func parseAge(text string) (time.Duration, error) {
+	units := map[string]time.Duration{"d": 24 * time.Hour, "w": 7 * 24 * time.Hour}
+
+	n, err := strconv.Atoi(text[:max(len(text)-1, 0)])
+	unit, ok := units[text[max(len(text)-1, 0):]]
+
+	if err != nil || !ok || n < 1 {
+		return 0, fmt.Errorf(
+			"--older-than takes a number of days or weeks, such as 30d or 2w, got %q", text,
+		)
+	}
+
+	return time.Duration(n) * unit, nil
+}
+
+func runGC(cmd *cobra.Command, r profile.Retention, dryRun, cache bool) error {
 	e, err := loadEnv()
 	if err != nil {
 		return err
@@ -85,9 +122,9 @@ func runGC(cmd *cobra.Command, keep int, dryRun, cache bool) error {
 
 	pruned := map[*profile.Profile][]int{}
 
-	if keep > 0 {
+	if r.Keep > 0 || !r.Since.IsZero() {
 		for _, prof := range profiles {
-			if pruned[prof], err = prof.Prune(keep, dryRun); err != nil {
+			if pruned[prof], err = prof.Prune(r, dryRun); err != nil {
 				return err
 			}
 

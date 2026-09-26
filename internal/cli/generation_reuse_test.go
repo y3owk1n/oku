@@ -6,7 +6,9 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"testing"
+	"time"
 )
 
 // genDir returns generation n of the global profile.
@@ -115,5 +117,48 @@ func TestB370GCDeletesTheLinksNoGenerationUses(t *testing.T) {
 		if _, err := exec.Command(m.profile("bin", name)).Output(); err != nil {
 			t.Fatalf("%s no longer runs: %v", name, err)
 		}
+	}
+}
+
+func TestB371GCOlderThanKeepsWhatWasActiveThen(t *testing.T) {
+	m := newMachine(t)
+
+	for _, name := range []string{"one", "two", "three", "four"} {
+		_, err := m.run(t, "", "add", m.namedManifest(t, name, name, name))
+		must(t, err)
+	}
+
+	// Generations 1 and 2 are older than 30 days, and 2 was active 30 days ago.
+	for n, age := range map[int]time.Duration{1: 60, 2: 40, 3: 10} {
+		path := filepath.Join(m.genDir(n), "oku-gen.toml")
+		data, err := os.ReadFile(path)
+		must(t, err)
+
+		created := time.Now().Add(-age * 24 * time.Hour).UTC().Format(time.RFC3339)
+		data = regexp.MustCompile(`(?m)^created = .*$`).ReplaceAll(data, []byte("created = "+created))
+		must(t, os.WriteFile(path, data, 0o644))
+	}
+
+	if _, err := m.run(t, "", "gc", "--older-than", "30"); err == nil {
+		t.Fatal("--older-than took a number without a unit")
+	}
+
+	out, err := m.run(t, "", "gc", "--older-than", "30d")
+	must(t, err)
+
+	for n, kept := range map[int]bool{1: false, 2: true, 3: true, 4: true} {
+		if _, err := os.Stat(m.genDir(n)); (err == nil) != kept {
+			t.Fatalf(
+				"after gc --older-than 30d, generation %d exists: %v, want %v\n%s",
+				n, err == nil, kept, out,
+			)
+		}
+	}
+
+	_, err = m.run(t, "", "rollback", "2")
+	must(t, err)
+
+	if _, err := exec.Command(m.profile("bin", "one")).Output(); err != nil {
+		t.Fatalf("rollback to what was active 30 days ago does not run one: %v", err)
 	}
 }

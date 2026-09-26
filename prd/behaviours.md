@@ -437,6 +437,10 @@ order step in `prd/product.md`.
 - B23 [3] `oku gc` deletes store paths referenced by no generation of any
   profile, and nothing else. `--keep N` first deletes all but the newest N
   generations and the active one. `--dry-run` deletes nothing.
+- B371 [3] `oku gc --older-than 30d` first deletes the generations older than
+  30 days, except the newest of them, which was active 30 days ago, and the
+  active one. It takes days (`d`) or weeks (`w`) and refuses anything else.
+  With `--keep N`, a generation stays when either flag keeps it.
 - B348 [3] `oku gc --cache` also deletes each download in the cache that no
   kept store path was made from, and the index of downloads by url, and keeps
   the download of every kept store path. It skips a file less than a day old.
