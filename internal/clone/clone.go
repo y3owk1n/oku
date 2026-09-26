@@ -64,8 +64,8 @@ func Possible(from, to string) bool {
 
 // copyTree walks source and clones each file it can, and copies the others.
 func copyTree(source, dest string) error {
-	// A filesystem that refuses one clone refuses every clone, so the walk stops
-	// asking.
+	// A filesystem that refuses one clone refuses every clone, so the walk tries
+	// it once.
 	copies := false
 
 	return filepath.WalkDir(source, func(path string, entry fs.DirEntry, err error) error {

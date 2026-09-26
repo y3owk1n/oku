@@ -485,8 +485,8 @@ order step in `prd/product.md`.
   hold it, and marks one that only old generations hold and one that no
   generation holds.
 - B380 [3] `oku du` says that a cloned app or font takes less disk than its
-  size, and only where a file of the store can become a clone beside the placed
-  apps.
+  size. It says so only where a file of the store can become a clone next to
+  the apps oku placed.
 - B362 [3] Store paths that hold an identical file of 8 KiB or more keep one
   copy of it on disk, and each still reads the same bytes and runs as before.
   Where the filesystem clones, the file keeps its mode. Elsewhere it is one
@@ -942,9 +942,9 @@ order step in `prd/product.md`.
   `remove` and `rollback` take it away again.
 - B379 [8] An app or a font that oku places is a clone of the file in the store
   where the filesystem clones, and a copy of its bytes elsewhere. The placed
-  file is the user's own either way: writing to it leaves the store path alone,
-  and it keeps the mode and the symlinks of the bundle it came from, with the
-  owner able to write in every directory of it.
+  file is the user's own either way. Writing to it leaves the store path alone.
+  It keeps the modes and the symlinks of the bundle it came from, and the owner
+  can write in every directory of it.
 - B72 [8] oku unpacks dmg, pkg, deb, rpm and AppImage downloads without
   executing anything inside them. `.msi` follows in step 9.
 - B301 [8] When the top of a `.dmg` holds a `.pkg` and no app, oku unpacks

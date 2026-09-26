@@ -835,9 +835,9 @@ an app or a font that oku cloned shares its blocks with the store, so it takes l
 ```
 
 The last line says what `oku gc` frees, and what `oku gc --cache` frees, which
-includes it. The line above it is there on a filesystem that clones, since an
-app or a font oku placed there shares its blocks with the file in the store and
-no filesystem says how many, so its size is an upper bound.
+includes it. The line above it appears on a filesystem that clones. An app or a
+font oku placed there shares its blocks with the file in the store, and no
+filesystem says how many, so the size in its row is an upper bound.
 
 | Area | What it holds |
 |---|---|

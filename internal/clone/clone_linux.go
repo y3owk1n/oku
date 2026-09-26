@@ -34,7 +34,7 @@ func File(source, dest string) error {
 }
 
 // cloneTree reports that Linux has no call that clones a whole directory, so
-// the tree is walked and each file cloned on its own.
+// oku walks the tree and clones each file on its own.
 func cloneTree(_, _ string) error {
 	return ErrUnsupported
 }

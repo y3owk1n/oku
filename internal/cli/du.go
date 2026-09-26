@@ -429,9 +429,9 @@ func (e env) duAreas(cmd *cobra.Command, areas []area, paths []storePath, stale 
 		return err
 	}
 
-	// The size of an app or a font is what the file says, and no filesystem tells
-	// which of a clone's blocks it shares, so those rows are an upper bound where
-	// oku clones.
+	// The size of an app or a font is what the file says, and no filesystem says
+	// how many of a clone's blocks it shares, so those rows are an upper bound
+	// where oku clones.
 	for _, a := range areas {
 		if (a.Area == "apps" || a.Area == "fonts") && len(a.Paths) > 0 &&
 			clone.Possible(e.store().Dir(), a.Paths[0]) {
