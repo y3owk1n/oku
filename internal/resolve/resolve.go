@@ -452,7 +452,7 @@ func (r *Resolver) list(ctx context.Context, v manifest.Version) ([]Release, err
 	}
 
 	if v.From == manifest.FromGitBranch {
-		release, err := branchHead(ctx, v)
+		release, err := r.branchHead(ctx, v)
 		if err != nil {
 			return nil, err
 		}
@@ -471,7 +471,7 @@ func (r *Resolver) list(ctx context.Context, v manifest.Version) ([]Release, err
 	case manifest.FromGitHubReleases, manifest.FromGiteaReleases, manifest.FromGitLabReleases:
 		tags, digests, times, err = r.published(ctx, v)
 	case manifest.FromGitTags:
-		tags, err = gitTags(ctx, v.Repo)
+		tags, err = r.tags(ctx, v.Repo)
 	default:
 		return nil, fmt.Errorf("version.from %q is not supported", v.From)
 	}
@@ -639,10 +639,49 @@ func explain(err error, what, missing string) error {
 
 // branchHead returns the one release of a branch, which is its newest commit.
 // Its version has the form of a moving tag's, such as 2026.09.20-a73243f, and
-// its tag is the branch. The clone holds that commit and no files.
-func branchHead(ctx context.Context, v manifest.Version) (Release, error) {
+// its tag is the branch. On a host oku knows it reads the commit from the API,
+// which answers in one request and revalidates with an ETag. Elsewhere it
+// clones the branch without files.
+func (r *Resolver) branchHead(ctx context.Context, v manifest.Version) (Release, error) {
+	var refused error
+
+	if server, repo, ok := r.Hosts.OpenURL(v.Repo); ok {
+		commit, err := server.TagCommit(ctx, repo, v.Branch)
+		if err == nil {
+			return branchRelease(v.Branch, commit.SHA, commit.Date)
+		}
+
+		refused = err
+	}
+
+	release, err := cloneHead(ctx, v)
+	if err != nil && refused != nil {
+		return Release{}, fmt.Errorf("%w, and the host's API said: %w", err, refused)
+	}
+
+	return release, err
+}
+
+// branchRelease names the release of the commit sha, made at date, on branch.
+func branchRelease(branch, sha string, date time.Time) (Release, error) {
+	if len(sha) < 7 || date.IsZero() {
+		return Release{}, fmt.Errorf("the newest commit of the branch %s is %q", branch, sha)
+	}
+
+	return Release{
+		Version: date.UTC().Format("2006.01.02") + "-" + sha[:7],
+		Tag:     branch,
+		Commit:  sha,
+	}, nil
+}
+
+// cloneHead reads the newest commit of a branch with git, for a host that
+// serves no API oku knows.
+func cloneHead(ctx context.Context, v manifest.Version) (Release, error) {
 	if _, err := exec.LookPath("git"); err != nil {
-		return Release{}, errors.New(`version.from = "git-branch" needs git on PATH`)
+		return Release{}, errors.New(
+			`version.from = "git-branch" on a host that serves no API oku knows needs git on PATH`,
+		)
 	}
 
 	what := "read the branch " + v.Branch + " of " + v.Repo
@@ -677,20 +716,46 @@ func branchHead(ctx context.Context, v manifest.Version) (Release, error) {
 	sha, seconds, _ := strings.Cut(strings.TrimSpace(string(out)), " ")
 
 	unix, err := strconv.ParseInt(seconds, 10, 64)
-	if err != nil || len(sha) < 7 {
+	if err != nil {
 		return Release{}, fmt.Errorf("%s: git printed %q for its newest commit", what, out)
 	}
 
-	return Release{
-		Version: time.Unix(unix, 0).UTC().Format("2006.01.02") + "-" + sha[:7],
-		Tag:     v.Branch,
-		Commit:  sha,
-	}, nil
+	release, err := branchRelease(v.Branch, sha, time.Unix(unix, 0))
+	if err != nil {
+		return Release{}, fmt.Errorf("%s: %w", what, err)
+	}
+
+	return release, nil
+}
+
+// tags lists the tags of the repository at url. On a host oku knows it reads
+// them from the API, which revalidates with an ETag. On any other host, when
+// that host gives an error, and when it lists no tag at all, it asks git.
+func (r *Resolver) tags(ctx context.Context, url string) ([]string, error) {
+	var refused error
+
+	if server, repo, ok := r.Hosts.OpenURL(url); ok {
+		tags, err := server.Tags(ctx, repo)
+		if err == nil && len(tags) > 0 {
+			return tags, nil
+		}
+
+		refused = err
+	}
+
+	tags, err := gitTags(ctx, url)
+	if err != nil && refused != nil {
+		return nil, fmt.Errorf("%w, and the host's API said: %w", err, refused)
+	}
+
+	return tags, err
 }
 
 func gitTags(ctx context.Context, url string) ([]string, error) {
 	if _, err := exec.LookPath("git"); err != nil {
-		return nil, errors.New(`version.from = "git-tags" needs git on PATH`)
+		return nil, errors.New(
+			`version.from = "git-tags" on a host that serves no API oku knows needs git on PATH`,
+		)
 	}
 
 	cmd := exec.CommandContext(ctx, "git", "ls-remote", "--tags", "--refs", "--", url)

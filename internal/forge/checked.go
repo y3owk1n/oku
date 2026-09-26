@@ -47,6 +47,19 @@ func (c checked) Releases(ctx context.Context, repo string) ([]Release, error) {
 	return releases, err
 }
 
+func (c checked) Tags(ctx context.Context, repo string) ([]string, error) {
+	tags, err := c.Forge.Tags(ctx, repo)
+
+	for _, tag := range tags {
+		if err == nil {
+			err = shape.Check(fmt.Sprintf("%s's answer for the tags of %s", c.name, repo),
+				shape.Field{Name: "the name of a tag", Has: tag != ""})
+		}
+	}
+
+	return tags, err
+}
+
 func (c checked) TagCommit(ctx context.Context, repo, tag string) (Commit, error) {
 	commit, err := c.Forge.TagCommit(ctx, repo, tag)
 	if err == nil {

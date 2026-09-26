@@ -92,8 +92,8 @@ manifest change.
 | `github-releases` | `owner/repo`, or `host/owner/repo` on a GitHub Enterprise Server | The newest 1000 releases, page by page. Skips drafts and prereleases. |
 | `gitea-releases` | `host/owner/repo`, such as `codeberg.org/owner/repo` | The same on a Gitea or Forgejo server. |
 | `gitlab-releases` | `group/project`, or `host/group/project` on a GitLab server of your own | The newest 1000 releases. Skips a release dated in the future, which GitLab calls upcoming. |
-| `git-tags` | a git URL | Every tag, with `git ls-remote`. Needs `git` on `PATH`. |
-| `git-branch` | a git URL | The newest commit of `branch`. Needs `git` on `PATH`. |
+| `git-tags` | a git URL | Every tag, up to 2000. On github.com, gitlab.com and codeberg.org oku reads them from the host's API. On any other host it runs `git ls-remote`, which needs `git` on `PATH`. |
+| `git-branch` | a git URL | The newest commit of `branch`. On github.com, gitlab.com and codeberg.org oku reads it from the host's API. On any other host it clones the branch without files, which needs `git` on `PATH`. |
 | `npm` | a package name, such as `@scope/name` | Every version in `registry.npmjs.org`. Skips a prerelease, which has a `-` in its version. |
 | `pypi` | a package name, such as `black` | Every version in the Python Package Index. |
 | `go` | a module path, such as `golang.org/x/tools/gopls` | The tagged versions of the module from the Go module proxy. A module with no tags has one version, the pseudo-version of its newest commit. |
@@ -208,6 +208,9 @@ source = { git = "https://github.com/someone/tool", tag = "{{tag}}" }
 
 - The version is `<date>-<commit>`, such as `2026.09.20-a73243f`, the day and
   the first seven characters of the newest commit. `{{tag}}` is the branch.
+- On github.com, gitlab.com and codeberg.org oku reads that commit from the
+  host's API, in one request that revalidates with an ETag. On any other host it
+  clones the branch without files, which takes seconds on each lookup.
 - `oku.lock` records the commit. `oku sync` fetches that commit, so every
   machine builds the same source after the branch has newer commits. The host
   must serve a commit by its id, which GitHub, GitLab and Gitea do.

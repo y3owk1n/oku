@@ -742,6 +742,28 @@ if ($LASTEXITCODE -eq 0) {
     throw "oku add gitea:gitea.com/gitea/tea exited with $LASTEXITCODE`n$added"
 }
 
+# A git-tags source on github.com: oku lists the tags through the API and never
+# runs git for it (B381).
+Set-Content (Join-Path $fixtures 'rgtags.toml') @'
+[package]
+name = "rgtags"
+[version]
+from = "git-tags"
+repo = "https://github.com/BurntSushi/ripgrep"
+[[artifact]]
+match = { os = "windows", arch = "amd64" }
+url = "https://github.com/BurntSushi/ripgrep/releases/download/{{version}}/ripgrep-{{version}}-x86_64-pc-windows-msvc.zip"
+strip = 1
+bin = ["rg.exe"]
+'@
+# The version is named, so the check holds when upstream tags a new one, and the
+# tag list still has to hold it.
+Oku add ((Join-Path $fixtures 'rgtags.toml') + '@15.2.0') --accept-unknown-age
+$tagged = & "$bin\rg.exe" --version
+Check 'a git-tags version installs from the tags the forge API lists' {
+    $tagged -match '^ripgrep 15\.2\.0'
+}
+
 Oku add https://github.com/sharkdp/hyperfine/releases/download/v1.19.0/hyperfine-v1.19.0-x86_64-pc-windows-msvc.zip
 $hyperfine = & "$bin\hyperfine.exe" --version
 Check 'a URL of the download installs, with its version from the file name' {
