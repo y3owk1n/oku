@@ -1275,9 +1275,10 @@ what changed: https://github.com/y3owk1n/oku/releases/tag/v0.5.0
 - A release made less than the [minimum release age](security.md#minimum-release-age)
   ago waits, as a package's version does. The age is `[lock]`
   `min_release_age` in the global `oku.toml`, 1 day unless it says otherwise.
-  oku says which release waits and until when, and takes the newest release
-  that is old enough and newer than the one that runs. `--to` and `--nightly`
-  skip the age.
+- oku says which release waits and until when. It takes the newest release
+  that is old enough and newer than the one that runs, and otherwise prints
+  `oku <version> is the newest release that is old enough`. `--to` and
+  `--nightly` skip the age.
 - `--check` prints `oku <newest> is available, this is <running>`.
 - At the newest release it prints `oku <version> is the newest release`.
 - On a nightly build, `oku self update` without a flag refuses, because the

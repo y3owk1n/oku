@@ -54,8 +54,8 @@ what waits and when oku takes it.
   the command stops and names the version that passes first, and when.
 - A moving tag such as `nightly` and a `git-branch` are new by design and skip
   the check.
-- `oku self update` follows the global list's age too, so a new oku release
-  waits a day. `--to <tag>` and `--nightly` skip it. The install scripts, which
+- `oku self update` follows the global list's age too, so by default a new
+  oku release waits a day. `--to <tag>` and `--nightly` skip it. The install scripts, which
   run before oku exists on the machine, take the newest release.
 
 oku reads when each version came out from its source: the publish time of a

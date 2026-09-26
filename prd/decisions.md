@@ -1619,6 +1619,6 @@ from `[lock]` in the global `oku.toml`, 1 day by default. `--to` and `--nightly`
 skip it, and it never takes a release older than the one that runs. Why: the
 release workflow signs in CI, so a stolen repo or workflow could publish a
 release that passes the signature check. The age gives others time to notice,
-as D97 does for packages. The global list is the one setup that the machine's
-own oku belongs to, so no new setting is needed. The install scripts run before
+as D97 does for packages. The machine's own oku belongs to the global setup, so
+the global list's age applies and no new setting is needed. The install scripts run before
 oku exists and take the newest release.
