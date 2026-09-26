@@ -3,6 +3,7 @@ package cli
 import (
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
@@ -11,6 +12,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/y3owk1n/oku/internal/profile"
+	"github.com/y3owk1n/oku/internal/shim"
 	"github.com/y3owk1n/oku/internal/ui"
 )
 
@@ -96,8 +98,16 @@ func which(prof *profile.Profile, pkgs []profile.Package, program string) (which
 		link += ".exe"
 	}
 
-	target, err := filepath.EvalSymlinks(link)
+	target, err := runs(link)
 	if err != nil {
+		if _, statErr := os.Lstat(link); statErr == nil {
+			return whichAnswer{}, fmt.Errorf(
+				"%s is in the profile, but oku cannot read the file it runs: %w",
+				program,
+				err,
+			)
+		}
+
 		if found, err := exec.LookPath(program); err == nil {
 			return whichAnswer{}, fmt.Errorf(
 				"%s is not from oku, PATH runs %s\n`oku search %s` looks for a package that provides it",
@@ -136,13 +146,28 @@ func which(prof *profile.Profile, pkgs []profile.Package, program string) (which
 		)
 	}
 
-	// A shim on Windows is a copy, so the comparison is by path.
 	if found, err := exec.LookPath(program); err == nil {
-		resolved, _ := filepath.EvalSymlinks(found)
-		if resolved != target && found != link {
+		// PATH may spell the profile's own entry in another case on Windows.
+		resolved, err := runs(found)
+		if err != nil {
+			resolved = found
+		}
+
+		if resolved != target && !strings.EqualFold(found, link) {
 			answer.ShadowedBy = found
 		}
 	}
 
 	return answer, nil
+}
+
+// runs names the file that the entry at file starts. A profile entry on Windows
+// is a shim, a copy of oku, and the spec beside it names the file in the store.
+// Every other entry is a link to the store, or the program itself.
+func runs(file string) (string, error) {
+	if spec, err := shim.Read(file); err == nil {
+		return spec.Target, nil
+	}
+
+	return filepath.EvalSymlinks(file)
 }

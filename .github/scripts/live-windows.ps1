@@ -43,6 +43,11 @@ Check 'bin is a junction to the links that generations share' {
 $version = & "$bin\rg.exe" --version
 Check 'the shim passes arguments and stdout through' { $version -match '^ripgrep \d' }
 
+$whichRg = (& $oku which rg) -join "`n"
+Check 'which names the package of a shim and the file it runs' {
+    ($whichRg -match 'ripgrep') -and ($whichRg -match '\\store\\ripgrep-') -and ($whichRg -notmatch 'not from oku')
+}
+
 $found = 'needle in a haystack' | & "$bin\rg.exe" needle
 Check 'the shim passes stdin through' { $found -match 'needle' }
 
