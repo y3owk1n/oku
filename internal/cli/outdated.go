@@ -198,8 +198,8 @@ func (e env) newestOf(
 	// When every version it allows waits for age, or the lock holds a newer one,
 	// update keeps the locked one.
 	newest, waiting, err := e.resolverAged(opts, age).PickWaiting(ctx, source, want)
-	if errors.Is(err, resolve.ErrTooNew) ||
-		err == nil && resolve.Compare(pkg.Version, newest.Version) > 0 {
+	if waiting.Version != "" && (errors.Is(err, resolve.ErrTooNew) ||
+		err == nil && resolve.Compare(pkg.Version, newest.Version) > 0) {
 		newest, err = resolve.Release{Version: pkg.Version}, nil
 	}
 
@@ -207,7 +207,7 @@ func (e env) newestOf(
 		return "", "", resolve.Release{}, err
 	}
 
-	if resolve.Compare(waiting.Version, pkg.Version) <= 0 {
+	if waiting.Version != "" && resolve.Compare(waiting.Version, pkg.Version) <= 0 {
 		waiting = resolve.Release{}
 	}
 

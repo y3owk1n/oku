@@ -777,19 +777,25 @@ func (e env) pickRelease(
 	}
 
 	keep = req.keepVersion && previous.Version != "" && allowed
+
+	// waiting is a newer release that the minimum release age held back.
+	var waiting resolve.Release
+
 	switch {
 	case m.PerArtifact():
 		release, err = e.artifactVersions(ctx, opts, req, m, keep)
 	case keep:
 	case r.Version == "" && req.constraint != "":
-		release, err = e.resolverAged(opts, req.releaseAge).Pick(ctx, m.Version, req.constraint)
+		release, waiting, err = e.resolverAged(opts, req.releaseAge).
+			PickWaiting(ctx, m.Version, req.constraint)
 	default:
-		release, err = e.resolverAged(opts, req.releaseAge).Pick(ctx, m.Version, r.Version)
+		release, waiting, err = e.resolverAged(opts, req.releaseAge).
+			PickWaiting(ctx, m.Version, r.Version)
 	}
 
 	// The minimum release age never takes a package back from a version the
 	// lock holds, as one taken with --min-release-age 0.
-	if !keep && allowed && previous.Version != "" && !m.PerArtifact() &&
+	if waiting.Version != "" && allowed && previous.Version != "" &&
 		(errors.Is(err, resolve.ErrTooNew) ||
 			err == nil && resolve.Compare(previous.Version, release.Version) > 0) {
 		release, err = resolve.Release{
