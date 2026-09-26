@@ -44,7 +44,7 @@ A normal Windows user may not create symlinks, so oku builds a
   starts the real program in the store, passes the arguments, stdin and stdout
   through, and exits with the program's exit code. Stopping the shim, as an
   editor does with a language server it started, stops the program too. A
-  program that the program started keeps running, as on macOS and Linux.
+  process that the program starts keeps running, as on macOS and Linux.
 - Other files are hard links into the store, or copies across volumes.
 
 A shim also puts the `bin` directories of the package's runtime deps, and the
@@ -58,8 +58,9 @@ old generations keep the old one until `oku gc --keep N` removes them. The old
 copy in `shims\` stays.
 
 Windows refuses to delete a program that runs, and every link to it. When
-`oku gc` or `oku self uninstall` meets one, it moves the file aside on the same
-volume, finishes, and deletes the file once the program has ended.
+`oku gc` or `oku self uninstall` has to delete such a file, it moves the file
+aside on the same volume, finishes, and deletes the file once the program has
+ended.
 
 Switching generations takes two renames on Windows, one on macOS and Linux.
 When oku is killed between them, the next command puts the previous generation

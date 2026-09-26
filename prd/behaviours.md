@@ -947,8 +947,8 @@ order step in `prd/product.md`.
   while a program that oku installed runs, through its shim or from the store.
   What Windows keeps in use moves to `<data>/oku/trash` or the store root's
   `trash`, and a later `gc` deletes it once nothing uses it.
-- B367 [9] Stopping a Windows shim stops the program it started. A program
-  that this program started keeps running.
+- B367 [9] Stopping a Windows shim stops the program it started. A process
+  that the program starts keeps running.
 
 ## Cache and signing
 

@@ -582,8 +582,8 @@ Check 'gc deletes what it moved aside once the program has ended' {
     } | Where-Object { -not $_ } | Measure-Object | ForEach-Object { $_.Count -eq 0 }
 }
 
-# A shim ties the program it starts to itself, so stopping the shim stops the
-# program, as stopping the program does on macOS and Linux.
+# When a shim ends, Windows ends the program it started, as stopping a program
+# does on macOS and Linux.
 Set-Content (Join-Path $fixtures 'linger.toml') @"
 [package]
 name = "linger"
@@ -602,8 +602,8 @@ Stop-Process $lingerShim
 Start-Sleep -Seconds 2
 Check 'stopping the shim stops the program it started' { -not (Get-Process linger -ErrorAction SilentlyContinue) }
 
-# A program that the program started, as an editor that a launcher opens, keeps
-# running. launch is cmd, which starts ping and waits.
+# A process that the program starts keeps running, as an editor that a launcher
+# opens does. launch is a copy of cmd, which starts ping and waits.
 $launchShim = Start-Process "$bin\launch.exe" -ArgumentList '/c', 'ping -n 120 127.0.0.1' -PassThru -WindowStyle Hidden
 Start-Sleep -Seconds 2
 Stop-Process $launchShim
