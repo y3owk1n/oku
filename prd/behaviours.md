@@ -358,6 +358,14 @@ order step in `prd/product.md`.
 - B177 [3] With `version.from = "git-branch"`, `add` builds the newest commit of
   `version.branch` as version `<date>-<commit>`. `sync` builds the locked commit
   after the branch has moved, and `update` takes the newest commit.
+- B381 [3] With `version.from = "git-tags"` on github.com, gitlab.com or
+  codeberg.org, oku lists the tags through the host's API, and picks the same
+  version as `git ls-remote` gives.
+- B382 [3] With `version.from = "git-branch"` on those hosts, oku reads the
+  newest commit of the branch through the host's API, and names the same version
+  as a clone of the branch gives.
+- B383 [3] On any other host, and when the API gives an error, oku asks git
+  instead and picks the same version.
 - B280 [3] With `version.from = "redirect"`, `add` follows the redirects of
   `repo` past hops without a version, and installs the version that `regex`
   finds in the first URL it matches. `sync` installs the locked version

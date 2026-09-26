@@ -529,6 +529,9 @@ func (e env) stores() []*store.Store {
 func (e env) fetcher(opts Options) *ref.Fetcher {
 	f := ref.NewFetcher(e.cache)
 	f.Hosts.GitHubAPI, f.Hosts.GitHubRaw = opts.GitHubAPI, opts.GitHubRaw
+	// The resolver takes these hosts. It reads a git URL on github.com through
+	// the API, so a test's github.com belongs here too.
+	f.Hosts.GitHubWeb = opts.GitHubWeb
 
 	return f
 }

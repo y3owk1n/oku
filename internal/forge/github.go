@@ -163,6 +163,35 @@ func (g *github) Releases(ctx context.Context, repo string) ([]Release, error) {
 	})
 }
 
+// Tags reads the newest maxTags tags. GitHub lists them newest first.
+func (g *github) Tags(ctx context.Context, repo string) ([]string, error) {
+	return readTags(ctx, releasePage, func(ctx context.Context, page int) ([]string, int, error) {
+		at := fmt.Sprintf("%s/repos/%s/tags?per_page=%d", g.api, repo, releasePage)
+		if page > 1 {
+			at += fmt.Sprintf("&page=%d", page)
+		}
+
+		body, link, err := g.page(ctx, at, "application/vnd.github+json")
+		if err != nil {
+			return nil, 0, err
+		}
+
+		var found []struct {
+			Name string `json:"name"`
+		}
+		if err := json.Unmarshal(body, &found); err != nil {
+			return nil, 0, err
+		}
+
+		tags := make([]string, len(found))
+		for i, tag := range found {
+			tags[i] = tag.Name
+		}
+
+		return tags, lastPage(link), nil
+	})
+}
+
 func (g *github) TagCommit(ctx context.Context, repo, tag string) (Commit, error) {
 	var found struct {
 		SHA    string `json:"sha"`

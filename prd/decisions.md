@@ -1678,3 +1678,22 @@ that was 7.7 GiB of 26.2 GiB, and each update of a large app wrote its whole
 bundle again. The store already clones identical files (D95), so oku reuses that
 call here. Placing Ghostty measured 3.6 s and 157 MiB of disk as a copy, and
 1.4 s and 63 MiB as a clone, with identical modes, symlinks and code signature.
+
+## D102. A git version source reads a host oku knows through its API
+
+With `version.from = "git-tags"` or `"git-branch"` on github.com, gitlab.com or
+codeberg.org, oku lists the tags, or reads the newest commit of the branch,
+through that host's API. On any other host, and when the API gives an error or
+no tag at all, oku runs `git ls-remote` or clones the branch as before. The API
+answers carry an ETag, so a later lookup revalidates, and GitHub counts a 304
+against no rate limit.
+
+Why: `git ls-remote` measured 3.0 to 3.8 s against github.com and a bare clone
+of a branch 3 to 6 s, each on every lookup, with no cache of any kind. The same
+answers over the API took 0.34 to 0.79 s cold and a 304 after that. On one real
+list of 74 packages `oku outdated` waited for those lookups last. The
+answers are the same: for four repos the API listed the identical tag set that
+`git ls-remote` did, 378, 86, 73 and 68 tags, and both ways named the same
+commit for a branch. git stays for every other host, for a private repository
+that only a git login can read, and for a host that rate limits, so no lookup
+depends on an API being reachable.

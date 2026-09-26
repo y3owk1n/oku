@@ -164,6 +164,36 @@ func (g *gitea) Releases(ctx context.Context, repo string) ([]Release, error) {
 	})
 }
 
+// Tags reads the newest maxTags tags.
+func (g *gitea) Tags(ctx context.Context, repo string) ([]string, error) {
+	return readTags(ctx, giteaPage, func(ctx context.Context, page int) ([]string, int, error) {
+		body, link, err := g.read(ctx, repo, fmt.Sprintf("/tags?limit=%d&page=%d", giteaPage, page))
+		if err != nil {
+			return nil, 0, err
+		}
+
+		var found []struct {
+			Name string `json:"name"`
+		}
+		if err := json.Unmarshal(body, &found); err != nil {
+			return nil, 0, err
+		}
+
+		tags := make([]string, len(found))
+		for i, tag := range found {
+			tags[i] = tag.Name
+		}
+
+		// A server that sends no Link header has more when the page is full.
+		last := lastPage(link)
+		if link == "" && len(found) == giteaPage {
+			last = -1
+		}
+
+		return tags, last, nil
+	})
+}
+
 func (g *gitea) TagCommit(ctx context.Context, repo, tag string) (Commit, error) {
 	var found struct {
 		SHA    string `json:"sha"`

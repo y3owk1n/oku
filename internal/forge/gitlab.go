@@ -192,6 +192,33 @@ func (g *gitlab) Releases(ctx context.Context, repo string) ([]Release, error) {
 	})
 }
 
+// Tags reads the newest maxTags tags. GitLab orders them by the commit date,
+// newest first.
+func (g *gitlab) Tags(ctx context.Context, repo string) ([]string, error) {
+	return readTags(ctx, gitlabPage, func(ctx context.Context, page int) ([]string, int, error) {
+		at := fmt.Sprintf("%s/repository/tags?per_page=%d", g.project(repo), gitlabPage)
+		if page > 1 {
+			at += fmt.Sprintf("&page=%d", page)
+		}
+
+		var found []struct {
+			Name string `json:"name"`
+		}
+
+		link, err := g.json(ctx, at, &found)
+		if err != nil {
+			return nil, 0, err
+		}
+
+		tags := make([]string, len(found))
+		for i, tag := range found {
+			tags[i] = tag.Name
+		}
+
+		return tags, lastPage(link), nil
+	})
+}
+
 func (g *gitlab) TagCommit(ctx context.Context, repo, tag string) (Commit, error) {
 	var found struct {
 		ID   string    `json:"id"`
