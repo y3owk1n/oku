@@ -1734,3 +1734,21 @@ run to 71 requests, 3 of them later pages and all three for a tag list, and
 about 240 MiB to about 190 MiB. The reports were identical for every package.
 A repo whose newest 100 releases are all nightlies still resolves, because the
 first pick fails and the lookup then reads everything (B200).
+
+## D105. The download cache keeps a download for two days
+
+`oku gc --cache` deletes a download that no install has read for two days, even
+when a kept store path was made from it, and `--older-than` sets that age.
+Reading a download sets the time on its file, so one that installs still use
+stays. A download of less than a day is never touched, since a run that has not
+written its lock yet may need it.
+
+Why: a store path already holds the unpacked content of its download, so the
+cache was a second copy of every installed package that nothing ever deleted.
+On one machine it held 7.5 GiB, of which 4.5 GiB belonged to store paths in use,
+and a nightly `oku update` added about 1.1 GiB a day. Every download has its
+digest pinned in oku.lock, so oku can fetch one again, and the case worth saving
+the network for is redoing an install from the last day or two. An age of a week
+was measured first and freed nothing on that machine, because its whole cache
+was younger than a week. Two days freed 5.7 GiB and leaves the cache at about
+two days of installs.
