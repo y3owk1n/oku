@@ -31,6 +31,7 @@ import (
 	"github.com/y3owk1n/oku/internal/platform"
 	"github.com/y3owk1n/oku/internal/pypi"
 	"github.com/y3owk1n/oku/internal/sandbox"
+	"github.com/y3owk1n/oku/internal/shim"
 	"github.com/y3owk1n/oku/internal/status"
 	"github.com/y3owk1n/oku/internal/tempdir"
 )
@@ -1209,15 +1210,34 @@ func linkEnv(deps []Dep, systemPC string) []string {
 	}
 }
 
-// dllDirs returns the downloads of the deps on Windows, and nothing elsewhere.
-// A dep's bin holds links to its programs, and Windows looks for a program's
-// DLLs beside the file it started and then on PATH.
+// dllDirs returns the directories that hold the DLLs of the deps on Windows,
+// and nothing elsewhere. Windows looks for a program's DLLs beside the file it
+// started and then on PATH. A build step runs the link in a dep's bin, which is
+// a copy of the program when the user may not create symlinks. So PATH takes the
+// download and the directory of each real file in it.
 func dllDirs(deps []Dep) []string {
 	if runtime.GOOS != "windows" {
 		return nil
 	}
 
-	return depDirs(deps, "pkg")
+	dirs := depDirs(deps, "pkg")
+
+	for _, dep := range deps {
+		specs, _ := filepath.Glob(filepath.Join(dep.Prefix, "bin", "*"+shim.Ext))
+
+		for _, file := range specs {
+			spec, err := shim.Read(file)
+			if err != nil {
+				continue
+			}
+
+			if dir := filepath.Dir(spec.Target); !slices.Contains(dirs, dir) {
+				dirs = append(dirs, dir)
+			}
+		}
+	}
+
+	return dirs
 }
 
 func depDirs(deps []Dep, sub string) []string {
