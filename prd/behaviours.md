@@ -464,6 +464,13 @@ order step in `prd/product.md`.
 - B364 [3] `oku gc` shares the identical files of store paths from before oku
   shared files, and says how many and what that saved. `--dry-run` says how
   many it would share and changes nothing.
+- B369 [3] A generation whose packages are the same as those of the generation
+  it replaces links to the same links into the store. Its `oku.lock`, when
+  unchanged, and each file whose content and mode did not change are hard
+  links to the copies in that generation. Rollback to either one restores its
+  own files.
+- B370 [3] `oku gc --keep N` deletes the links of each set of packages that no
+  kept generation uses.
 
 ## Publishing
 

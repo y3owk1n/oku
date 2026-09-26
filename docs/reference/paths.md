@@ -44,11 +44,14 @@ export XDG_CACHE_HOME=/tmp/oku-try/cache
     global/
       gen-1/                   one directory per profile change
       gen-2/
-        bin/rg -> <store path>/bin/rg
-        share/...
+        bin -> ../trees/<hash>/bin
+        share -> ../trees/<hash>/share
         oku-gen.toml           when it was written, its packages, and the store paths of their deps
         oku.lock               a copy of oku.lock as it was then
         files/                 the content of the text entries of [files]
+      trees/<hash>/            the links of one set of packages, which generations share
+        bin/rg -> <store path>/bin/rg
+        share/...
       current -> gen-2         the active generation
     project-2d27013d8c67/      one per project, same layout
   exposed.toml                 the ledger: every file and setting oku wrote outside these directories
@@ -109,9 +112,15 @@ after a hash of the project's path. Moving a project directory gives it a new
 profile on the next `oku sync`.
 
 Put `<data>/oku/profiles/global/current/bin` on `PATH`, which the shell hook
-does. A change writes a new `gen-<n>` directory of links and then moves
-`current` to it in one rename. Old generations stay until `oku gc --keep N`
-deletes them.
+does. A change writes a new `gen-<n>` directory and then moves `current` to it
+in one rename. Old generations stay until `oku gc --keep N` deletes them.
+
+The links to the store live once per set of packages, in `trees/`, and a
+generation's `bin` and `share` link there. A change that adds, removes or
+updates no package, such as a new dotfile or setting, links to the same tree.
+Its `oku.lock` and each file whose content did not change are hard links to
+the copy in the generation it replaced. So such a generation takes a few KiB.
+`oku gc --keep N` deletes the trees that no generation uses.
 
 On Windows a generation holds shims and hard links in place of symlinks, and
 `current` is a directory junction, see [Windows](../guides/windows.md).

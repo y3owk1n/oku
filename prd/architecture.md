@@ -29,7 +29,7 @@ XDG on unix, `%APPDATA%` and `%LOCALAPPDATA%` on Windows. `<root>` is
 <root>/store/<name>-<version>-<hash>/
 <root>/store/.links/<sha256>[x]      one copy of each file store paths share (D95)
 <root>/store/.links/paths/<path>     what one store path shares, with each file's mode
-<data>/oku/profiles/global/gen-<n>/  current -> gen-<n>
+<data>/oku/profiles/global/gen-<n>/  current -> gen-<n>, bin and share -> trees/<hash>/ (D96)
 <data>/oku/profiles/project-<hash>/  same shape, keyed by the project's path
 <data>/oku/trust/allow.toml, approvals.toml
 <data>/oku/exposed.toml              ledger of every file written elsewhere (D17)
