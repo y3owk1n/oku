@@ -17,6 +17,7 @@ import (
 	"github.com/y3owk1n/oku/internal/expose"
 	"github.com/y3owk1n/oku/internal/service"
 	"github.com/y3owk1n/oku/internal/source"
+	"github.com/y3owk1n/oku/internal/trash"
 )
 
 // listFiles are what --keep-list leaves in the config directory.
@@ -148,9 +149,11 @@ func runUninstall(
 	// Windows cannot delete the lock file while it is open.
 	release()
 
-	// The cache goes first because on Windows it is inside the data directory.
+	// The cache goes first because on Windows it is inside the data directory. A
+	// program that oku installed may still run, and Windows keeps its files, so
+	// they move aside and go once it ends.
 	for _, dir := range []string{e.cache, e.data} {
-		if err := os.RemoveAll(dir); err != nil {
+		if err := trash.Remove(dir, uninstalled(e.data)); err != nil {
 			return fmt.Errorf("remove %s: %w", dir, err)
 		}
 	}
@@ -169,7 +172,26 @@ func runUninstall(
 		return fmt.Errorf("remove %s: %w", executable, err)
 	}
 
+	var running []string
+
+	for _, dir := range []string{uninstalled(e.data), uninstalled(e.root)} {
+		if _, err := os.Stat(dir); err == nil && !slices.Contains(running, dir) {
+			if err := deleteLater(dir); err != nil {
+				return fmt.Errorf("remove %s: %w", dir, err)
+			}
+
+			running = append(running, dir)
+		}
+	}
+
 	fmt.Fprintln(out, "oku is uninstalled")
+
+	if len(running) > 0 {
+		fmt.Fprintf(
+			out, "a program that oku installed still runs, and its files go once it ends:\n  %s\n",
+			strings.Join(running, "\n  "),
+		)
+	}
 
 	if len(notOkus) > 0 {
 		fmt.Fprintf(
@@ -245,6 +267,12 @@ func removeCommand(target string) string {
 	return fmt.Sprintf("sudo rm -rf %q", target)
 }
 
+// uninstalled is where uninstall moves the files of dir that a program that
+// runs keeps, on the same volume as dir.
+func uninstalled(dir string) string {
+	return filepath.Join(filepath.Dir(dir), "oku-uninstalled")
+}
+
 // removeSharedRoot empties the shared store root, which the user owns, and then
 // deletes the directory itself, which needs administrator rights. Without
 // elevated it returns the directory it left behind.
@@ -259,7 +287,7 @@ func removeSharedRoot(ctx context.Context, opts Options, e env, elevated bool) (
 	}
 
 	for _, entry := range entries {
-		if err := os.RemoveAll(filepath.Join(e.root, entry.Name())); err != nil {
+		if err := trash.Remove(filepath.Join(e.root, entry.Name()), uninstalled(e.root)); err != nil {
 			return "", fmt.Errorf("remove %s: %w", e.root, err)
 		}
 	}

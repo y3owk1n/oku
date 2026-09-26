@@ -110,8 +110,16 @@ func Run(executable string, args []string) (code int, handled bool) {
 	// program to exit.
 	signal.Ignore(os.Interrupt)
 
+	if err := cmd.Start(); err != nil {
+		fmt.Fprintf(os.Stderr, "oku shim: run %s: %v\n", spec.Target, err)
+
+		return 1, true
+	}
+
+	tie(cmd.Process)
+
 	var exit *exec.ExitError
-	if err := cmd.Run(); errors.As(err, &exit) {
+	if err := cmd.Wait(); errors.As(err, &exit) {
 		return exit.ExitCode(), true
 	} else if err != nil {
 		fmt.Fprintf(os.Stderr, "oku shim: run %s: %v\n", spec.Target, err)

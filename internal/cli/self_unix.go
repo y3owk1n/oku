@@ -9,3 +9,9 @@ import "os"
 func removeBinary(path string) error {
 	return os.Remove(path)
 }
+
+// deleteLater deletes dir. Unix deletes the files of a program that runs, so
+// uninstall moves nothing aside.
+func deleteLater(dir string) error {
+	return os.RemoveAll(dir)
+}
