@@ -20,10 +20,11 @@ type gitea struct {
 }
 
 type giteaRelease struct {
-	Tag        string `json:"tag_name"`
-	Commit     string `json:"target_commitish"`
-	Draft      bool   `json:"draft"`
-	Prerelease bool   `json:"prerelease"`
+	Tag        string    `json:"tag_name"`
+	Commit     string    `json:"target_commitish"`
+	Draft      bool      `json:"draft"`
+	Prerelease bool      `json:"prerelease"`
+	Published  time.Time `json:"published_at"`
 	Assets     []struct {
 		Name string `json:"name"`
 		URL  string `json:"browser_download_url"`
@@ -32,7 +33,10 @@ type giteaRelease struct {
 }
 
 func (r giteaRelease) release() Release {
-	out := Release{Tag: r.Tag, Commit: r.Commit, Draft: r.Draft, Prerelease: r.Prerelease}
+	out := Release{
+		Tag: r.Tag, Commit: r.Commit, Draft: r.Draft, Prerelease: r.Prerelease,
+		Published: r.Published,
+	}
 
 	for _, asset := range r.Assets {
 		out.Assets = append(out.Assets, Asset{Name: asset.Name, URL: asset.URL, Size: asset.Size})

@@ -12,6 +12,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/y3owk1n/oku/internal/infer"
 	"github.com/y3owk1n/oku/internal/lock"
@@ -66,6 +67,9 @@ type installed struct {
 	// linkNotes warns for each store package that a build loads without naming
 	// it in runtime.deps, for the deps too.
 	linkNotes []string
+	// ageUnknown reports a version that oku picked while its source gives no
+	// release time, so the minimum release age could not check it.
+	ageUnknown bool
 }
 
 // fitMode says what install does with a platform that the manifest has no
@@ -121,6 +125,9 @@ type request struct {
 	// the missing ones too. Without it, add and update pin the ones they can.
 	platforms       []platform.Platform
 	strictPlatforms bool
+	// releaseAge passes over versions released less than this long ago when oku
+	// picks one. Deps inherit it. Zero takes the newest.
+	releaseAge time.Duration
 	// rebuild builds the package again when the store holds its build. "sync
 	// --rebuild" sets it. Deps do not inherit it.
 	rebuild bool
@@ -405,12 +412,17 @@ func (e env) installFrom(
 	req request,
 	fetched ref.Fetched,
 	inferred string,
-) (installed, error) {
+) (got installed, err error) {
 	r, previous := req.ref, req.previous
 
 	m, release, keep, err := e.pickRelease(ctx, opts, req, fetched)
 	if err != nil {
 		return installed{}, err
+	}
+
+	if !keep && req.releaseAge > 0 && release.Published.IsZero() && ageKnowable(m.Version) &&
+		release.Version != previous.Version {
+		defer func() { got.ageUnknown = err == nil }()
 	}
 	ctx = status.Scope(ctx, m.Package.Name+" "+m.Version.Value)
 
@@ -770,9 +782,19 @@ func (e env) pickRelease(
 		release, err = e.artifactVersions(ctx, opts, req, m, keep)
 	case keep:
 	case r.Version == "" && req.constraint != "":
-		release, err = e.resolver(opts).Pick(ctx, m.Version, req.constraint)
+		release, err = e.resolverAged(opts, req.releaseAge).Pick(ctx, m.Version, req.constraint)
 	default:
-		release, err = e.resolver(opts).Pick(ctx, m.Version, r.Version)
+		release, err = e.resolverAged(opts, req.releaseAge).Pick(ctx, m.Version, r.Version)
+	}
+
+	// The minimum release age never takes a package back from a version the
+	// lock holds, as one taken with --min-release-age 0.
+	if !keep && allowed && previous.Version != "" && !m.PerArtifact() &&
+		(errors.Is(err, resolve.ErrTooNew) ||
+			err == nil && resolve.Compare(previous.Version, release.Version) > 0) {
+		release, err = resolve.Release{
+			Version: previous.Version, Tag: previous.Tag, Commit: previous.TagCommit,
+		}, nil
 	}
 
 	if err != nil {
@@ -945,7 +967,7 @@ func (e env) artifactVersions(
 		if release.Version == "" {
 			var err error
 
-			release, err = e.resolver(opts).Pick(ctx, source, "")
+			release, err = e.resolverAged(opts, req.releaseAge).Pick(ctx, source, "")
 
 			// lockOthers skips a platform it cannot pin, unless the platforms are
 			// strict.
@@ -1204,7 +1226,7 @@ func (e env) manifestData(
 	}
 
 	if write := e.inferrerOf(req.ref.Kind); write != nil {
-		text, err := e.inferAt(ctx, opts, cmp.Or(req.ref.Version, req.constraint), func(version string) (string, error) {
+		text, err := e.inferAt(ctx, opts, cmp.Or(req.ref.Version, req.constraint), req.releaseAge, func(version string) (string, error) {
 			at := req
 			at.ref.Version = version
 
@@ -1253,7 +1275,7 @@ func (e env) manifestData(
 	}
 
 	for i, target := range targets {
-		_, err = e.inferAt(ctx, opts, cmp.Or(req.ref.Version, req.constraint), func(version string) (string, error) {
+		_, err = e.inferAt(ctx, opts, cmp.Or(req.ref.Version, req.constraint), req.releaseAge, func(version string) (string, error) {
 			var err error
 
 			inferred, err = e.inferrer(opts).Manifest(
@@ -1301,9 +1323,11 @@ func (e env) inferAt(
 	ctx context.Context,
 	opts Options,
 	want string,
+	age time.Duration,
 	write func(version string) (string, error),
 ) (string, error) {
-	if want == "" {
+	// The newest release may be too new, so the pick from the versions decides.
+	if want == "" && age == 0 {
 		return write("")
 	}
 
@@ -1327,7 +1351,7 @@ func (e env) inferAt(
 		return "", err
 	}
 
-	release, err := e.resolver(opts).Pick(ctx, m.Version, want)
+	release, err := e.resolverAged(opts, age).Pick(ctx, m.Version, want)
 	if err != nil || release.Version == first {
 		return text, err
 	}
@@ -1756,6 +1780,22 @@ func reportNodeRuntime(w io.Writer, got installed) {
 	}
 }
 
+// ageKnowable reports whether the minimum release age applies to a release of
+// v. A fixed version is not picked, and a moving tag and a branch are new by
+// design.
+func ageKnowable(v manifest.Version) bool {
+	return v.From != "" && v.Tag == "" && v.From != manifest.FromGitBranch
+}
+
+// reportAge warns that oku could not check the release time of a version it
+// picked.
+func reportAge(w io.Writer, got installed) {
+	if got.ageUnknown {
+		warn(w, "%s %s: its source gives no release time, so the minimum release age did not check it",
+			got.lock.Name, got.lock.Version)
+	}
+}
+
 // reportFirstUse tells the user that oku trusted a download unverified.
 func (e env) reportFirstUse(w io.Writer, got installed) {
 	if len(got.firstUseOthers) > 0 {
@@ -1927,6 +1967,7 @@ func (e env) installDeps(
 				wantManifest:    wantManifest,
 				acceptDigest:    parent.acceptDigest,
 				acceptKey:       parent.acceptKey,
+				releaseAge:      parent.releaseAge,
 				keepVersion:     keep,
 				platforms:       platforms,
 				strictPlatforms: parent.strictPlatforms,

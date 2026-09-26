@@ -2,6 +2,7 @@ package resolve
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -36,6 +37,30 @@ func (r *Resolver) goVersions(ctx context.Context, module string) ([]Release, er
 			return Compare(b.Version, a.Version)
 		}
 	})
+
+	// The proxy gives a time per version, one request each, so oku asks from the
+	// newest down to the first one old enough, which is the one Pick takes.
+	for i := range releases {
+		if r.MinAge == 0 {
+			break
+		}
+
+		at, err := goproxy.Published(ctx, r.Hosts.HTTP, r.GoProxy, module, releases[i].Version)
+
+		// A proxy that keeps no times leaves them unknown.
+		if errors.Is(err, goproxy.ErrNotFound) {
+			break
+		}
+
+		if err != nil {
+			return nil, fmt.Errorf("read when %s %s came out: %w", module, releases[i].Version, err)
+		}
+
+		releases[i].Published = at
+		if at.Before(r.cutoff()) {
+			break
+		}
+	}
 
 	return releases, nil
 }

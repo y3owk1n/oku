@@ -65,6 +65,7 @@ Installs the package that a [ref](refs.md) points at, and writes it to
 | `--bin <name>` | For a repo with no manifest, or a URL of the download itself, the file name of a program inside it. Give it once per program. oku records `--asset` and `--bin` in `oku.toml` and `oku.lock`, and `oku update` infers the next version with them. |
 | `--yes`, `-y` | Approves the manifest's build commands, or the command that generates an artifact's completions, without asking. See [approvals](security.md#approve-build-commands). |
 | `--accept-key` | Accepts a manifest whose `signing_key` differs from the one in `oku.lock`. See [signing keys](security.md#signing-keys-of-a-manifest). |
+| `--min-release-age AGE` | Takes only a version that came out at least AGE ago, such as `3d`, in place of the list's. `0` takes the newest. See [Minimum release age](security.md#minimum-release-age). |
 | `--verbose`, `-v` | Shows the output of build commands as they run, and prints a manifest that oku inferred. |
 | `--when <key=value,...>` | Limits the package to matching platforms and writes `when` to `oku.toml`, such as `--when os=linux,libc=glibc`. Give it once per table of an array. When it leaves out this machine, `add` pins the package for the `[lock]` platforms it matches and installs nothing. |
 | `--plan` | Prints what oku found for the ref and what `add` would do, and changes nothing. See [A plan](#a-plan). |
@@ -205,6 +206,7 @@ With no names it updates every package of the list.
 | `--system` | Also applies system-scope apps, fonts and services, which needs administrator rights. |
 | `--yes`, `-y` | Approves build commands without asking. |
 | `--accept-key` | Accepts a changed `signing_key`. |
+| `--min-release-age AGE` | As in `oku add`. `0` takes a version that waits now. |
 | `--verbose`, `-v` | Shows build output, and a manifest that oku inferred. |
 
 It reads the newest commit of forge and `git+` refs, moves each package to the
@@ -252,11 +254,14 @@ ripgrep  14.1.1  14.1.1  15.2.0  github:BurntSushi/ripgrep
 | Column | Meaning |
 |---|---|
 | `locked` | The version `oku.lock` pins. |
-| `newest` | The newest version that the package's `version` in `oku.toml` allows. `oku update` takes it. |
+| `newest` | The newest version that the package's `version` in `oku.toml` allows and that is older than the [minimum release age](security.md#minimum-release-age). `oku update` takes it. |
 | `latest` | The newest release. It differs from `newest` when `version` leaves it out, as `^2` leaves out 3.0.0. |
+| `waiting` | A newer version that `version` allows and that came out less than the minimum release age ago, with the time `oku update` takes it from. The column shows only when a version waits. |
 | `ref` | The ref from the list. |
 
-- A package shows when either `newest` or `latest` is newer than the lock.
+- A package shows when `newest` or `latest` is newer than the lock, or when a
+  version waits. `oku update <name> --min-release-age 0` takes a waiting
+  version now.
 - oku reads an inferred manifest from `oku.lock`, and any other manifest from
   its ref.
 - When every package is at its newest version, oku says so.
@@ -379,6 +384,7 @@ profile.
 |---|---|
 | `--yes`, `-y` | As in `oku add`. |
 | `--accept-key` | As in `oku add`. |
+| `--min-release-age AGE` | As in `oku add`. |
 | `--verbose`, `-v` | As in `oku add`. |
 
 ```
@@ -419,6 +425,7 @@ tables.
 | `--system` | Also applies system-scope apps, fonts and services, which needs administrator rights. |
 | `--yes`, `-y` | Approves build commands without asking. |
 | `--accept-key` | Accepts a changed `signing_key`. |
+| `--min-release-age AGE` | As in `oku add`, for the packages that sync picks a version for. |
 | `--verbose`, `-v` | Shows build output, and a manifest that oku inferred. |
 
 What it does:
@@ -1357,7 +1364,7 @@ that prints no data, `--json` changes nothing.
 | `oku why <name>` | `name`, `version`, `in_list` (the listed ref, or empty for a package that is only a dep), and `needed_by`, a list of `name`, `version`, `dep_versions`. |
 | `oku which <program>` | `program`, `package`, `version`, `path`, `shadowed_by`. |
 | `oku generations` | A list of `number`, `from`, `current`, `created`, `packages` (`name`, `version`), `files` (`target`, `link`) and `settings` (`domain`, `key`, `value`). |
-| `oku outdated` | A list of `name`, `version`, `newest`, `latest`, `ref`, for each package with a newer version. |
+| `oku outdated` | A list of `name`, `version`, `newest`, `latest`, `ref`, for each package with a newer version, and `waiting` and `waits_until` for one whose newer version waits for the minimum release age. |
 | `oku search <term>` | A list of `ref`, `description`. |
 | `oku source list` | A list of `alias`, `ref`. |
 | `oku cache list` | A list of locations. |

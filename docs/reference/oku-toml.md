@@ -89,6 +89,7 @@ or a table:
 | `service` | boolean | `true` runs the package's services now and at every login. `oku add --service` writes it. See [Services](../guides/services.md). |
 | `asset` | string | For a repo with no manifest, the glob that picks its release asset. `oku add --asset` writes it. See [Fix a wrong pick](../guides/add-packages.md#fix-a-wrong-pick-with---asset-and---bin). |
 | `bin` | array of strings | For a repo with no manifest, the programs inside the asset. `oku add --bin` writes it. |
+| `min_release_age` | string | Replaces [`[lock]` `min_release_age`](#lock) for this package, such as `"0"` for a package you want the moment it ships. |
 | `system` | boolean | `true` puts the package's apps, fonts and services in [system scope](../how-oku-works.md#system-scope). A plain `oku sync` lists those files and skips them, and `oku sync --system` applies them. `oku add --system` writes it. See [System-wide](../guides/system-wide.md). |
 
 ```toml
@@ -172,16 +173,18 @@ Rules:
 
 ### [lock]
 
-Names the platforms that `oku.lock` pins every package for, besides the
-machine you run on.
+Says what `oku.lock` pins: the platforms besides the machine you run on, and
+how old a version has to be.
 
 | Key | Type | Meaning |
 |---|---|---|
 | `platforms` | array of strings | Platform names: `darwin-amd64`, `darwin-arm64`, `linux-amd64-glibc`, `linux-amd64-musl`, `linux-arm64-glibc`, `linux-arm64-musl`, `windows-amd64`, `windows-arm64`. |
+| `min_release_age` | string | How long ago a version must have come out before `add`, `update` and `sync` take it, as a whole number of hours, days or weeks: `"12h"`, `"3d"`, `"2w"`. `"0"` takes the newest. The default is `"1d"`. See [Minimum release age](security.md#minimum-release-age). |
 
 ```toml
 [lock]
 platforms = ["darwin-arm64", "linux-amd64-glibc", "linux-arm64-glibc"]
+min_release_age = "3d"
 ```
 
 Any other key is an error. Only the `[lock]` of your own `oku.toml` counts,

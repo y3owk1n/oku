@@ -217,6 +217,11 @@ func reconcile(
 		platforms, strict := e.lockPlatforms(all.own, entry.When)
 		fresh := update && (len(names) == 0 || slices.Contains(names, name))
 
+		age, err := releaseAge(cmd, all.own, entry)
+		if err != nil {
+			return fmt.Errorf("%s: %w", name, err)
+		}
+
 		// oku does not install a package for another platform. It keeps the lock
 		// entry, or pins the package again when the entry has to change.
 		lockOnly := !entry.When.Matches(host)
@@ -271,6 +276,7 @@ func reconcile(
 				wantManifest:    wantManifest,
 				acceptDigest:    fresh,
 				acceptKey:       flags.acceptKey,
+				releaseAge:      age,
 				keepVersion:     !fresh && previous.Ref == r.String(),
 				service:         entry.Service,
 				system:          entry.System,
@@ -426,6 +432,7 @@ func reconcile(
 		}
 
 		e.reportFirstUse(cmd.ErrOrStderr(), got)
+		reportAge(cmd.ErrOrStderr(), got)
 		reportUnsandboxed(cmd.ErrOrStderr(), got)
 		reportLinks(cmd.ErrOrStderr(), got)
 		reportCache(cmd.ErrOrStderr(), got)

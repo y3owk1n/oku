@@ -437,6 +437,17 @@ order step in `prd/product.md`.
 - B23 [3] `oku gc` deletes store paths referenced by no generation of any
   profile, and nothing else. `--keep N` first deletes all but the newest N
   generations and the active one. `--dry-run` deletes nothing.
+- B372 [3] `add`, `update`, `sync` and `oku shell` take the newest version
+  that came out at least `min_release_age` ago, 1 day unless `[lock]`
+  `min_release_age` or the package's own says otherwise, and `"0"` turns it
+  off. `--min-release-age` replaces it for one run. A version named exactly
+  and a locked version skip it, and so do a moving tag and a branch. It never
+  takes a package back from the version the lock holds. When every version
+  that fits is too new and the lock holds none, the command fails and names
+  the version that passes first and when. `oku outdated` shows a newer version
+  that waits and when.
+- B373 [3] A version whose source gives no release time passes the minimum
+  release age, and `add` and `update` say that oku could not check it.
 - B371 [3] `oku gc --older-than 30d` first deletes the generations older than
   30 days, except the newest of them, which was active 30 days ago, and the
   active one. It takes days (`d`) or weeks (`w`) and refuses anything else.

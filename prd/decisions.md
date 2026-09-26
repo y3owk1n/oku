@@ -1585,3 +1585,26 @@ tree per set, and not a link to the previous generation, lets `gc --keep`
 delete any generation without breaking another. The lock and the files use hard
 links, since oku never changes them after it writes a generation, and so
 rollback still restores each generation's own bytes.
+
+## D97. A version must be a day old before oku takes it
+
+`add`, `update`, `sync` and `oku shell` take the newest version that came out
+at least `min_release_age` ago, from `[lock]` in `oku.toml` or the package's
+entry, `"1d"` by default and `"0"` for none. A version named exactly and a
+locked version skip it, and so do a moving tag and a branch. A version whose
+source gives no time passes, and oku says so.
+
+Why: a version published from a stolen account is usually removed within
+hours. The malicious chalk 5.6.1 and debug 4.4.2 of 2025-09-08 were on npm for
+about two hours. pnpm, Yarn and Deno default to a day, npm, Bun, uv, pip,
+Poetry and cargo have the setting, and Dependabot waits three days. The age
+belongs to the list, beside `[lock]` platforms, since it decides what
+`oku.lock` pins on every machine. oku picks only the top version. An `npm:` or
+`pypi:` build already limits its dependencies to before that version's publish
+time, and `go:` and `cargo:` builds take what their lock files name, so the one
+check covers them. Blocking a version with no time would stop every `git-tags`,
+`page` and `sparkle` package, which cask translations use, so such a version
+passes with a note, as npm and Bun let it pass. The Go proxy reports the commit
+time, which the author sets, and oku uses it since nothing better exists. npm's
+full answer holds the times and can be tens of MB, so oku reads it only when
+the package changed within the age.

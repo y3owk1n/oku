@@ -8,6 +8,8 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+
+	"github.com/y3owk1n/oku/internal/list"
 )
 
 // ExitError holds the exit code of the program that "oku shell" or "oku exec"
@@ -71,6 +73,16 @@ func runShell(
 
 	environ := os.Environ()
 
+	own, err := list.Read(e.listPath())
+	if err != nil {
+		return err
+	}
+
+	age, err := releaseAge(cmd, own, list.Entry{})
+	if err != nil {
+		return err
+	}
+
 	for _, arg := range refs {
 		r, err := e.parseRef(arg)
 		if err != nil {
@@ -89,10 +101,11 @@ func runShell(
 		}
 
 		got, err := e.install(cmd.Context(), opts, request{
-			ref:       r,
-			acceptKey: flags.acceptKey,
-			approve:   e.approver(cmd, opts, flags),
-			log:       buildLog(cmd, flags),
+			ref:        r,
+			releaseAge: age,
+			acceptKey:  flags.acceptKey,
+			approve:    e.approver(cmd, opts, flags),
+			log:        buildLog(cmd, flags),
 		})
 		if err != nil {
 			return err

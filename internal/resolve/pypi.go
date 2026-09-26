@@ -21,7 +21,9 @@ func (r *Resolver) pypiVersions(ctx context.Context, name string) ([]Release, er
 	var releases []Release
 
 	for version := range pkg.Versions {
-		releases = append(releases, Release{Version: version, Tag: version})
+		releases = append(releases, Release{
+			Version: version, Tag: version, Published: pkg.Versions[version].Uploaded,
+		})
 	}
 
 	behind := func(r Release) bool {

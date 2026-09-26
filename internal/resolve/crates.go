@@ -26,7 +26,8 @@ func (r *Resolver) crateVersions(ctx context.Context, name string) ([]Release, e
 		yanked[v.Number] = v.Yanked
 		releases = append(releases, Release{
 			Version: v.Number, Tag: v.Number,
-			Digests: map[string]string{crates.URL(r.CrateDownloads, name, v.Number): v.SHA256},
+			Digests:   map[string]string{crates.URL(r.CrateDownloads, name, v.Number): v.SHA256},
+			Published: v.Published,
 		})
 	}
 

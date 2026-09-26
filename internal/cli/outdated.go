@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -15,6 +16,7 @@ import (
 	"github.com/y3owk1n/oku/internal/manifest"
 	"github.com/y3owk1n/oku/internal/platform"
 	"github.com/y3owk1n/oku/internal/ref"
+	"github.com/y3owk1n/oku/internal/resolve"
 	"github.com/y3owk1n/oku/internal/ui"
 )
 
@@ -41,11 +43,15 @@ version in oku.toml. oku downloads no package and changes nothing.`,
 }
 
 // staleness is one package of the lock, the newest version that the list
-// allows, and the latest release.
+// allows and that is old enough, and the latest release.
 type staleness struct {
 	pkg            lock.Package
 	newest, latest string
-	err            error
+	// waiting is the newest version that the list allows and that is newer than
+	// the minimum release age, or the zero Release.
+	waiting resolve.Release
+	age     time.Duration
+	err     error
 }
 
 func (e env) outdated(cmd *cobra.Command, opts Options) error {
@@ -79,12 +85,16 @@ func (e env) outdated(cmd *cobra.Command, opts Options) error {
 		// this machine's platform.
 		pkg.Version = pkg.VersionOn(host)
 
+		age, err := releaseAge(cmd, all.own, all.packages[pkg.Name].entry)
+		if err != nil {
+			return fmt.Errorf("%s: %w", pkg.Name, err)
+		}
+
 		wg.Go(func() {
 			limit <- struct{}{}
 			defer func() { <-limit }()
 
-			newest, latest, err := e.newest(cmd.Context(), opts, pkg, all.packages[pkg.Name].ref.Version)
-			found[i] = staleness{pkg: pkg, newest: newest, latest: latest, err: err}
+			found[i] = e.newest(cmd.Context(), opts, pkg, all.packages[pkg.Name].ref.Version, age)
 		})
 	}
 
@@ -101,7 +111,7 @@ func (e env) outdated(cmd *cobra.Command, opts Options) error {
 		switch {
 		case f.err != nil:
 			failed = append(failed, fmt.Errorf("%s: %w", f.pkg.Name, f.err))
-		case f.newest != f.pkg.Version || f.latest != f.pkg.Version:
+		case f.newest != f.pkg.Version || f.latest != f.pkg.Version || f.waiting.Version != "":
 			stale = append(stale, f)
 		}
 	}
@@ -113,12 +123,30 @@ func (e env) outdated(cmd *cobra.Command, opts Options) error {
 	return errors.Join(failed...)
 }
 
-// newest returns the newest version of pkg that want allows, as oku update
-// would pick it, and the latest release.
-func (e env) newest(ctx context.Context, opts Options, pkg lock.Package, want string) (string, string, error) {
+// newest finds the newest version of pkg that want allows and age lets in, as
+// oku update would pick it, the one that waits for age, and the latest release.
+func (e env) newest(
+	ctx context.Context,
+	opts Options,
+	pkg lock.Package,
+	want string,
+	age time.Duration,
+) staleness {
+	newest, latest, waiting, err := e.newestOf(ctx, opts, pkg, want, age)
+
+	return staleness{pkg: pkg, newest: newest, latest: latest, waiting: waiting, age: age, err: err}
+}
+
+func (e env) newestOf(
+	ctx context.Context,
+	opts Options,
+	pkg lock.Package,
+	want string,
+	age time.Duration,
+) (string, string, resolve.Release, error) {
 	r, err := ref.ParseIn(e.listDir(), pkg.Ref)
 	if err != nil {
-		return "", "", err
+		return "", "", resolve.Release{}, err
 	}
 
 	// oku wrote an inferred manifest, and the lock holds its text. Inferring it
@@ -127,7 +155,7 @@ func (e env) newest(ctx context.Context, opts Options, pkg lock.Package, want st
 	if !pkg.Inferred || pkg.Manifest == "" {
 		fetched, err := e.fetcher(opts).Fetch(ctx, r, "", ref.Manifest)
 		if err != nil {
-			return "", "", err
+			return "", "", resolve.Release{}, err
 		}
 
 		text = fetched.Data
@@ -135,7 +163,7 @@ func (e env) newest(ctx context.Context, opts Options, pkg lock.Package, want st
 
 	m, err := manifest.Parse(text, r.String())
 	if err != nil {
-		return "", "", err
+		return "", "", resolve.Release{}, err
 	}
 
 	source := m.Version
@@ -156,23 +184,34 @@ func (e env) newest(ctx context.Context, opts Options, pkg lock.Package, want st
 
 		i := slices.IndexFunc(m.Artifacts, func(a manifest.Artifact) bool { return a.Match.Matches(at) })
 		if i < 0 {
-			return "", "", fmt.Errorf("%s has no artifact for %s", m.Package.Name, at)
+			return "", "", resolve.Release{}, fmt.Errorf("%s has no artifact for %s", m.Package.Name, at)
 		}
 
 		source = *m.Artifacts[i].Version
 	}
 
 	latest, err := e.resolver(opts).Pick(ctx, source, "")
-	if err != nil || want == "" {
-		return latest.Version, latest.Version, err
-	}
-
-	newest, err := e.resolver(opts).Pick(ctx, source, want)
 	if err != nil {
-		return "", "", err
+		return "", "", resolve.Release{}, err
 	}
 
-	return newest.Version, latest.Version, nil
+	// When every version it allows waits for age, or the lock holds a newer one,
+	// update keeps the locked one.
+	newest, waiting, err := e.resolverAged(opts, age).PickWaiting(ctx, source, want)
+	if errors.Is(err, resolve.ErrTooNew) ||
+		err == nil && resolve.Compare(pkg.Version, newest.Version) > 0 {
+		newest, err = resolve.Release{Version: pkg.Version}, nil
+	}
+
+	if err != nil {
+		return "", "", resolve.Release{}, err
+	}
+
+	if resolve.Compare(waiting.Version, pkg.Version) <= 0 {
+		waiting = resolve.Release{}
+	}
+
+	return newest.Version, latest.Version, waiting, nil
 }
 
 func printStale(cmd *cobra.Command, stale []staleness, all int) error {
@@ -183,11 +222,25 @@ func printStale(cmd *cobra.Command, stale []staleness, all int) error {
 			Newest  string `json:"newest"`
 			Latest  string `json:"latest"`
 			Ref     string `json:"ref"`
+			// Waiting is the newest version that waits for the minimum release age,
+			// and WaitsUntil the time it passes it.
+			Waiting    string     `json:"waiting,omitempty"`
+			WaitsUntil *time.Time `json:"waits_until,omitempty"`
 		}
 
 		rows := []row{}
 		for _, f := range stale {
-			rows = append(rows, row{f.pkg.Name, f.pkg.Version, f.newest, f.latest, f.pkg.Ref})
+			r := row{
+				Name: f.pkg.Name, Version: f.pkg.Version, Newest: f.newest, Latest: f.latest,
+				Ref: f.pkg.Ref, Waiting: f.waiting.Version,
+			}
+
+			if f.waiting.Version != "" {
+				until := f.waiting.Published.Add(f.age)
+				r.WaitsUntil = &until
+			}
+
+			rows = append(rows, r)
 		}
 
 		return printJSON(cmd, rows)
@@ -202,9 +255,29 @@ func printStale(cmd *cobra.Command, stale []staleness, all int) error {
 		return nil
 	}
 
+	// The waiting column shows only when a version waits.
+	waits := slices.ContainsFunc(stale, func(f staleness) bool { return f.waiting.Version != "" })
+
 	tab := s.Table("name", "locked", "newest", "latest", "ref")
+	if waits {
+		tab = s.Table("name", "locked", "newest", "latest", "waiting", "ref")
+	}
+
 	for _, f := range stale {
-		tab.Styled([]string{f.pkg.Name, f.pkg.Version, f.newest, f.latest, s.Home(f.pkg.Ref)}, s.Bold, s.Dim, nil, nil, s.Dim)
+		cells := []string{f.pkg.Name, f.pkg.Version, f.newest, f.latest}
+		styles := []func(string) string{s.Bold, s.Dim, nil, nil}
+
+		if waits {
+			waiting := ""
+			if f.waiting.Version != "" {
+				waiting = f.waiting.Version + " from " +
+					f.waiting.Published.Add(f.age).Local().Format("2006-01-02 15:04")
+			}
+
+			cells, styles = append(cells, waiting), append(styles, s.Dim)
+		}
+
+		tab.Styled(append(cells, s.Home(f.pkg.Ref)), append(styles, s.Dim)...)
 	}
 
 	if err := tab.Write(out); err != nil {
@@ -212,6 +285,11 @@ func printStale(cmd *cobra.Command, stale []staleness, all int) error {
 	}
 
 	hint(out, "`oku update` takes the newest versions. To take a latest beyond them, change its version in oku.toml")
+
+	if waits {
+		hint(out, "a waiting version is newer than the minimum release age. "+
+			"`oku update <name> --min-release-age 0` takes it now")
+	}
 
 	return nil
 }

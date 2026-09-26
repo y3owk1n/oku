@@ -171,6 +171,11 @@ func addRequest(
 
 	platforms, strict := e.lockPlatforms(own, when)
 
+	age, err := releaseAge(cmd, own, own.Packages[previous.Name])
+	if err != nil {
+		return e, request{}, nil, err
+	}
+
 	// A when that leaves out this machine pins the package for the lock
 	// platforms it matches, as sync does.
 	lockOnly := !when.Matches(platform.Host())
@@ -202,6 +207,7 @@ func addRequest(
 		fit:             fitNarrow,
 		when:            when,
 		lockOnly:        lockOnly,
+		releaseAge:      age,
 	}, locked, nil
 }
 
@@ -325,6 +331,7 @@ func runAdd(
 	reportNarrowed(cmd.ErrOrStderr(), got, e.listPath())
 
 	e.reportFirstUse(cmd.ErrOrStderr(), got)
+	reportAge(cmd.ErrOrStderr(), got)
 	reportUnsandboxed(cmd.ErrOrStderr(), got)
 	reportLinks(cmd.ErrOrStderr(), got)
 	reportCache(cmd.ErrOrStderr(), got)

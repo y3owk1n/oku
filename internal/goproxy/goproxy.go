@@ -11,6 +11,7 @@ import (
 	"path"
 	"regexp"
 	"strings"
+	"time"
 	"unicode"
 
 	"github.com/y3owk1n/oku/internal/shape"
@@ -102,6 +103,26 @@ func Versions(ctx context.Context, client *http.Client, proxy, module string) ([
 	}
 
 	return []string{strings.TrimPrefix(latest.Version, "v")}, nil
+}
+
+// Published returns the time the proxy reports for version of module. The Go
+// module reference defines it as the time of the version's commit.
+func Published(
+	ctx context.Context,
+	client *http.Client,
+	proxy, module, version string,
+) (time.Time, error) {
+	body, err := get(ctx, client, proxy, module+"/@v/v"+version+".info")
+	if err != nil {
+		return time.Time{}, err
+	}
+
+	var info struct{ Time time.Time }
+	if err := json.Unmarshal(body, &info); err != nil {
+		return time.Time{}, fmt.Errorf("read the proxy's answer for %s %s: %w", module, version, err)
+	}
+
+	return info.Time, nil
 }
 
 func get(ctx context.Context, client *http.Client, proxy, at string) ([]byte, error) {

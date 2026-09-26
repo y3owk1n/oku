@@ -34,7 +34,16 @@ type Resolver struct {
 	// Crates and CrateDownloads replace the URLs of the crates.io API and of
 	// its downloads when set.
 	Crates, CrateDownloads string
+	// MinAge makes Pick and PickWithin pass over a release published less than
+	// MinAge ago, unless the caller names its exact version. Zero turns it off.
+	MinAge time.Duration
+	// Now is the time MinAge counts back from. Nil means time.Now.
+	Now func() time.Time
 }
+
+// ErrTooNew reports that every version that fits was published less than the
+// minimum release age ago.
+var ErrTooNew = errors.New("newer than the minimum release age")
 
 // Release is one installable version and the upstream tag it came from.
 type Release struct {
@@ -49,67 +58,122 @@ type Release struct {
 	// Integrity maps the download URL of an npm version to the digest the
 	// registry publishes for it, such as "sha512-...".
 	Integrity map[string]string
+	// Published is when upstream published the release, or a time no earlier
+	// than that. It is zero when the source does not say.
+	Published time.Time
+}
+
+// cutoff is the latest time a release may be published at to pass MinAge.
+func (r *Resolver) cutoff() time.Time {
+	now := time.Now
+	if r.Now != nil {
+		now = r.Now
+	}
+
+	return now().Add(-r.MinAge)
+}
+
+// tooNew reports whether MinAge passes over release of v. A moving tag and a
+// branch are new by design, and a release of unknown age passes.
+func (r *Resolver) tooNew(v manifest.Version, release Release) bool {
+	return r.MinAge > 0 && v.Tag == "" && v.From != manifest.FromGitBranch &&
+		release.Published.After(r.cutoff())
+}
+
+// tooNewError explains why no release of v passed MinAge. soonest is the
+// release that fit and passes MinAge first.
+func (r *Resolver) tooNewError(v manifest.Version, soonest Release) error {
+	return fmt.Errorf(
+		"%w: every version of %s that fits came out less than %s ago, "+
+			"and the first to pass is %s, from %s\n"+
+			"run the command with --min-release-age 0 to take the newest now",
+		ErrTooNew, v.Repo, FormatAge(r.MinAge), soonest.Version,
+		soonest.Published.Add(r.MinAge).Local().Format("2006-01-02 15:04"),
+	)
+}
+
+// FormatAge writes age in the largest of weeks, days or hours that divides it,
+// as oku.toml takes it.
+func FormatAge(age time.Duration) string {
+	day := 24 * time.Hour
+
+	switch {
+	case age%(7*day) == 0:
+		return fmt.Sprintf("%dw", age/(7*day))
+	case age%day == 0:
+		return fmt.Sprintf("%dd", age/day)
+	default:
+		return fmt.Sprintf("%dh", age/time.Hour)
+	}
 }
 
 // Pick returns the release of v to install. An empty want selects the newest.
 // Otherwise want is an exact version, a prefix such as "22" for the newest 22.x,
 // or a range such as "^1.4", as Matches reads it. A manifest with a fixed
-// version has one release, whose tag equals its version.
+// version has one release, whose tag equals its version. MinAge passes over a
+// release that is too new, unless want is its exact version.
 func (r *Resolver) Pick(ctx context.Context, v manifest.Version, want string) (Release, error) {
+	release, _, err := r.PickWaiting(ctx, v, want)
+
+	return release, err
+}
+
+// PickWaiting is Pick, and also returns the newest release that MinAge passed
+// over, or the zero Release when it passed over none.
+func (r *Resolver) PickWaiting(
+	ctx context.Context,
+	v manifest.Version,
+	want string,
+) (Release, Release, error) {
 	if v.From == "" {
 		ok, err := Matches(v.Value, want)
 		if err != nil {
-			return Release{}, err
+			return Release{}, Release{}, err
 		}
 
 		if !ok {
-			return Release{}, fmt.Errorf("the manifest provides version %s, not %s", v.Value, want)
+			return Release{}, Release{}, fmt.Errorf(
+				"the manifest provides version %s, not %s", v.Value, want,
+			)
 		}
 
-		return Release{Version: v.Value, Tag: v.Value}, nil
-	}
-
-	if IsRange(want) {
-		return r.PickWithin(ctx, v, want)
+		return Release{Version: v.Value, Tag: v.Value}, Release{}, nil
 	}
 
 	releases, err := r.List(ctx, v)
 	if err != nil {
-		return Release{}, err
+		return Release{}, Release{}, err
 	}
 
 	if len(releases) == 0 {
-		return Release{}, fmt.Errorf("%s %s has no versions", v.From, v.Repo)
+		return Release{}, Release{}, fmt.Errorf("%s %s has no versions", v.From, v.Repo)
 	}
 
-	if want == "" {
-		return releases[0], nil
+	if IsRange(want) {
+		return r.newest(v, releases, func(release Release) (bool, error) {
+			return Satisfies(release.Version, want)
+		}, func(seen []string) error {
+			return fmt.Errorf(
+				"no version satisfies %q, the versions found are %s", want, strings.Join(seen, ", "),
+			)
+		})
 	}
 
 	for _, release := range releases {
-		if release.Version == want {
-			return release, nil
+		if want != "" && release.Version == want {
+			return release, Release{}, nil
 		}
 	}
 
 	// The releases are newest first, with every prerelease behind them.
-	for _, release := range releases {
-		if strings.HasPrefix(release.Version, want+".") {
-			return release, nil
-		}
-	}
-
-	newest := releases[:min(5, len(releases))]
-	names := make([]string, len(newest))
-
-	for i, release := range newest {
-		names[i] = release.Version
-	}
-
-	return Release{}, fmt.Errorf(
-		"%s %s has no version %s, the newest are %s",
-		v.From, v.Repo, want, strings.Join(names, ", "),
-	)
+	return r.newest(v, releases, func(release Release) (bool, error) {
+		return want == "" || strings.HasPrefix(release.Version, want+"."), nil
+	}, func(seen []string) error {
+		return fmt.Errorf(
+			"%s %s has no version %s, the newest are %s",
+			v.From, v.Repo, want, strings.Join(seen, ", "),
+		)
+	})
 }
 
 // PickWithin returns the newest release of v that satisfies constraint, such as
@@ -119,35 +183,66 @@ func (r *Resolver) PickWithin(
 	v manifest.Version,
 	constraint string,
 ) (Release, error) {
-	releases := []Release{{Version: v.Value, Tag: v.Value}}
-
-	if v.From != "" {
-		var err error
-		if releases, err = r.List(ctx, v); err != nil {
-			return Release{}, err
+	if v.From == "" {
+		ok, err := Satisfies(v.Value, constraint)
+		if err != nil || !ok {
+			return Release{}, errors.Join(err, fmt.Errorf(
+				"no version satisfies %q, the versions found are %s", constraint, v.Value,
+			))
 		}
+
+		return Release{Version: v.Value, Tag: v.Value}, nil
 	}
 
-	var seen []string
+	release, _, err := r.PickWaiting(ctx, v, constraint)
+
+	return release, err
+}
+
+// newest returns the first of releases that fits and passes MinAge, and the
+// newest one that fits and MinAge passed over. none makes the error for when
+// nothing fits, from the first few versions.
+func (r *Resolver) newest(
+	v manifest.Version,
+	releases []Release,
+	fits func(Release) (bool, error),
+	none func(seen []string) error,
+) (Release, Release, error) {
+	var (
+		waiting, soonest Release
+		seen             []string
+	)
 
 	for _, release := range releases {
-		ok, err := Satisfies(release.Version, constraint)
-		if err != nil {
-			return Release{}, err
-		}
-
-		if ok {
-			return release, nil
-		}
-
 		if len(seen) < 5 {
 			seen = append(seen, release.Version)
 		}
+
+		ok, err := fits(release)
+		if err != nil {
+			return Release{}, Release{}, err
+		}
+
+		if !ok {
+			continue
+		}
+
+		if !r.tooNew(v, release) {
+			return release, waiting, nil
+		}
+
+		if waiting.Version == "" {
+			waiting = release
+		}
+
+		soonest = release
 	}
 
-	return Release{}, fmt.Errorf(
-		"no version satisfies %q, the versions found are %s", constraint, strings.Join(seen, ", "),
-	)
+	if waiting.Version != "" {
+		return Release{}, waiting, r.tooNewError(v, soonest)
+	}
+
+	return Release{}, Release{}, none(seen)
 }
 
 // IsRange reports whether want is a range for Satisfies, which starts with an
@@ -292,7 +387,8 @@ func (r *Resolver) List(ctx context.Context, v manifest.Version) ([]Release, err
 		return r.list(ctx, v)
 	}
 
-	key := fmt.Sprintf("%#v", v)
+	// A list for MinAge holds publish times, which some sources read apart.
+	key := fmt.Sprintf("%#v %t", v, r.MinAge > 0)
 
 	m.mu.Lock()
 
@@ -367,12 +463,13 @@ func (r *Resolver) list(ctx context.Context, v manifest.Version) ([]Release, err
 	var (
 		tags    []string
 		digests map[string]map[string]string
+		times   map[string]time.Time
 		err     error
 	)
 
 	switch v.From {
 	case manifest.FromGitHubReleases, manifest.FromGiteaReleases, manifest.FromGitLabReleases:
-		tags, digests, err = r.published(ctx, v)
+		tags, digests, times, err = r.published(ctx, v)
 	case manifest.FromGitTags:
 		tags, err = gitTags(ctx, v.Repo)
 	default:
@@ -407,13 +504,16 @@ func (r *Resolver) list(ctx context.Context, v manifest.Version) ([]Release, err
 		if i, seen := at[version]; seen {
 			if declared {
 				releases[i].Tag, releases[i].Digests = tag, digests[tag]
+				releases[i].Published = times[tag]
 			}
 
 			continue
 		}
 
 		at[version] = len(releases)
-		releases = append(releases, Release{Version: version, Tag: tag, Digests: digests[tag]})
+		releases = append(releases, Release{
+			Version: version, Tag: tag, Digests: digests[tag], Published: times[tag],
+		})
 	}
 
 	// A prerelease sorts behind every release, so the newest is never one, and
@@ -479,33 +579,37 @@ func (r *Resolver) open(v manifest.Version) (forge.Forge, string, error) {
 }
 
 // published returns the tags of published releases, and the digests of each
-// one's files by tag. It skips drafts and prereleases.
+// one's files and its publish time by tag. It skips drafts and prereleases.
 func (r *Resolver) published(
 	ctx context.Context,
 	v manifest.Version,
-) ([]string, map[string]map[string]string, error) {
+) ([]string, map[string]map[string]string, map[string]time.Time, error) {
 	host, repo, err := r.open(v)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	found, err := host.Releases(ctx, repo)
 	if err != nil {
-		return nil, nil, explain(err, "list releases of "+v.Repo, "the repository was not found")
+		return nil, nil, nil, explain(
+			err, "list releases of "+v.Repo, "the repository was not found",
+		)
 	}
 
 	var tags []string
 
 	digests := map[string]map[string]string{}
+	times := map[string]time.Time{}
 
 	for _, release := range found {
 		if !release.Draft && !release.Prerelease {
 			tags = append(tags, release.Tag)
 			digests[release.Tag] = assetDigests(release)
+			times[release.Tag] = release.Published
 		}
 	}
 
-	return tags, digests, nil
+	return tags, digests, times, nil
 }
 
 // assetDigests maps the download URL of each file of release to the sha256
