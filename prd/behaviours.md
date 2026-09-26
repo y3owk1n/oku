@@ -956,9 +956,9 @@ order step in `prd/product.md`.
   ignored and the package builds locally.
 - B87 [10] `oku cache push` writes the signed closure of the named packages
   into a directory. Impure packages are refused.
-- B365 [10] `oku cache push` writes each file that the store shares with the
-  mode the file had before, so an entry does not depend on what else the store
-  held.
+- B365 [10] `oku cache push` writes each shared file with the mode it had
+  before the store shared it, so an entry does not depend on what else the
+  store held.
 - B88 [10] A non-relocatable entry built under a different store root is never
   substituted.
 - B89 [10] A manifest with `signing_key` has its artifacts verified against

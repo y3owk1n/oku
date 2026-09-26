@@ -1528,8 +1528,8 @@ file with the same bytes becomes a clone of it where the filesystem clones
 among them, it becomes a hard link, and the shared file loses its write bits.
 `store/.links/paths/` records which files each store path shares, with the mode
 each had. `oku gc` shares the files of store paths from before this, and
-deletes what no record names any more. It and `oku du` count a shared file
-once, and a file that a kept store path shares frees nothing.
+deletes what no record names any more. `oku gc` and `oku du` count a shared
+file once, and a file that a kept store path shares frees nothing.
 
 Why: rollback stays a link flip with no download (D3), and every generation
 stays a working rollback target until the user deletes it (D23). So old
@@ -1539,8 +1539,9 @@ of them keeps a generation as a lock alone to download again on rollback. On
 2026-09-26 one 12 GB store held 0.83 GB of identical files, most of it one
 version under several store paths: three go-1.26.8 paths of 259 MB each,
 because the store hash includes the manifest's sha and each profile reached go
-through a different manifest. Sharing files removes that without changing
-which store path a package gets. Consecutive versions share most of their files
+through a different manifest. Sharing its files of 8 KiB or more saved 728 MiB,
+and the first `gc` took 15 seconds to do it. Sharing does not change which
+store path a package gets. Consecutive versions share most of their files
 too, which Nix's manual puts at 25 to 35% of a store.
 
 A clone shares blocks and not the file, so a write through one store path never
@@ -1548,12 +1549,14 @@ reaches another, and nothing about the file changes. A hard link shares one
 file, so it must not be writable, as in Nix and Guix. The exec bit is part of
 the hash because every hard link of a file has one mode. 8 KiB is Guix's floor,
 since most small files are unique and each one would cost an entry. The
-records keep what `gc` says it frees true, and let `cache push` write each
+records let `gc` report what it really frees, and let `cache push` write each
 file with its own mode, so an entry does not depend on what else the store
 held.
 
-Some files stay apart. A file with extended attributes would take another
-file's, apart from Linux's `security.` ones, which the kernel sets by path. A
+Some files keep their own copy. A clone or hard link of a file with extended
+attributes would carry another file's attributes, so such a file is not
+shared. Linux's `security.` attributes are the exception, since the kernel sets
+them by path. A
 repo's files for `[files]` are not shared, since the home links into them. On
 Windows a program or library, any file that starts with `MZ`, is not shared,
 since Windows refuses to delete a hard link to a program that runs. Go's
