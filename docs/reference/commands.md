@@ -740,7 +740,7 @@ identical files of store paths that an older oku installed, see
 |---|---|
 | `--keep N` | First deletes all generations of each profile except the newest N. The active generation always stays. N is at least 1. |
 | `--older-than AGE` | First deletes the generations of each profile older than AGE, a number of days or weeks such as `30d` or `2w`. It keeps the newest generation older than AGE, which was active then, so you can still roll back to how things were AGE ago. With `--keep`, a generation stays when either flag keeps it. |
-| `--cache` | Also deletes the downloads in the cache that no kept store path was made from, see below. |
+| `--cache` | Also deletes the downloads in the cache that no kept store path was made from, and the API answers that no command has read for 30 days, see below. |
 | `--dry-run` | Prints what would be deleted and deletes nothing. |
 
 ```
@@ -801,14 +801,18 @@ freed 4.6 MiB from 1 store path
   roll back to again offline. It deletes the other downloads, such as old
   versions and the downloads of other lock platforms, and the index of
   downloads by url. It skips a file less than a day old, which a run that has
-  not written its lock yet may need. It leaves `git/` and `api/` alone.
+  not written its lock yet may need. It leaves `git/` alone.
+- With `--cache` it also deletes each answer in `api/` that no command has read
+  for 30 days. Reading an answer sets the time on its file, so an answer that a
+  lookup still uses stays. Deleting one costs a single request the next time.
 
 ```
 $ oku gc --keep 1 --cache
 removed generation 1
 removed ripgrep-14.0.3-4c8fe21b8d1d13c4 (4.6 MiB)
 removed 38 files from the download cache (1.9 GiB)
-freed 1.9 GiB from 1 store path and 38 cached files
+removed 12 answers from the API cache (3.1 MiB)
+freed 1.9 GiB from 1 store path, 38 cached files and 12 kept answers
 ```
 - It refuses to run while an unfinished change waits to be put back.
 - You cannot roll back to a deleted generation.

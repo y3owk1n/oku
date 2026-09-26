@@ -70,7 +70,7 @@ export XDG_CACHE_HOME=/tmp/oku-try/cache
   downloads/<sha256>           verified downloads, reused on reinstall
   downloads/by-url/<hash>      the digest each url gave in the last day, so a run that stopped early does not download again
   git/<hash>/                  clones for git+ refs
-  api/<hash>                   answers of forge and registry APIs, asked again with their ETag
+  api/<hash>                   answers of forge and registry APIs, asked again with their ETag. One line of JSON, then the answer packed with zstd
 ```
 
 ## The store
@@ -261,4 +261,11 @@ stale lock.
 
 Deleting the cache directory is safe. oku downloads again when it needs to.
 `oku gc` leaves the cache alone. `oku gc --cache` deletes the downloads that
-no kept store path was made from, see [`oku gc`](commands.md#oku-gc).
+no kept store path was made from, and the API answers that no command has read
+for 30 days, see [`oku gc`](commands.md#oku-gc).
+
+An API answer holds the host's ETag, so the next lookup asks the host whether
+anything changed, and downloads the whole list again only when it did. Reading
+an answer sets the time on its file, which is the age `oku gc --cache` goes by.
+An answer that an older oku kept in another format costs one request to fetch
+again.

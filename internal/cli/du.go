@@ -9,11 +9,13 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 
 	"github.com/y3owk1n/oku/internal/clone"
 	"github.com/y3owk1n/oku/internal/expose"
+	"github.com/y3owk1n/oku/internal/forge"
 	"github.com/y3owk1n/oku/internal/profile"
 	"github.com/y3owk1n/oku/internal/status"
 	"github.com/y3owk1n/oku/internal/store"
@@ -77,6 +79,13 @@ the apps and fonts it copied out of the store, and the rest of its data.
 			if err != nil {
 				return err
 			}
+
+			answers, err := forge.StaleAnswers(filepath.Join(e.cache, "api"), time.Now())
+			if err != nil {
+				return err
+			}
+
+			maps.Copy(stale, answers)
 
 			return e.duAreas(cmd, areas, paths, stale)
 		},

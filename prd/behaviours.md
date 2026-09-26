@@ -311,6 +311,8 @@ order step in `prd/product.md`.
 - B250 [3] oku keeps each answer of a forge API with its ETag and asks again
   with `If-None-Match`. When the host answers 304, `update` uses the answer it
   kept, and a changed answer replaces it.
+- B385 [3] An answer that an older oku kept in another format makes oku ask the
+  host for the whole answer again, and the lookup gives the same versions.
 - B361 [3] oku reads a registry answer of up to 64 MB whole, with or without
   an ETag, so an npm or PyPI package with thousands of versions resolves.
 - B359 [3] One command asks each version source once. Packages that share a
@@ -482,6 +484,9 @@ order step in `prd/product.md`.
   the download of every kept store path. It skips a file less than a day old.
   `oku gc` without `--cache` leaves the cache alone. `oku du` says what
   `oku gc --cache` frees.
+- B384 [3] `oku gc --cache` also deletes each API answer that no command has
+  read for 30 days, and says how many and what that freed. An answer a lookup
+  read since stays, because reading one sets the time on its file.
 - B347 [3] When `gc --keep` deletes generations and no store path becomes
   unused, it ends with `every store path is still used by a generation`,
   never with `nothing to delete`.

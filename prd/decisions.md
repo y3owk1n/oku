@@ -1697,3 +1697,20 @@ answers are the same: for four repos the API listed the identical tag set that
 commit for a branch. git stays for every other host, for a private repository
 that only a git login can read, and for a host that rate limits, so no lookup
 depends on an API being reachable.
+
+## D103. An API answer is kept as a header line and a zstd body
+
+Each file under `<cache>/oku/api` holds one line of JSON, the ETag, the Link
+header, the media type and the length of the answer, and then the answer itself
+packed with zstd. An answer without that length is from an older oku, and oku
+asks the host for it again. `oku gc --cache` deletes an answer that no command
+has read for 30 days, and reading one sets the time on its file.
+
+Why: the body used to sit inside the JSON, which base64 made a third larger and
+cost a full scan of the encoded text before the real parse. Over 500 answers of
+one real cache that measured 249.7 MiB on disk and 1.504 s to read and parse.
+The same answers as a header line and a zstd body take 14.2 MiB and 836 ms, and
+packing all of them once costs 166 ms. Nothing deleted this directory before, so
+it only grew. Fetching an answer again costs a single request, so 30 days
+without a read is enough to drop it. An answer in the old format is fetched
+again too, and no second reader stays behind for it.

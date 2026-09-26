@@ -105,6 +105,19 @@ Oku gc --keep 1
 $listed = & $oku list
 Check 'list no longer shows ripgrep' { ($listed -join "`n") -notmatch 'ripgrep' }
 
+# An API answer holds one line of JSON and the answer packed with zstd, and
+# gc --cache deletes one that no command has read for 30 days (B384).
+$answers = Join-Path $env:XDG_CACHE_HOME 'oku\api'
+$answer = Get-ChildItem -File $answers | Select-Object -First 1
+Check 'an API answer names the length of the answer it packed' {
+    (Get-Content -TotalCount 1 $answer.FullName) -match '"bytes":\s*\d+'
+}
+$answer.LastWriteTime = (Get-Date).AddDays(-31)
+$pruned = (Oku gc --cache) -join "`n"
+Check 'gc --cache deletes an answer no command read for a month' {
+    ($pruned -match 'from the API cache') -and -not (Test-Path $answer.FullName)
+}
+
 # The PowerShell hook, with a project that needs fd.
 $project = Join-Path $root 'project'
 New-Item -ItemType Directory -Force $project | Out-Null
