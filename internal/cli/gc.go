@@ -37,8 +37,8 @@ func newGCCmd() *cobra.Command {
 Old generations keep their packages in the store so rollback needs no download.
 --keep deletes old generations first, which frees the packages only they use.
 --older-than deletes the generations older than a number of days or weeks, and
-keeps the one that was active then, so rollback reaches back that far. With
-both, a generation stays when either keeps it.
+keeps the one that was active then, so you can still roll back to that date.
+With both, a generation stays when either flag keeps it.
 --cache also deletes the downloads that no kept store path was made from.
 
 gc also shares the identical files of store paths that an older oku installed,
