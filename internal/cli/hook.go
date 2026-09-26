@@ -447,34 +447,71 @@ func setupHint(opts Options) string {
 // hookLines returns the lines in the user's shell startup files that load the
 // oku hook, as "file: line".
 func hookLines() []string {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return nil
-	}
-
 	var found []string
 
-	for _, name := range []string{
-		".bashrc", ".bash_profile", ".profile", ".zshrc", ".zprofile", ".config/fish/config.fish",
-		".config/powershell/Microsoft.PowerShell_profile.ps1",
-		"Documents/PowerShell/Microsoft.PowerShell_profile.ps1",
-		"Documents/WindowsPowerShell/Microsoft.PowerShell_profile.ps1",
-	} {
-		file := filepath.Join(home, filepath.FromSlash(name))
-
+	for _, file := range startupFiles() {
 		data, err := os.ReadFile(file)
 		if err != nil {
 			continue
 		}
 
 		for _, line := range strings.Split(string(data), "\n") {
-			// The current line quotes the path, and older ones call oku by name.
-			if (strings.Contains(line, `oku" hook`) || strings.Contains(line, "oku hook")) &&
-				!strings.HasPrefix(strings.TrimSpace(line), "#") {
+			if shellhook.IsHookLine(line) {
 				found = append(found, file+": "+strings.TrimSpace(line))
 			}
 		}
 	}
 
 	return found
+}
+
+// startupFiles names the files a shell reads at startup, where the hook line
+// can sit. Every shell but PowerShell has one file per user. PowerShell has one
+// profile per scope and host: profile.ps1 for every host, and
+// Microsoft.<host>_profile.ps1 for a single host. Each PowerShell edition keeps
+// them in a directory of its own.
+func startupFiles() []string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return nil
+	}
+
+	var files []string
+
+	for _, name := range []string{
+		".bashrc", ".bash_profile", ".profile", ".zshrc", ".zprofile", ".config/fish/config.fish",
+	} {
+		files = append(files, filepath.Join(home, filepath.FromSlash(name)))
+	}
+
+	dirs := []string{filepath.Join(home, ".config", "powershell")}
+	for _, documents := range documentsDirs(home) {
+		dirs = append(
+			dirs,
+			filepath.Join(documents, "PowerShell"),
+			filepath.Join(documents, "WindowsPowerShell"),
+		)
+	}
+
+	for _, dir := range dirs {
+		for _, pattern := range []string{"profile.ps1", "Microsoft.*_profile.ps1"} {
+			matches, _ := filepath.Glob(filepath.Join(dir, pattern))
+			files = append(files, matches...)
+		}
+	}
+
+	return files
+}
+
+// documentsDirs returns the Documents directories a PowerShell profile can sit
+// under: the one in the home directory, and the one Windows records, which
+// OneDrive's Known Folder Move redirects to OneDrive\Documents.
+func documentsDirs(home string) []string {
+	dirs := []string{filepath.Join(home, "Documents")}
+
+	if known := knownDocumentsDir(); known != "" && !strings.EqualFold(known, dirs[0]) {
+		dirs = append(dirs, known)
+	}
+
+	return dirs
 }

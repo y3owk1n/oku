@@ -59,9 +59,15 @@ function Write-NextSteps {
 Write-Host ''
 
 # A profile that loads the hook already, from an earlier install, needs no
-# second line. The pattern is the one "oku doctor" uses.
-if ((Test-Path $PROFILE) -and (Select-String -Path $PROFILE -Pattern 'oku(\.exe)?" hook|oku hook' -Quiet)) {
-    Write-Host "$PROFILE already loads oku. Open a new terminal, or run:  . `$PROFILE"
+# second line. PowerShell reads four profiles, one per scope and host, and the
+# line works in any of them. The pattern is the one "oku doctor" uses.
+$loaded = @(
+    $PROFILE.AllUsersAllHosts, $PROFILE.AllUsersCurrentHost,
+    $PROFILE.CurrentUserAllHosts, $PROFILE.CurrentUserCurrentHost
+) | Where-Object { $_ -and (Test-Path $_) -and (Select-String -Path $_ -Pattern 'oku(\.exe)?" hook|oku hook' -Quiet) }
+
+if ($loaded) {
+    Write-Host "$($loaded[0]) already loads oku. Open a new terminal, or run:  . `$PROFILE"
     Write-NextSteps
     return
 }

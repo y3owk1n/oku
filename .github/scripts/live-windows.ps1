@@ -218,6 +218,30 @@ Check 'doctor finds no problem once the profile is on PATH' {
     ($diagnosis -match 'points at a file in the store')
 }
 
+# profile.ps1 is the profile every host reads, and $PROFILE does not name it.
+# The line written here carries the oku.exe name, as the Windows line does.
+$allHosts = $PROFILE.CurrentUserAllHosts
+$hookLine = "if (Test-Path `"$oku`") { Invoke-Expression ((& `"$oku`" hook pwsh) -join [Environment]::NewLine) }"
+$keptAllHosts = if (Test-Path $allHosts) { Get-Content -Raw $allHosts } else { $null }
+New-Item -Force -ItemType File $allHosts | Out-Null
+try {
+    Set-Content $allHosts $hookLine
+    $diagnosis = (& $oku doctor) -join "`n"
+    Check 'doctor finds the hook line in profile.ps1, written with the oku.exe name' {
+        ($diagnosis -match 'the shell hook is loaded from') -and
+        ($diagnosis -match [regex]::Escape($allHosts))
+    }
+
+    Set-Content $allHosts "# $hookLine"
+    $diagnosis = (& $oku doctor) -join "`n"
+    Check 'doctor ignores a commented hook line' {
+        $diagnosis -match 'no shell hook line found'
+    }
+}
+finally {
+    if ($null -eq $keptAllHosts) { Remove-Item -Force $allHosts } else { Set-Content $allHosts $keptAllHosts }
+}
+
 # A build from source: a dep, a needs tool, pwsh and cmd steps, and an install.
 $fixtures = Join-Path $root 'fixtures'
 New-Item -ItemType Directory -Force $fixtures | Out-Null
@@ -718,6 +742,21 @@ try {
     Check 'install.ps1 puts a working oku.exe in place and prints the hook line' {
         ($installedVersion -match '0\.0\.1') -and ($said -match 'hook pwsh') -and ($said -match 'PROFILE') -and
         ($said -match 'installed oku version 0\.0\.1') -and ($said -match 'oku doctor')
+    }
+
+    # A second install finds the line in the profile every host reads, not in
+    # the one $PROFILE names.
+    $keptAllHosts = if (Test-Path $allHosts) { Get-Content -Raw $allHosts } else { $null }
+    New-Item -Force -ItemType File $allHosts | Out-Null
+    try {
+        Set-Content $allHosts $hookLine
+        $again = (& (Join-Path $repoRoot 'install.ps1') 6>&1) -join "`n"
+        Check 'install.ps1 finds the hook line in profile.ps1 and does not ask for it again' {
+            ($again -match 'already loads oku') -and ($again -notmatch 'one step left')
+        }
+    }
+    finally {
+        if ($null -eq $keptAllHosts) { Remove-Item -Force $allHosts } else { Set-Content $allHosts $keptAllHosts }
     }
 
     Add-Content (Join-Path $download 'oku-windows-amd64.exe') 'x'

@@ -5,6 +5,7 @@ package shellhook
 import (
 	"fmt"
 	"maps"
+	"regexp"
 	"slices"
 	"strings"
 )
@@ -298,4 +299,20 @@ func quoter(shell string) func(string) string {
 	return func(s string) string {
 		return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 	}
+}
+
+// HookPattern matches a startup file line that loads the oku hook. The current
+// line quotes the path of the binary, which ends in .exe on Windows, and an
+// older one calls oku by name. install.ps1 repeats this pattern, and a test
+// checks that the two are the same.
+const HookPattern = `oku(\.exe)?" hook|oku hook`
+
+var hookPattern = regexp.MustCompile(HookPattern)
+
+// IsHookLine reports whether line, from a shell startup file, loads the oku
+// hook. A commented out line does not.
+func IsHookLine(line string) bool {
+	line = strings.TrimSpace(line)
+
+	return !strings.HasPrefix(line, "#") && hookPattern.MatchString(line)
 }
