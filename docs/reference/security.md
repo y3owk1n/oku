@@ -154,6 +154,14 @@ run them? [y/N]
   manifest that changed asks again.
 - When stdin is not a terminal, oku refuses, and `--yes` approves. Use `--yes`
   in scripts only for manifests you have read.
+- A package that `oku.lock` holds stays at its locked version when you do not
+  approve the build of its new version, or when oku cannot ask without a
+  terminal. oku says so, and the rest of `update` or `sync` goes on.
+- oku installs that locked version from the manifest the lock pins. You
+  approved its build before, so oku does not ask again.
+- A package that is new to the lock has no version to keep, so the command
+  stops. So does a local manifest file you edited, since its old text is
+  gone.
 - A dep that builds from source asks for its own approval, before the package
   that needs it.
 - An approval applies to one machine. `oku sync` on a new machine asks again.

@@ -73,6 +73,9 @@ type installed struct {
 	// notTaken is the version oku did not take for that reason, keeping the
 	// locked one, or empty.
 	notTaken string
+	// notApproved says why the package kept its locked version, when the build
+	// of the new one was not approved, or is empty.
+	notApproved string
 }
 
 // errNotTaken reports a version whose source gives no release time and that
@@ -260,8 +263,39 @@ func (c *depCache) do(root, key string, install func() (installed, error)) (inst
 }
 
 // install fetches the manifest, realizes the host's artifact and returns the
-// profile and lock entries for it. It changes the store only.
+// profile and lock entries for it. It changes the store only. When the user
+// does not approve the build of a new version of a package that oku.lock holds,
+// the package keeps its locked version and the rest of the command goes on.
 func (e env) install(ctx context.Context, opts Options, req request) (installed, error) {
+	got, err := e.installOnce(ctx, opts, req)
+
+	previous := req.previous
+	if !errors.Is(err, errNotApproved) || req.keepVersion || previous.Version == "" ||
+		previous.Ref != req.ref.String() {
+		return got, err
+	}
+
+	// The locked version installs from the manifest the lock pins, whose build
+	// was approved when it was locked.
+	locked := req
+	locked.keepVersion, locked.commit, locked.acceptDigest = true, previous.Commit, false
+	locked.wantManifest = previous.ManifestSHA256
+
+	got, lockedErr := e.installOnce(ctx, opts, locked)
+	if lockedErr != nil {
+		return installed{}, err
+	}
+
+	if declined := (notApprovedError{}); errors.As(err, &declined) {
+		got.notApproved = fmt.Sprintf(
+			"the build of %s was not approved, since %s", declined.version, declined.why,
+		)
+	}
+
+	return got, nil
+}
+
+func (e env) installOnce(ctx context.Context, opts Options, req request) (installed, error) {
 	fetched, inferred, err := e.manifestData(ctx, opts, req)
 	if err != nil {
 		return installed{}, err
@@ -1847,8 +1881,13 @@ func ageKnowable(v manifest.Version) bool {
 }
 
 // reportAge warns that oku could not check the release time of a version it
-// picked, or that it kept the locked version since it did not take the new one.
+// picked, or that it kept the locked version since it did not take the new one
+// or its build was not approved.
 func reportAge(w io.Writer, got installed) {
+	if got.notApproved != "" {
+		warn(w, "%s stays at %s: %s", got.lock.Name, got.lock.Version, got.notApproved)
+	}
+
 	if got.notTaken != "" {
 		warn(w, "%s stays at %s: %s was not taken, since its source gives no release time",
 			got.lock.Name, got.lock.Version, got.notTaken)
