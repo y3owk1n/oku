@@ -549,12 +549,19 @@ Check 'the shared data file is read-only' { (Get-Item $dataB).IsReadOnly }
 $programLinks = (fsutil hardlink list (Get-Item "$store\share-b-*\bin\share-b.exe").FullName) -join "`n"
 Check 'a program is not shared' { $programLinks -notmatch 'share-a-' }
 
-# The program runs from the store, since every shim is a link to one file.
-$pinger = Start-Process (Get-Item "$store\share-b-*\bin\share-b.exe").FullName -ArgumentList '-n', '30', '127.0.0.1' -PassThru -WindowStyle Hidden
+# Every shim is a hard link of one file, so the old generations hold links to
+# the shim that runs. gc moves those aside and deletes them once it has ended.
+$pinger = Start-Process "$bin\share-b.exe" -ArgumentList '-n', '30', '127.0.0.1' -PassThru -WindowStyle Hidden
+Start-Sleep -Seconds 1
 Oku remove share-a
 Oku gc --keep 1
 Check 'gc deletes a store path while a program of the other one runs' { -not (Test-Path "$store\share-a-*") }
+Check 'gc deletes the old generations while a shim runs' {
+    @(Get-ChildItem $profileDir -Directory -Filter 'gen-*').Count -eq 1
+}
+Check 'the shim keeps running' { -not $pinger.HasExited }
 Stop-Process $pinger -ErrorAction SilentlyContinue
+$pinger.WaitForExit()
 
 Check 'the kept data file is whole and still read-only' {
     ((Get-Item $dataB).Length -eq 20000) -and (Get-Item $dataB).IsReadOnly
@@ -566,6 +573,10 @@ $key = (Get-FileHash $zeros -Algorithm SHA256).Hash.ToLower()
 Oku remove share-b
 Oku gc --keep 1
 Check 'gc drops the shared file once no store path holds it' { -not (Test-Path "$store\.links\$key") }
+$trash = Join-Path $env:XDG_DATA_HOME 'oku\trash'
+Check 'gc deletes what it moved aside once the program has ended' {
+    -not (Test-Path $trash) -or @(Get-ChildItem $trash).Count -eq 0
+}
 
 # Uninstall, which has to delete the running oku.exe and the junctions.
 Set-Location $env:RUNNER_TEMP

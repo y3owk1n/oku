@@ -943,6 +943,10 @@ order step in `prd/product.md`.
   `PATH`.
 - B82 [9] `oku hook pwsh` gives B61 to B68 in PowerShell, on Windows, macOS
   and Linux, and keeps `$LASTEXITCODE` across the prompt.
+- B366 [9] On Windows, `oku gc` deletes old generations and unused store paths
+  while a program that oku installed runs, through its shim or from the store.
+  What Windows keeps in use moves to `<data>/oku/trash` or the store root's
+  `trash`, and a later `gc` deletes it once nothing uses it.
 
 ## Cache and signing
 

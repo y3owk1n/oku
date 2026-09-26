@@ -16,6 +16,8 @@ import (
 	"time"
 
 	"github.com/pelletier/go-toml/v2"
+
+	"github.com/y3owk1n/oku/internal/trash"
 )
 
 const (
@@ -445,11 +447,16 @@ func (p *Profile) Activate(n int) error {
 
 // Discard deletes generation n.
 func (p *Profile) Discard(n int) error {
-	if err := os.RemoveAll(filepath.Join(p.dir, genPrefix+strconv.Itoa(n))); err != nil {
+	if err := trash.Remove(filepath.Join(p.dir, genPrefix+strconv.Itoa(n)), p.trash()); err != nil {
 		return fmt.Errorf("delete generation %d: %w", n, err)
 	}
 
 	return nil
+}
+
+// trash holds what a deleted generation left in use, beside the profiles.
+func (p *Profile) trash() string {
+	return filepath.Join(filepath.Dir(filepath.Dir(p.dir)), "trash")
 }
 
 // Generations lists every generation, oldest first.
@@ -689,7 +696,7 @@ func (p *Profile) Prune(keep int, dryRun bool) ([]int, error) {
 
 		if !dryRun {
 			dir := filepath.Join(p.dir, genPrefix+strconv.Itoa(gen.Number))
-			if err := os.RemoveAll(dir); err != nil {
+			if err := trash.Remove(dir, p.trash()); err != nil {
 				return removed, fmt.Errorf("delete generation %d: %w", gen.Number, err)
 			}
 		}

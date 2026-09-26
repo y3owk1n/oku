@@ -755,6 +755,10 @@ freed 4.6 MiB from 1 store path
   shared the identical files of 109 store paths (830.4 MiB)
   freed 830.4 MiB from identical files
   ```
+- On Windows a program that runs cannot be deleted. When a program of an old
+  generation or of an unused store path still runs, gc moves its files into a
+  `trash` folder beside the profiles or the store, and a later gc deletes them
+  once the program has ended.
 - The kept generations keep their numbers, and no number is used twice.
 - A dep counts as used while any generation holds a package that depends on
   it.

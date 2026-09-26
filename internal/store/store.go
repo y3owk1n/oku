@@ -31,6 +31,7 @@ import (
 	"github.com/y3owk1n/oku/internal/sandbox"
 	"github.com/y3owk1n/oku/internal/status"
 	"github.com/y3owk1n/oku/internal/tempdir"
+	"github.com/y3owk1n/oku/internal/trash"
 )
 
 // metaFile is the description oku writes into every store path.
@@ -963,7 +964,8 @@ func (s *Store) Remove(path string) error {
 		return fmt.Errorf("%s is not a store path", path)
 	}
 
-	if err := os.RemoveAll(path); err != nil {
+	// A program of the path may still run, from a generation that is gone.
+	if err := trash.Remove(path, filepath.Join(filepath.Dir(s.dir), "trash")); err != nil {
 		return err
 	}
 
