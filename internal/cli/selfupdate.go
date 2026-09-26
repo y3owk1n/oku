@@ -88,21 +88,21 @@ says otherwise, or --min-release-age for one run. --to and --nightly skip it.`,
 // oldEnoughRelease returns latest, the newest release of repo, when it is older
 // than the minimum release age. Otherwise it says that latest waits, and
 // returns the newest release that is old enough and newer than this oku, or
-// this oku's own release when there is none.
+// this oku's own release when there is none, and true.
 func (e env) oldEnoughRelease(
 	cmd *cobra.Command,
 	opts Options,
 	repo string,
 	latest forge.Release,
-) (forge.Release, error) {
+) (forge.Release, bool, error) {
 	own, err := list.Read(e.listPath())
 	if err != nil {
-		return forge.Release{}, err
+		return forge.Release{}, false, err
 	}
 
 	age, err := releaseAge(cmd, own, list.Entry{})
 	if err != nil {
-		return forge.Release{}, err
+		return forge.Release{}, false, err
 	}
 
 	now := time.Now
@@ -111,7 +111,7 @@ func (e env) oldEnoughRelease(
 	}
 
 	if age == 0 || !latest.Published.After(now().Add(-age)) {
-		return latest, nil
+		return latest, false, nil
 	}
 
 	fmt.Fprintf(
@@ -129,14 +129,16 @@ func (e env) oldEnoughRelease(
 	running := strings.TrimPrefix(opts.Version, "v")
 	if errors.Is(err, resolve.ErrTooNew) ||
 		err == nil && isVersion(running) && resolve.Compare(picked.Version, running) <= 0 {
-		return forge.Release{Tag: "v" + running}, nil
+		return forge.Release{Tag: "v" + running}, true, nil
 	}
 
 	if err != nil {
-		return forge.Release{}, err
+		return forge.Release{}, true, err
 	}
 
-	return e.inferrer(opts).Tagged(cmd.Context(), repo, picked.Tag)
+	found, err := e.inferrer(opts).Tagged(cmd.Context(), repo, picked.Tag)
+
+	return found, true, err
 }
 
 // isVersion reports whether version is a release number and not a build such
@@ -186,6 +188,8 @@ func runSelfUpdate(cmd *cobra.Command, opts Options, check, nightly, release boo
 		found   forge.Release
 		newest  string
 		current bool
+		// held reports that the minimum release age held a newer release back.
+		held bool
 	)
 
 	switch {
@@ -216,7 +220,7 @@ func runSelfUpdate(cmd *cobra.Command, opts Options, check, nightly, release boo
 			return err
 		}
 
-		if found, err = e.oldEnoughRelease(cmd, opts, repo, found); err != nil {
+		if found, held, err = e.oldEnoughRelease(cmd, opts, repo, found); err != nil {
 			return err
 		}
 	}
@@ -232,6 +236,8 @@ func runSelfUpdate(cmd *cobra.Command, opts Options, check, nightly, release boo
 			fmt.Fprintf(out, "oku %s is the newest nightly build\n", newest)
 		case to != "":
 			fmt.Fprintf(out, "oku %s is release %s already\n", newest, to)
+		case held:
+			fmt.Fprintf(out, "oku %s is the newest release that is old enough\n", newest)
 		default:
 			fmt.Fprintf(out, "oku %s is the newest release\n", newest)
 		}

@@ -111,7 +111,8 @@ func TestB374SelfUpdateTakesTheNewestReleaseOlderThanTheMinimumReleaseAge(t *tes
 	out, err = m.run(t, "", "self", "update")
 	must(t, err)
 
-	if binary() != "oku v1.3.0" || !strings.Contains(out, "waits until") {
+	if binary() != "oku v1.3.0" || !strings.Contains(out, "waits until") ||
+		!strings.Contains(out, "1.3.0 is the newest release that is old enough") {
 		t.Fatalf("self update on 1.3.0 took %q:\n%s", binary(), out)
 	}
 
