@@ -460,6 +460,11 @@ order step in `prd/product.md`.
   about.
 - B376 [3] The `pubDate` of a Sparkle feed's item is its release time, so the
   minimum release age checks it.
+- B378 [3] `oku gc` removes the profile of a project whose folder, or whose
+  `oku.toml`, is gone, which frees the packages only it used, and forgets the
+  project's `oku allow`. It keeps a project on a volume that is not mounted,
+  and a profile whose folder oku does not know, and says so. `--dry-run` names
+  what it would remove.
 - B371 [3] `oku gc --older-than 30d` first deletes the generations older than
   30 days, except the newest of them, which was active 30 days ago, and the
   active one. It takes days (`d`) or weeks (`w`) and refuses anything else.

@@ -134,11 +134,57 @@ const LockSnapshot = "oku.lock"
 // Profile is a directory of generations.
 type Profile struct {
 	dir string
+	// project is the directory of the project whose profile this is, or empty.
+	project string
 }
+
+// projectFile in the profile of a project holds the project's directory, so gc
+// can tell when the project is gone.
+const projectFile = "project"
 
 // Open returns the profile called name under dataDir.
 func Open(dataDir, name string) *Profile {
 	return &Profile{dir: filepath.Join(dataDir, "profiles", name)}
+}
+
+// OpenProject returns the profile called name of the project in dir, and
+// records dir in it when the profile exists and does not name it yet.
+func OpenProject(dataDir, name, dir string) *Profile {
+	p := &Profile{dir: filepath.Join(dataDir, "profiles", name), project: dir}
+	if _, err := os.Stat(p.dir); err == nil {
+		p.recordProject()
+	}
+
+	return p
+}
+
+// recordProject writes the project's directory into the profile. The profile
+// works without it, so a failure is left alone.
+func (p *Profile) recordProject() {
+	path := filepath.Join(p.dir, projectFile)
+	if held, err := os.ReadFile(path); err == nil && string(held) == p.project {
+		return
+	}
+
+	_ = os.WriteFile(path, []byte(p.project), 0o644)
+}
+
+// Project returns the directory of the project whose profile p is, as the
+// profile records it, or empty when it records none.
+func (p *Profile) Project() string {
+	data, _ := os.ReadFile(filepath.Join(p.dir, projectFile))
+
+	return string(data)
+}
+
+// Delete removes the profile and every generation in it. What a program of it
+// that still runs keeps goes to the trash.
+func (p *Profile) Delete() error {
+	if err := trash.Remove(p.dir, p.trash()); err != nil {
+		return fmt.Errorf("delete profile %s: %w", p.Name(), err)
+	}
+
+	return nil
 }
 
 // LockSnapshotOfCurrent returns the oku.lock saved in the active generation, or
@@ -411,6 +457,10 @@ func (p *Profile) stage(
 	gen := filepath.Join(p.dir, genPrefix+strconv.Itoa(next))
 	if err := os.MkdirAll(gen, 0o755); err != nil {
 		return 0, fmt.Errorf("create generation: %w", err)
+	}
+
+	if p.project != "" {
+		p.recordProject()
 	}
 
 	err = p.linkPackages(gen, pkgs)

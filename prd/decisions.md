@@ -1643,3 +1643,18 @@ alone, where a failure would stop the whole update. `--accept-unknown-age` is
 apart from `--yes`, which approves build commands, so one flag does not answer
 both questions. Sparkle feeds date each item with `pubDate`, so they count as
 dated.
+
+## D100. gc removes the profile of a project that is gone
+
+Each project profile records its project's folder in a `project` file. `oku
+gc` removes the profile when that folder, or its `oku.toml`, is gone, and
+forgets the project's `oku allow`. A profile from before the record takes the
+folder from `trust/allow.toml`, and one that neither names is kept.
+
+Why: a project profile is named after a hash of its folder, so a deleted or
+moved project left its profile, and every package only it used, in place for
+good. gc is where oku already frees what nothing uses. A folder on a volume
+that is not mounted is away, not gone, so gc keeps it, since removing it would
+lose the project's generations on the next gc run without the drive. A profile
+whose folder oku cannot place may belong to a project that still exists, so gc
+keeps it and says how many there are.

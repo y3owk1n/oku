@@ -49,6 +49,7 @@ export XDG_CACHE_HOME=/tmp/oku-try/cache
         oku-gen.toml           when it was written, its packages, and the store paths of their deps
         oku.lock               a copy of oku.lock as it was then
         files/                 the content of the text entries of [files]
+      project                  the project's folder, in a project's profile, which gc checks
       trees/<hash>/            the links of one set of packages, which generations share
         bin/rg -> <store path>/bin/rg
         share/...

@@ -499,7 +499,7 @@ func (e env) profile() *profile.Profile {
 		return e.globalProfile()
 	}
 
-	return profile.Open(e.data, projectProfile(e.project))
+	return profile.OpenProject(e.data, projectProfile(e.project), e.project)
 }
 
 // projectProfile is the name of the profile of the project in dir.

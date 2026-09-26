@@ -755,6 +755,20 @@ freed 4.6 MiB from 1 store path
   path is used by a generation`. When `--keep` deleted generations and no
   store path became unused, it prints `every store path is still used by a
   generation`.
+- It removes the profile of a project that is gone: its folder no longer
+  exists, or no longer holds an `oku.toml`. That frees the packages only that
+  project used, and it forgets the project's `oku allow`. A project that
+  moved counts as gone, since the new folder gets a profile of its own.
+  `--dry-run` names such projects and removes nothing.
+
+  ```
+  removed project ~/Dev/old-thing, its folder is gone (3 generations)
+  ```
+- It keeps a project on a drive that is not mounted, such as one under
+  `/Volumes`, `/media` or `/mnt`, or on a missing Windows drive, and says so.
+  It also keeps a project profile from before oku recorded each project's
+  folder, when `oku allow` never named that folder either, and says how many.
+  Running any oku command in that project records it.
 - The size of a store path is what deleting it frees. A file that a kept
   store path shares counts as nothing, and a file that several deleted store
   paths share counts once.
