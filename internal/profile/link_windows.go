@@ -71,9 +71,11 @@ func linkEntry(target, dest string, pkg Package) error {
 		return hardLinkOrCopy(target, dest)
 	}
 
-	// dest is <data>/oku/profiles/<profile>/gen-<n>/bin/<name>.exe, and the shims
-	// of every profile share <data>/oku/shims.
-	source, err := shimSource(filepath.Join(filepath.Dir(dest), "..", "..", "..", "..", "shims"))
+	// dest is <data>/oku/profiles/<profile>/trees/<key>/bin/<name>.exe, and the
+	// shims of every profile share <data>/oku/shims.
+	source, err := shimSource(
+		filepath.Join(filepath.Dir(dest), "..", "..", "..", "..", "..", "shims"),
+	)
 	if err != nil {
 		return err
 	}
@@ -112,6 +114,33 @@ func linkEntry(target, dest string, pkg Package) error {
 	}
 
 	return shim.Write(dest, spec)
+}
+
+// linkDir makes link a directory junction to target, which every Windows user
+// may create.
+func linkDir(target, link string) error {
+	out, err := exec.Command("cmd", "/c", "mklink", "/J", link, target).CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("mklink /J: %w: %s", err, strings.TrimSpace(string(out)))
+	}
+
+	return nil
+}
+
+// linkVersion names the running oku.exe, which every shim is a copy of, so a new
+// oku builds new shims.
+func linkVersion() string {
+	self, err := os.Executable()
+	if err != nil {
+		return ""
+	}
+
+	info, err := os.Stat(self)
+	if err != nil {
+		return ""
+	}
+
+	return fmt.Sprintf("oku-%d-%d", info.Size(), info.ModTime().Unix())
 }
 
 // shimSource returns a copy of the running oku.exe in dir, and makes it when it

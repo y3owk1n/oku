@@ -36,6 +36,9 @@ Check 'the profile has a shim and its spec file' {
 Check 'current is a junction, not a symlink' {
     (Get-Item (Split-Path $bin)).LinkType -eq 'Junction'
 }
+Check 'bin is a junction to the links that generations share' {
+    ((Get-Item $bin).LinkType -eq 'Junction') -and ((Get-Item $bin).Target -match '\\trees\\')
+}
 
 $version = & "$bin\rg.exe" --version
 Check 'the shim passes arguments and stdout through' { $version -match '^ripgrep \d' }

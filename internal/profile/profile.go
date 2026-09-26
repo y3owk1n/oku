@@ -4,6 +4,8 @@ package profile
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -120,6 +122,10 @@ type Generation struct {
 
 // filesDir is the directory in a generation that holds the content of files.
 const filesDir = "files"
+
+// treesDir in a profile holds the links of each set of packages that a
+// generation holds, named by a hash of the set.
+const treesDir = "trees"
 
 // LockSnapshot is the file in a generation that holds oku.lock as it was when
 // the generation was activated.
@@ -407,7 +413,12 @@ func (p *Profile) stage(
 		return 0, fmt.Errorf("create generation: %w", err)
 	}
 
-	if err := build(gen, p.Current(), pkgs, files, settings, lockData); err != nil {
+	err = p.linkPackages(gen, pkgs)
+	if err == nil {
+		err = build(gen, p.Current(), pkgs, files, settings, lockData)
+	}
+
+	if err != nil {
 		os.RemoveAll(gen)
 
 		return 0, err
@@ -451,7 +462,7 @@ func (p *Profile) Discard(n int) error {
 		return fmt.Errorf("delete generation %d: %w", n, err)
 	}
 
-	return nil
+	return p.dropTrees()
 }
 
 // trash holds what a deleted generation left in use, beside the profiles.
@@ -538,11 +549,138 @@ func (p *Profile) nextGeneration() (int, error) {
 	return highest + 1, nil
 }
 
-// build links every file under each package's bin, share and man into gen,
-// writes the content of files, saves the lock snapshot and writes the state
-// file. A build that installed its manuals under {{prefix}}/man, as `make
-// install` with a bare prefix does, gets them under share/man like every other
-// package.
+// linkPackages points the bin and share of gen at the links to the files of
+// pkgs. The links of one set of packages are built once, under treesDir, so a
+// generation that changes files, settings or the lock alone costs no links.
+func (p *Profile) linkPackages(gen string, pkgs []Package) error {
+	if len(pkgs) == 0 {
+		return nil
+	}
+
+	tree := filepath.Join(p.dir, treesDir, treeKey(pkgs))
+	if _, err := os.Stat(tree); errors.Is(err, fs.ErrNotExist) {
+		if err := buildTree(tree, pkgs); err != nil {
+			return err
+		}
+	} else if err != nil {
+		return fmt.Errorf("write generation: %w", err)
+	}
+
+	for _, sub := range []string{"bin", "share"} {
+		if _, err := os.Stat(filepath.Join(tree, sub)); err != nil {
+			continue
+		}
+
+		if err := linkDir(filepath.Join(tree, sub), filepath.Join(gen, sub)); err != nil {
+			return fmt.Errorf("write generation: %w", err)
+		}
+	}
+
+	return nil
+}
+
+// treeKey names the links of pkgs. A Windows shim holds the closure and a copy
+// of oku, so those count too.
+func treeKey(pkgs []Package) string {
+	sum := sha256.New()
+	fmt.Fprintln(sum, linkVersion())
+
+	for _, pkg := range pkgs {
+		fmt.Fprintln(
+			sum, pkg.Name, pkg.StorePath,
+			strings.Join(pkg.Closure, "\x00"), strings.Join(pkg.BuildOnly, "\x00"),
+		)
+	}
+
+	return hex.EncodeToString(sum.Sum(nil))[:16]
+}
+
+// buildTree links every file under each package's bin, share and man into tree.
+// A build that installed its manuals under {{prefix}}/man, as `make install`
+// with a bare prefix does, gets them under share/man like every other package.
+func buildTree(tree string, pkgs []Package) error {
+	if err := os.MkdirAll(filepath.Dir(tree), 0o755); err != nil {
+		return fmt.Errorf("write generation: %w", err)
+	}
+
+	tmp, err := os.MkdirTemp(filepath.Dir(tree), ".tmp-")
+	if err != nil {
+		return fmt.Errorf("write generation: %w", err)
+	}
+
+	owners := map[string]string{}
+
+	for _, pkg := range pkgs {
+		for _, sub := range [][2]string{
+			{"bin", "bin"}, {"share", "share"}, {"man", filepath.Join("share", "man")},
+		} {
+			if err := linkTree(tmp, pkg, sub[0], sub[1], owners); err != nil {
+				os.RemoveAll(tmp)
+
+				return err
+			}
+		}
+	}
+
+	if err := os.Rename(tmp, tree); err != nil {
+		os.RemoveAll(tmp)
+
+		return fmt.Errorf("write generation: %w", err)
+	}
+
+	return nil
+}
+
+// dropTrees deletes the links of each set of packages that no generation uses.
+func (p *Profile) dropTrees() error {
+	trees := filepath.Join(p.dir, treesDir)
+
+	entries, err := os.ReadDir(trees)
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil
+	}
+
+	if err != nil {
+		return fmt.Errorf("read profile: %w", err)
+	}
+
+	used := map[string]bool{}
+
+	gens, err := os.ReadDir(p.dir)
+	if err != nil {
+		return fmt.Errorf("read profile: %w", err)
+	}
+
+	for _, gen := range gens {
+		if !strings.HasPrefix(gen.Name(), genPrefix) {
+			continue
+		}
+
+		for _, sub := range []string{"bin", "share"} {
+			// A Windows junction reads back as an absolute path.
+			if target, err := os.Readlink(filepath.Join(p.dir, gen.Name(), sub)); err == nil {
+				used[filepath.Base(filepath.Dir(target))] = true
+			}
+		}
+	}
+
+	for _, entry := range entries {
+		if used[entry.Name()] {
+			continue
+		}
+
+		// A shim in it may still run.
+		if err := trash.Remove(filepath.Join(trees, entry.Name()), p.trash()); err != nil {
+			return fmt.Errorf("delete %s: %w", entry.Name(), err)
+		}
+	}
+
+	return nil
+}
+
+// build writes the content of files, saves the lock snapshot and writes the
+// state file into gen. A file or lock with the same bytes and mode as in the
+// generation it replaces becomes a hard link to that copy.
 func build(
 	gen string,
 	from int,
@@ -551,16 +689,9 @@ func build(
 	settings []Setting,
 	lockData []byte,
 ) error {
-	owners := map[string]string{}
-
-	for _, pkg := range pkgs {
-		for _, tree := range [][2]string{
-			{"bin", "bin"}, {"share", "share"}, {"man", filepath.Join("share", "man")},
-		} {
-			if err := linkTree(gen, pkg, tree[0], tree[1], owners); err != nil {
-				return err
-			}
-		}
+	prev := ""
+	if from > 0 {
+		prev = filepath.Join(filepath.Dir(gen), genPrefix+strconv.Itoa(from))
 	}
 
 	for _, f := range files {
@@ -579,28 +710,21 @@ func build(
 			mode = 0o444
 		}
 
-		path := filepath.Join(gen, filesDir, f.Content)
-		if err := os.WriteFile(path, f.Text, mode); err != nil {
-			return fmt.Errorf("write generation: %w", err)
-		}
-
-		// WriteFile applies the umask, and a mode from the list is meant exactly.
-		if err := os.Chmod(path, mode); err != nil {
-			return fmt.Errorf("write generation: %w", err)
+		if err := writeOrReuse(gen, prev, filepath.Join(filesDir, f.Content), f.Text, mode); err != nil {
+			return err
 		}
 
 		// Two files may use one encrypted file, which then has one copy.
 		for _, ref := range f.Secrets {
-			err := os.WriteFile(filepath.Join(gen, filesDir, ref.Cipher), ref.Data, 0o600)
-			if err != nil {
-				return fmt.Errorf("write generation: %w", err)
+			if err := writeOrReuse(gen, prev, filepath.Join(filesDir, ref.Cipher), ref.Data, 0o600); err != nil {
+				return err
 			}
 		}
 	}
 
 	if lockData != nil {
-		if err := os.WriteFile(filepath.Join(gen, LockSnapshot), lockData, 0o644); err != nil {
-			return fmt.Errorf("write generation: %w", err)
+		if err := writeOrReuse(gen, prev, LockSnapshot, lockData, 0o644); err != nil {
+			return err
 		}
 	}
 
@@ -616,6 +740,41 @@ func build(
 	}
 
 	if err := os.WriteFile(filepath.Join(gen, stateFile), data, 0o644); err != nil {
+		return fmt.Errorf("write generation: %w", err)
+	}
+
+	return nil
+}
+
+// writeOrReuse writes data with mode at rel in gen. When prev, the generation gen
+// replaces, holds the same bytes with the same mode at rel, rel becomes a hard
+// link to that copy.
+func writeOrReuse(gen, prev, rel string, data []byte, mode fs.FileMode) error {
+	path := filepath.Join(gen, rel)
+
+	// Two files may use one encrypted file, whose name holds its hash, and a
+	// write through a link would change prev.
+	if _, err := os.Lstat(path); err == nil {
+		return nil
+	}
+
+	if prev != "" {
+		old := filepath.Join(prev, rel)
+		if info, err := os.Lstat(old); err == nil && info.Mode().IsRegular() &&
+			info.Mode().Perm() == mode {
+			if held, err := os.ReadFile(old); err == nil && bytes.Equal(held, data) &&
+				os.Link(old, path) == nil {
+				return nil
+			}
+		}
+	}
+
+	if err := os.WriteFile(path, data, mode); err != nil {
+		return fmt.Errorf("write generation: %w", err)
+	}
+
+	// WriteFile applies the umask, and a mode from the list is meant exactly.
+	if err := os.Chmod(path, mode); err != nil {
 		return fmt.Errorf("write generation: %w", err)
 	}
 
@@ -704,5 +863,9 @@ func (p *Profile) Prune(keep int, dryRun bool) ([]int, error) {
 		removed = append(removed, gen.Number)
 	}
 
-	return removed, nil
+	if dryRun || len(removed) == 0 {
+		return removed, nil
+	}
+
+	return removed, p.dropTrees()
 }

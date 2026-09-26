@@ -25,6 +25,22 @@ func (p *Profile) point(gen string) error {
 	return nil
 }
 
+// linkDir makes link a relative symlink to the directory target, so that a
+// profile keeps working when its directory moves.
+func linkDir(target, link string) error {
+	rel, err := filepath.Rel(filepath.Dir(link), target)
+	if err != nil {
+		return err
+	}
+
+	return os.Symlink(rel, link)
+}
+
+// linkVersion is empty, since a symlink holds nothing of oku.
+func linkVersion() string {
+	return ""
+}
+
 // linkEntry creates dest in a generation for the store file target.
 func linkEntry(target, dest string, _ Package) error {
 	return os.Symlink(target, dest)

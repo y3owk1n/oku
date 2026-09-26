@@ -1565,3 +1565,23 @@ attribute, so deleting one store path leaves another's file read-only. A
 package that writes to its own files in place fails with permission denied
 where the store hard links. It can still create files, since directories stay
 writable.
+
+## D96. Generations share the links of one set of packages
+
+A profile keeps the links into the store of each set of packages once, in
+`trees/<hash>/`, where the hash covers each package's name, store path and
+closure, and on Windows the copy of oku that every shim is. A generation's `bin`
+and `share` are a relative symlink there, or a directory junction on Windows.
+A generation's `oku.lock` and the content of each file are hard links to the
+copy in the generation it replaced when the bytes and the mode are the same.
+`oku gc --keep` deletes the trees that no generation links to.
+
+Why: most changes add a dotfile or a setting and leave the packages alone, yet
+each wrote every link again. On ext4 a link longer than 60 bytes takes a 4 KiB
+block, so on 2026-09-26 one global profile of 844 links cost 3.9 MB per
+generation, and the copy of `oku.lock` another 164 KB. Nix and Guix keep a
+profile as one store path that generations point at, for the same reason. A
+tree per set, and not a link to the previous generation, lets `gc --keep`
+delete any generation without breaking another. The lock and the files use hard
+links, since oku never changes them after it writes a generation, and so
+rollback still restores each generation's own bytes.
