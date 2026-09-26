@@ -36,15 +36,16 @@ func removeBinary(path string) error {
 }
 
 // deleteLater deletes dir once no program holds its files. A detached cmd tries
-// every ten seconds for a day.
+// every ten seconds for a day. The wait comes first, since cmd would read
+// anything after "if ... exit" as part of the if.
 func deleteLater(dir string) error {
 	const detachedProcess = 0x00000008
 
 	cmd := exec.Command("cmd")
 	cmd.SysProcAttr = &syscall.SysProcAttr{
 		CmdLine: fmt.Sprintf(
-			`cmd /c "for /l %%i in (1,1,8640) do @(rd /s /q "%s" 2>nul & `+
-				`if not exist "%s" exit & ping -n 11 127.0.0.1 >nul)"`,
+			`cmd /c "for /l %%i in (1,1,8640) do @(ping -n 11 127.0.0.1 >nul & `+
+				`rd /s /q "%s" 2>nul & if not exist "%s" exit)"`,
 			dir, dir,
 		),
 		CreationFlags: detachedProcess | syscall.CREATE_NEW_PROCESS_GROUP,

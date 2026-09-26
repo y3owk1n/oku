@@ -638,7 +638,10 @@ Check 'the file that was moved aside is deleted once oku has exited' {
     -not (Test-Path "$oku.uninstalled")
 }
 Get-Process linger -ErrorAction SilentlyContinue | Stop-Process
-Start-Sleep -Seconds 15
+# The deleting cmd tries every ten seconds.
+for ($i = 0; $i -lt 30 -and ((Test-Path "$env:XDG_DATA_HOME\oku-uninstalled") -or (Test-Path "$env:ProgramData\oku-uninstalled")); $i++) {
+    Start-Sleep -Seconds 1
+}
 Check 'the files of the program are deleted once it has ended' {
     -not (Test-Path "$env:XDG_DATA_HOME\oku-uninstalled") -and -not (Test-Path "$env:ProgramData\oku-uninstalled")
 }
