@@ -33,6 +33,13 @@ func sidecar(executable string) string {
 	return strings.TrimSuffix(executable, filepath.Ext(executable)) + Ext
 }
 
+// Has reports whether a spec file is beside the program at executable.
+func Has(executable string) bool {
+	_, err := os.Stat(sidecar(executable))
+
+	return err == nil
+}
+
 // Write saves spec for the shim at executable.
 func Write(executable string, spec Spec) error {
 	lines := []string{"path = " + spec.Target}

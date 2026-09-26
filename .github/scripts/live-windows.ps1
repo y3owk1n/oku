@@ -1118,8 +1118,33 @@ Check 'a pypi: program finds its python on PATH, and not the uv that installed i
     ($httpSpec -match 'dir = .*\\python-3\.13\.15-') -and ($httpSpec -notmatch '\\uv-')
 }
 
-# python.exe loads python313.dll from beside the real file in its download, and
-# bin in the store holds a link to it, so the shim names the download.
+# python.exe loads python313.dll from beside the real file in its download. With
+# the download's own directory kept, that file sits in pkg\python, the shape of
+# most Windows archives. A user who may not create symlinks gets a copy in the
+# store's bin, with no DLL beside it, so the shim names the real file instead.
+$nestedToml = Join-Path $fixtures 'python-nested.toml'
+Set-Content $nestedToml @'
+[package]
+name = "python-nested"
+[version]
+value = "3.13.15"
+[[artifact]]
+url = "https://github.com/astral-sh/python-build-standalone/releases/download/20260901/cpython-3.13.15+20260901-x86_64-pc-windows-msvc-install_only.tar.gz"
+bin = ["python/python.exe"]
+'@
+Oku add $nestedToml
+$nestedSpec = (Get-Content "$bin\python.shim") -join "`n"
+Check 'the shim of a program in a directory of its download names the real file' {
+    $nestedSpec -match 'path = .*\\pkg\\python\\python\.exe'
+}
+$version = & "$bin\python.exe" --version
+Check 'a program that loads a DLL beside it in a directory of its download runs from its shim' {
+    $version -match '^Python 3\.13'
+}
+Oku remove python-nested
+
+# The same program with the download's directory stripped. The real file and its
+# DLL then sit at the top of pkg.
 Oku add $pythonToml
 $version = & "$bin\python.exe" --version
 Check 'a program that loads a DLL beside it in its download runs from its shim' { $version -match '^Python 3\.13' }

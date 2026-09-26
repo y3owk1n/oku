@@ -29,6 +29,7 @@ import (
 	"github.com/y3owk1n/oku/internal/manifest"
 	"github.com/y3owk1n/oku/internal/platform"
 	"github.com/y3owk1n/oku/internal/sandbox"
+	"github.com/y3owk1n/oku/internal/shim"
 	"github.com/y3owk1n/oku/internal/status"
 	"github.com/y3owk1n/oku/internal/tempdir"
 	"github.com/y3owk1n/oku/internal/trash"
@@ -252,7 +253,7 @@ func (s *Store) Realize(
 		return Realized{}, fmt.Errorf("unpack %s: %w", a.URL, err)
 	}
 
-	if err := linkOutputs(tmp, a); err != nil {
+	if err := linkOutputs(tmp, final, a, p.OS); err != nil {
 		return Realized{}, err
 	}
 
@@ -497,10 +498,26 @@ func singleFileName(url string) string {
 
 var manSectionRe = regexp.MustCompile(`\.([1-9])[a-z]*(\.gz)?$`)
 
+// nameRealFile writes the spec that names the program's file in the download,
+// beside the link to that file in bin. A Windows user who may not create
+// symlinks gets a copy in bin instead of a link, and Windows then looks for the
+// program's DLLs beside the copy. The shim reads this spec and starts the file
+// in the download, where the DLLs are.
+func nameRealFile(tmp, final, entry, name, goos string) error {
+	if goos != "windows" || !strings.EqualFold(path.Ext(entry), ".exe") {
+		return nil
+	}
+
+	return shim.Write(
+		filepath.Join(tmp, "bin", name),
+		shim.Spec{Target: filepath.Join(final, "pkg", filepath.FromSlash(entry))},
+	)
+}
+
 // linkOutputs links the artifact's outputs from <tmp>/pkg into <tmp>/bin and
 // <tmp>/share. Links are relative so they still resolve after the move into the
-// store.
-func linkOutputs(tmp string, a manifest.Artifact) error {
+// store, which is at final. goos is the platform the package installs for.
+func linkOutputs(tmp, final string, a manifest.Artifact, goos string) error {
 	bins := make([][2]string, 0, len(a.Bin)+len(a.Wrap))
 	for _, entry := range a.Bin {
 		bins = append(bins, [2]string{entry, path.Base(entry)})
@@ -523,6 +540,10 @@ func linkOutputs(tmp string, a manifest.Artifact) error {
 			filepath.Join(tmp, "pkg", filepath.FromSlash(entry)),
 			0o755,
 		); err != nil {
+			return fmt.Errorf("bin %q: %w", entry, err)
+		}
+
+		if err := nameRealFile(tmp, final, entry, name, goos); err != nil {
 			return fmt.Errorf("bin %q: %w", entry, err)
 		}
 	}

@@ -1007,8 +1007,8 @@ order step in `prd/product.md`.
 - B80 [9] Profile `bin` entries are shims that exec the store binary with
   arguments, stdio and exit code passed through.
 - B81 [9] A binary with DLL deps in other store paths, or beside its real file
-  in its own download, starts from any working directory, and so does a build
-  step that runs such a binary of a dep.
+  anywhere in its own download, starts from any working directory, and so does
+  a build step that runs such a binary of a dep.
 - B288 [9] On Windows, two `.msi` downloads in one sync both unpack, one
   after the other.
 - B269 [9] On Windows, a build step with `shell = "pwsh"`, and oku's own steps

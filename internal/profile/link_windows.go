@@ -71,6 +71,13 @@ func linkEntry(target, dest string, pkg Package) error {
 		return hardLinkOrCopy(target, dest)
 	}
 
+	// A program of the package has a spec beside it in the store, which names the
+	// program's file in the download. That spec makes the shim, so this copy of
+	// the program needs no link.
+	if !wrapper && shim.Has(target) {
+		return nil
+	}
+
 	// dest is <data>/oku/profiles/<profile>/trees/<key>/bin/<name>.exe, and the
 	// shims of every profile share <data>/oku/shims.
 	source, err := shimSource(

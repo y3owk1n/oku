@@ -52,10 +52,11 @@ A normal Windows user may not create symlinks, so oku builds a
   process that the program starts keeps running, as on macOS and Linux.
 - Other files are hard links into the store, or copies across volumes.
 
-A shim also puts the `bin` directories of the package's runtime deps, and the
-downloads of the package and those deps, at the front of `PATH` for the
-program. That is how a program finds the DLLs it ships and those of its deps,
-from any directory.
+A shim starts the program's real file in the download, wherever that file sits
+in it, so Windows finds the DLLs the package ships beside it. The shim also puts
+the `bin` directories of the package's runtime deps, and the downloads of the
+package and those deps, at the front of `PATH`. That is how the program finds
+the DLLs of its deps from any directory.
 
 Shims are hard links to one copy of oku in `%LOCALAPPDATA%\oku\shims\`, so they
 take no extra space. After you replace `oku.exe`, new shims use a new copy, and
