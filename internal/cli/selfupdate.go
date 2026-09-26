@@ -9,10 +9,15 @@ import (
 	"regexp"
 	"runtime"
 	"strings"
+	"time"
+	"unicode"
 
 	"github.com/spf13/cobra"
 
 	"github.com/y3owk1n/oku/internal/forge"
+	"github.com/y3owk1n/oku/internal/list"
+	"github.com/y3owk1n/oku/internal/manifest"
+	"github.com/y3owk1n/oku/internal/resolve"
 	"github.com/y3owk1n/oku/internal/store"
 )
 
@@ -48,7 +53,11 @@ is built into this binary made that signature.
 prerelease with the same signature. A nightly build stays on nightly until you
 pass --release, which goes back to the newest release.
 
---to <tag> takes that release, older or newer, after the same check.`,
+--to <tag> takes that release, older or newer, after the same check.
+
+A release that came out less than the minimum release age ago waits, as it
+does for packages: [lock] min_release_age in the global oku.toml, 1d unless it
+says otherwise, or --min-release-age for one run. --to and --nightly skip it.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if nightly && release {
@@ -70,8 +79,70 @@ pass --release, which goes back to the newest release.
 	cmd.Flags().
 		BoolVar(&release, "release", false, "go from a nightly build back to the newest release")
 	cmd.Flags().StringVar(&to, "to", "", "take the release with this tag, such as v0.5.0")
+	cmd.Flags().String(minReleaseAgeFlag, "",
+		"take only a release made at least this long ago, such as 3d, or 0 for the newest")
 
 	return cmd
+}
+
+// oldEnoughRelease returns latest, the newest release of repo, when it is older
+// than the minimum release age. Otherwise it says that latest waits, and
+// returns the newest release that is old enough and newer than this oku, or
+// this oku's own release when there is none.
+func (e env) oldEnoughRelease(
+	cmd *cobra.Command,
+	opts Options,
+	repo string,
+	latest forge.Release,
+) (forge.Release, error) {
+	own, err := list.Read(e.listPath())
+	if err != nil {
+		return forge.Release{}, err
+	}
+
+	age, err := releaseAge(cmd, own, list.Entry{})
+	if err != nil {
+		return forge.Release{}, err
+	}
+
+	now := time.Now
+	if opts.Now != nil {
+		now = opts.Now
+	}
+
+	if age == 0 || !latest.Published.After(now().Add(-age)) {
+		return latest, nil
+	}
+
+	fmt.Fprintf(
+		cmd.OutOrStdout(),
+		"oku %s came out less than %s ago, so it waits until %s. "+
+			"--min-release-age 0 takes it now\n",
+		strings.TrimPrefix(latest.Tag, "v"), resolve.FormatAge(age),
+		latest.Published.Add(age).Local().Format("2006-01-02 15:04"),
+	)
+
+	picked, _, err := e.resolverAged(opts, age).PickWaiting(cmd.Context(), manifest.Version{
+		From: manifest.FromGitHubReleases, Repo: repo, StripPrefix: "v",
+	}, "")
+
+	running := strings.TrimPrefix(opts.Version, "v")
+	if errors.Is(err, resolve.ErrTooNew) ||
+		err == nil && isVersion(running) && resolve.Compare(picked.Version, running) <= 0 {
+		return forge.Release{Tag: "v" + running}, nil
+	}
+
+	if err != nil {
+		return forge.Release{}, err
+	}
+
+	return e.inferrer(opts).Tagged(cmd.Context(), repo, picked.Tag)
+}
+
+// isVersion reports whether version is a release number and not a build such
+// as "dev".
+func isVersion(version string) bool {
+	return version != "" && unicode.IsDigit(rune(version[0]))
 }
 
 // releaseAsset names the release file for this OS and CPU.
@@ -142,6 +213,10 @@ func runSelfUpdate(cmd *cobra.Command, opts Options, check, nightly, release boo
 		}
 	default:
 		if found, err = e.inferrer(opts).Latest(cmd.Context(), repo); err != nil {
+			return err
+		}
+
+		if found, err = e.oldEnoughRelease(cmd, opts, repo, found); err != nil {
 			return err
 		}
 	}

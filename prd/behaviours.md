@@ -999,6 +999,11 @@ order step in `prd/product.md`.
   signature.
 - B246 [11] `oku self update` refuses a binary whose signature the release key
   made for another release, and names both releases.
+- B374 [11] `oku self update` takes the newest release made at least the
+  global list's `min_release_age` ago, 1 day unless it says otherwise, and
+  says which newer release waits and until when. It never takes a release
+  older than the one that runs. `--min-release-age` replaces the age for one
+  run, and `--to` and `--nightly` skip it.
 - B111 [11] `oku self update --nightly` replaces the oku binary with the build
   of the `nightly` release after the same signature check, and changes nothing
   when the running binary is that build.
