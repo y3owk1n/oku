@@ -591,7 +591,7 @@ name = "linger"
 value = "1.0.0"
 [build]
 [[build.step]]
-run = "New-Item -ItemType Directory -Force '{{prefix}}/bin' | Out-Null; Copy-Item `$env:SystemRoot/System32/PING.EXE '{{prefix}}/bin/linger.exe'"
+run = "New-Item -ItemType Directory -Force '{{prefix}}/bin' | Out-Null; Copy-Item `$env:SystemRoot/System32/PING.EXE '{{prefix}}/bin/linger.exe'; Copy-Item `$env:SystemRoot/System32/cmd.exe '{{prefix}}/bin/launch.exe'"
 shell = "pwsh"
 "@
 Oku add (Join-Path $fixtures 'linger.toml') --yes
@@ -601,6 +601,17 @@ Check 'a shim and the program it started run' { @(Get-Process linger -ErrorActio
 Stop-Process $lingerShim
 Start-Sleep -Seconds 2
 Check 'stopping the shim stops the program it started' { -not (Get-Process linger -ErrorAction SilentlyContinue) }
+
+# A program that the program started, as an editor that a launcher opens, keeps
+# running. launch is cmd, which starts ping and waits.
+$launchShim = Start-Process "$bin\launch.exe" -ArgumentList '/c', 'ping -n 120 127.0.0.1' -PassThru -WindowStyle Hidden
+Start-Sleep -Seconds 2
+Stop-Process $launchShim
+Start-Sleep -Seconds 2
+Check 'stopping the shim leaves what its program started' {
+    -not (Get-Process launch -ErrorAction SilentlyContinue) -and (Get-Process PING -ErrorAction SilentlyContinue)
+}
+Get-Process PING -ErrorAction SilentlyContinue | Stop-Process
 
 # Uninstall, which has to delete the running oku.exe and the junctions, while a
 # program that oku installed runs from the shared store through its shim.
