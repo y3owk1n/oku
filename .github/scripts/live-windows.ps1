@@ -1141,6 +1141,18 @@ $version = & "$bin\python.exe" --version
 Check 'a program that loads a DLL beside it in a directory of its download runs from its shim' {
     $version -match '^Python 3\.13'
 }
+
+# A package that an older oku unpacked has no spec beside the link in its bin.
+# The next install writes it, with no new download.
+$nestedTarget = [regex]::Match($nestedSpec, 'path = (.+)').Groups[1].Value
+$nestedStore = Split-Path (Split-Path (Split-Path $nestedTarget))
+Oku remove python-nested
+Remove-Item "$nestedStore\bin\python.shim"
+Oku add $nestedToml
+Check 'an install writes the spec that an older oku left out of the store' {
+    (Test-Path "$nestedStore\bin\python.shim") -and
+    ((& "$bin\python.exe" --version) -match '^Python 3\.13')
+}
 Oku remove python-nested
 
 # The same program with the download's directory stripped. The real file and its

@@ -179,7 +179,7 @@ func (s *Store) Realize(
 	// needs no second look at the published checksum.
 	if pinned != "" && (a.SHA256 == "" || a.SHA256 == pinned) {
 		if final := s.artifactPath(m, a, p, pinned, deps); exists(final) {
-			return Realized{Path: final, SHA256: pinned}, nil
+			return reuse(Realized{Path: final, SHA256: pinned}, a, p.OS)
 		}
 	}
 
@@ -206,7 +206,7 @@ func (s *Store) Realize(
 
 	if want != "" {
 		if final := s.artifactPath(m, a, p, want, deps); exists(final) {
-			return Realized{Path: final, SHA256: want}, nil
+			return reuse(Realized{Path: final, SHA256: want}, a, p.OS)
 		}
 	}
 
@@ -219,7 +219,7 @@ func (s *Store) Realize(
 		Path: s.artifactPath(m, a, p, got, deps), SHA256: got, FirstUse: want == "",
 	}
 	if exists(realized.Path) {
-		return realized, nil
+		return reuse(realized, a, p.OS)
 	}
 
 	vouched, err := s.vouched(ctx, m, a, download)
@@ -498,26 +498,51 @@ func singleFileName(url string) string {
 
 var manSectionRe = regexp.MustCompile(`\.([1-9])[a-z]*(\.gz)?$`)
 
-// nameRealFile writes the spec that names the program's file in the download,
+// reuse returns a package that is in the store already. A package that an older
+// oku unpacked has no spec beside the links in its bin, so this writes the ones
+// that are missing. It downloads nothing.
+func reuse(r Realized, a manifest.Artifact, goos string) (Realized, error) {
+	if err := nameRealFiles(filepath.Join(r.Path, "bin"), r.Path, a, goos); err != nil {
+		return Realized{}, err
+	}
+
+	return r, nil
+}
+
+// nameRealFiles writes the spec that names each program's file in the download,
 // beside the link to that file in bin. A Windows user who may not create
 // symlinks gets a copy in bin instead of a link, and Windows then looks for the
 // program's DLLs beside the copy. The shim reads this spec and starts the file
-// in the download, where the DLLs are.
-func nameRealFile(tmp, final, entry, name, goos string) error {
-	if goos != "windows" || !strings.EqualFold(path.Ext(entry), ".exe") {
+// in the download, where the DLLs are. dir is the bin that holds the links,
+// either in the unpack or in the store. prefix is where the package ends up. A
+// spec that is there already stays, such as the one a wrapper wrote.
+func nameRealFiles(dir, prefix string, a manifest.Artifact, goos string) error {
+	if goos != "windows" {
 		return nil
 	}
 
-	return shim.Write(
-		filepath.Join(tmp, "bin", name),
-		shim.Spec{Target: filepath.Join(final, "pkg", filepath.FromSlash(entry))},
-	)
+	for _, bin := range binEntries(a) {
+		entry, name := bin[0], bin[1]
+		if !strings.EqualFold(path.Ext(entry), ".exe") {
+			continue
+		}
+
+		link := filepath.Join(dir, name)
+		if shim.Has(link) {
+			continue
+		}
+
+		spec := shim.Spec{Target: filepath.Join(prefix, "pkg", filepath.FromSlash(entry))}
+		if err := shim.Write(link, spec); err != nil {
+			return fmt.Errorf("bin %q: %w", entry, err)
+		}
+	}
+
+	return nil
 }
 
-// linkOutputs links the artifact's outputs from <tmp>/pkg into <tmp>/bin and
-// <tmp>/share. Links are relative so they still resolve after the move into the
-// store, which is at final. goos is the platform the package installs for.
-func linkOutputs(tmp, final string, a manifest.Artifact, goos string) error {
+// binEntries pairs each program of the artifact with the name it takes in bin.
+func binEntries(a manifest.Artifact) [][2]string {
 	bins := make([][2]string, 0, len(a.Bin)+len(a.Wrap))
 	for _, entry := range a.Bin {
 		bins = append(bins, [2]string{entry, path.Base(entry)})
@@ -530,7 +555,14 @@ func linkOutputs(tmp, final string, a manifest.Artifact, goos string) error {
 		}
 	}
 
-	for _, bin := range bins {
+	return bins
+}
+
+// linkOutputs links the artifact's outputs from <tmp>/pkg into <tmp>/bin and
+// <tmp>/share. Links are relative so they still resolve after the move into the
+// store, which is at final. goos is the platform the package installs for.
+func linkOutputs(tmp, final string, a manifest.Artifact, goos string) error {
+	for _, bin := range binEntries(a) {
 		entry, name := bin[0], bin[1]
 		if err := link(tmp, entry, path.Join("bin", name)); err != nil {
 			return fmt.Errorf("bin %q: %w", entry, err)
@@ -542,10 +574,10 @@ func linkOutputs(tmp, final string, a manifest.Artifact, goos string) error {
 		); err != nil {
 			return fmt.Errorf("bin %q: %w", entry, err)
 		}
+	}
 
-		if err := nameRealFile(tmp, final, entry, name, goos); err != nil {
-			return fmt.Errorf("bin %q: %w", entry, err)
-		}
+	if err := nameRealFiles(filepath.Join(tmp, "bin"), final, a, goos); err != nil {
+		return err
 	}
 
 	mans, err := expandGlobs(filepath.Join(tmp, "pkg"), "man", a.Man)
