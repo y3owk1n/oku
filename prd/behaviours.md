@@ -452,6 +452,18 @@ order step in `prd/product.md`.
 - B345 [3] `oku du --packages` lists every store path with the profiles that
   hold it, and marks one that only old generations hold and one that no
   generation holds.
+- B362 [3] Store paths that hold an identical file of 8 KiB or more keep one
+  copy of it on disk, and each still reads the same bytes and runs as before.
+  Where the filesystem clones, the file keeps its mode. Elsewhere it is one
+  hard link with no write bits. `oku du` counts it once. On Windows a program
+  or library is never shared, so one that runs never keeps gc from deleting
+  another store path.
+- B363 [3] `oku gc` frees only what deleting a store path frees. A file that a
+  kept store path shares counts as nothing, and a file several deleted paths
+  share counts once. Once no store path holds a shared file, gc deletes it.
+- B364 [3] `oku gc` shares the identical files of store paths from before oku
+  shared files, and says how many and what that saved. `--dry-run` says how
+  many it would share and changes nothing.
 
 ## Publishing
 
@@ -931,6 +943,10 @@ order step in `prd/product.md`.
   `PATH`.
 - B82 [9] `oku hook pwsh` gives B61 to B68 in PowerShell, on Windows, macOS
   and Linux, and keeps `$LASTEXITCODE` across the prompt.
+- B366 [9] On Windows, `oku gc` deletes old generations and unused store paths
+  while a program that oku installed runs, through its shim or from the store.
+  What Windows keeps in use moves to `<data>/oku/trash` or the store root's
+  `trash`, and a later `gc` deletes it once nothing uses it.
 
 ## Cache and signing
 
@@ -940,6 +956,9 @@ order step in `prd/product.md`.
   ignored and the package builds locally.
 - B87 [10] `oku cache push` writes the signed closure of the named packages
   into a directory. Impure packages are refused.
+- B365 [10] `oku cache push` writes each shared file with the mode it had
+  before the store shared it, so an entry does not depend on what else the
+  store held.
 - B88 [10] A non-relocatable entry built under a different store root is never
   substituted.
 - B89 [10] A manifest with `signing_key` has its artifacts verified against

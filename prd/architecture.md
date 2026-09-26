@@ -27,6 +27,8 @@ XDG on unix, `%APPDATA%` and `%LOCALAPPDATA%` on Windows. `<root>` is
 <config>/oku/config.toml             sources, caches, trusted_keys, store_root
 <config>/oku/signing.key             secret key of `oku cache push`
 <root>/store/<name>-<version>-<hash>/
+<root>/store/.links/<sha256>[x]      one copy of each file store paths share (D95)
+<root>/store/.links/paths/<path>     what one store path shares, with each file's mode
 <data>/oku/profiles/global/gen-<n>/  current -> gen-<n>
 <data>/oku/profiles/project-<hash>/  same shape, keyed by the project's path
 <data>/oku/trust/allow.toml, approvals.toml

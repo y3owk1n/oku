@@ -133,7 +133,14 @@ func (s *Store) substituteFrom(
 		return fmt.Sprintf("ignored %s, it does not hold %s", url, filepath.Base(prefix)), nil
 	}
 
-	return "", os.Rename(inner, prefix)
+	if err := os.Rename(inner, prefix); err != nil {
+		return "", err
+	}
+
+	// A store path that shares nothing still works, and gc shares it later.
+	_, _ = s.Share(prefix)
+
+	return "", nil
 }
 
 // downloadEntry saves url to dest and returns a reader that has digested it.
@@ -173,6 +180,11 @@ func (s *Store) Pack(prefix, dir string, key minisign.PrivateKey) error {
 		return ErrImpure
 	}
 
+	shared, err := s.SharedFiles(prefix)
+	if err != nil {
+		return err
+	}
+
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
 	}
@@ -186,7 +198,7 @@ func (s *Store) Pack(prefix, dir string, key minisign.PrivateKey) error {
 	}
 	defer os.Remove(tmp.Name())
 
-	if err := writeEntry(tmp, prefix, name); err != nil {
+	if err := writeEntry(tmp, prefix, name, shared); err != nil {
 		tmp.Close()
 
 		return err
@@ -216,7 +228,10 @@ func (s *Store) Pack(prefix, dir string, key minisign.PrivateKey) error {
 	return os.Rename(tmp.Name(), dest)
 }
 
-func writeEntry(w io.Writer, prefix, name string) error {
+// writeEntry writes the tar of prefix under name. A shared file goes in with
+// the mode it had before the store shared it, so an entry does not depend on
+// what else the store held.
+func writeEntry(w io.Writer, prefix, name string, shared map[string]Shared) error {
 	compressed, err := zstd.NewWriter(w)
 	if err != nil {
 		return err
@@ -255,6 +270,10 @@ func writeEntry(w io.Writer, prefix, name string) error {
 		header.Name = filepath.ToSlash(filepath.Join(name, rel))
 		header.Uid, header.Gid, header.Uname, header.Gname = 0, 0, "", ""
 		header.ModTime, header.AccessTime, header.ChangeTime = time.Time{}, time.Time{}, time.Time{}
+
+		if f, ok := shared[filepath.ToSlash(rel)]; ok {
+			header.Mode = header.Mode&^0o777 | int64(f.Mode.Perm())
+		}
 
 		if err := archive.WriteHeader(header); err != nil {
 			return err

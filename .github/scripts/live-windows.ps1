@@ -522,6 +522,66 @@ Oku add (Join-Path $fixtures 'sevenzip.toml')
 $banner = (& "$bin\7za.exe") -join ' '
 Check 'a program from a 7z archive runs through its shim' { $banner -match '7-Zip \(a\) 26\.03' }
 
+# Two store paths with the same files. The data file becomes one hard link that
+# neither can change. A program keeps its own copy, since Windows refuses to
+# delete any link to a running program, and gc must still delete the other path.
+foreach ($name in 'share-a', 'share-b') {
+    Set-Content (Join-Path $fixtures "$name.toml") @"
+[package]
+name = "$name"
+[version]
+value = "1.0.0"
+[build]
+[[build.step]]
+run = "New-Item -ItemType Directory -Force '{{prefix}}/bin' | Out-Null; Copy-Item `$env:SystemRoot/System32/PING.EXE '{{prefix}}/bin/$name.exe'; [IO.File]::WriteAllBytes('{{prefix}}/data.bin', [byte[]]::new(20000))"
+shell = "pwsh"
+"@
+    Oku add (Join-Path $fixtures "$name.toml") --yes
+}
+
+# setup --system above moved the store to the shared root.
+$store = Join-Path $shared 'store'
+$dataB = (Get-Item "$store\share-b-*\data.bin").FullName
+$dataLinks = (fsutil hardlink list $dataB) -join "`n"
+Check 'two store paths share one data file' { $dataLinks -match 'share-a-' }
+Check 'the shared data file is read-only' { (Get-Item $dataB).IsReadOnly }
+
+$programLinks = (fsutil hardlink list (Get-Item "$store\share-b-*\bin\share-b.exe").FullName) -join "`n"
+Check 'a program is not shared' { $programLinks -notmatch 'share-a-' }
+
+# Every shim is a hard link of one file, so the old generations hold links to
+# the shim that runs. gc moves those aside and deletes them once it has ended.
+$pinger = Start-Process "$bin\share-b.exe" -ArgumentList '-n', '30', '127.0.0.1' -PassThru -WindowStyle Hidden
+Start-Sleep -Seconds 1
+Oku remove share-a
+Oku gc --keep 1
+Check 'gc deletes a store path while a program of the other one runs' { -not (Test-Path "$store\share-a-*") }
+Check 'gc deletes the old generations while a shim runs' {
+    @(Get-ChildItem $profileDir -Directory -Filter 'gen-*').Count -eq 1
+}
+Check 'the shim keeps running' { -not $pinger.HasExited }
+# Stopping the shim does not stop the program it started, so the test stops both.
+Stop-Process $pinger -ErrorAction SilentlyContinue
+Get-Process share-b -ErrorAction SilentlyContinue | Stop-Process
+$pinger.WaitForExit()
+Wait-Process share-b -ErrorAction SilentlyContinue
+
+Check 'the kept data file is whole and still read-only' {
+    ((Get-Item $dataB).Length -eq 20000) -and (Get-Item $dataB).IsReadOnly
+}
+
+$zeros = Join-Path $root 'zeros.bin'
+[IO.File]::WriteAllBytes($zeros, [byte[]]::new(20000))
+$key = (Get-FileHash $zeros -Algorithm SHA256).Hash.ToLower()
+Oku remove share-b
+Oku gc --keep 1
+Check 'gc drops the shared file once no store path holds it' { -not (Test-Path "$store\.links\$key") }
+Check 'gc deletes what it moved aside once the program has ended' {
+    @((Join-Path $env:XDG_DATA_HOME 'oku\trash'), (Join-Path $shared 'trash')) | ForEach-Object {
+        -not (Test-Path $_) -or @(Get-ChildItem $_).Count -eq 0
+    } | Where-Object { -not $_ } | Measure-Object | ForEach-Object { $_.Count -eq 0 }
+}
+
 # Uninstall, which has to delete the running oku.exe and the junctions.
 Set-Location $env:RUNNER_TEMP
 Oku self uninstall --yes --system

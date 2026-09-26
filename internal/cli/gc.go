@@ -33,7 +33,10 @@ func newGCCmd() *cobra.Command {
 
 Old generations keep their packages in the store so rollback needs no download.
 --keep deletes old generations first, which frees the packages only they use.
---cache also deletes the downloads that no kept store path was made from.`,
+--cache also deletes the downloads that no kept store path was made from.
+
+gc also shares the identical files of store paths that an older oku installed,
+so the disk keeps each of them once.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if cmd.Flags().Changed("keep") && keep < 1 {
@@ -132,6 +135,65 @@ func runGC(cmd *cobra.Command, keep int, dryRun, cache bool) error {
 				"%s %s (%s)", verb, filepath.Base(path), status.Size(found[path]),
 			)))
 		}
+
+		if !dryRun {
+			if err := st.DropLinks(); err != nil {
+				return err
+			}
+		}
+	}
+
+	// gc shares the identical files of store paths from before oku shared files.
+	var (
+		sharedPaths int
+		saved       int64
+	)
+
+	for _, st := range e.stores() {
+		paths, err := st.Unshared()
+		if err != nil {
+			return err
+		}
+
+		// A dry run deleted nothing, so skip the store paths it would have deleted.
+		paths = slices.DeleteFunc(paths, func(path string) bool {
+			_, gone := unused[path]
+
+			return gone
+		})
+
+		sharedPaths += len(paths)
+
+		if dryRun || len(paths) == 0 {
+			continue
+		}
+
+		done := status.Start(
+			cmd.Context(), "sharing the identical files of %s", count(len(paths), "store path"),
+		)
+
+		for _, path := range paths {
+			n, err := st.Share(path)
+			saved += n
+
+			if err != nil {
+				done()
+
+				return err
+			}
+		}
+
+		done()
+	}
+
+	switch {
+	case dryRun && sharedPaths > 0:
+		fmt.Fprintf(out, "would share the identical files of %s\n", count(sharedPaths, "store path"))
+	case saved > 0:
+		freed += saved
+		fmt.Fprintln(out, mark(fmt.Sprintf(
+			"shared the identical files of %s (%s)", count(sharedPaths, "store path"), status.Size(saved),
+		)))
 	}
 
 	// gc holds the lock of the busy package, so an oku process that changes the
@@ -185,7 +247,7 @@ func runGC(cmd *cobra.Command, keep int, dryRun, cache bool) error {
 		}
 	}
 
-	if len(unused) == 0 && len(leftovers) == 0 && len(downloads) == 0 {
+	if len(unused) == 0 && len(leftovers) == 0 && len(downloads) == 0 && saved == 0 {
 		// After deleted generations, "nothing to delete" would contradict the
 		// lines above it.
 		text := "nothing to delete, every store path is used by a generation"
@@ -220,6 +282,10 @@ func runGC(cmd *cobra.Command, keep int, dryRun, cache bool) error {
 		case c.n > 1:
 			counts = append(counts, fmt.Sprintf("%d %s", c.n, c.several))
 		}
+	}
+
+	if saved > 0 {
+		counts = append(counts, "identical files")
 	}
 
 	noun := strings.Join(counts, ", ")

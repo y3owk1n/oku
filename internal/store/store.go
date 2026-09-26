@@ -31,6 +31,7 @@ import (
 	"github.com/y3owk1n/oku/internal/sandbox"
 	"github.com/y3owk1n/oku/internal/status"
 	"github.com/y3owk1n/oku/internal/tempdir"
+	"github.com/y3owk1n/oku/internal/trash"
 )
 
 // metaFile is the description oku writes into every store path.
@@ -307,9 +308,16 @@ func (s *Store) Realize(
 	}
 
 	// Another install of the same package may have put it there first.
-	if err := os.Rename(tmp, final); err != nil && !exists(final) {
-		return Realized{}, fmt.Errorf("move package into store: %w", err)
+	if err := os.Rename(tmp, final); err != nil {
+		if !exists(final) {
+			return Realized{}, fmt.Errorf("move package into store: %w", err)
+		}
+
+		return realized, nil
 	}
+
+	// A store path that shares nothing still works, and gc shares it later.
+	_, _ = s.Share(final)
 
 	return realized, nil
 }
@@ -800,34 +808,71 @@ func writeNew(in io.Reader, dest string) error {
 	return err
 }
 
-// Unreferenced returns the store paths that are not in keep, with their sizes in
-// bytes. The caller holds the lock of the busy package, so a temporary directory
-// is left over from an install that was killed.
+// Unreferenced returns the store paths that are not in keep, with the bytes
+// that deleting them frees. A file that a kept store path shares frees nothing,
+// and a file that several of them share counts once. The caller holds the lock
+// of the busy package, so a temporary directory is left over from an install
+// that was killed.
 func (s *Store) Unreferenced(keep map[string]bool) (map[string]int64, error) {
 	entries, err := os.ReadDir(s.dir)
 	if err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return nil, fmt.Errorf("read store: %w", err)
 	}
 
-	found := map[string]int64{}
+	var unused []string
+
+	kept := map[string]bool{}
 
 	for _, entry := range entries {
 		path := filepath.Join(s.dir, entry.Name())
-		if !entry.IsDir() || keep[path] {
+		if !entry.IsDir() || entry.Name() == LinksDir {
 			continue
 		}
 
 		// A rebuild that a crash interrupted moved the old build to <path>.old. The
 		// next install of the package moves it back.
-		if keep[strings.TrimSuffix(path, ".old")] {
+		if !keep[path] && !keep[strings.TrimSuffix(path, ".old")] {
+			unused = append(unused, path)
+
 			continue
+		}
+
+		files, err := s.SharedFiles(path)
+		if err != nil {
+			return nil, err
+		}
+
+		for _, f := range files {
+			kept[f.Key] = true
+		}
+	}
+
+	found := map[string]int64{}
+
+	for _, path := range unused {
+		files, err := s.SharedFiles(path)
+		if err != nil {
+			return nil, err
 		}
 
 		var size int64
 
-		err := filepath.WalkDir(path, func(_ string, item fs.DirEntry, err error) error {
+		err = filepath.WalkDir(path, func(file string, item fs.DirEntry, err error) error {
 			if err != nil || item.IsDir() {
 				return err
+			}
+
+			rel, err := filepath.Rel(path, file)
+			if err != nil {
+				return err
+			}
+
+			if f, ok := files[filepath.ToSlash(rel)]; ok {
+				if kept[f.Key] {
+					return nil
+				}
+
+				kept[f.Key] = true
 			}
 
 			info, err := item.Info()
@@ -919,7 +964,17 @@ func (s *Store) Remove(path string) error {
 		return fmt.Errorf("%s is not a store path", path)
 	}
 
-	return os.RemoveAll(path)
+	// A program of the path may still run, from a generation that is gone.
+	if err := trash.Remove(path, filepath.Join(filepath.Dir(s.dir), "trash")); err != nil {
+		return err
+	}
+
+	err := os.Remove(filepath.Join(s.dir, LinksDir, recordsDir, filepath.Base(path)))
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil
+	}
+
+	return err
 }
 
 // Inspect downloads url into the cache, unpacks it into a temporary directory

@@ -83,6 +83,18 @@ covers the deps, and the store root unless the manifest says
   write that path into their files. oku writes `oku-meta.toml` last. A store
   path without it is a crashed build, and oku deletes it before it builds
   again. A build has no `pkg/`.
+- Store paths keep one copy of a file they have in common. When oku adds a
+  store path, it looks up each file of 8 KiB or more, by its bytes and exec
+  bit, in `store/.links/`. On APFS, btrfs and XFS a match becomes a clone,
+  which shares blocks on disk and keeps its own mode and time, so nothing
+  about the file changes. On other filesystems, ext4 and NTFS among them, it
+  becomes a hard link to one read-only file, with one mode and time for every
+  store path that has it, so that no store path can change another's. A
+  package that writes to its own files in place then gets permission denied,
+  and can still create new ones. `store/.links/paths/` records what each store
+  path shares.
+- oku leaves some files apart: a file with extended attributes, the files of a
+  repo that `[files]` links into, and on Windows every program and library.
 - `oku remove` leaves store paths in place, because older generations use
   them. [`oku gc`](commands.md#oku-gc) deletes the ones no generation uses.
 - After [`oku setup --system`](commands.md#oku-setup) the store is
