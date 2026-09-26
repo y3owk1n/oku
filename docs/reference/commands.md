@@ -1251,7 +1251,7 @@ oku: doctor found 1 problem
 ### oku self update
 
 ```
-oku self update [--check] [--nightly | --release | --to <tag>]
+oku self update [--check] [--nightly | --release | --to <tag>] [--min-release-age AGE]
 ```
 
 Replaces the `oku` binary with the newest release from
@@ -1264,6 +1264,7 @@ Replaces the `oku` binary with the newest release from
 | `--nightly` | Takes the build of the newest commit on `main`, the prerelease `nightly`. |
 | `--release` | Goes from a nightly build back to the newest release. |
 | `--to <tag>` | Takes the release with that tag, such as `v0.4.0`, older or newer. |
+| `--min-release-age AGE` | Takes only a release made at least AGE ago, in place of the global list's. `0` takes the newest. |
 
 ```
 $ oku self update
@@ -1271,6 +1272,13 @@ updated oku from 0.4.0 to 0.5.0
 what changed: https://github.com/y3owk1n/oku/releases/tag/v0.5.0
 ```
 
+- A release made less than the [minimum release age](security.md#minimum-release-age)
+  ago waits, as a package's version does. The age is `[lock]`
+  `min_release_age` in the global `oku.toml`, 1 day unless it says otherwise.
+- oku says which release waits and until when. It takes the newest release
+  that is old enough and newer than the one that runs, and otherwise prints
+  `oku <version> is the newest release that is old enough`. `--to` and
+  `--nightly` skip the age.
 - `--check` prints `oku <newest> is available, this is <running>`.
 - At the newest release it prints `oku <version> is the newest release`.
 - On a nightly build, `oku self update` without a flag refuses, because the
