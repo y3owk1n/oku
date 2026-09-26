@@ -7120,6 +7120,17 @@ func TestB196WhichNamesThePackageOfAProgram(t *testing.T) {
 	if !strings.Contains(out, "tool 1.2.3") {
 		t.Fatalf("which inside a project:\n%s", out)
 	}
+
+	// A profile entry whose file in the store is gone says so. It used to call
+	// the program one that oku did not install.
+	for _, entry := range m.storeEntries(t) {
+		must(t, os.RemoveAll(filepath.Join(m.data, "store", entry)))
+	}
+
+	if _, err := m.run(t, "", "which", "tool"); err == nil ||
+		!strings.Contains(err.Error(), "cannot read the file it runs") {
+		t.Fatalf("which for a program whose store file is gone: %v", err)
+	}
 }
 
 // completer is a program that prints completions for the shell it is given, and
