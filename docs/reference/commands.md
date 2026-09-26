@@ -721,9 +721,9 @@ oku gc [--keep N] [--cache] [--dry-run]
 ```
 
 Deletes store paths that no generation of any profile uses, and what a killed
-oku process left in the system's temporary directory. It also makes the store
-paths from before oku shared files keep one copy of the files they have in
-common, see [the store](paths.md#the-store).
+oku process left in the system's temporary directory. It also shares the
+identical files of store paths that an older oku installed, see
+[the store](paths.md#the-store).
 
 | Flag | Effect |
 |---|---|
@@ -752,10 +752,10 @@ freed 4.6 MiB from 1 store path
 
   ```
   $ oku gc
-  shared the identical files of 109 store paths (830.4 MiB)
-  freed 830.4 MiB from identical files
+  shared the identical files of 109 store paths (728.4 MiB)
+  freed 728.4 MiB from identical files
   ```
-- On Windows a program that runs cannot be deleted. When a program of an old
+- Windows refuses to delete a program that runs. When a program of an old
   generation or of an unused store path still runs, gc moves its files into a
   `trash` folder beside the profiles or the store, and a later gc deletes them
   once the program has ended.

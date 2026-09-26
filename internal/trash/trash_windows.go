@@ -8,9 +8,9 @@ import (
 	"time"
 )
 
-// remove moves each file that Windows refuses to delete into dir. Windows keeps
-// every hard link of a program that runs, and every shim is a hard link of one
-// file, but it lets such a file move. os.RemoveAll deletes a read-only file and
+// remove moves each file that Windows refuses to delete into dir. Windows
+// refuses to delete any hard link of a program that runs, and every shim is a
+// hard link of one file, but it lets such a file move. os.RemoveAll deletes a read-only file and
 // leaves the attribute of its other links alone, where os.Remove would clear it.
 func remove(path, dir string) error {
 	if err := os.RemoveAll(path); err == nil {

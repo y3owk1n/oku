@@ -163,7 +163,7 @@ func TestB363GCFreesOnlyWhatDeletingAStorePathFrees(t *testing.T) {
 		t.Fatalf("gc took the blob from one: %v", err)
 	}
 
-	// With the last store path that holds it gone, the index lets it go too.
+	// With the last store path that holds it gone, gc deletes it from the index.
 	for _, args := range [][]string{{"remove", "one"}, {"gc", "--keep", "1"}} {
 		_, err := m.run(t, "", args...)
 		must(t, err)

@@ -523,8 +523,8 @@ $banner = (& "$bin\7za.exe") -join ' '
 Check 'a program from a 7z archive runs through its shim' { $banner -match '7-Zip \(a\) 26\.03' }
 
 # Two store paths with the same files. The data file becomes one hard link that
-# neither can change. A program stays a copy of its own, since Windows keeps
-# every link to a running program, and gc must still delete the other path.
+# neither can change. A program keeps its own copy, since Windows refuses to
+# delete any link to a running program, and gc must still delete the other path.
 foreach ($name in 'share-a', 'share-b') {
     Set-Content (Join-Path $fixtures "$name.toml") @"
 [package]
@@ -560,7 +560,7 @@ Check 'gc deletes the old generations while a shim runs' {
     @(Get-ChildItem $profileDir -Directory -Filter 'gen-*').Count -eq 1
 }
 Check 'the shim keeps running' { -not $pinger.HasExited }
-# Stopping the shim leaves the program it started, so both stop.
+# Stopping the shim does not stop the program it started, so the test stops both.
 Stop-Process $pinger -ErrorAction SilentlyContinue
 Get-Process share-b -ErrorAction SilentlyContinue | Stop-Process
 $pinger.WaitForExit()

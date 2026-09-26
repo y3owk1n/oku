@@ -33,7 +33,10 @@ func newGCCmd() *cobra.Command {
 
 Old generations keep their packages in the store so rollback needs no download.
 --keep deletes old generations first, which frees the packages only they use.
---cache also deletes the downloads that no kept store path was made from.`,
+--cache also deletes the downloads that no kept store path was made from.
+
+gc also shares the identical files of store paths that an older oku installed,
+so the disk keeps each of them once.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if cmd.Flags().Changed("keep") && keep < 1 {
@@ -140,7 +143,7 @@ func runGC(cmd *cobra.Command, keep int, dryRun, cache bool) error {
 		}
 	}
 
-	// Store paths from before oku shared files get their identical files shared.
+	// gc shares the identical files of store paths from before oku shared files.
 	var (
 		sharedPaths int
 		saved       int64

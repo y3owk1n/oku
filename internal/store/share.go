@@ -40,8 +40,8 @@ type Shared struct {
 	Mode fs.FileMode
 }
 
-// Share makes each file of the store path path that another store path holds
-// too one copy on disk, and returns the bytes that saved. Where the filesystem
+// Share keeps one copy on disk of each file of the store path path that another
+// store path also holds, and returns the bytes that saved. Where the filesystem
 // clones, the file becomes a clone and keeps its mode and time. Elsewhere it
 // becomes a hard link, and the shared file loses its write bits so that no
 // store path can change another's. A store path without oku-meta.toml is a
@@ -274,8 +274,8 @@ type sharer struct {
 	hardLinks bool
 }
 
-// share makes file one copy with entry, the file under links with the same
-// key, and makes file the entry when there is none. It reports whether file
+// share makes file and entry, the file under links with the same key, one copy
+// on disk. When there is no entry, file becomes it. It reports whether file
 // shares the entry's content now, and the bytes that saved.
 func (sh *sharer) share(file, entry string, info fs.FileInfo) (bool, int64) {
 	err := os.Link(file, entry)
@@ -283,7 +283,7 @@ func (sh *sharer) share(file, entry string, info fs.FileInfo) (bool, int64) {
 		return true, 0
 	}
 
-	// A filesystem that has no hard links, or a file with too many, stays apart.
+	// A filesystem that has no hard links, or a file with too many, keeps a copy.
 	if !errors.Is(err, fs.ErrExist) {
 		return false, 0
 	}
@@ -297,8 +297,8 @@ func (sh *sharer) share(file, entry string, info fs.FileInfo) (bool, int64) {
 		return true, 0
 	}
 
-	// A package that edited the file under links since would pass its change on,
-	// so the file stands in for it.
+	// A package edited the entry after it entered the index, so it no longer holds
+	// the bytes of its key. file replaces it.
 	if same, err := sameBytes(entry, file); err != nil || !same {
 		return replaceWith(entry, file, nil) == nil, 0
 	}

@@ -12,7 +12,7 @@ func cloneFile(_, _ string) error {
 	return errNoClones
 }
 
-// shareable reports whether file is no program or library. Windows refuses to
+// shareable reports whether file is not a program or library. Windows refuses to
 // delete any hard link to a program that runs, so a shared program would keep
 // gc from deleting an old store path.
 func shareable(file string) bool {

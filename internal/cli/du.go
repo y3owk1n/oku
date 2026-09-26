@@ -558,7 +558,8 @@ func (m *meter) size(path string) int64 {
 	return m.storeSize(path, nil)
 }
 
-// storeSize is size of a store path whose shared files are files.
+// storeSize is size for a store path, and counts each file of files once by
+// its content.
 func (m *meter) storeSize(path string, files map[string]store.Shared) int64 {
 	var size int64
 
