@@ -88,9 +88,11 @@ order step in `prd/product.md`.
   milliseconds, not `0s`.
 - B196 [1] `oku which <program>` names the package and version that provide a
   program in the profile and the file in the store it runs. Inside a project
-  it looks in the project's profile, then in the global one. It warns when
-  another program earlier on PATH runs in its place, and it fails for a program
-  oku did not install, saying what PATH runs.
+  it looks in the project's profile, then in the global one. On Windows the
+  entry is a shim, and the answer names the file that its spec starts. It warns
+  when another program earlier on PATH runs in its place. It fails for a program
+  oku did not install, saying what PATH runs. It fails for one in the profile
+  whose file it cannot read, saying why.
 - B5 [1] `oku list` shows name, version and ref for the active list.
 - B6 [1] A failed install leaves the previous profile active and unchanged.
 - B7 [1] `man` and `completions` entries appear under the profile `share`.
