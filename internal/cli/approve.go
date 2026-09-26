@@ -254,9 +254,8 @@ func (e env) approver(
 				fmt.Fprint(terminal, block.String())
 
 				return fmt.Errorf(
-					"%s needs approval to run %s, and this is not a terminal\npass --yes to approve",
-					m.Package.Name,
-					them,
+					"%s %s needs approval to run %s, and this is not a terminal: %w\npass --yes to approve",
+					m.Package.Name, m.Version.Value, them, errNotApproved,
 				)
 			}
 
@@ -278,7 +277,9 @@ func (e env) approver(
 					s.Bad(s.Pick("✗", "x")), m.Package.Name, m.Version.Value,
 				)
 
-				return errors.New("not approved, nothing was built")
+				return fmt.Errorf(
+					"%s %s: %w, nothing was built", m.Package.Name, m.Version.Value, errNotApproved,
+				)
 			}
 
 			fmt.Fprintf(
@@ -290,6 +291,10 @@ func (e env) approver(
 		return approvals.Add(m.Package.Name, m.SHA256)
 	}
 }
+
+// errNotApproved reports a build or a completions command that the user did not
+// approve, or that oku could not ask about without a terminal.
+var errNotApproved = errors.New("not approved")
 
 // interactive reports whether oku can ask the user a question.
 func interactive(cmd *cobra.Command, opts Options) bool {

@@ -797,6 +797,11 @@ order step in `prd/product.md`.
   asks for approval. The same manifest hash is never asked twice. A changed
   manifest asks again. A dep that builds asks for itself.
 - B42 [5] Non-interactive runs refuse unapproved `run` steps unless `--yes`.
+- B377 [5] When the build of a new version is not approved, or cannot be asked
+  about without a terminal, a package that `oku.lock` holds stays at its locked
+  version from the manifest the lock pins, oku says so, and the rest of the
+  command goes on. A package new to the lock, or one whose locked manifest is
+  gone, stops the command.
 - B217 [5] A build `install` step accepts the same `completions` forms. With
   `generate`, the command runs in the source directory after the files are
   copied, with the package's `bin` first on PATH, and the step appears in the
