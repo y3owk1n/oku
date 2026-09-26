@@ -169,8 +169,8 @@ func (g *gitlab) Release(ctx context.Context, repo, tag string) (Release, error)
 const gitlabPage = 100
 
 // Releases reads the newest maxReleases releases.
-func (g *gitlab) Releases(ctx context.Context, repo string) ([]Release, error) {
-	return readReleases(ctx, gitlabPage, func(ctx context.Context, page int) ([]Release, int, error) {
+func (g *gitlab) Releases(ctx context.Context, repo string, all bool) ([]Release, bool, error) {
+	return readReleases(ctx, gitlabPage, all, func(ctx context.Context, page int) ([]Release, int, error) {
 		at := fmt.Sprintf("%s/releases?per_page=%d", g.project(repo), gitlabPage)
 		if page > 1 {
 			at += fmt.Sprintf("&page=%d", page)

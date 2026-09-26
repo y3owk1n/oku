@@ -140,11 +140,34 @@ func (r *Resolver) PickWaiting(
 		return Release{Version: v.Value, Tag: v.Value}, Release{}, nil
 	}
 
-	releases, err := r.List(ctx, v)
+	// The newest page of releases holds the version to install for nearly every
+	// package.
+	releases, more, err := r.listing(ctx, v, false)
 	if err != nil {
 		return Release{}, Release{}, err
 	}
 
+	release, waiting, err := r.pickFrom(v, releases, want)
+	if err == nil || !more {
+		return release, waiting, err
+	}
+
+	// That page holds no version the list allows, which happens when a repo's
+	// newest releases are all of another stream, so oku reads the other pages.
+	releases, _, err = r.listing(ctx, v, true)
+	if err != nil {
+		return Release{}, Release{}, err
+	}
+
+	return r.pickFrom(v, releases, want)
+}
+
+// pickFrom picks the release of v to install out of releases, newest first.
+func (r *Resolver) pickFrom(
+	v manifest.Version,
+	releases []Release,
+	want string,
+) (Release, Release, error) {
 	if len(releases) == 0 {
 		return Release{}, Release{}, fmt.Errorf("%s %s has no versions", v.From, v.Repo)
 	}
@@ -366,10 +389,15 @@ type memo struct {
 	lists map[string]*listing
 }
 
+// listing is what List found for one source. read is set once the first page is
+// in, and complete once every page is. The mutex serializes the lookups of one
+// source, so packages that share a source still cost one lookup.
 type listing struct {
-	once     sync.Once
-	releases []Release
-	err      error
+	mu             sync.Mutex
+	read, complete bool
+	releases       []Release
+	more           bool
+	err            error
 }
 
 // WithMemo returns a context in which List asks each version source once.
@@ -380,11 +408,24 @@ func WithMemo(ctx context.Context) context.Context {
 	return context.WithValue(ctx, memoKey{}, &memo{lists: map[string]*listing{}})
 }
 
-// List returns the releases of v, newest first.
+// List returns every release of v, newest first.
 func (r *Resolver) List(ctx context.Context, v manifest.Version) ([]Release, error) {
+	releases, _, err := r.listing(ctx, v, true)
+
+	return releases, err
+}
+
+// listing returns the releases of v, newest first, and whether the host has more
+// pages that oku has not read. With all false it reads the newest page of a
+// release list.
+func (r *Resolver) listing(
+	ctx context.Context,
+	v manifest.Version,
+	all bool,
+) ([]Release, bool, error) {
 	m, _ := ctx.Value(memoKey{}).(*memo)
 	if m == nil {
-		return r.list(ctx, v)
+		return r.list(ctx, v, all)
 	}
 
 	// A list for MinAge holds publish times, which some sources read apart.
@@ -400,84 +441,111 @@ func (r *Resolver) List(ctx context.Context, v manifest.Version) ([]Release, err
 
 	m.mu.Unlock()
 
-	l.once.Do(func() { l.releases, l.err = r.list(ctx, v) })
+	l.mu.Lock()
+	defer l.mu.Unlock()
 
-	return l.releases, l.err
+	// The pages oku has are enough when it has them all, or when the caller asked
+	// for one page and got it.
+	if l.complete || (l.read && !all) {
+		return l.releases, l.more, l.err
+	}
+
+	l.releases, l.more, l.err = r.list(ctx, v, all)
+	l.read = true
+	l.complete = l.err == nil && !l.more
+
+	return l.releases, l.more, l.err
 }
 
-func (r *Resolver) list(ctx context.Context, v manifest.Version) ([]Release, error) {
+// list reads the versions of v. With all false it reads the newest page of a
+// release list and reports whether the host has more pages. Every other source
+// gives its whole list in one answer.
+func (r *Resolver) list(
+	ctx context.Context,
+	v manifest.Version,
+	all bool,
+) ([]Release, bool, error) {
 	defer status.Start(ctx, "looking up the versions of %s", v.Repo)()
 
 	if v.Tag != "" {
 		release, err := r.movingTag(ctx, v)
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
 
-		return []Release{release}, nil
+		return []Release{release}, false, nil
 	}
 
 	if v.From == manifest.FromNPM {
-		return r.npmVersions(ctx, v.Repo)
+		releases, err := r.npmVersions(ctx, v.Repo)
+
+		return releases, false, err
 	}
 
 	if v.From == manifest.FromPyPI {
-		return r.pypiVersions(ctx, v.Repo)
+		releases, err := r.pypiVersions(ctx, v.Repo)
+
+		return releases, false, err
 	}
 
 	if v.From == manifest.FromGo {
-		return r.goVersions(ctx, v.Repo)
+		releases, err := r.goVersions(ctx, v.Repo)
+
+		return releases, false, err
 	}
 
 	if v.From == manifest.FromCrates {
-		return r.crateVersions(ctx, v.Repo)
+		releases, err := r.crateVersions(ctx, v.Repo)
+
+		return releases, false, err
 	}
 
 	if v.From == manifest.FromSparkle {
 		release, err := r.sparkle(ctx, v)
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
 
-		return []Release{release}, nil
+		return []Release{release}, false, nil
 	}
 
 	if v.From == manifest.FromRedirect || v.From == manifest.FromPage {
 		release, err := r.scrape(ctx, v)
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
 
-		return []Release{release}, nil
+		return []Release{release}, false, nil
 	}
 
 	if v.From == manifest.FromGitBranch {
 		release, err := r.branchHead(ctx, v)
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
 
-		return []Release{release}, nil
+		return []Release{release}, false, nil
 	}
 
 	var (
 		tags    []string
 		digests map[string]map[string]string
 		times   map[string]time.Time
+		more    bool
 		err     error
 	)
 
 	switch v.From {
 	case manifest.FromGitHubReleases, manifest.FromGiteaReleases, manifest.FromGitLabReleases:
-		tags, digests, times, err = r.published(ctx, v)
+		tags, digests, times, more, err = r.published(ctx, v, all)
 	case manifest.FromGitTags:
 		tags, err = r.tags(ctx, v.Repo)
 	default:
-		return nil, fmt.Errorf("version.from %q is not supported", v.From)
+		return nil, false, fmt.Errorf("version.from %q is not supported", v.From)
 	}
 
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 
 	var releases []Release
@@ -531,7 +599,7 @@ func (r *Resolver) list(ctx context.Context, v manifest.Version) ([]Release, err
 		}
 	})
 
-	return releases, nil
+	return releases, more, nil
 }
 
 // movingTag returns the one release of a tag that upstream moves, such as
@@ -579,19 +647,22 @@ func (r *Resolver) open(v manifest.Version) (forge.Forge, string, error) {
 }
 
 // published returns the tags of published releases, and the digests of each
-// one's files and its publish time by tag. It skips drafts and prereleases.
+// one's files and its publish time by tag. It skips drafts and prereleases. With
+// all false it reads the newest page of releases and reports whether the host
+// has more.
 func (r *Resolver) published(
 	ctx context.Context,
 	v manifest.Version,
-) ([]string, map[string]map[string]string, map[string]time.Time, error) {
+	all bool,
+) ([]string, map[string]map[string]string, map[string]time.Time, bool, error) {
 	host, repo, err := r.open(v)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, false, err
 	}
 
-	found, err := host.Releases(ctx, repo)
+	found, more, err := host.Releases(ctx, repo, all)
 	if err != nil {
-		return nil, nil, nil, explain(
+		return nil, nil, nil, false, explain(
 			err, "list releases of "+v.Repo, "the repository was not found",
 		)
 	}
@@ -609,7 +680,7 @@ func (r *Resolver) published(
 		}
 	}
 
-	return tags, digests, times, nil
+	return tags, digests, times, more, nil
 }
 
 // assetDigests maps the download URL of each file of release to the sha256

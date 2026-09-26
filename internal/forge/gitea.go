@@ -137,8 +137,8 @@ func (g *gitea) Release(ctx context.Context, repo, tag string) (Release, error) 
 const giteaPage = 50
 
 // Releases reads the newest maxReleases releases.
-func (g *gitea) Releases(ctx context.Context, repo string) ([]Release, error) {
-	return readReleases(ctx, giteaPage, func(ctx context.Context, page int) ([]Release, int, error) {
+func (g *gitea) Releases(ctx context.Context, repo string, all bool) ([]Release, bool, error) {
+	return readReleases(ctx, giteaPage, all, func(ctx context.Context, page int) ([]Release, int, error) {
 		body, link, err := g.read(ctx, repo, fmt.Sprintf("/releases?limit=%d&page=%d", giteaPage, page))
 		if err != nil {
 			return nil, 0, err

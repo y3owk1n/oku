@@ -35,8 +35,8 @@ func (c checked) Release(ctx context.Context, repo, tag string) (Release, error)
 	return release, err
 }
 
-func (c checked) Releases(ctx context.Context, repo string) ([]Release, error) {
-	releases, err := c.Forge.Releases(ctx, repo)
+func (c checked) Releases(ctx context.Context, repo string, all bool) ([]Release, bool, error) {
+	releases, more, err := c.Forge.Releases(ctx, repo, all)
 
 	for _, release := range releases {
 		if err == nil {
@@ -44,7 +44,7 @@ func (c checked) Releases(ctx context.Context, repo string) ([]Release, error) {
 		}
 	}
 
-	return releases, err
+	return releases, more, err
 }
 
 func (c checked) Tags(ctx context.Context, repo string) ([]string, error) {

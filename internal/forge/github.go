@@ -137,8 +137,8 @@ func (g *github) Release(ctx context.Context, repo, tag string) (Release, error)
 const releasePage = 100
 
 // Releases reads the newest maxReleases releases.
-func (g *github) Releases(ctx context.Context, repo string) ([]Release, error) {
-	return readReleases(ctx, releasePage, func(ctx context.Context, page int) ([]Release, int, error) {
+func (g *github) Releases(ctx context.Context, repo string, all bool) ([]Release, bool, error) {
+	return readReleases(ctx, releasePage, all, func(ctx context.Context, page int) ([]Release, int, error) {
 		at := fmt.Sprintf("%s/repos/%s/releases?per_page=%d", g.api, repo, releasePage)
 		if page > 1 {
 			at += fmt.Sprintf("&page=%d", page)
