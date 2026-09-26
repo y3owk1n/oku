@@ -46,6 +46,9 @@ new terminal:
 | fish | `~/.config/fish/config.fish` | `test -x "$HOME/.local/bin/oku"; and "$HOME/.local/bin/oku" hook fish \| source` |
 | PowerShell | the file `$PROFILE` names | `if (Test-Path "$HOME\AppData\Local\oku\bin\oku.exe") { Invoke-Expression ((& "$HOME\AppData\Local\oku\bin\oku.exe" hook pwsh) -join [Environment]::NewLine) }` |
 
+PowerShell reads several profiles, one per scope and host. The line works in
+any of them, and `oku doctor` finds it wherever you put it.
+
 The line does nothing on a machine without oku, so it is safe in a dotfiles
 repo you share between machines. oku never edits your startup files itself.
 

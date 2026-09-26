@@ -1047,7 +1047,12 @@ order step in `prd/product.md`.
 - B90 [11] `oku shell <ref>...` opens a shell with those packages on PATH and
   leaves `oku.toml`, the lock and every profile unchanged.
 - B91 [11] `oku doctor` reports store root, sandbox availability, hook status,
-  PATH order problems and broken profile links.
+  PATH order problems and broken profile links. It finds the hook line in any
+  file the user's shells read at startup, whether the line names `oku` or
+  `oku.exe`. A commented line does not count. For PowerShell it reads
+  `profile.ps1` and `Microsoft.<host>_profile.ps1` under `.config/powershell`,
+  `Documents/PowerShell` and `Documents/WindowsPowerShell`, with `Documents`
+  where Windows records it, which OneDrive may move.
 - B92 [11] `oku self update` replaces the oku binary after verifying its
   signature.
 - B246 [11] `oku self update` refuses a binary whose signature the release key
@@ -1078,9 +1083,9 @@ order step in `prd/product.md`.
 - B93 [11] The install script puts one static binary in place and prints the
   hook line for the user's shell. It needs no root and edits no existing file.
 - B220 [11] The install script prints the installed version, and ends with the
-  next commands: `oku doctor`, a first `oku add`, `oku self update`. When the
+  next commands: `oku doctor`, a first `oku add`, `oku self update`. When a
   startup file loads the hook already, it says so instead of printing the line
-  again.
+  again. On Windows that is any of the four files `$PROFILE` names.
 
 ## Transactions
 

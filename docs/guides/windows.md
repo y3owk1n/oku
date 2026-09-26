@@ -27,8 +27,13 @@ if (Test-Path "$HOME\AppData\Local\oku\bin\oku.exe") { Invoke-Expression ((& "$H
 It puts `oku.exe` and the programs oku installs on `PATH`, loads the
 completions of `oku`, and applies a [project's](projects.md) programs while you
 are inside it. It wraps your `prompt` function and keeps `$LASTEXITCODE`. oku
-never edits your profile itself. `oku doctor` says whether the line is in
-place.
+never edits your profile itself.
+
+`$PROFILE` names the profile of the current host, such as
+`Documents\WindowsPowerShell\Microsoft.PowerShell_profile.ps1`. The line also
+works in `profile.ps1` beside it, which every host reads, and in the
+`PowerShell` directory that PowerShell 7 uses. `oku doctor` reads all of them,
+and follows `Documents` to OneDrive when Windows keeps it there.
 
 PowerShell gets the completions of `oku` only, not those of the programs you
 install.
