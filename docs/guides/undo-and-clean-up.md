@@ -200,8 +200,9 @@ unfinished, until `oku sync` has put the machine back.
 
 The cache lives in `~/.cache/oku`, and plain gc leaves it alone.
 `oku gc --cache` also deletes the downloads that no kept store path was made
-from, such as old versions and the downloads of your other lock platforms, and
-the API answers that no command has read for 30 days:
+from, such as old versions and the downloads of your other lock platforms, the
+downloads that no install has used for two days, and the API answers that no
+command has read for 30 days:
 
 ```
 $ oku gc --keep 1 --cache
@@ -211,10 +212,12 @@ removed 38 files from the download cache (1.9 GiB)
 freed 1.9 GiB from 1 store path and 38 cached files
 ```
 
-It keeps the download of every kept store path, so you can install any
-generation you can roll back to again offline. A deleted API answer costs one
-request the next time a lookup needs it. Deleting the whole cache is also safe,
-and oku downloads again when it needs a file.
+A package whose download gc deleted still runs, because its store path holds the
+unpacked content. oku downloads the file again when it has to unpack or build it
+once more, since `oku.lock` pins its digest. `--older-than` sets how long a
+download stays, so `oku gc --cache --older-than 2w` keeps two weeks of them.
+A deleted API answer costs one request the next time a lookup needs it. Deleting
+the whole cache is also safe, and oku downloads again when it needs a file.
 [Paths](../reference/paths.md) lists every directory.
 
 ## Remove a package

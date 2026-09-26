@@ -157,9 +157,11 @@ func TestB348GCCacheDeletesDownloadsNoKeptStorePathWasMadeFrom(t *testing.T) {
 	}
 
 	// A download less than a day old may belong to a run that has not written
-	// its lock yet, so the cache is made two days old, but for one new file.
+	// its lock yet, so the cache is made a day and a half old, but for one new
+	// file. Two days is the age at which a kept store path stops holding its
+	// download (B387).
 	downloads := filepath.Join(m.cache, "downloads")
-	old := time.Now().Add(-48 * time.Hour)
+	old := time.Now().Add(-36 * time.Hour)
 
 	must(t, filepath.WalkDir(downloads, func(path string, _ fs.DirEntry, err error) error {
 		must(t, err)

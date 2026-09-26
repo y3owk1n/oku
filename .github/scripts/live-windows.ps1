@@ -777,6 +777,24 @@ Check 'a git-tags version installs from the tags the forge API lists' {
     $tagged -match '^ripgrep 15\.2\.0'
 }
 
+# rgtags is installed, so the download it was unpacked from is one gc keeps until
+# no install has used it for two days (B387).
+$rgStore = Get-ChildItem -Directory (Join-Path $env:XDG_DATA_HOME 'oku\store') |
+    Where-Object Name -Like 'rgtags-*' | Select-Object -First 1
+$sha = (Select-String -Path (Join-Path $rgStore.FullName 'oku-meta.toml') -Pattern "sha256 = '(.+)'"
+    ).Matches[0].Groups[1].Value
+$download = Join-Path $env:XDG_CACHE_HOME "oku\downloads\$sha"
+Check 'the cache holds the download that rgtags was unpacked from' { Test-Path $download }
+
+(Get-Item $download).LastWriteTime = (Get-Date).AddDays(-3)
+Oku gc --cache
+Check 'gc --cache deletes a download no install has used for two days' {
+    -not (Test-Path $download)
+}
+Check 'the program still runs after its download went' {
+    (& "$bin\rg.exe" --version) -match '^ripgrep 15\.2\.0'
+}
+
 Oku add https://github.com/sharkdp/hyperfine/releases/download/v1.19.0/hyperfine-v1.19.0-x86_64-pc-windows-msvc.zip
 $hyperfine = & "$bin\hyperfine.exe" --version
 Check 'a URL of the download installs, with its version from the file name' {

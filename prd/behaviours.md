@@ -486,10 +486,14 @@ order step in `prd/product.md`.
   active one. It takes days (`d`) or weeks (`w`) and refuses anything else.
   With `--keep N`, a generation stays when either flag keeps it.
 - B348 [3] `oku gc --cache` also deletes each download in the cache that no
-  kept store path was made from, and the index of downloads by url, and keeps
-  the download of every kept store path. It skips a file less than a day old.
-  `oku gc` without `--cache` leaves the cache alone. `oku du` says what
-  `oku gc --cache` frees.
+  kept store path was made from, and the index of downloads by url. It skips a
+  file less than a day old. `oku gc` without `--cache` leaves the cache alone.
+  `oku du` says what `oku gc --cache` frees.
+- B387 [3] `oku gc --cache` deletes a download that no install has used for two
+  days, even when a kept store path was made from it, and `--older-than` sets
+  that age. The package still runs, because its store path holds the unpacked
+  content. An install that reads a download sets the time on its file, so a
+  download in use stays.
 - B384 [3] `oku gc --cache` also deletes each API answer that no command has
   read for 30 days, and says how many and what that freed. An answer a lookup
   read since stays, because reading one sets the time on its file.
