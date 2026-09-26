@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.9.1](https://github.com/y3owk1n/oku/compare/v0.9.0...v0.9.1) (2026-09-26)
+
+
+### Bug Fixes
+
+* **doctor:** find the hook line in every PowerShell profile ([#297](https://github.com/y3owk1n/oku/issues/297)) ([fc69db4](https://github.com/y3owk1n/oku/commit/fc69db488f002f6cc02faacfcfedbbdd2ef150a5))
+* **store:** write the spec a package in the store is missing ([#300](https://github.com/y3owk1n/oku/issues/300)) ([d95159e](https://github.com/y3owk1n/oku/commit/d95159eb565206414e791511fa81367b11f99dcf))
+* **which:** read the shim spec, so a Windows program is found ([#301](https://github.com/y3owk1n/oku/issues/301)) ([5ac29b8](https://github.com/y3owk1n/oku/commit/5ac29b869c220208211ebf104ecda1642e888705))
+* **windows:** start a program's real file, so it finds its DLLs ([#299](https://github.com/y3owk1n/oku/issues/299)) ([5541d6d](https://github.com/y3owk1n/oku/commit/5541d6d9a0aeba9279ed63e7fe68bbb37401780b))
+
 ## [0.9.0](https://github.com/y3owk1n/oku/compare/v0.8.1...v0.9.0) (2026-09-26)
 
 
