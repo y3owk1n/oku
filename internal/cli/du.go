@@ -12,6 +12,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/y3owk1n/oku/internal/clone"
 	"github.com/y3owk1n/oku/internal/expose"
 	"github.com/y3owk1n/oku/internal/profile"
 	"github.com/y3owk1n/oku/internal/status"
@@ -426,6 +427,19 @@ func (e env) duAreas(cmd *cobra.Command, areas []area, paths []storePath, stale 
 
 	if err := tab.Write(out); err != nil {
 		return err
+	}
+
+	// The size of an app or a font is what the file says, and no filesystem tells
+	// which of a clone's blocks it shares, so those rows are an upper bound where
+	// oku clones.
+	for _, a := range areas {
+		if (a.Area == "apps" || a.Area == "fonts") && len(a.Paths) > 0 &&
+			clone.Possible(e.store().Dir(), a.Paths[0]) {
+			hint(out, "an app or a font that oku cloned shares its blocks with the store, "+
+				"so it takes less disk than its size above")
+
+			break
+		}
 	}
 
 	var next []string

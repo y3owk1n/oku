@@ -830,18 +830,21 @@ apps       ~/Applications               1.9 GiB    4 apps
 fonts      ~/Library/Fonts              31.5 MiB   12 fonts
 other      ~/.local/share/oku           1.2 MiB    logs, secrets, trust
 total                                   11.5 GiB
+an app or a font that oku cloned shares its blocks with the store, so it takes less disk than its size above
 `oku gc` frees 1.2 GiB, and `oku gc --cache` frees 2.8 GiB
 ```
 
 The last line says what `oku gc` frees, and what `oku gc --cache` frees, which
-includes it.
+includes it. The line above it is there on a filesystem that clones, since an
+app or a font oku placed there shares its blocks with the file in the store and
+no filesystem says how many, so its size is an upper bound.
 
 | Area | What it holds |
 |---|---|
 | `store` | Every store path, with a file that store paths share counted once. `unused` is what `oku gc` frees. `only in old generations` is what `oku gc --keep` can free once those generations go. After `oku setup --system` there is a row for the shared store and one for the old store. |
 | `profiles` | The generations of every profile. |
 | `cache` | Downloads, `git+` clones and API answers. |
-| `apps`, `fonts` | The copies oku placed outside the store, from the ledger. Absent when there are none. |
+| `apps`, `fonts` | The copies oku placed outside the store, from the ledger, each by its size. Absent when there are none. |
 | `other` | The rest of the data directory, such as secrets, services and logs. |
 | `temporary` | What killed oku processes left in the system's temporary directory, which `oku gc` also deletes. Absent when there is none. |
 

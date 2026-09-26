@@ -7,7 +7,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -17,6 +16,7 @@ import (
 
 	"github.com/pelletier/go-toml/v2"
 
+	"github.com/y3owk1n/oku/internal/clone"
 	"github.com/y3owk1n/oku/internal/list"
 )
 
@@ -451,8 +451,9 @@ func Place(item Item) error {
 	}
 
 	// oku copies, because Finder, Spotlight and font services do not treat a
-	// symlinked bundle or font as installed.
-	if err := CopyTree(source, item.Target); err != nil {
+	// symlinked bundle or font as installed. The copy is a clone where the
+	// filesystem clones, so it costs no disk and no reading of the content.
+	if err := clone.Tree(source, item.Target); err != nil {
 		return err
 	}
 
@@ -499,60 +500,4 @@ func children(dir string) []string {
 	}
 
 	return paths
-}
-
-// CopyTree copies a file or a directory, keeping modes and the symlinks inside
-// it. App bundles use relative symlinks for their frameworks.
-func CopyTree(source, target string) error {
-	return filepath.WalkDir(source, func(path string, entry fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-
-		rel, err := filepath.Rel(source, path)
-		if err != nil {
-			return err
-		}
-
-		dest := filepath.Join(target, rel)
-
-		info, err := entry.Info()
-		if err != nil {
-			return err
-		}
-
-		switch {
-		case entry.IsDir():
-			return os.MkdirAll(dest, info.Mode().Perm()|0o700)
-		case info.Mode()&fs.ModeSymlink != 0:
-			link, err := os.Readlink(path)
-			if err != nil {
-				return err
-			}
-
-			return os.Symlink(link, dest)
-		default:
-			return copyFile(path, dest, info.Mode().Perm())
-		}
-	})
-}
-
-func copyFile(source, dest string, mode fs.FileMode) error {
-	in, err := os.Open(source)
-	if err != nil {
-		return err
-	}
-	defer in.Close()
-
-	out, err := os.OpenFile(dest, os.O_CREATE|os.O_WRONLY|os.O_EXCL, mode|0o600)
-	if err != nil {
-		return err
-	}
-
-	_, err = io.Copy(out, in)
-	if closeErr := out.Close(); err == nil {
-		err = closeErr
-	}
-
-	return err
 }

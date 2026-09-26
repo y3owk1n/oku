@@ -23,6 +23,7 @@ import (
 
 	"github.com/pelletier/go-toml/v2"
 
+	"github.com/y3owk1n/oku/internal/clone"
 	"github.com/y3owk1n/oku/internal/expose"
 	"github.com/y3owk1n/oku/internal/goproxy"
 	"github.com/y3owk1n/oku/internal/manifest"
@@ -926,7 +927,7 @@ func installFiles(in manifest.Install, src, prefix string) error {
 			return err
 		}
 
-		if err := expose.CopyTree(
+		if err := clone.Tree(
 			filepath.Join(src, filepath.FromSlash(bundle)),
 			target,
 		); err != nil {

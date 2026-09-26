@@ -5149,6 +5149,73 @@ func TestB71FontIsInstalledForTheUserAndRemoveTakesItAway(t *testing.T) {
 	}
 }
 
+func TestB379APlacedAppAndFontAreIndependentOfTheStorePath(t *testing.T) {
+	m := newMachine(t)
+	app, font := m.exposedPaths()
+
+	_, err := m.run(t, "", "add", m.desktopManifest(t))
+	must(t, err)
+
+	// On Linux the app is a desktop entry that oku writes, so only macOS places a
+	// bundle.
+	placed := []string{font}
+	if runtime.GOOS == "darwin" {
+		placed = append(placed, app)
+	}
+
+	for _, target := range placed {
+		info, err := os.Lstat(target)
+		if err != nil || !info.Mode().IsRegular() {
+			t.Fatalf("%s is not a real file: %v", target, err)
+		}
+
+		source := storeTwin(t, m, target)
+
+		before, err := os.ReadFile(source)
+		must(t, err)
+
+		must(t, os.WriteFile(target, []byte("the user changed it"), info.Mode().Perm()))
+
+		after, err := os.ReadFile(source)
+		must(t, err)
+
+		if !bytes.Equal(before, after) {
+			t.Fatalf("writing to %s changed %s in the store", target, source)
+		}
+	}
+}
+
+// storeTwin returns the file in the store that placed came from, which has the
+// same name and the same size.
+func storeTwin(t *testing.T, m machine, placed string) string {
+	t.Helper()
+
+	want, err := os.Stat(placed)
+	must(t, err)
+
+	store := filepath.Join(m.data, "store")
+
+	var found string
+
+	must(t, filepath.WalkDir(store, func(path string, entry os.DirEntry, err error) error {
+		if err != nil || found != "" || entry.IsDir() || entry.Name() != filepath.Base(placed) {
+			return err //nolint:nilerr
+		}
+
+		if info, err := os.Stat(path); err == nil && info.Size() == want.Size() {
+			found = path
+		}
+
+		return nil
+	}))
+
+	if found == "" {
+		t.Fatalf("the store holds no file named %s", filepath.Base(placed))
+	}
+
+	return found
+}
+
 func TestB95UninstallRemovesExposedAppsAndFonts(t *testing.T) {
 	m := newMachine(t)
 	app, font := m.exposedPaths()
