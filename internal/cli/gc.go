@@ -40,7 +40,10 @@ Old generations keep their packages in the store so rollback needs no download.
 --older-than deletes the generations older than a number of days or weeks, and
 keeps the one that was active then, so you can still roll back to that date.
 With both, a generation stays when either flag keeps it.
---cache also deletes the downloads that no kept store path was made from.
+--cache also deletes the downloads that no kept store path was made from, the
+downloads that no install has used for two days, and the API answers that no
+command has read for a month. With --older-than, a download stays for that age
+instead of two days.
 
 gc also shares the identical files of store paths that an older oku installed,
 so the disk keeps each of them once.`,
@@ -51,6 +54,7 @@ so the disk keeps each of them once.`,
 			}
 
 			r := profile.Retention{Keep: keep}
+			keepFor := store.DownloadRetention
 
 			if olderThan != "" {
 				age, err := parseAge(olderThan)
@@ -59,9 +63,10 @@ so the disk keeps each of them once.`,
 				}
 
 				r.Since = time.Now().Add(-age)
+				keepFor = age
 			}
 
-			return runGC(cmd, r, dryRun, cache)
+			return runGC(cmd, r, keepFor, dryRun, cache)
 		},
 	}
 
@@ -72,7 +77,10 @@ so the disk keeps each of them once.`,
 		"first delete the generations older than this, such as 30d or 2w",
 	)
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "print what would be deleted and delete nothing")
-	cmd.Flags().BoolVar(&cache, "cache", false, "also delete the downloads that no kept store path was made from")
+	cmd.Flags().BoolVar(
+		&cache, "cache", false,
+		"also delete the cached downloads and API answers that nothing needs any more",
+	)
 
 	return cmd
 }
@@ -93,7 +101,7 @@ func parseAge(text string) (time.Duration, error) {
 	return time.Duration(n) * unit, nil
 }
 
-func runGC(cmd *cobra.Command, r profile.Retention, dryRun, cache bool) error {
+func runGC(cmd *cobra.Command, r profile.Retention, keepFor time.Duration, dryRun, cache bool) error {
 	e, err := loadEnv()
 	if err != nil {
 		return err
@@ -270,7 +278,7 @@ func runGC(cmd *cobra.Command, r profile.Retention, dryRun, cache bool) error {
 	var downloads, answers map[string]int64
 
 	if cache {
-		if downloads, err = e.staleDownloads(used); err != nil {
+		if downloads, err = e.staleDownloads(used, keepFor); err != nil {
 			return err
 		}
 
@@ -370,9 +378,9 @@ func runGC(cmd *cobra.Command, r profile.Retention, dryRun, cache bool) error {
 }
 
 // staleDownloads returns the files of the download cache that no store path in
-// used was made from, with their sizes. A store path's meta holds the digest
-// of its download, or of a build's source archive.
-func (e env) staleDownloads(used map[string]bool) (map[string]int64, error) {
+// used was made from, and those older than keepFor, with their sizes. A store
+// path's meta holds the digest of its download, or of a build's source archive.
+func (e env) staleDownloads(used map[string]bool, keepFor time.Duration) (map[string]int64, error) {
 	keep := map[string]bool{}
 
 	for path := range used {
@@ -381,5 +389,5 @@ func (e env) staleDownloads(used map[string]bool) (map[string]int64, error) {
 		}
 	}
 
-	return e.store().StaleDownloads(keep)
+	return e.store().StaleDownloads(keep, keepFor)
 }

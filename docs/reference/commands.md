@@ -739,8 +739,8 @@ identical files of store paths that an older oku installed, see
 | Flag | Effect |
 |---|---|
 | `--keep N` | First deletes all generations of each profile except the newest N. The active generation always stays. N is at least 1. |
-| `--older-than AGE` | First deletes the generations of each profile older than AGE, a number of days or weeks such as `30d` or `2w`. It keeps the newest generation older than AGE, which was active then, so you can still roll back to how things were AGE ago. With `--keep`, a generation stays when either flag keeps it. |
-| `--cache` | Also deletes the downloads in the cache that no kept store path was made from, and the API answers that no command has read for 30 days, see below. |
+| `--older-than AGE` | First deletes the generations of each profile older than AGE, a number of days or weeks such as `30d` or `2w`. It keeps the newest generation older than AGE, which was active then, so you can still roll back to how things were AGE ago. With `--keep`, a generation stays when either flag keeps it. With `--cache` it also sets how long a download stays. |
+| `--cache` | Also deletes the downloads in the cache that no kept store path was made from, the downloads that no install has used for two days, and the API answers that no command has read for 30 days, see below. |
 | `--dry-run` | Prints what would be deleted and deletes nothing. |
 
 ```
@@ -796,12 +796,16 @@ freed 4.6 MiB from 1 store path
   entries of a process that still runs and those of another user.
 - Without `--cache` it does not touch the cache directory. It never touches
   `oku.toml` or `oku.lock`.
-- With `--cache` it keeps each download that a kept store path was made from,
-  as its `oku-meta.toml` records. So oku can install any generation you can
-  roll back to again offline. It deletes the other downloads, such as old
-  versions and the downloads of other lock platforms, and the index of
-  downloads by url. It skips a file less than a day old, which a run that has
+- With `--cache` it deletes the downloads that no kept store path was made from,
+  such as old versions and the downloads of other lock platforms, and the index
+  of downloads by url. It skips a file less than a day old, which a run that has
   not written its lock yet may need. It leaves `git/` alone.
+- It also deletes a download that no install has used for two days, even when a
+  kept store path was made from it, and `--older-than` sets that age. The
+  package still runs, because its store path holds the unpacked content, and
+  oku downloads the file again when it has to build or unpack it once more. An
+  install that reads a download sets the time on its file, so a download in use
+  stays.
 - With `--cache` it also deletes each answer in `api/` that no command has read
   for 30 days. Reading an answer sets the time on its file, so an answer that a
   lookup still uses stays. Deleting one costs a single request the next time.

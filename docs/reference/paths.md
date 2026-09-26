@@ -67,7 +67,7 @@ export XDG_CACHE_HOME=/tmp/oku-try/cache
     allow.toml                 projects the shell hook may apply
 
 <cache>/oku/
-  downloads/<sha256>           verified downloads, reused on reinstall
+  downloads/<sha256>           verified downloads, reused on reinstall for two days
   downloads/by-url/<hash>      the digest each url gave in the last day, so a run that stopped early does not download again
   git/<hash>/                  clones for git+ refs
   api/<hash>                   answers of forge and registry APIs, asked again with their ETag. One line of JSON, then the answer packed with zstd
@@ -260,9 +260,10 @@ stale lock.
 ## The cache
 
 Deleting the cache directory is safe. oku downloads again when it needs to.
-`oku gc` leaves the cache alone. `oku gc --cache` deletes the downloads that
-no kept store path was made from, and the API answers that no command has read
-for 30 days, see [`oku gc`](commands.md#oku-gc).
+`oku gc` leaves the cache alone. `oku gc --cache` deletes the downloads that no
+kept store path was made from, the downloads that no install has used for two
+days, and the API answers that no command has read for 30 days, see
+[`oku gc`](commands.md#oku-gc).
 
 An API answer holds the host's ETag, so the next lookup asks the host whether
 anything changed, and downloads the whole list again only when it did. Reading

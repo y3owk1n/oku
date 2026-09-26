@@ -60,6 +60,11 @@ func (s *Store) download(
 	if cached != "" {
 		dest := filepath.Join(dir, cached)
 		if got, err := fileSHA256(dest); err == nil && got == cached {
+			// The age of the file says when an install last used it, which is what
+			// gc goes by.
+			now := time.Now()
+			_ = os.Chtimes(dest, now, now)
+
 			return dest, cached, nil
 		}
 	}
@@ -115,11 +120,18 @@ func (s *Store) download(
 	return dest, got, nil
 }
 
-// StaleDownloads returns the files of the download cache that no install
-// needs, with their sizes: each download whose digest is not in keep, the
-// entries of the index by url, and partial downloads. It skips a file less than
-// a day old, which may belong to a run that has not written its lock yet.
-func (s *Store) StaleDownloads(keep map[string]bool) (map[string]int64, error) {
+// DownloadRetention is how long a download that no install has used stays in the
+// cache once a store path holds its unpacked content. The lock pins the digest of
+// every download, so oku can fetch one again, and two days cover redoing
+// yesterday's install without the network.
+const DownloadRetention = 2 * 24 * time.Hour
+
+// StaleDownloads returns the files of the download cache that no install needs,
+// with their sizes: each download that no install has used for keepFor, each
+// download whose digest is not in keep, the entries of the index by url, and
+// partial downloads. It skips a file less than a day old, which may belong to a
+// run that has not written its lock yet.
+func (s *Store) StaleDownloads(keep map[string]bool, keepFor time.Duration) (map[string]int64, error) {
 	dir := filepath.Join(s.cache, "downloads")
 	stale := map[string]int64{}
 
@@ -138,8 +150,13 @@ func (s *Store) StaleDownloads(keep map[string]bool) (map[string]int64, error) {
 			return err
 		}
 
+		age := time.Since(info.ModTime())
+		if age < recentDownload {
+			return nil
+		}
+
 		inIndex := filepath.Dir(path) != dir
-		if time.Since(info.ModTime()) >= recentDownload && (inIndex || !keep[entry.Name()]) {
+		if inIndex || !keep[entry.Name()] || age >= keepFor {
 			stale[path] = info.Size()
 		}
 

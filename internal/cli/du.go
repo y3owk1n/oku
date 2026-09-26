@@ -75,7 +75,7 @@ the apps and fonts it copied out of the store, and the rest of its data.
 				used[path] = true
 			}
 
-			stale, err := e.staleDownloads(used)
+			stale, err := e.staleDownloads(used, store.DownloadRetention)
 			if err != nil {
 				return err
 			}

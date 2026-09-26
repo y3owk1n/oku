@@ -113,9 +113,26 @@ Check 'an API answer names the length of the answer it packed' {
     (Get-Content -TotalCount 1 $answer.FullName) -match '"bytes":\s*\d+'
 }
 $answer.LastWriteTime = (Get-Date).AddDays(-31)
+
+# fd is installed, so the download it was unpacked from is one that gc keeps
+# until no install has used it for two days (B387).
+$fd = Get-ChildItem -Directory (Join-Path $env:XDG_DATA_HOME 'oku\store') |
+    Where-Object Name -Like 'fd-*' | Select-Object -First 1
+$sha = (Select-String -Path (Join-Path $fd.FullName 'oku-meta.toml') -Pattern "sha256 = '(.+)'"
+    ).Matches[0].Groups[1].Value
+$download = Join-Path $env:XDG_CACHE_HOME "oku\downloads\$sha"
+Check 'the cache holds the download that fd was unpacked from' { Test-Path $download }
+(Get-Item $download).LastWriteTime = (Get-Date).AddDays(-3)
+
 $pruned = (Oku gc --cache) -join "`n"
 Check 'gc --cache deletes an answer no command read for a month' {
     ($pruned -match 'from the API cache') -and -not (Test-Path $answer.FullName)
+}
+Check 'gc --cache deletes a download no install has used for two days' {
+    -not (Test-Path $download)
+}
+Check 'the program still runs after its download went' {
+    (& "$bin\fd.exe" --version) -match '^fd \d'
 }
 
 # The PowerShell hook, with a project that needs fd.
