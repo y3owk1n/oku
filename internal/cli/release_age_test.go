@@ -182,3 +182,130 @@ func TestB373AVersionWithoutAReleaseTimeIsTakenWithANote(t *testing.T) {
 		t.Fatalf("add took %s and said:\n%s", got, out)
 	}
 }
+
+// undated serves owner/tool with releases 1.0.0 and 1.1.0 and no release times,
+// and asks the real default of [lock] unknown_release_age.
+func undated(t *testing.T) (machine, string) {
+	t.Helper()
+
+	m := newMachine(t)
+	m.opts.UnknownReleaseAge = ""
+	tool := ageServer(t, &m, map[string]time.Duration{"1.0.0": 0, "1.1.0": 0})
+
+	return m, tool
+}
+
+func TestB375WarnRefusesANewUndatedVersionWithoutATerminal(t *testing.T) {
+	m, tool := undated(t)
+
+	_, err := m.run(t, "", "add", tool)
+	if err == nil || !strings.Contains(err.Error(), "--accept-unknown-age") {
+		t.Fatalf("add without a terminal took an undated version: %v", err)
+	}
+
+	out, err := m.run(t, "", "add", tool, "--accept-unknown-age")
+	must(t, err)
+
+	if got := m.toolVersion(t); got != "1.1.0" || !strings.Contains(out, "gives no release time") {
+		t.Fatalf("--accept-unknown-age took %s and said:\n%s", got, out)
+	}
+}
+
+func TestB375WarnAsksOnATerminal(t *testing.T) {
+	m, tool := undated(t)
+	m.opts.Interactive = yes()
+
+	out, err := m.run(t, "y\n", "add", tool)
+	must(t, err)
+
+	if got := m.toolVersion(t); got != "1.1.0" || !strings.Contains(out, "take it? [y/N]") {
+		t.Fatalf("a yes took %s after:\n%s", got, out)
+	}
+}
+
+func TestB375ANoKeepsTheLockedVersionAndTheUpdateGoesOn(t *testing.T) {
+	m, tool := undated(t)
+
+	_, err := m.run(t, "", "add", tool+"@1.0.0")
+	must(t, err)
+
+	// The list lets tool move again.
+	m.writeFilesList(t, fmt.Sprintf("[packages]\ntool = %q\n", tool))
+
+	for _, tc := range []struct {
+		name  string
+		stdin string
+		tty   bool
+	}{
+		{"without a terminal", "", false},
+		{"a no on a terminal", "n\n", true},
+	} {
+		m.opts.Interactive = &tc.tty
+
+		out, err := m.run(t, tc.stdin, "update")
+		if err != nil {
+			t.Fatalf("%s: update failed: %v\n%s", tc.name, err, out)
+		}
+
+		if got := m.toolVersion(t); got != "1.0.0" || !strings.Contains(out, "stays at 1.0.0") {
+			t.Fatalf("%s: update left %s and said:\n%s", tc.name, got, out)
+		}
+	}
+}
+
+func TestB375RefuseAndThePackagesOwnAge(t *testing.T) {
+	m, tool := undated(t)
+	m.opts.Interactive = yes()
+
+	m.writeFilesList(t, fmt.Sprintf(
+		"[lock]\nunknown_release_age = \"refuse\"\n[packages]\ntool = %q\n", tool,
+	))
+
+	if _, err := m.run(t, "y\n", "sync"); err == nil || !strings.Contains(err.Error(), "refuses") {
+		t.Fatalf("refuse asked or took an undated version: %v", err)
+	}
+
+	m.writeFilesList(t, fmt.Sprintf(
+		"[lock]\nunknown_release_age = \"refuse\"\n[packages]\ntool = { ref = %q, min_release_age = \"0\" }\n",
+		tool,
+	))
+
+	_, err := m.run(t, "", "sync")
+	must(t, err)
+
+	if got := m.toolVersion(t); got != "1.1.0" {
+		t.Fatalf("min_release_age 0 took %s", got)
+	}
+
+	m.writeFilesList(t, "[lock]\nunknown_release_age = \"never\"\n")
+
+	if _, err := m.run(t, "", "sync"); err == nil || !strings.Contains(err.Error(), "wants \"allow\"") {
+		t.Fatalf("an unknown value passed: %v", err)
+	}
+}
+
+func TestB376ASparkleItemsPubDateIsItsReleaseTime(t *testing.T) {
+	m := newMachine(t)
+	m.opts.UnknownReleaseAge = ""
+	s := m.vendorServer(t, "1.2.0")
+
+	feed := func(age time.Duration) {
+		s.setFeed(`<rss><channel><item><sparkle:shortVersionString>1.2.0</sparkle:shortVersionString>` +
+			`<pubDate>` + time.Now().Add(-age).UTC().Format(time.RFC1123Z) + `</pubDate></item></channel></rss>`)
+	}
+
+	ref := m.partsManifest(t, s, "from = \"sparkle\"\nrepo = \""+s.URL+"/feed\"", "{{version}}")
+
+	feed(2 * time.Hour)
+
+	if _, err := m.run(t, "", "add", ref); err == nil || !strings.Contains(err.Error(), "the first to pass") {
+		t.Fatalf("a Sparkle item 2 hours old passed the age: %v", err)
+	}
+
+	feed(10 * 24 * time.Hour)
+
+	out, err := m.run(t, "", "add", ref)
+	if err != nil || strings.Contains(out, "gives no release time") {
+		t.Fatalf("a Sparkle item 10 days old: %v\n%s", err, out)
+	}
+}

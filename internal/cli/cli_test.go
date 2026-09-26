@@ -176,6 +176,9 @@ func newMachine(t *testing.T) machine {
 	m.opts.Services = m.services
 	m.opts.Sleep = func(time.Duration) {}
 
+	// The fake registries give no release times, which the real ones do.
+	m.opts.UnknownReleaseAge = "allow"
+
 	// oku places apps and fonts under HOME, so tests get their own.
 	t.Setenv("HOME", filepath.Join(root, "home"))
 	must(t, os.MkdirAll(filepath.Join(root, "home"), 0o755))

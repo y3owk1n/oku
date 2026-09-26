@@ -105,6 +105,7 @@ func runShell(
 			releaseAge: age,
 			acceptKey:  flags.acceptKey,
 			approve:    e.approver(cmd, opts, flags),
+			checkAge:   e.ageChecker(cmd, opts, flags),
 			log:        buildLog(cmd, flags),
 		})
 		if err != nil {

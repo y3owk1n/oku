@@ -70,7 +70,14 @@ type installed struct {
 	// ageUnknown reports a version that oku picked while its source gives no
 	// release time, so the minimum release age could not check it.
 	ageUnknown bool
+	// notTaken is the version oku did not take for that reason, keeping the
+	// locked one, or empty.
+	notTaken string
 }
+
+// errNotTaken reports a version whose source gives no release time and that
+// [lock] unknown_release_age, or the user's answer, turned down.
+var errNotTaken = errors.New("not taken")
 
 // fitMode says what install does with a platform that the manifest has no
 // artifact and no build for.
@@ -144,6 +151,12 @@ type request struct {
 	// approve decides whether a manifest may run its build commands, or, with an
 	// artifact, the command that generates the artifact's completions.
 	approve func(m *manifest.Manifest, host platform.Platform, a *manifest.Artifact) error
+	// checkAge decides whether oku takes a version of the package called name
+	// whose source gives no release time, and whether to say that it took it
+	// unchecked. locked is the version the package keeps when it does not, or
+	// empty. An error that wraps errNotTaken refuses the version. Nil takes it
+	// and says so.
+	checkAge func(name, version, locked string) (note bool, err error)
 	// log receives the output of build commands, or is nil.
 	log io.Writer
 	// constraint limits the version of a dep, as a range such as ">=3" or a
@@ -420,9 +433,42 @@ func (e env) installFrom(
 		return installed{}, err
 	}
 
-	if !keep && req.releaseAge > 0 && release.Published.IsZero() && ageKnowable(m.Version) &&
-		release.Version != previous.Version {
-		defer func() { got.ageUnknown = err == nil }()
+	// A version named exactly skips the age, as it does in resolve.
+	exact := r.Version != "" && release.Version == r.Version
+
+	if !keep && !exact && req.releaseAge > 0 && release.Published.IsZero() &&
+		ageKnowable(m.Version) && release.Version != previous.Version {
+		// A package that has a locked version keeps it when oku does not take the
+		// new one, and the rest of the command goes on.
+		locked := ""
+		if allowed, _ := resolve.Matches(previous.Version, r.Version); allowed && !m.PerArtifact() {
+			locked = previous.Version
+		}
+
+		note := true
+		if req.checkAge != nil {
+			note, err = req.checkAge(m.Package.Name, release.Version, locked)
+		}
+
+		switch {
+		case errors.Is(err, errNotTaken) && locked != "":
+			notTaken := release.Version
+			release = resolve.Release{
+				Version: previous.Version, Tag: cmp.Or(previous.Tag, previous.Version),
+				Commit: previous.TagCommit,
+			}
+			m.Version.Value, m.Tag, m.TagCommit = release.Version, release.Tag, release.Commit
+
+			defer func() {
+				if err == nil {
+					got.notTaken = notTaken
+				}
+			}()
+		case err != nil:
+			return installed{}, err
+		case note:
+			defer func() { got.ageUnknown = err == nil }()
+		}
 	}
 	ctx = status.Scope(ctx, m.Package.Name+" "+m.Version.Value)
 
@@ -1801,8 +1847,13 @@ func ageKnowable(v manifest.Version) bool {
 }
 
 // reportAge warns that oku could not check the release time of a version it
-// picked.
+// picked, or that it kept the locked version since it did not take the new one.
 func reportAge(w io.Writer, got installed) {
+	if got.notTaken != "" {
+		warn(w, "%s stays at %s: %s was not taken, since its source gives no release time",
+			got.lock.Name, got.lock.Version, got.notTaken)
+	}
+
 	if got.ageUnknown {
 		warn(w, "%s %s: its source gives no release time, so the minimum release age did not check it",
 			got.lock.Name, got.lock.Version)
@@ -1986,6 +2037,7 @@ func (e env) installDeps(
 				strictPlatforms: parent.strictPlatforms,
 				lockOnly:        !onHost,
 				approve:         parent.approve,
+				checkAge:        parent.checkAge,
 				log:             parent.log,
 				constraint:      dep.Version,
 				stack:           stack,
