@@ -1300,6 +1300,11 @@ It removes:
   directory
 - the `oku` binary
 
+On Windows a program that oku installed may still run. Its files move to an
+`oku-uninstalled` folder beside the data directory or the shared store root,
+uninstall says so, and a background `cmd` deletes the folder once the program
+has ended.
+
 Anything else in the config directory is yours, such as the sources of
 `[files]`, your own manifests or a `.git` directory. It stays, and uninstall
 lists it. A project's `oku.toml` and `oku.lock` stay too.

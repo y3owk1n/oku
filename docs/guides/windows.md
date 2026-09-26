@@ -42,7 +42,9 @@ A normal Windows user may not create symlinks, so oku builds a
 - Each program in `bin` is a [shim](../how-oku-works.md#shim), such as
   `bin\rg.exe` beside `bin\rg.shim`. The shim is a copy of `oku.exe` that
   starts the real program in the store, passes the arguments, stdin and stdout
-  through, and exits with the program's exit code.
+  through, and exits with the program's exit code. Stopping the shim, as an
+  editor does with a language server it started, stops the program too. A
+  process that the program starts keeps running, as on macOS and Linux.
 - Other files are hard links into the store, or copies across volumes.
 
 A shim also puts the `bin` directories of the package's runtime deps, and the
@@ -54,6 +56,11 @@ Shims are hard links to one copy of oku in `%LOCALAPPDATA%\oku\shims\`, so they
 take no extra space. After you replace `oku.exe`, new shims use a new copy, and
 old generations keep the old one until `oku gc --keep N` removes them. The old
 copy in `shims\` stays.
+
+Windows refuses to delete a program that runs, and every link to it. When
+`oku gc` or `oku self uninstall` has to delete such a file, it moves the file
+aside on the same volume, finishes, and deletes the file once the program has
+ended.
 
 Switching generations takes two renames on Windows, one on macOS and Linux.
 When oku is killed between them, the next command puts the previous generation

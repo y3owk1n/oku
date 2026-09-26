@@ -947,6 +947,8 @@ order step in `prd/product.md`.
   while a program that oku installed runs, through its shim or from the store.
   What Windows keeps in use moves to `<data>/oku/trash` or the store root's
   `trash`, and a later `gc` deletes it once nothing uses it.
+- B367 [9] Stopping a Windows shim stops the program it started. A process
+  that the program starts keeps running.
 
 ## Cache and signing
 
@@ -1150,6 +1152,10 @@ order step in `prd/product.md`.
   error.
 - B102 [1] When the global profile `bin` is on PATH, uninstall ends by
   printing that PATH entry for the user to remove.
+- B368 [9] On Windows, uninstall finishes while a program that oku installed
+  runs. It moves the program's files into `oku-uninstalled` beside the data
+  directory or the shared root, says so, and deletes them once the program
+  has ended.
 - B101 [9] On Windows the oku binary is gone from its path once the command has
   exited, and the renamed file a few seconds later.
 - B105 [11] The one hook line in a shell's startup file is the whole shell

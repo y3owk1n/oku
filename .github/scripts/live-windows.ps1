@@ -582,9 +582,44 @@ Check 'gc deletes what it moved aside once the program has ended' {
     } | Where-Object { -not $_ } | Measure-Object | ForEach-Object { $_.Count -eq 0 }
 }
 
-# Uninstall, which has to delete the running oku.exe and the junctions.
+# When a shim ends, Windows ends the program it started, as stopping a program
+# does on macOS and Linux.
+Set-Content (Join-Path $fixtures 'linger.toml') @"
+[package]
+name = "linger"
+[version]
+value = "1.0.0"
+[build]
+[[build.step]]
+run = "New-Item -ItemType Directory -Force '{{prefix}}/bin' | Out-Null; Copy-Item `$env:SystemRoot/System32/PING.EXE '{{prefix}}/bin/linger.exe'; Copy-Item `$env:SystemRoot/System32/cmd.exe '{{prefix}}/bin/launch.exe'"
+shell = "pwsh"
+"@
+Oku add (Join-Path $fixtures 'linger.toml') --yes
+$lingerShim = Start-Process "$bin\linger.exe" -ArgumentList '-n', '120', '127.0.0.1' -PassThru -WindowStyle Hidden
+Start-Sleep -Seconds 2
+Check 'a shim and the program it started run' { @(Get-Process linger -ErrorAction SilentlyContinue).Count -eq 2 }
+Stop-Process $lingerShim
+Start-Sleep -Seconds 2
+Check 'stopping the shim stops the program it started' { -not (Get-Process linger -ErrorAction SilentlyContinue) }
+
+# A process that the program starts keeps running, as an editor that a launcher
+# opens does. launch is a copy of cmd, which starts ping and waits.
+$launchShim = Start-Process "$bin\launch.exe" -ArgumentList '/c', 'ping -n 120 127.0.0.1' -PassThru -WindowStyle Hidden
+Start-Sleep -Seconds 2
+Stop-Process $launchShim
+Start-Sleep -Seconds 2
+Check 'stopping the shim leaves what its program started' {
+    -not (Get-Process launch -ErrorAction SilentlyContinue) -and (Get-Process PING -ErrorAction SilentlyContinue)
+}
+Get-Process PING -ErrorAction SilentlyContinue | Stop-Process
+
+# Uninstall, which has to delete the running oku.exe and the junctions, while a
+# program that oku installed runs from the shared store through its shim.
+$null = Start-Process "$bin\linger.exe" -ArgumentList '-n', '120', '127.0.0.1' -PassThru -WindowStyle Hidden
+Start-Sleep -Seconds 2
 Set-Location $env:RUNNER_TEMP
-Oku self uninstall --yes --system
+$uninstalled = (Oku self uninstall --yes --system) -join "`n"
+Check 'uninstall says that a program it installed still runs' { $uninstalled -match 'still runs' }
 Check 'uninstall --system removes the shared root' { -not (Test-Path (Join-Path $env:ProgramData 'oku')) }
 Check 'oku.exe is no longer at its path' { -not (Test-Path $oku) }
 Check 'data, cache and config are gone' {
@@ -601,6 +636,14 @@ Check 'the project list and lock are untouched' {
 Start-Sleep -Seconds 8
 Check 'the file that was moved aside is deleted once oku has exited' {
     -not (Test-Path "$oku.uninstalled")
+}
+Get-Process linger -ErrorAction SilentlyContinue | Stop-Process
+# The deleting cmd tries every ten seconds.
+for ($i = 0; $i -lt 30 -and ((Test-Path "$env:XDG_DATA_HOME\oku-uninstalled") -or (Test-Path "$env:ProgramData\oku-uninstalled")); $i++) {
+    Start-Sleep -Seconds 1
+}
+Check 'the files of the program are deleted once it has ended' {
+    -not (Test-Path "$env:XDG_DATA_HOME\oku-uninstalled") -and -not (Test-Path "$env:ProgramData\oku-uninstalled")
 }
 
 # The install script, against a release that a local web server offers.
