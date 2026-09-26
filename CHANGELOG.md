@@ -1,5 +1,53 @@
 # Changelog
 
+## [0.9.0](https://github.com/y3owk1n/oku/compare/v0.8.1...v0.9.0) (2026-09-26)
+
+
+### Features
+
+* **du:** show how much disk oku uses and where ([#263](https://github.com/y3owk1n/oku/issues/263)) ([ec21e91](https://github.com/y3owk1n/oku/commit/ec21e91cae95e0bef39f7b2f9f1e60208f834bb7))
+* **gc:** --cache deletes the downloads no kept store path was made from ([#267](https://github.com/y3owk1n/oku/issues/267)) ([22658b9](https://github.com/y3owk1n/oku/commit/22658b9c60b74ec25aa38a1db464728edc4c3ae4))
+* **gc:** --older-than deletes generations by age ([#286](https://github.com/y3owk1n/oku/issues/286)) ([d7501be](https://github.com/y3owk1n/oku/commit/d7501be9cd72d6ee7af400daf3e4140c1b5730e1))
+* **gc:** remove the profile of a project that is gone ([#291](https://github.com/y3owk1n/oku/issues/291)) ([289d7cc](https://github.com/y3owk1n/oku/commit/289d7cca9ed9ef5df59a71985196866577727279))
+* **profile:** a generation reuses what did not change ([#285](https://github.com/y3owk1n/oku/issues/285)) ([c258b6b](https://github.com/y3owk1n/oku/commit/c258b6b8aecb949a84ec603302b94d203125f7fb))
+* **resolve:** ask before taking a version with no release time ([#289](https://github.com/y3owk1n/oku/issues/289)) ([d619bcd](https://github.com/y3owk1n/oku/commit/d619bcda1e1c73705ffeb43d37100aaf0557cda8))
+* **resolve:** take only versions older than a minimum release age ([#287](https://github.com/y3owk1n/oku/issues/287)) ([7fa7112](https://github.com/y3owk1n/oku/commit/7fa7112342561ecf2ce5f9df0d0942c4a28e24e6))
+* **self:** self update waits for the minimum release age ([#288](https://github.com/y3owk1n/oku/issues/288)) ([a72dee8](https://github.com/y3owk1n/oku/commit/a72dee8c52f7b64a478491d15561381c9fceeaeb))
+* **store:** keep one copy of each identical file ([#283](https://github.com/y3owk1n/oku/issues/283)) ([b6da6b0](https://github.com/y3owk1n/oku/commit/b6da6b00f19cd6cf191e4a53e6059b5360add250))
+
+
+### Bug Fixes
+
+* **forge:** read a registry answer over 32 MB whole ([#278](https://github.com/y3owk1n/oku/issues/278)) ([ab7bd1b](https://github.com/y3owk1n/oku/commit/ab7bd1bb506ff8d6c89a1cb9836b0799d5e60244))
+* **generations:** say when gc deleted the generation a line replaced ([#265](https://github.com/y3owk1n/oku/issues/265)) ([293f57a](https://github.com/y3owk1n/oku/commit/293f57a19a3dbb615d1a189e76e07d84d8cdb793))
+* **infer:** find each OS's apps, and name them with one app key ([#269](https://github.com/y3owk1n/oku/issues/269)) ([818a3fb](https://github.com/y3owk1n/oku/commit/818a3fbc98214f13d778e3f718a9a9e1746ea5fa))
+* **infer:** tell apart the programs of one release, and keep --asset in oku.toml ([#268](https://github.com/y3owk1n/oku/issues/268)) ([7b88c39](https://github.com/y3owk1n/oku/commit/7b88c39b598685fc658a456c61003e1cabe1aa0c))
+* **install:** a declined build keeps the locked version ([#290](https://github.com/y3owk1n/oku/issues/290)) ([a613666](https://github.com/y3owk1n/oku/commit/a613666090592cdef430c6bc7a01dbd1ba664334))
+* **npm:** find install scripts before asking, so an npm: package asks and builds once ([#266](https://github.com/y3owk1n/oku/issues/266)) ([e569bf5](https://github.com/y3owk1n/oku/commit/e569bf5f5e1fb029e658edd810fd692840c2d14a))
+* **npm:** look for install scripts only when oku builds, so sync of a stored build runs no npm ([#272](https://github.com/y3owk1n/oku/issues/272)) ([482247c](https://github.com/y3owk1n/oku/commit/482247ce946128ba4528e22876995d09dff1a259))
+* **npm:** print the manifest of an npm: package with no deps ([#282](https://github.com/y3owk1n/oku/issues/282)) ([436aba6](https://github.com/y3owk1n/oku/commit/436aba6a45add81c45a74e31c99c80b7322954fd))
+* **windows:** stop a shim's program with it, uninstall while a program runs ([#284](https://github.com/y3owk1n/oku/issues/284)) ([0e23831](https://github.com/y3owk1n/oku/commit/0e238315ea7e2e968d3f1825ee84b4cf2a0a2c64))
+
+
+### Performance Improvements
+
+* **expose:** place an app or a font as a clone of the store's file ([#292](https://github.com/y3owk1n/oku/issues/292)) ([09039bf](https://github.com/y3owk1n/oku/commit/09039bf908682096c49f233eb9df2aead4df1f2a))
+* **forge:** keep an API answer as a header line and a zstd body ([#294](https://github.com/y3owk1n/oku/issues/294)) ([00ab04b](https://github.com/y3owk1n/oku/commit/00ab04bca14ee2c90bc02eb5376d6521494a9b1f))
+* **forge:** read the later pages of a release list at once ([#275](https://github.com/y3owk1n/oku/issues/275)) ([7a90d56](https://github.com/y3owk1n/oku/commit/7a90d5650b71096e6c8a4595cbf1faeffc308987))
+* **gc:** delete a download that no install has used for two days ([#296](https://github.com/y3owk1n/oku/issues/296)) ([06fdfae](https://github.com/y3owk1n/oku/commit/06fdfae9dcf2a5a4b04860a4bc51441c913871e2))
+* **resolve:** ask each version source once per command ([#274](https://github.com/y3owk1n/oku/issues/274)) ([7cc5c02](https://github.com/y3owk1n/oku/commit/7cc5c021d6d3a1fc140c77103a99eba84e95e687))
+* **resolve:** read a branch's newest commit without a second fetch ([#273](https://github.com/y3owk1n/oku/issues/273)) ([9ff0ed1](https://github.com/y3owk1n/oku/commit/9ff0ed16199ce952047d407bace1a3008ad3abf8))
+* **resolve:** read the newest page of releases first ([#295](https://github.com/y3owk1n/oku/issues/295)) ([8654f0d](https://github.com/y3owk1n/oku/commit/8654f0dafca72ec8e178a2a3c176cbdde86a568d))
+* **resolve:** read the tags and a branch of a known host through its API ([#293](https://github.com/y3owk1n/oku/issues/293)) ([a3b6786](https://github.com/y3owk1n/oku/commit/a3b6786bd2d1acb1d99ddd0ed75d67531183a3e9))
+* **store:** open each directory of an archive once while unpacking ([#280](https://github.com/y3owk1n/oku/issues/280)) ([686dcca](https://github.com/y3owk1n/oku/commit/686dcca6cf78998d82a8e01a83bb023fad953416))
+* **store:** unpack gzip with klauspost and every xz file with internal/xz ([#277](https://github.com/y3owk1n/oku/issues/277)) ([4afad47](https://github.com/y3owk1n/oku/commit/4afad47fcd1f1ce0964362762f1a1cb18eda763b))
+* **sync:** work on 16 packages at once, and let outdated follow OKU_PARALLEL ([#276](https://github.com/y3owk1n/oku/issues/276)) ([c752f81](https://github.com/y3owk1n/oku/commit/c752f81e3018489cb951bb14fec943a526e8fa74))
+
+
+### Documentation
+
+* say that a dry run changes the store and the cache ([#279](https://github.com/y3owk1n/oku/issues/279)) ([ec975b7](https://github.com/y3owk1n/oku/commit/ec975b7135f45dbeb1429bc825825da9d31c1e5e))
+
 ## [0.8.1](https://github.com/y3owk1n/oku/compare/v0.8.0...v0.8.1) (2026-09-25)
 
 
