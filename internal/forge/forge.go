@@ -47,8 +47,9 @@ type Forge interface {
 	// Release returns the release of tag. An empty tag means the newest release
 	// that is no draft and no prerelease.
 	Release(ctx context.Context, repo, tag string) (Release, error)
-	// Releases lists the newest releases.
-	Releases(ctx context.Context, repo string) ([]Release, error)
+	// Releases lists the newest releases. With all false it reads the first page
+	// only and reports whether the host has more pages.
+	Releases(ctx context.Context, repo string, all bool) (found []Release, more bool, err error)
 	// Tags lists the repo's tags, newest first where the host says so.
 	Tags(ctx context.Context, repo string) ([]string, error)
 	// TagCommit returns the commit that tag points at.
@@ -130,13 +131,14 @@ func lastPage(link string) int {
 }
 
 // readReleases reads a list of releases with size releases to a page, up to
-// maxReleases.
+// maxReleases. With all false it reads the first page only.
 func readReleases(
 	ctx context.Context,
 	size int,
+	all bool,
 	read func(ctx context.Context, page int) ([]Release, int, error),
-) ([]Release, error) {
-	return readPages(ctx, size, maxReleases, read)
+) ([]Release, bool, error) {
+	return readPages(ctx, size, maxReleases, all, read)
 }
 
 // readTags reads a list of tags with size tags to a page, up to maxTags.
@@ -145,21 +147,29 @@ func readTags(
 	size int,
 	read func(ctx context.Context, page int) ([]string, int, error),
 ) ([]string, error) {
-	return readPages(ctx, size, maxTags, read)
+	tags, _, err := readPages(ctx, size, maxTags, true, read)
+
+	return tags, err
 }
 
 // readPages reads a list with size items to a page, up to most items.
 // read returns one page and the last page, as lastPage gives it. When the first
 // page names the last one, oku asks for the others at once, a few at a time.
-// Otherwise it reads one page after another.
+// Otherwise it reads one page after another. With all false it stops after the
+// first page and reports whether the host has more.
 func readPages[T any](
 	ctx context.Context,
 	size, most int,
+	all bool,
 	read func(ctx context.Context, page int) ([]T, int, error),
-) ([]T, error) {
+) ([]T, bool, error) {
 	items, last, err := read(ctx, 1)
 	if err != nil {
-		return nil, err
+		return nil, false, err
+	}
+
+	if !all {
+		return items, last != 0, nil
 	}
 
 	pageLimit := most / size
@@ -184,26 +194,26 @@ func readPages[T any](
 		wg.Wait()
 
 		if err := cmp.Or(errs...); err != nil {
-			return nil, err
+			return nil, false, err
 		}
 
 		for _, found := range pages[2:] {
 			items = append(items, found...)
 		}
 
-		return items, nil
+		return items, false, nil
 	}
 
 	for page := 2; last < 0 && page <= pageLimit; page++ {
 		var found []T
 		if found, last, err = read(ctx, page); err != nil {
-			return nil, err
+			return nil, false, err
 		}
 
 		items = append(items, found...)
 	}
 
-	return items, nil
+	return items, false, nil
 }
 
 // Auth is the Authorization header for the downloads of one host. The zero
