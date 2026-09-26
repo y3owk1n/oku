@@ -286,7 +286,11 @@ func (e env) install(ctx context.Context, opts Options, req request) (installed,
 		return installed{}, err
 	}
 
-	got.notApproved = strings.SplitN(err.Error(), "\n", 2)[0]
+	if declined := (notApprovedError{}); errors.As(err, &declined) {
+		got.notApproved = fmt.Sprintf(
+			"the build of %s was not approved, since %s", declined.version, declined.why,
+		)
+	}
 
 	return got, nil
 }
@@ -1881,7 +1885,7 @@ func ageKnowable(v manifest.Version) bool {
 // or its build was not approved.
 func reportAge(w io.Writer, got installed) {
 	if got.notApproved != "" {
-		warn(w, "%s stays at %s, since %s", got.lock.Name, got.lock.Version, got.notApproved)
+		warn(w, "%s stays at %s: %s", got.lock.Name, got.lock.Version, got.notApproved)
 	}
 
 	if got.notTaken != "" {

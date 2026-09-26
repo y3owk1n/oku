@@ -253,10 +253,14 @@ func (e env) approver(
 			if !interactive(cmd, opts) {
 				fmt.Fprint(terminal, block.String())
 
-				return fmt.Errorf(
-					"%s %s needs approval to run %s, and this is not a terminal: %w\npass --yes to approve",
-					m.Package.Name, m.Version.Value, them, errNotApproved,
-				)
+				return notApprovedError{
+					version: m.Version.Value,
+					text: fmt.Sprintf(
+						"%s %s needs approval to run %s, and this is not a terminal\npass --yes to approve",
+						m.Package.Name, m.Version.Value, them,
+					),
+					why: "oku cannot ask without a terminal, pass --yes to approve it",
+				}
 			}
 
 			fmt.Fprint(out, "\n"+s.Bold(question)+" [y/N] ")
@@ -277,9 +281,11 @@ func (e env) approver(
 					s.Bad(s.Pick("✗", "x")), m.Package.Name, m.Version.Value,
 				)
 
-				return fmt.Errorf(
-					"%s %s: %w, nothing was built", m.Package.Name, m.Version.Value, errNotApproved,
-				)
+				return notApprovedError{
+					version: m.Version.Value,
+					text:    "not approved, nothing was built",
+					why:     "you did not approve it",
+				}
 			}
 
 			fmt.Fprintf(
@@ -295,6 +301,15 @@ func (e env) approver(
 // errNotApproved reports a build or a completions command that the user did not
 // approve, or that oku could not ask about without a terminal.
 var errNotApproved = errors.New("not approved")
+
+// notApprovedError is errNotApproved for one version, and why.
+type notApprovedError struct {
+	version, text, why string
+}
+
+func (n notApprovedError) Error() string { return n.text }
+
+func (n notApprovedError) Is(target error) bool { return target == errNotApproved }
 
 // interactive reports whether oku can ask the user a question.
 func interactive(cmd *cobra.Command, opts Options) bool {
