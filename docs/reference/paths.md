@@ -115,8 +115,8 @@ Put `<data>/oku/profiles/global/current/bin` on `PATH`, which the shell hook
 does. A change writes a new `gen-<n>` directory and then moves `current` to it
 in one rename. Old generations stay until `oku gc --keep N` deletes them.
 
-The links to the store live once per set of packages, in `trees/`, and a
-generation's `bin` and `share` link there. A change that adds, removes or
+oku keeps the links into the store once per set of packages, in `trees/`, and
+a generation's `bin` and `share` link there. A change that adds, removes or
 updates no package, such as a new dotfile or setting, links to the same tree.
 Its `oku.lock` and each file whose content did not change are hard links to
 the copy in the generation it replaced. So such a generation takes a few KiB.

@@ -1570,7 +1570,7 @@ writable.
 
 A profile keeps the links into the store of each set of packages once, in
 `trees/<hash>/`, where the hash covers each package's name, store path and
-closure, and on Windows the copy of oku that shims are. A generation's `bin`
+closure, and on Windows the copy of oku that every shim is. A generation's `bin`
 and `share` are a relative symlink there, or a directory junction on Windows.
 A generation's `oku.lock` and the content of each file are hard links to the
 copy in the generation it replaced when the bytes and the mode are the same.
@@ -1582,6 +1582,6 @@ block, so on 2026-09-26 one global profile of 844 links cost 3.9 MB per
 generation, and the copy of `oku.lock` another 164 KB. Nix and Guix keep a
 profile as one store path that generations point at, for the same reason. A
 tree per set, and not a link to the previous generation, lets `gc --keep`
-delete any generation without breaking another. Hard links carry the lock and
-the files, since a generation never changes them after it is written, and so
+delete any generation without breaking another. The lock and the files use hard
+links, since oku never changes them after it writes a generation, and so
 rollback still restores each generation's own bytes.
