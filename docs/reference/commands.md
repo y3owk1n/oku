@@ -717,7 +717,7 @@ that oku did not write.
 ### oku gc
 
 ```
-oku gc [--keep N] [--cache] [--dry-run]
+oku gc [--keep N] [--older-than AGE] [--cache] [--dry-run]
 ```
 
 Deletes store paths that no generation of any profile uses, and what a killed
@@ -728,6 +728,7 @@ identical files of store paths that an older oku installed, see
 | Flag | Effect |
 |---|---|
 | `--keep N` | First deletes all generations of each profile except the newest N. The active generation always stays. N is at least 1. |
+| `--older-than AGE` | First deletes the generations of each profile older than AGE, a number of days or weeks such as `30d` or `2w`. It keeps the newest generation older than AGE, which was active then, so you can still roll back to how things were AGE ago. With `--keep`, a generation stays when either flag keeps it. |
 | `--cache` | Also deletes the downloads in the cache that no kept store path was made from, see below. |
 | `--dry-run` | Prints what would be deleted and deletes nothing. |
 

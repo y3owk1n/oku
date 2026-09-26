@@ -838,18 +838,40 @@ func All(dataDir string) ([]*Profile, error) {
 	return profiles, nil
 }
 
-// Prune deletes every generation except the newest keep and the active one. It
-// returns the numbers it deleted. With dryRun it deletes nothing.
-func (p *Profile) Prune(keep int, dryRun bool) ([]int, error) {
+// Retention says which generations Prune keeps. A generation stays when any
+// rule that is set keeps it.
+type Retention struct {
+	// Keep keeps the newest Keep generations.
+	Keep int
+	// Since keeps the generations created after it, and the newest one before it,
+	// which was active at that time.
+	Since time.Time
+}
+
+// Prune deletes every generation that r does not keep, and never the active one.
+// It returns the numbers it deleted. With dryRun it deletes nothing.
+func (p *Profile) Prune(r Retention, dryRun bool) ([]int, error) {
 	gens, err := p.Generations()
 	if err != nil {
 		return nil, err
 	}
 
+	// The newest generation before Since, which gens holds oldest first.
+	then := -1
+
+	for i, gen := range gens {
+		if !r.Since.IsZero() && gen.Created.Before(r.Since) {
+			then = i
+		}
+	}
+
 	var removed []int
 
 	for i, gen := range gens {
-		if gen.Current || i >= len(gens)-keep {
+		keptByCount := r.Keep > 0 && i >= len(gens)-r.Keep
+		keptByTime := !r.Since.IsZero() && (i >= then)
+
+		if gen.Current || keptByCount || keptByTime {
 			continue
 		}
 
