@@ -1711,6 +1711,6 @@ cost a full scan of the encoded text before the real parse. Over 500 answers of
 one real cache that measured 249.7 MiB on disk and 1.504 s to read and parse.
 The same answers as a header line and a zstd body take 14.2 MiB and 836 ms, and
 packing all of them once costs 166 ms. Nothing deleted this directory before, so
-it only grew. An answer costs one request to fetch again, which is why 30 days
-without a read is enough to drop it, and why an answer in the old format is
-refetched rather than read by a second reader kept around for it.
+it only grew. Fetching an answer again costs a single request, so 30 days
+without a read is enough to drop it. An answer in the old format is fetched
+again too, and no second reader stays behind for it.

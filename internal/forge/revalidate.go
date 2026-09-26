@@ -31,7 +31,8 @@ func Revalidating(dir string) *http.Client {
 type revalidator struct{ dir string }
 
 // encoder and decoder pack and unpack the body of a kept answer. A release list
-// of 6.6 MB keeps as 0.4 MB, and both calls are safe from several goroutines.
+// of 6.6 MB packs to 0.4 MB, and both calls are safe to use from several
+// goroutines.
 var (
 	encoder, _ = zstd.NewWriter(nil, zstd.WithEncoderLevel(zstd.SpeedFastest))
 	decoder, _ = zstd.NewReader(nil, zstd.WithDecoderMaxMemory(maxAnswer))
@@ -56,12 +57,12 @@ type kept struct {
 	Link  string `json:"link,omitempty"`
 	Type  string `json:"type,omitempty"`
 	Bytes int    `json:"bytes"`
-	// Body is the answer itself. It does not go into the JSON, since a body of
-	// 30 MB costs a third more as base64 and another read of all of it to decode.
+	// Body is the answer itself. It stays out of the JSON, since base64 makes a
+	// body of 30 MB a third larger and costs a full scan of it to decode.
 	Body []byte `json:"-"`
 }
 
-// read loads the answer at path: one line of JSON, then the body as zstd.
+// read loads the answer at path, one line of JSON and then the body as zstd.
 func read(path string) (kept, bool) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -178,9 +179,9 @@ func keep(path string, answer kept) {
 	}
 }
 
-// AnswerRetention is how long an answer that no command has used stays in the
-// cache. An answer costs one request to fetch again, and a machine that has not
-// looked a package up in a month is unlikely to want its old answer.
+// AnswerRetention is how long an answer that no command has read stays in the
+// cache. Fetching one again costs a single request, so an answer that no lookup
+// has read for a month is not worth the disk.
 const AnswerRetention = 30 * 24 * time.Hour
 
 // StaleAnswers returns the answers under dir that no command has read for
