@@ -89,7 +89,7 @@ or a table:
 | `service` | boolean | `true` runs the package's services now and at every login. `oku add --service` writes it. See [Services](../guides/services.md). |
 | `asset` | string | For a repo with no manifest, the glob that picks its release asset. `oku add --asset` writes it. See [Fix a wrong pick](../guides/add-packages.md#fix-a-wrong-pick-with---asset-and---bin). |
 | `bin` | array of strings | For a repo with no manifest, the programs inside the asset. `oku add --bin` writes it. |
-| `min_release_age` | string | Replaces [`[lock]` `min_release_age`](#lock) for this package, such as `"0"` for a package you want the moment it ships. |
+| `min_release_age` | string | Replaces [`[lock]` `min_release_age`](#lock) for this package, such as `"0"` for a package you want as soon as it is released. |
 | `system` | boolean | `true` puts the package's apps, fonts and services in [system scope](../how-oku-works.md#system-scope). A plain `oku sync` lists those files and skips them, and `oku sync --system` applies them. `oku add --system` writes it. See [System-wide](../guides/system-wide.md). |
 
 ```toml
