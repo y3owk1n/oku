@@ -172,24 +172,24 @@ func runUninstall(
 		return fmt.Errorf("remove %s: %w", executable, err)
 	}
 
-	var running []string
+	var aside []string
 
 	for _, dir := range []string{uninstalled(e.data), uninstalled(e.root)} {
-		if _, err := os.Stat(dir); err == nil && !slices.Contains(running, dir) {
+		if _, err := os.Stat(dir); err == nil && !slices.Contains(aside, dir) {
 			if err := deleteLater(dir); err != nil {
 				return fmt.Errorf("remove %s: %w", dir, err)
 			}
 
-			running = append(running, dir)
+			aside = append(aside, dir)
 		}
 	}
 
 	fmt.Fprintln(out, "oku is uninstalled")
 
-	if len(running) > 0 {
+	if len(aside) > 0 {
 		fmt.Fprintf(
 			out, "a program that oku installed still runs, and its files go once it ends:\n  %s\n",
-			strings.Join(running, "\n  "),
+			strings.Join(aside, "\n  "),
 		)
 	}
 
@@ -267,8 +267,8 @@ func removeCommand(target string) string {
 	return fmt.Sprintf("sudo rm -rf %q", target)
 }
 
-// uninstalled is where uninstall moves the files of dir that a program that
-// runs keeps, on the same volume as dir.
+// uninstalled is where uninstall moves the files that a running program keeps,
+// on the same volume as dir.
 func uninstalled(dir string) string {
 	return filepath.Join(filepath.Dir(dir), "oku-uninstalled")
 }
