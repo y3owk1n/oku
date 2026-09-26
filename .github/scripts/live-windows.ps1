@@ -616,6 +616,21 @@ Check 'stopping the shim leaves what its program started' {
 }
 Get-Process PING -ErrorAction SilentlyContinue | Stop-Process
 
+# A project whose folder is gone takes its profile with it on the next gc.
+$goneProject = Join-Path $root 'gone-project'
+New-Item -ItemType Directory -Force $goneProject | Out-Null
+Set-Content (Join-Path $goneProject 'oku.toml') ''
+Push-Location $goneProject
+Oku add (Join-Path $fixtures 'linger.toml') --yes
+Pop-Location
+$projectProfiles = { @(Get-ChildItem (Join-Path $env:XDG_DATA_HOME 'oku\profiles') -Directory -Filter 'project-*').Count }
+$profilesBefore = & $projectProfiles
+Remove-Item -Recurse -Force $goneProject
+$gcOut = (Oku gc) -join "`n"
+Check 'gc removes the profile of a project whose folder is gone' {
+    ((& $projectProfiles) -eq $profilesBefore - 1) -and ($gcOut -match 'its folder is gone')
+}
+
 # Uninstall, which has to delete the running oku.exe and the junctions, while a
 # program that oku installed runs from the shared store through its shim.
 $null = Start-Process "$bin\linger.exe" -ArgumentList '-n', '120', '127.0.0.1' -PassThru -WindowStyle Hidden

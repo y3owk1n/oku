@@ -120,6 +120,17 @@ func runGC(cmd *cobra.Command, r profile.Retention, dryRun, cache bool) error {
 		verb, mark = "would remove", func(text string) string { return text }
 	}
 
+	// A project that is gone takes its profile with it, and gc then frees the
+	// store paths that only it used.
+	goneProjects, err := e.removeGoneProjects(out, profiles, verb, mark, dryRun)
+	if err != nil {
+		return err
+	}
+
+	profiles = slices.DeleteFunc(profiles, func(prof *profile.Profile) bool {
+		return slices.ContainsFunc(goneProjects, func(s projectState) bool { return s.prof == prof })
+	})
+
 	pruned := map[*profile.Profile][]int{}
 
 	if r.Keep > 0 || !r.Since.IsZero() {
@@ -284,7 +295,8 @@ func runGC(cmd *cobra.Command, r profile.Retention, dryRun, cache bool) error {
 		}
 	}
 
-	if len(unused) == 0 && len(leftovers) == 0 && len(downloads) == 0 && saved == 0 {
+	if len(unused) == 0 && len(leftovers) == 0 && len(downloads) == 0 && saved == 0 &&
+		len(goneProjects) == 0 {
 		// After deleted generations, "nothing to delete" would contradict the
 		// lines above it.
 		text := "nothing to delete, every store path is used by a generation"
@@ -309,6 +321,7 @@ func runGC(cmd *cobra.Command, r profile.Retention, dryRun, cache bool) error {
 		n            int
 		one, several string
 	}{
+		{len(goneProjects), "project", "projects"},
 		{len(unused), "store path", "store paths"},
 		{len(leftovers), "temporary file", "temporary files"},
 		{len(downloads), "cached file", "cached files"},
