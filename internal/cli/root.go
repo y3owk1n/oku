@@ -67,6 +67,9 @@ type Options struct {
 	Elevate func(ctx context.Context, argv []string) error
 	// Interactive overrides the check for a terminal on stdin. Tests set it.
 	Interactive *bool
+	// UnknownReleaseAge replaces the default of [lock] unknown_release_age. Tests
+	// set it to allow, since their fake registries give no release times.
+	UnknownReleaseAge string
 	// GitHubAPI, GitHubRaw and GitHubWeb replace the github.com URLs when set.
 	GitHubAPI string
 	GitHubRaw string

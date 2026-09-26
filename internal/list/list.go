@@ -109,6 +109,9 @@ type List struct {
 	// MinReleaseAge is [lock] min_release_age, as ParseAge reads it. Empty means
 	// DefaultReleaseAge.
 	MinReleaseAge string
+	// UnknownReleaseAge is [lock] unknown_release_age: what oku does with a
+	// version whose source gives no release time. Empty means UnknownWarn.
+	UnknownReleaseAge string
 	// Env holds [env], the variables the list sets in the shell and for oku exec.
 	Env map[string]EnvValue
 	// EnvFiles holds [[env.file]], the .env files the list loads before Env, in
@@ -176,7 +179,7 @@ func Parse(data []byte, origin string) (*List, error) {
 		return nil, fmt.Errorf("%s: %w", origin, err)
 	}
 
-	if l.LockPlatforms, l.MinReleaseAge, err = toLock(raw.Lock); err != nil {
+	if l.LockPlatforms, l.MinReleaseAge, l.UnknownReleaseAge, err = toLock(raw.Lock); err != nil {
 		return nil, fmt.Errorf("%s: %w", origin, err)
 	}
 
@@ -278,30 +281,52 @@ func ParseAge(text string) (time.Duration, error) {
 	return time.Duration(n) * unit, nil
 }
 
-// toLock reads the [lock] table.
-func toLock(table map[string]any) ([]platform.Platform, string, error) {
+// What oku does with a version whose source gives no release time, as
+// [lock] unknown_release_age names it.
+const (
+	// UnknownAllow takes the version and says so.
+	UnknownAllow = "allow"
+	// UnknownWarn asks on a terminal, and refuses without one.
+	UnknownWarn = "warn"
+	// UnknownRefuse refuses the version.
+	UnknownRefuse = "refuse"
+)
+
+// toLock reads the [lock] table: its platforms, min_release_age and
+// unknown_release_age.
+func toLock(table map[string]any) ([]platform.Platform, string, string, error) {
 	for key := range table {
-		if key != "platforms" && key != "min_release_age" {
-			return nil, "", fmt.Errorf(
-				"lock.%s is not a key of [lock], use platforms or min_release_age", key,
+		if !slices.Contains([]string{"platforms", "min_release_age", "unknown_release_age"}, key) {
+			return nil, "", "", fmt.Errorf(
+				"lock.%s is not a key of [lock], use platforms, min_release_age or unknown_release_age",
+				key,
 			)
 		}
 	}
 
 	age, ok := table["min_release_age"].(string)
 	if !ok && table["min_release_age"] != nil {
-		return nil, "", errors.New("lock.min_release_age wants a string such as \"1d\"")
+		return nil, "", "", errors.New("lock.min_release_age wants a string such as \"1d\"")
 	}
 
 	if age != "" {
 		if _, err := ParseAge(age); err != nil {
-			return nil, "", fmt.Errorf("lock.min_release_age: %w", err)
+			return nil, "", "", fmt.Errorf("lock.min_release_age: %w", err)
 		}
+	}
+
+	unknown, _ := table["unknown_release_age"].(string)
+	if table["unknown_release_age"] != nil &&
+		!slices.Contains([]string{UnknownAllow, UnknownWarn, UnknownRefuse}, unknown) {
+		return nil, "", "", fmt.Errorf(
+			"lock.unknown_release_age wants \"allow\", \"warn\" or \"refuse\", got %v",
+			table["unknown_release_age"],
+		)
 	}
 
 	names, ok := table["platforms"].([]any)
 	if !ok && table["platforms"] != nil {
-		return nil, "", errors.New("lock.platforms wants an array of platform names")
+		return nil, "", "", errors.New("lock.platforms wants an array of platform names")
 	}
 
 	platforms := make([]platform.Platform, 0, len(names))
@@ -311,13 +336,13 @@ func toLock(table map[string]any) ([]platform.Platform, string, error) {
 
 		p, err := platform.Parse(text)
 		if err != nil {
-			return nil, "", fmt.Errorf("lock.platforms: %w", err)
+			return nil, "", "", fmt.Errorf("lock.platforms: %w", err)
 		}
 
 		platforms = append(platforms, p)
 	}
 
-	return platforms, age, nil
+	return platforms, age, unknown, nil
 }
 
 // toSettings reads the domains of one settings table.

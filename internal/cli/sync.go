@@ -282,6 +282,7 @@ func reconcile(
 				system:          entry.System,
 				verbose:         flags.verbose,
 				approve:         e.approver(cmd, opts, flags),
+				checkAge:        e.ageChecker(cmd, opts, flags),
 				log:             buildLog(cmd, flags),
 				root:            name,
 				deps:            deps,

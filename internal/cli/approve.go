@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bufio"
+	"cmp"
 	"errors"
 	"fmt"
 	"io"
@@ -9,6 +10,7 @@ import (
 	"os"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -30,6 +32,9 @@ type buildFlags struct {
 	acceptKey bool
 	// minReleaseAge replaces the list's minimum release age for this command.
 	minReleaseAge string
+	// acceptUnknownAge takes a version whose source gives no release time,
+	// whatever [lock] unknown_release_age says.
+	acceptUnknownAge bool
 }
 
 func (f *buildFlags) register(cmd *cobra.Command) {
@@ -41,6 +46,80 @@ func (f *buildFlags) register(cmd *cobra.Command) {
 		BoolVar(&f.acceptKey, "accept-key", false, "accept a signing key that differs from the one in oku.lock")
 	cmd.Flags().StringVar(&f.minReleaseAge, minReleaseAgeFlag, "",
 		"take only versions released at least this long ago, such as 3d, or 0 for the newest")
+	cmd.Flags().BoolVar(&f.acceptUnknownAge, "accept-unknown-age", false,
+		"take a version whose source gives no release time without asking")
+}
+
+// askAge makes one question about a version's age wait for another, since
+// sync installs several packages at once.
+var askAge sync.Mutex
+
+// ageChecker returns the check that install runs before it takes a version
+// whose source gives no release time, by [lock] unknown_release_age: allow
+// takes it and says so, refuse fails, and warn asks on a terminal and fails
+// without one. --accept-unknown-age takes it.
+func (e env) ageChecker(
+	cmd *cobra.Command,
+	opts Options,
+	flags *buildFlags,
+) func(name, version, locked string) (bool, error) {
+	return func(name, version, locked string) (bool, error) {
+		if flags.acceptUnknownAge {
+			return true, nil
+		}
+
+		own, err := list.Read(e.listPath())
+		if err != nil {
+			return false, err
+		}
+
+		why := fmt.Sprintf("%s %s: its source gives no release time", name, version)
+
+		switch cmp.Or(own.UnknownReleaseAge, opts.UnknownReleaseAge, list.UnknownWarn) {
+		case list.UnknownAllow:
+			return true, nil
+		case list.UnknownRefuse:
+			return false, fmt.Errorf(
+				"%s, and [lock] unknown_release_age refuses such a version: %w\n"+
+					"run the command with --accept-unknown-age, or set min_release_age = \"0\" on %s",
+				why, errNotTaken, name,
+			)
+		}
+
+		if !interactive(cmd, opts) {
+			return false, fmt.Errorf(
+				"%s, so oku asks before it takes it, and this is not a terminal: %w\n"+
+					"run the command with --accept-unknown-age, "+
+					"or set [lock] unknown_release_age = \"allow\"",
+				why, errNotTaken,
+			)
+		}
+
+		askAge.Lock()
+		defer askAge.Unlock()
+
+		// Other packages keep installing, and their waits would redraw over the
+		// question.
+		defer status.Pause(cmd.Context())()
+
+		out := cmd.OutOrStdout()
+		s := ui.For(out)
+
+		keeps := ""
+		if locked != "" {
+			keeps = fmt.Sprintf(" (no keeps %s)", locked)
+		}
+
+		fmt.Fprintf(out, "%s, so oku cannot check how old it is. %s [y/N]%s ",
+			why, s.Bold("take it?"), keeps)
+
+		answer, _ := bufio.NewReader(cmd.InOrStdin()).ReadString('\n')
+		if !slices.Contains([]string{"y", "yes"}, strings.ToLower(strings.TrimSpace(answer))) {
+			return false, fmt.Errorf("%s %s: %w", name, version, errNotTaken)
+		}
+
+		return false, nil
+	}
 }
 
 const minReleaseAgeFlag = "min-release-age"

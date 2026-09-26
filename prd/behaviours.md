@@ -446,8 +446,20 @@ order step in `prd/product.md`.
   that fits is too new and the lock holds none, the command fails and names
   the version that passes first and when. `oku outdated` shows a newer version
   that waits and when.
-- B373 [3] A version whose source gives no release time passes the minimum
-  release age, and `add` and `update` say that oku could not check it.
+- B373 [3] With `[lock]` `unknown_release_age = "allow"`, a version whose
+  source gives no release time passes the minimum release age, and `add` and
+  `update` say that oku could not check it.
+- B375 [3] `[lock]` `unknown_release_age` is `"warn"` unless it says `"allow"`
+  or `"refuse"`. For a new version whose source gives no release time, warn
+  asks on a terminal and does not take it without one, and refuse does not
+  take it. A package that `oku.lock` holds then stays at its locked version,
+  oku says so, and the command goes on. A package new to the lock stops the
+  command with how to go on. `--accept-unknown-age` takes such versions for one
+  run, and `min_release_age = "0"` on the package skips the check. A version
+  named exactly, a locked version, a moving tag and a branch are never asked
+  about.
+- B376 [3] The `pubDate` of a Sparkle feed's item is its release time, so the
+  minimum release age checks it.
 - B371 [3] `oku gc --older-than 30d` first deletes the generations older than
   30 days, except the newest of them, which was active 30 days ago, and the
   active one. It takes days (`d`) or weeks (`w`) and refuses anything else.

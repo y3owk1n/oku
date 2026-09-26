@@ -66,6 +66,7 @@ Installs the package that a [ref](refs.md) points at, and writes it to
 | `--yes`, `-y` | Approves the manifest's build commands, or the command that generates an artifact's completions, without asking. See [approvals](security.md#approve-build-commands). |
 | `--accept-key` | Accepts a manifest whose `signing_key` differs from the one in `oku.lock`. See [signing keys](security.md#signing-keys-of-a-manifest). |
 | `--min-release-age AGE` | Takes only a version that came out at least AGE ago, such as `3d`, in place of the list's. `0` takes the newest. See [Minimum release age](security.md#minimum-release-age). |
+| `--accept-unknown-age` | Takes a version whose source gives no release time without asking, whatever `[lock]` `unknown_release_age` says. See [Minimum release age](security.md#minimum-release-age). |
 | `--verbose`, `-v` | Shows the output of build commands as they run, and prints a manifest that oku inferred. |
 | `--when <key=value,...>` | Limits the package to matching platforms and writes `when` to `oku.toml`, such as `--when os=linux,libc=glibc`. Give it once per table of an array. When it leaves out this machine, `add` pins the package for the `[lock]` platforms it matches and installs nothing. |
 | `--plan` | Prints what oku found for the ref and what `add` would do, and changes nothing. See [A plan](#a-plan). |
@@ -207,6 +208,7 @@ With no names it updates every package of the list.
 | `--yes`, `-y` | Approves build commands without asking. |
 | `--accept-key` | Accepts a changed `signing_key`. |
 | `--min-release-age AGE` | As in `oku add`. `0` takes a version that waits now. |
+| `--accept-unknown-age` | As in `oku add`. |
 | `--verbose`, `-v` | Shows build output, and a manifest that oku inferred. |
 
 It reads the newest commit of forge and `git+` refs, moves each package to the
@@ -385,6 +387,7 @@ profile.
 | `--yes`, `-y` | As in `oku add`. |
 | `--accept-key` | As in `oku add`. |
 | `--min-release-age AGE` | As in `oku add`. |
+| `--accept-unknown-age` | As in `oku add`. |
 | `--verbose`, `-v` | As in `oku add`. |
 
 ```
@@ -426,6 +429,7 @@ tables.
 | `--yes`, `-y` | Approves build commands without asking. |
 | `--accept-key` | Accepts a changed `signing_key`. |
 | `--min-release-age AGE` | As in `oku add`, for the packages that sync picks a version for. |
+| `--accept-unknown-age` | As in `oku add`. |
 | `--verbose`, `-v` | Shows build output, and a manifest that oku inferred. |
 
 What it does:

@@ -179,6 +179,7 @@ how old a version has to be.
 | Key | Type | Meaning |
 |---|---|---|
 | `platforms` | array of strings | Platform names: `darwin-amd64`, `darwin-arm64`, `linux-amd64-glibc`, `linux-amd64-musl`, `linux-arm64-glibc`, `linux-arm64-musl`, `windows-amd64`, `windows-arm64`. |
+| `unknown_release_age` | string | What `add`, `update` and `sync` do with a new version whose source gives no release time: `"allow"` takes it and says so, `"warn"` asks on a terminal and refuses without one, `"refuse"` refuses it. The default is `"warn"`. A package that has a locked version keeps it when oku does not take the new one. See [Minimum release age](security.md#minimum-release-age). |
 | `min_release_age` | string | How long ago a version must have come out before `add`, `update` and `sync` take it, as a whole number of hours, days or weeks: `"12h"`, `"3d"`, `"2w"`. `"0"` takes the newest. The default is `"1d"`. See [Minimum release age](security.md#minimum-release-age). |
 
 ```toml

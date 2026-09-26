@@ -59,10 +59,31 @@ what waits and when oku takes it.
   run before oku exists on the machine, take the newest release.
 
 oku reads when each version came out from its source: the publish time of a
-GitHub, GitLab, Gitea or Forgejo release, the npm registry, PyPI and crates.io.
-The Go module proxy gives the time of the version's commit, which its author
-sets. `git-tags`, `page`, `redirect` and `sparkle` give no time, so oku takes
-the version and says that it could not check it.
+GitHub, GitLab, Gitea or Forgejo release, the npm registry, PyPI, crates.io and
+the `pubDate` of a Sparkle feed's item. The Go module proxy gives the time of
+the version's commit, which its author sets.
+
+`git-tags`, `page` and `redirect` give no time, and neither does a Sparkle item
+without a `pubDate`. `[lock]` `unknown_release_age` in `oku.toml` says what oku
+does with a new version from such a source:
+
+| Value | What happens |
+|---|---|
+| `"warn"` | The default. On a terminal oku asks `take it? [y/N]`. Without one, as in CI, it does not take the version. |
+| `"refuse"` | oku does not take the version. |
+| `"allow"` | oku takes the version and says that it could not check it. |
+
+- When oku does not take a new version of a package that `oku.lock` holds, the
+  package stays at its locked version, oku says so, and the rest of the
+  command goes on.
+- For a package that is new to the lock there is nothing to keep, so the
+  command stops and says how to go on.
+- `--accept-unknown-age` on `add`, `update`, `sync` or `oku shell` takes such
+  versions for one run without asking.
+- `min_release_age = "0"` on a package turns the check off for it, so oku
+  neither asks nor refuses.
+- A version you name exactly and a version `oku.lock` pins are never asked
+  about, and neither are a moving tag and a `git-branch`.
 
 The packages that an `npm:` or `pypi:` build installs with it come from before
 that version was published, and a `go:` or `cargo:` build takes the versions

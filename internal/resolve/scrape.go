@@ -11,6 +11,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/y3owk1n/oku/internal/manifest"
 )
@@ -164,7 +165,10 @@ func (r *Resolver) sparkle(ctx context.Context, v manifest.Version) (Release, er
 	// Sparkle takes the item with the highest build, sparkle:version, as the
 	// newest. oku does the same, and compares short versions only when an item
 	// names no build. An old item may give a commit as its short version.
-	var newest, newestBuild string
+	var (
+		newest, newestBuild string
+		published           time.Time
+	)
 
 	for _, item := range sparkleItemRe.FindAllString(text, -1) {
 		// A feed that WinSparkle shares marks the items of other systems.
@@ -208,7 +212,7 @@ func (r *Resolver) sparkle(ctx context.Context, v manifest.Version) (Release, er
 		}
 
 		if newer {
-			newest, newestBuild = version, build
+			newest, newestBuild, published = version, build, pubDate(item)
 		}
 	}
 
@@ -216,7 +220,28 @@ func (r *Resolver) sparkle(ctx context.Context, v manifest.Version) (Release, er
 		return Release{}, fmt.Errorf("%s: no item names a sparkle:shortVersionString", what)
 	}
 
-	return Release{Version: newest, Tag: newest}, nil
+	return Release{Version: newest, Tag: newest, Published: published}, nil
+}
+
+var sparklePubDateRe = regexp.MustCompile(`<pubDate>\s*([^<]*?)\s*</pubDate>`)
+
+// pubDate reads the RSS pubDate of a Sparkle item, when the feed wrote one in
+// a form that RSS allows, or returns the zero time.
+func pubDate(item string) time.Time {
+	m := sparklePubDateRe.FindStringSubmatch(item)
+	if m == nil {
+		return time.Time{}
+	}
+
+	for _, layout := range []string{
+		time.RFC1123Z, time.RFC1123, "Mon, 2 Jan 2006 15:04:05 -0700", "Mon, 2 Jan 2006 15:04:05 MST",
+	} {
+		if at, err := time.Parse(layout, m[1]); err == nil {
+			return at
+		}
+	}
+
+	return time.Time{}
 }
 
 var sparkleChannelRe = regexp.MustCompile(`<sparkle:channel>\s*([^<]*?)\s*</sparkle:channel>`)

@@ -270,6 +270,7 @@ func runAdd(
 	req.fromSource, req.bins = fromSource, bins
 	req.service, req.acceptKey, req.system = enable, flags.acceptKey, system
 	req.verbose, req.approve, req.log = flags.verbose, e.approver(cmd, opts, flags), buildLog(cmd, flags)
+	req.checkAge = e.ageChecker(cmd, opts, flags)
 
 	got, err := e.install(cmd.Context(), opts, req)
 	if err != nil {

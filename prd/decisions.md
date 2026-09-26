@@ -1622,3 +1622,24 @@ release that passes the signature check. The age gives others time to notice,
 as D97 does for packages. The machine's own oku belongs to the global setup, so
 the global list's age applies and no new setting is needed. The install scripts run before
 oku exists and take the newest release.
+
+## D99. oku asks before it takes a version it cannot date
+
+`[lock]` `unknown_release_age` says what `add`, `update` and `sync` do with a new
+version whose source gives no release time: `"allow"` takes it with a note,
+`"warn"` asks on a terminal and does not take it without one, and `"refuse"`
+does not take it. The default is `"warn"`. A package that `oku.lock` holds
+stays at its locked version when oku does not take the new one, and the rest of
+the command goes on. `--accept-unknown-age` takes such versions for one run,
+and `min_release_age = "0"` on a package skips the check.
+
+Why: D97 let such a version pass, so the age covered none of the `git-tags`,
+`page` and `redirect` packages, which are about a fifth of one real list.
+Refusing them outright would stop them on every update, so warn leaves the
+choice to the user, as a build approval does. Without a terminal nobody can
+answer, and a script should not take an unchecked version silently. A "no" is
+about one version, so it keeps the locked one and leaves the other packages
+alone, where a failure would stop the whole update. `--accept-unknown-age` is
+apart from `--yes`, which approves build commands, so one flag does not answer
+both questions. Sparkle feeds date each item with `pubDate`, so they count as
+dated.
