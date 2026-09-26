@@ -560,8 +560,11 @@ Check 'gc deletes the old generations while a shim runs' {
     @(Get-ChildItem $profileDir -Directory -Filter 'gen-*').Count -eq 1
 }
 Check 'the shim keeps running' { -not $pinger.HasExited }
+# Stopping the shim leaves the program it started, so both stop.
 Stop-Process $pinger -ErrorAction SilentlyContinue
+Get-Process share-b -ErrorAction SilentlyContinue | Stop-Process
 $pinger.WaitForExit()
+Wait-Process share-b -ErrorAction SilentlyContinue
 
 Check 'the kept data file is whole and still read-only' {
     ((Get-Item $dataB).Length -eq 20000) -and (Get-Item $dataB).IsReadOnly
@@ -573,9 +576,10 @@ $key = (Get-FileHash $zeros -Algorithm SHA256).Hash.ToLower()
 Oku remove share-b
 Oku gc --keep 1
 Check 'gc drops the shared file once no store path holds it' { -not (Test-Path "$store\.links\$key") }
-$trash = Join-Path $env:XDG_DATA_HOME 'oku\trash'
 Check 'gc deletes what it moved aside once the program has ended' {
-    -not (Test-Path $trash) -or @(Get-ChildItem $trash).Count -eq 0
+    @((Join-Path $env:XDG_DATA_HOME 'oku\trash'), (Join-Path $shared 'trash')) | ForEach-Object {
+        -not (Test-Path $_) -or @(Get-ChildItem $_).Count -eq 0
+    } | Where-Object { -not $_ } | Measure-Object | ForEach-Object { $_.Count -eq 0 }
 }
 
 # Uninstall, which has to delete the running oku.exe and the junctions.
