@@ -1352,6 +1352,13 @@ func (e env) inferAt(
 	}
 
 	release, err := e.resolverAged(opts, age).Pick(ctx, m.Version, want)
+
+	// pickRelease decides what to do when every version is too new, since the
+	// lock may hold one.
+	if errors.Is(err, resolve.ErrTooNew) {
+		return text, nil
+	}
+
 	if err != nil || release.Version == first {
 		return text, err
 	}

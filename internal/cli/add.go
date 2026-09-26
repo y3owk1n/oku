@@ -303,17 +303,24 @@ func runAdd(
 	}
 
 	c.commit = func() error {
-		err := list.Set(
+		// No flag of add writes the entry's minimum release age, so it stays.
+		own, err := list.Read(e.listPath())
+		if err != nil {
+			return err
+		}
+
+		err = list.Set(
 			e.listPath(),
 			got.lock.Name,
 			list.Entry{
-				Ref:     ref.InDir(filepath.Dir(e.listPath()), r.String()),
-				Version: r.Version,
-				Service: enable,
-				System:  system,
-				When:    entryWhen,
-				Asset:   got.lock.Asset,
-				Bins:    got.lock.Bins,
+				Ref:           ref.InDir(filepath.Dir(e.listPath()), r.String()),
+				Version:       r.Version,
+				Service:       enable,
+				System:        system,
+				When:          entryWhen,
+				Asset:         got.lock.Asset,
+				Bins:          got.lock.Bins,
+				MinReleaseAge: own.Packages[got.lock.Name].MinReleaseAge,
 			},
 		)
 		if err != nil {
