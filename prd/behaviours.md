@@ -308,6 +308,11 @@ order step in `prd/product.md`.
 - B360 [3] When the first page of a host's release list names the last page,
   oku asks for the other pages at once, four at a time. When it names only the
   next page, oku reads one page after another.
+- B386 [3] A version lookup reads the newest page of a host's release list and
+  stops there when it holds the version to install. It reads the other pages
+  only when that page holds none the list allows, such as a repo whose newest
+  releases are all of another stream, and then picks as before. A tag list is
+  always read whole, since a host does not promise to put the newest tags first.
 - B250 [3] oku keeps each answer of a forge API with its ETag and asks again
   with `If-None-Match`. When the host answers 304, `update` uses the answer it
   kept, and a changed answer replaces it.

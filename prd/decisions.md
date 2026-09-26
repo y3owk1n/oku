@@ -1714,3 +1714,23 @@ packing all of them once costs 166 ms. Nothing deleted this directory before, so
 it only grew. Fetching an answer again costs a single request, so 30 days
 without a read is enough to drop it. An answer in the old format is fetched
 again too, and no second reader stays behind for it.
+
+## D104. A release lookup reads the newest page first
+
+A lookup asks the host for the newest page of its release list, 100 releases on
+GitHub and GitLab and 50 on Gitea, and picks the version from that. It reads the
+other pages only when that page holds no version the list allows, and then picks
+again from the whole list, up to 1000 releases. The memo of one command holds
+both, so a package that needs the whole list reads the later pages once for every
+package that shares the repo. A tag list stays whole.
+
+Why: a repo with many releases cost a request and a parse for every page on
+every lookup, even though the version to install is almost always among the
+newest 100. On one real list of 74 packages that was 22 requests for later pages
+out of 90, and `anomalyco/opencode` alone had 9 pages, read four at a time, which
+`oku outdated` waited for last. Reading the newest page first brought the same
+run to 71 requests, 3 of them later pages and all three for a tag list, and
+`oku outdated` from 5.2 to 9.1 s down to 4.0 to 4.9 s, with peak memory from
+about 240 MiB to about 190 MiB. The reports were identical for every package.
+A repo whose newest 100 releases are all nightlies still resolves, because the
+first pick fails and the lookup then reads everything (B200).
