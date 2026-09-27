@@ -34,7 +34,8 @@ func main() {
 
 	if err := cli.NewRootCmd(cli.Options{Version: version, Executable: executable}).
 		Execute(); err != nil {
-		// "oku shell -- command" exits with the command's code and adds no message.
+		// "oku run" and "oku shell -- command" exit with the program's code and add
+		// no message.
 		var exit cli.ExitError
 		if errors.As(err, &exit) {
 			os.Exit(exit.Code)

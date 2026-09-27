@@ -316,6 +316,18 @@ install = { bin = ["hello.exe"], share = ["where.txt"], font = ["OkuLive.ttf"], 
 "@
 
 Set-Location $root
+
+# oku run builds the package, starts its app with the arguments after "--", and
+# installs nothing (B388, B392). The add below reuses what it put in the store.
+$mine = Join-Path $root 'mine.txt'
+Set-Content $mine 'from run'
+$ranText = (& $oku run (Join-Path $fixtures 'hello.toml') --yes -- $mine) -join ' '
+$helloShortcut = Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\oku-oku-hello.lnk'
+Check 'run starts the app of a package it does not install' {
+    ($ranText -match 'patched: from run') -and
+    -not (Test-Path $helloShortcut) -and -not (Test-Path "$bin\hello.exe")
+}
+
 Oku add (Join-Path $fixtures 'hello.toml') --yes --verbose
 $shimSpec = Get-Content "$bin\hello.shim"
 Check 'the shim leaves the build dep off PATH' {
@@ -334,7 +346,7 @@ Check 'the build saw a scratch home, not the real profile' {
 }
 
 # The app and the font of that package, for the current user.
-$shortcut = Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\oku-oku-hello.lnk'
+$shortcut = $helloShortcut
 $font = Join-Path $env:LOCALAPPDATA 'Microsoft\Windows\Fonts\OkuLive.ttf'
 $fontsKey = 'HKCU:\Software\Microsoft\Windows NT\CurrentVersion\Fonts'
 

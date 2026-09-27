@@ -272,6 +272,28 @@ func (m machine) profile(elem ...string) string {
 	return filepath.Join(append([]string{m.data, "profiles", "global", "current"}, elem...)...)
 }
 
+// snapshot returns the global list, the lock and the generation the profile
+// points at, which is what a command that installs nothing leaves alone.
+func (m machine) snapshot(t *testing.T) string {
+	t.Helper()
+
+	var state []string
+
+	for _, path := range []string{
+		filepath.Join(m.config, "oku.toml"), filepath.Join(m.config, "oku.lock"),
+	} {
+		data, err := os.ReadFile(path)
+		must(t, err)
+
+		state = append(state, string(data))
+	}
+
+	target, err := os.Readlink(filepath.Join(m.data, "profiles", "global", "current"))
+	must(t, err)
+
+	return strings.Join(append(state, target), "\n")
+}
+
 func (m machine) storeEntries(t *testing.T) []string {
 	t.Helper()
 
@@ -6155,25 +6177,7 @@ func TestB90ShellRunsWithThePackagesOnPathAndChangesNothing(t *testing.T) {
 	_, err := m.run(t, "", "add", kept)
 	must(t, err)
 
-	snapshot := func() string {
-		var state []string
-
-		for _, path := range []string{
-			filepath.Join(m.config, "oku.toml"), filepath.Join(m.config, "oku.lock"),
-		} {
-			data, err := os.ReadFile(path)
-			must(t, err)
-
-			state = append(state, string(data))
-		}
-
-		target, err := os.Readlink(filepath.Join(m.data, "profiles", "global", "current"))
-		must(t, err)
-
-		return strings.Join(append(state, target), "\n")
-	}
-
-	before := snapshot()
+	before := m.snapshot(t)
 	ref := m.envManifest(t, "tool", "TOOL_HOME")
 
 	out, err := m.run(
@@ -6194,7 +6198,7 @@ func TestB90ShellRunsWithThePackagesOnPathAndChangesNothing(t *testing.T) {
 		t.Fatalf("the command did not see the package on PATH with its env:\n%s", out)
 	}
 
-	if after := snapshot(); after != before {
+	if after := m.snapshot(t); after != before {
 		t.Fatalf("shell changed the list, the lock or the profile:\n%s\nwas\n%s", after, before)
 	}
 

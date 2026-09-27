@@ -1006,7 +1006,7 @@ func findLayout(files []File, name string, named []string, archive bool) (layout
 	for _, f := range files {
 		rel := inside(f.Path)
 		if bundle := bundleOf(rel); bundle != "" && rel == bundle+"/Contents/Info.plist" {
-			mains[bundle] = bundleExecutable(f.Text)
+			mains[bundle] = BundleExecutable(f.Text)
 		}
 	}
 
@@ -1144,9 +1144,9 @@ func findLayout(files []File, name string, named []string, archive bool) (layout
 
 var bundleExecutableRe = regexp.MustCompile(`<key>CFBundleExecutable</key>\s*<string>([^<]+)</string>`)
 
-// bundleExecutable returns the program an XML Info.plist says opens the app,
-// or "".
-func bundleExecutable(plist string) string {
+// BundleExecutable returns the program an XML Info.plist says opens the app,
+// or "". A binary plist holds no such text, so it returns "".
+func BundleExecutable(plist string) string {
 	if m := bundleExecutableRe.FindStringSubmatch(plist); m != nil {
 		return strings.TrimSpace(m[1])
 	}

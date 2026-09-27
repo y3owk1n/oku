@@ -12,8 +12,8 @@ import (
 	"github.com/y3owk1n/oku/internal/list"
 )
 
-// ExitError holds the exit code of the program that "oku shell" or "oku exec"
-// ran, so that oku exits with the same code and prints nothing more.
+// ExitError holds the exit code of the program that "oku shell", "oku run" or
+// "oku exec" ran, so that oku exits with the same code and prints nothing more.
 type ExitError struct{ Code int }
 
 func (e ExitError) Error() string { return fmt.Sprintf("exit status %d", e.Code) }
@@ -57,85 +57,12 @@ func runShell(
 	flags *buildFlags,
 	refs, command []string,
 ) error {
-	e, err := loadEnv()
+	held, err := openRefs(cmd, opts, flags, refs)
 	if err != nil {
 		return err
 	}
 
-	// Only the install waits for other oku processes, not the shell itself.
-	release, err := lockMachine(cmd)
-	if err != nil {
-		return err
-	}
-	defer release()
-
-	var bins []string
-
-	environ := os.Environ()
-
-	own, err := list.Read(e.listPath())
-	if err != nil {
-		return err
-	}
-
-	age, err := releaseAge(cmd, own, list.Entry{})
-	if err != nil {
-		return err
-	}
-
-	for _, arg := range refs {
-		r, err := e.parseRef(arg)
-		if err != nil {
-			return err
-		}
-
-		// A package of a registry runs through, or builds with, the runtime that
-		// the list names.
-		if e.inferrerOf(r.Kind) != nil && e.runtimes == nil {
-			all, err := e.mergedList(cmd, opts)
-			if err != nil {
-				return err
-			}
-
-			e.runtimes = all.runtimes
-		}
-
-		got, err := e.install(cmd.Context(), opts, request{
-			ref:        r,
-			releaseAge: age,
-			acceptKey:  flags.acceptKey,
-			approve:    e.approver(cmd, opts, flags),
-			checkAge:   e.ageChecker(cmd, opts, flags),
-			log:        buildLog(cmd, flags),
-		})
-		if err != nil {
-			return err
-		}
-
-		// shell writes no lock, so there is nothing to pin the digest in.
-		if got.firstUse {
-			fmt.Fprintf(
-				cmd.ErrOrStderr(),
-				"%s publishes no checksum, so oku trusted this download\n",
-				got.lock.Name,
-			)
-		}
-
-		reportUnsandboxed(cmd.ErrOrStderr(), got)
-		reportLinks(cmd.ErrOrStderr(), got)
-		reportCache(cmd.ErrOrStderr(), got)
-
-		bins = append(bins, filepath.Join(got.profile.StorePath, "bin"))
-
-		for name, value := range got.profile.Env {
-			environ = append(environ, name+"="+value)
-		}
-	}
-
-	release()
-
-	path := strings.Join(append(bins, os.Getenv("PATH")), string(os.PathListSeparator))
-	environ = append(environ, "PATH="+path, "OKU_SHELL="+strings.Join(refs, " "))
+	environ := append(held.environ, "OKU_SHELL="+strings.Join(refs, " "))
 
 	if len(command) == 0 {
 		shell := os.Getenv("SHELL")
@@ -152,5 +79,107 @@ func runShell(
 		)
 	}
 
-	return runCommand(cmd, command, path, environ)
+	return runCommand(cmd, command, held.path, environ)
+}
+
+// opened holds the packages an install for "shell" or "run" put in the store,
+// and the environment their programs run with.
+type opened struct {
+	pkgs []installed
+	// path is PATH with the packages' bin directories first, and environ holds
+	// it together with the packages' [env].
+	path    string
+	environ []string
+}
+
+// openRefs puts the packages of refs in the store, without touching oku.toml,
+// the lock or a profile. Only the install waits for other oku processes, not
+// the program that runs afterwards.
+func openRefs(
+	cmd *cobra.Command,
+	opts Options,
+	flags *buildFlags,
+	refs []string,
+) (opened, error) {
+	e, err := loadEnv()
+	if err != nil {
+		return opened{}, err
+	}
+
+	release, err := lockMachine(cmd)
+	if err != nil {
+		return opened{}, err
+	}
+	defer release()
+
+	held := opened{environ: os.Environ()}
+
+	var bins []string
+
+	own, err := list.Read(e.listPath())
+	if err != nil {
+		return opened{}, err
+	}
+
+	age, err := releaseAge(cmd, own, list.Entry{})
+	if err != nil {
+		return opened{}, err
+	}
+
+	for _, arg := range refs {
+		r, err := e.parseRef(arg)
+		if err != nil {
+			return opened{}, err
+		}
+
+		// A package of a registry runs through, or builds with, the runtime that
+		// the list names.
+		if e.inferrerOf(r.Kind) != nil && e.runtimes == nil {
+			all, err := e.mergedList(cmd, opts)
+			if err != nil {
+				return opened{}, err
+			}
+
+			e.runtimes = all.runtimes
+		}
+
+		got, err := e.install(cmd.Context(), opts, request{
+			ref:        r,
+			releaseAge: age,
+			acceptKey:  flags.acceptKey,
+			approve:    e.approver(cmd, opts, flags),
+			checkAge:   e.ageChecker(cmd, opts, flags),
+			log:        buildLog(cmd, flags),
+		})
+		if err != nil {
+			return opened{}, err
+		}
+
+		// shell and run write no lock, so there is nothing to pin the digest in.
+		if got.firstUse {
+			fmt.Fprintf(
+				cmd.ErrOrStderr(),
+				"%s publishes no checksum, so oku trusted this download\n",
+				got.lock.Name,
+			)
+		}
+
+		reportUnsandboxed(cmd.ErrOrStderr(), got)
+		reportLinks(cmd.ErrOrStderr(), got)
+		reportCache(cmd.ErrOrStderr(), got)
+
+		held.pkgs = append(held.pkgs, got)
+		bins = append(bins, filepath.Join(got.profile.StorePath, "bin"))
+
+		for name, value := range got.profile.Env {
+			held.environ = append(held.environ, name+"="+value)
+		}
+	}
+
+	release()
+
+	held.path = strings.Join(append(bins, os.Getenv("PATH")), string(os.PathListSeparator))
+	held.environ = append(held.environ, "PATH="+held.path)
+
+	return held, nil
 }
