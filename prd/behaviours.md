@@ -864,6 +864,15 @@ order step in `prd/product.md`.
   another package in the store, and not to a directory the user can write to.
 - B249 [6] On Linux a `run` step sees no `/run/user`. On macOS it cannot run
   `launchctl` or open an app.
+- B405 [6] On Linux and macOS a build command runs in a session of its own,
+  with or without the sandbox, and cannot open the terminal oku runs in.
+  Ctrl-C kills the command with all of its children, and the command fails.
+- B406 [6] On macOS a `run` step cannot read the user's preferences or
+  temporary directory. On Linux it cannot see the user's terminals under
+  `/dev/pts`.
+- B407 [6] On a host without a sandbox the approval prompt says so before it
+  asks. With `require_sandbox = true` in `config.toml`, oku refuses to run a
+  package's commands there, before any change.
 - B51 [6] A `fetch` step without sha256 or sha256_url fails lint. With one, it
   may download, and the file must match that sha256, or the digest that the
   checksum file at sha256_url gives for the file's name.
