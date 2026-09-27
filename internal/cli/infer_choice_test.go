@@ -471,3 +471,23 @@ func TestB351SyncInfersWithTheAssetOfTheListEntry(t *testing.T) {
 		t.Fatalf("after update tool-server printed %q", got)
 	}
 }
+
+func TestB433AnAssetGlobForAnotherBuildKeepsTheRepoName(t *testing.T) {
+	m := newMachine(t)
+
+	// tool-portable is a build of tool, and holds the program tool.
+	tool, _ := m.archive(t, "tool", map[string]string{"tool": script})
+	portable, _ := m.archive(t, "portable", map[string]string{"tool": script})
+	portableName := strings.Replace(hostAssetName(), "tool-", "tool-portable-", 1)
+
+	inferServer(t, &m, map[string]string{hostAssetName(): tool, portableName: portable})
+
+	out, err := m.run(t, "", "add", "github:owner/tool", "--asset", "tool-portable-*", "--manifest")
+	if err != nil {
+		t.Fatalf("add --manifest: %v\n%s", err, out)
+	}
+
+	if !strings.Contains(out, `name = "tool"`) || !strings.Contains(hostArtifact(t, out), "/portable.tar.gz") {
+		t.Fatalf("the package should keep the repo's name and download the portable build:\n%s", out)
+	}
+}

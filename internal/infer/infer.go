@@ -181,6 +181,7 @@ func (inf *Inferrer) Manifest(
 	}
 
 	program := strings.ToLower(path.Base(repo))
+	repoProgram := program
 
 	chosen, picked, err := choose(names, sizes, program, host, opts.Asset)
 	if err != nil {
@@ -230,21 +231,6 @@ func (inf *Inferrer) Manifest(
 		prefix, version = rel.Tag[:i], rel.Tag[i:]
 	}
 
-	var b strings.Builder
-
-	// version.repo names the host, which a "codeberg:" ref leaves out.
-	versionRepo := repo
-	if server.Host() != "" {
-		versionRepo = server.Host() + "/" + repo
-	}
-
-	fmt.Fprintf(&b, "[package]\nname = %q\nhomepage = %q\n\n", name, server.Home(repo))
-	fmt.Fprintf(&b, "[version]\nfrom = %q\nrepo = %q\n", server.Kind()+"-releases", versionRepo)
-
-	if prefix != "" {
-		fmt.Fprintf(&b, "strip_prefix = %q\n", prefix)
-	}
-
 	// Assets of one OS with the same ending come from the same packaging step, so
 	// oku opens one of them for all. A zip for Windows is often laid out unlike
 	// the tar archives next to it, and a zip for macOS may add an app bundle.
@@ -288,6 +274,32 @@ func (inf *Inferrer) Manifest(
 		if isHost {
 			hostDone = true
 		}
+	}
+
+	// The asset --asset picks may name a build of the program, as
+	// tool-portable, rather than another program. The package keeps the repo's
+	// name unless the asset holds a program of the other name.
+	if i := slices.IndexFunc(chosen, func(c choice) bool { return c.Matches(host) }); i >= 0 &&
+		opts.Name == "" && program != repoProgram {
+		l := layouts[ending(chosen[i].asset)+" "+chosen[i].OS]
+		if !slices.ContainsFunc(l.bins, func(bin string) bool { return strings.ToLower(path.Base(bin)) == program }) {
+			name = repoProgram
+		}
+	}
+
+	var b strings.Builder
+
+	// version.repo names the host, which a "codeberg:" ref leaves out.
+	versionRepo := repo
+	if server.Host() != "" {
+		versionRepo = server.Host() + "/" + repo
+	}
+
+	fmt.Fprintf(&b, "[package]\nname = %q\nhomepage = %q\n\n", name, server.Home(repo))
+	fmt.Fprintf(&b, "[version]\nfrom = %q\nrepo = %q\n", server.Kind()+"-releases", versionRepo)
+
+	if prefix != "" {
+		fmt.Fprintf(&b, "strip_prefix = %q\n", prefix)
 	}
 
 	hostDone = false
