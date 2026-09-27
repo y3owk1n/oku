@@ -63,6 +63,10 @@ GitHub, GitLab, Gitea or Forgejo release, the npm registry, PyPI, crates.io and
 the `pubDate` of a Sparkle feed's item. The Go module proxy gives the time of
 the version's commit, which its author sets.
 
+A GitLab release's author can date it in the past, so oku counts from the
+later of that date and the time GitLab made the release. A Sparkle feed's
+`pubDate` is what its publisher writes, and oku cannot check it.
+
 `git-tags`, `page` and `redirect` give no time, and neither does a Sparkle item
 without a `pubDate`. `[lock]` `unknown_release_age` in `oku.toml` says what oku
 does with a new version from such a source:
@@ -205,7 +209,10 @@ approve commands you have not read.
 
 A manifest can name its developer's minisign public key as `signing_key`. oku
 then downloads `<artifact url>.minisig` and installs the artifact only when
-that key signed it.
+that key signed it, and when the signed comment names that file as
+`file:<name>`, which `minisign -S` writes, or holds the version, as in
+`tool 1.2.3`. The key signs every release, so without that check an older
+signed file served at the new version's URL would pass.
 
 `oku.lock` pins the key at the first install. When the manifest later shows
 another key, or drops it, `oku sync` and `oku update` stop:
@@ -322,7 +329,13 @@ the GitHub releases of `y3owk1n/oku` over HTTPS. It replaces itself only when:
   one.
 
 oku writes nothing near the running binary before that check passes, so a
-failed check leaves oku as it was. The nightly build has the same check.
+failed check leaves oku as it was.
+
+Every nightly binary is signed `oku nightly`, so `oku self update --nightly`
+also checks the nightly's `checksums.txt`. Its signed comment is the full
+version, such as `oku nightly-20260927084032-b796323`. It must name the commit
+of the release, be newer than the nightly that runs, and list the sha256 of
+the binary. An older nightly served as the newest one fails.
 
 The release key is:
 
@@ -333,8 +346,9 @@ RWSjFGqIxI8IPGwKE/uRgugZ51qCEMe1CDbFRVTMUAuin42JiOxg2HNW
 The install scripts check the sha256 of the binary always. When `minisign` is
 installed, they also check its signature against the same key and read the
 signed comment. The comment must be `oku <OKU_VERSION>` when you name a
-release, and any `oku v...` release otherwise. `OKU_REQUIRE_SIGNATURE=1` makes them refuse to install
-without that check, and the GitHub Action always sets it.
+release, and any `oku v...` release otherwise. `OKU_REQUIRE_SIGNATURE=1`
+makes them refuse to install without that check, and the GitHub Action always
+sets it.
 
 The sha256 alone only guards against a broken download, since `checksums.txt`
 comes from the same release as the binary. The signature is what shows the
