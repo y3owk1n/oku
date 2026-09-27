@@ -150,12 +150,14 @@ func TestMain(m *testing.M) {
 	// does not let a build read, and some builds read fixtures by path.
 	if runtime.GOOS == "darwin" {
 		dir, err := os.MkdirTemp("/private/tmp", "oku-test-")
+		if err == nil {
+			err = os.Setenv("TMPDIR", dir)
+		}
+
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
 		}
-
-		os.Setenv("TMPDIR", dir)
 
 		code := m.Run()
 		os.RemoveAll(dir)
