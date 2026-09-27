@@ -6,9 +6,14 @@
 # $env:OKU_INSTALL_DIR  where the binary goes, default %LOCALAPPDATA%\oku\bin
 # $env:OKU_VERSION      a release tag such as v0.1.0, or nightly for the build of
 #                       the newest commit on main, default the newest release
+# $env:OKU_REQUIRE_SIGNATURE=1  refuse to install without checking the minisign
+#                       signature, as the GitHub Action does
 $ErrorActionPreference = 'Stop'
 
 $repo = 'y3owk1n/oku'
+# The minisign public key that signs oku's releases. The script checks the
+# signature when minisign is installed, and always checks the sha256.
+$releaseKey = 'RWSjFGqIxI8IPGwKE/uRgugZ51qCEMe1CDbFRVTMUAuin42JiOxg2HNW'
 $dir = if ($env:OKU_INSTALL_DIR) { $env:OKU_INSTALL_DIR } else { Join-Path $env:LOCALAPPDATA 'oku\bin' }
 $base = if ($env:OKU_RELEASE_URL) { $env:OKU_RELEASE_URL } else { "https://github.com/$repo/releases" }
 $from = if ($env:OKU_VERSION) { "$base/download/$env:OKU_VERSION" } else { "$base/latest/download" }
@@ -30,6 +35,26 @@ try {
     $got = (Get-FileHash (Join-Path $tmp $name) -Algorithm SHA256).Hash.ToLower()
     if ($got -ne $want) { throw "the sha256 of $name is $got, and checksums.txt says $want" }
 
+    $checked = 'sha256'
+    $minisign = Get-Command minisign -ErrorAction SilentlyContinue
+    if ($minisign) {
+        Invoke-WebRequest "$from/$name.minisig" -OutFile (Join-Path $tmp "$name.minisig") -UseBasicParsing
+        $comment = & $minisign.Source -Vm (Join-Path $tmp $name) -P $releaseKey -Q
+        if ($LASTEXITCODE -ne 0) { throw "the signature of $name is not from oku's release key" }
+
+        # The release signs its tag into the trusted comment, so an older signed
+        # binary cannot pass for the release asked for.
+        if ($env:OKU_VERSION) {
+            if ($comment -ne "oku $env:OKU_VERSION") { throw "the signature of $name is for `"$comment`", not oku $env:OKU_VERSION" }
+        }
+        elseif ($comment -notmatch '^oku v\d') { throw "the signature of $name is for `"$comment`", not a release" }
+
+        $checked = 'minisign signature'
+    }
+    elseif ($env:OKU_REQUIRE_SIGNATURE -eq '1') {
+        throw "OKU_REQUIRE_SIGNATURE is 1, and minisign is not installed to check the signature of $name"
+    }
+
     New-Item -ItemType Directory -Force $dir | Out-Null
     Move-Item -Force (Join-Path $tmp $name) (Join-Path $dir 'oku.exe')
 }
@@ -39,7 +64,7 @@ finally {
 
 $version = (& (Join-Path $dir 'oku.exe') --version 2>$null | Select-Object -First 1)
 if (-not $version) { $version = 'oku' }
-Write-Host "installed $version at $(Join-Path $dir 'oku.exe') after checking its sha256"
+Write-Host "installed $version at $(Join-Path $dir 'oku.exe') after checking its $checked"
 
 # The line uses $HOME when the binary is under it, so it also works in a profile
 # that several machines share.

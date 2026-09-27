@@ -341,8 +341,15 @@ The release key is:
 RWSjFGqIxI8IPGwKE/uRgugZ51qCEMe1CDbFRVTMUAuin42JiOxg2HNW
 ```
 
-The install scripts check the sha256 of the binary always, and its minisign
-signature against the same key when `minisign` is installed.
+The install scripts check the sha256 of the binary always. When `minisign` is
+installed, they also check its signature against the same key and read the
+signed comment. The comment must be `oku <OKU_VERSION>` when you name a
+release, and any `oku v...` release otherwise. `OKU_REQUIRE_SIGNATURE=1` makes them refuse to install
+without that check, and the GitHub Action always sets it.
+
+The sha256 alone only guards against a broken download, since `checksums.txt`
+comes from the same release as the binary. The signature is what shows the
+binary is oku's.
 
 ### When the release key changes
 
