@@ -1205,15 +1205,22 @@ Check 'a program that loads a DLL beside it in its download runs from its shim' 
 $dllKit = Join-Path $fixtures 'dllkit'
 New-Item -ItemType Directory -Force $dllKit | Out-Null
 Set-Content (Join-Path $dllKit 'okudep.dll') 'a DLL of the dep'
-$dllZip = Join-Path $fixtures 'dllkit.zip'
-Compress-Archive -Force -Path (Join-Path $dllKit '*') -DestinationPath $dllZip
+$dllServed = Join-Path $root 'dllkit-served'
+New-Item -ItemType Directory -Force $dllServed | Out-Null
+Compress-Archive -Force -Path (Join-Path $dllKit '*') -DestinationPath (Join-Path $dllServed 'dllkit.zip')
+# The store downloads over http, from a server on this machine.
+$dllServer = Start-Process python -ArgumentList '-m', 'http.server', '18768', '--directory', $dllServed -PassThru -WindowStyle Hidden
+foreach ($attempt in 1..30) {
+    try { Invoke-WebRequest 'http://127.0.0.1:18768/dllkit.zip' -UseBasicParsing | Out-Null; break }
+    catch { if ($attempt -eq 30) { throw 'the local server for dllkit did not start' }; Start-Sleep -Seconds 1 }
+}
 Set-Content (Join-Path $fixtures 'dllkit.toml') @"
 [package]
 name = "dllkit"
 [version]
 value = "1.0.0"
 [[artifact]]
-url = "file:///$($dllZip -replace '\\', '/')"
+url = "http://127.0.0.1:18768/dllkit.zip"
 share = ["okudep.dll"]
 "@
 $dllKitRef = (Join-Path $fixtures 'dllkit.toml') -replace '\\', '/'
@@ -1238,6 +1245,7 @@ Check 'the DLL of a dep sits beside the program that loads it' {
     Test-Path (Join-Path (Split-Path $dllUser) 'okudep.dll')
 }
 Oku remove dlluser
+Stop-Process -Id $dllServer.Id -Force
 
 # A machine without PowerShell 7 builds registry packages with the Windows
 # PowerShell 5.1 that Windows ships. The runner has PowerShell 7, so its
