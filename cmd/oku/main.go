@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"github.com/y3owk1n/oku/internal/cli"
@@ -20,8 +21,11 @@ func main() {
 	if err == nil {
 		// On Windows a profile's bin holds copies of oku under other names. The
 		// check uses the path as started, because the shim file is beside that name.
-		if code, handled := shim.Run(executable, os.Args[1:]); handled {
-			os.Exit(code)
+		// oku itself is never a shim, so a file oku.shim beside it runs nothing.
+		if runtime.GOOS == "windows" && !isOku(executable) {
+			if code, handled := shim.Run(executable, os.Args[1:]); handled {
+				os.Exit(code)
+			}
 		}
 
 		executable, err = filepath.EvalSymlinks(executable)
@@ -76,4 +80,9 @@ func suggest(message string) string {
 	}
 
 	return first + ", did you mean " + strings.Join(strings.Fields(list), " or ") + "?"
+}
+
+// isOku reports whether executable is oku under its own name, as oku or oku.exe.
+func isOku(executable string) bool {
+	return strings.EqualFold(strings.TrimSuffix(filepath.Base(executable), filepath.Ext(executable)), "oku")
 }

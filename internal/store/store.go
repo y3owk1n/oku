@@ -79,6 +79,9 @@ type Meta struct {
 	Launchers []expose.Launcher `toml:"launcher,omitempty"`
 	// Services are the package's long-running programs.
 	Services []manifest.Service `toml:"service,omitempty"`
+	// DepDLLs are the links to DLLs of deps that oku put beside the programs on
+	// Windows. They are for the loader, and a profile leaves them out of its bin.
+	DepDLLs []string `toml:"dep_dlls,omitempty"`
 }
 
 // New returns the store under dataDir that caches downloads under cacheDir.
@@ -268,6 +271,19 @@ func (s *Store) Realize(
 		return Realized{}, err
 	}
 
+	var wrapped []string
+
+	for _, w := range a.Wrap {
+		if w.Path != "" {
+			wrapped = append(wrapped, w.Path)
+		}
+	}
+
+	depDLLs, err := linkDepDLLs(tmp, programDirs(filepath.Join(tmp, "pkg"), a.Bin, wrapped), deps)
+	if err != nil {
+		return Realized{}, fmt.Errorf("link the DLLs of the deps: %w", err)
+	}
+
 	if a.Completions.Generate != "" {
 		if realized.Unsandboxed, err = s.generateArtifactCompletions(ctx, a, tmp); err != nil {
 			return Realized{}, fmt.Errorf("%s: %w", m.Package.Name, err)
@@ -299,6 +315,7 @@ func (s *Store) Realize(
 		SHA256:    a.SHA256,
 		Launchers: apps,
 		Services:  m.ServicesFor(p),
+		DepDLLs:   depDLLs,
 	})
 	if err != nil {
 		return Realized{}, fmt.Errorf("write %s: %w", metaFile, err)

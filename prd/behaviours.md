@@ -1082,6 +1082,11 @@ order step in `prd/product.md`.
 - B81 [9] A binary with DLL deps in other store paths, or beside its real file
   anywhere in its own download, starts from any working directory, and so does
   a build step that runs such a binary of a dep.
+- B430 [9] On Windows each DLL of a runtime dep has a hard link beside the
+  package's programs in the store, unless the package ships a file of that
+  name, so a DLL of the same name in the working directory does not load first.
+  The profile leaves these links out of its `bin`, so two packages with one dep
+  install together.
 - B288 [9] On Windows, two `.msi` downloads in one sync both unpack, one
   after the other.
 - B269 [9] On Windows, a build step with `shell = "pwsh"`, and oku's own steps
@@ -1089,6 +1094,8 @@ order step in `prd/product.md`.
   `PATH` and the Windows PowerShell 5.1 that Windows ships otherwise. The
   Windows live test builds a `go:` and a `pypi:` ref with PowerShell 7 off
   `PATH`.
+- B429 [9] Outside Windows, and for oku itself under its own name, a `.shim`
+  file beside the binary runs nothing.
 - B82 [9] `oku hook pwsh` gives B61 to B68 in PowerShell, on Windows, macOS
   and Linux, and keeps `$LASTEXITCODE` across the prompt.
 - B412 [9] `oku hook pwsh` and `oku env --shell pwsh` double every single

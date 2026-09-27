@@ -402,10 +402,18 @@ func (s *Store) Build(
 		return Realized{}, err
 	}
 
+	depDLLs, err := linkDepDLLs(prefix, []string{filepath.Join(prefix, "bin")}, opts.RuntimeDeps)
+	if err != nil {
+		os.RemoveAll(prefix)
+
+		return Realized{}, fmt.Errorf("link the DLLs of the deps: %w", err)
+	}
+
 	meta, err := toml.Marshal(Meta{
 		Name: m.Package.Name, Version: m.Version.Value, Platform: p.String(),
 		Impure: result.Impure, Launchers: apps, Services: m.ServicesFor(p),
 		URL: result.SourceURL, SHA256: result.SHA256, VendorSHA256: result.VendorSHA256,
+		DepDLLs: depDLLs,
 	})
 	if err == nil {
 		err = inside(prefix, metaFile)
