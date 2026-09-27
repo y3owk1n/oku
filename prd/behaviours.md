@@ -599,6 +599,9 @@ order step in `prd/product.md`.
   of the repo, as `atuin-server` of `atuinsh/atuin`, the package takes that
   program's name and does not replace the package named after the repo.
   `oku.toml` records the glob as `asset`.
+- B433 [4] An asset that `--asset` picks and that holds no program of its own
+  name, such as `tool-portable-*` holding `tool`, keeps the repo's name for the
+  package.
 - B351 [4] `sync` and `update` infer with the `asset` and `bin` of the
   package's entry in `oku.toml`, under the entry's name. When the entry's
   `asset` or `bin` changes, they infer again. For an entry without them, they
