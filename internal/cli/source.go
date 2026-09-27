@@ -201,7 +201,7 @@ func newSearchCmd(opts Options) *cobra.Command {
 
 					if strings.Contains(strings.ToLower(m.Package.Name), term) ||
 						strings.Contains(strings.ToLower(m.Package.Description), term) {
-						tab.Styled([]string{alias + "/" + name, m.Package.Description}, s.Bold, nil)
+						tab.Styled([]string{ui.Clean(alias + "/" + name), ui.Clean(m.Package.Description)}, s.Bold, nil)
 
 						found = append(found, hit{alias + "/" + name, m.Package.Description})
 						hits++

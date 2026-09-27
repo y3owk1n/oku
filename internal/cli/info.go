@@ -127,7 +127,7 @@ func newInfoCmd(opts Options) *cobra.Command {
 				bins[i] = filepath.Base(bin)
 			}
 
-			pairs = append(pairs, [2]string{"programs", strings.Join(bins, ", ")})
+			pairs = append(pairs, [2]string{"programs", ui.Clean(strings.Join(bins, ", "))})
 
 			return s.KV(out, pairs...)
 		},

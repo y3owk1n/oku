@@ -10,6 +10,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"unicode"
 	"unicode/utf8"
 
 	"golang.org/x/term"
@@ -764,4 +765,33 @@ func (s Style) KV(w io.Writer, pairs ...[2]string) error {
 	_, err := io.WriteString(w, b.String())
 
 	return err
+}
+
+// Clean makes the control characters in text visible, an escape as \x1b, and
+// keeps tabs and newlines. Text from a package, such as its description or a
+// command it runs, could otherwise move the cursor, hide the rest of a line or
+// write to the terminal's clipboard.
+func Clean(text string) string {
+	if !strings.ContainsFunc(text, hidden) {
+		return text
+	}
+
+	var b strings.Builder
+
+	for _, r := range text {
+		switch {
+		case !hidden(r):
+			b.WriteRune(r)
+		case r < 0x100:
+			fmt.Fprintf(&b, `\x%02x`, r)
+		default:
+			fmt.Fprintf(&b, `\u%04x`, r)
+		}
+	}
+
+	return b.String()
+}
+
+func hidden(r rune) bool {
+	return r != '\n' && r != '\t' && unicode.IsControl(r)
 }

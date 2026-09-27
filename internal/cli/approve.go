@@ -220,7 +220,7 @@ func (e env) approver(
 					out,
 					"%s %s runs its download on your machine to generate completions:\n\n    %s\n"+
 						"  %s\n",
-					s.Bold(m.Package.Name), m.Version.Value, a.Completions.Generate,
+					s.Bold(m.Package.Name), m.Version.Value, ui.Clean(a.Completions.Generate),
 					s.Warn("(once for each of "+strings.Join(manifest.Shells, ", ")+")"),
 				)
 			case len(steps) > 0:
@@ -261,6 +261,10 @@ func (e env) approver(
 					text = *steps[i].Run
 				}
 
+				// A control character in a command could hide part of it, so the user
+				// sees it as \x1b and the like.
+				text = ui.Clean(text)
+
 				// Steps count from 1, as the wait line of a build does. A command
 				// line that wraps goes on further in, so it reads apart from the next.
 				fmt.Fprintf(
@@ -285,7 +289,7 @@ func (e env) approver(
 				)
 
 				for _, name := range slices.Sorted(maps.Keys(m.Env)) {
-					fmt.Fprintf(out, "%s\n", s.Wrap("    "+name+" = "+m.Env[name], 6))
+					fmt.Fprintf(out, "%s\n", s.Wrap("    "+name+" = "+ui.Clean(m.Env[name]), 6))
 				}
 			}
 

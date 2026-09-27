@@ -177,6 +177,10 @@ run them? [y/N]
 - An artifact whose completions a command generates runs the download, so it
   asks with `run it? [y/N]`, and `oku.lock` records `commands = true`.
 - A step marked `(wants network)` in the prompt gets the network.
+- oku prints a control character in a package's text as `\x1b` and the like,
+  in the prompt, in `--plan`, in `oku info`, in search results and in errors.
+  A manifest cannot hide part of a command it asks you to approve, move the
+  cursor over the prompt, or write to your terminal's clipboard.
 - A package from a trusted cache needs no approval for its commands, because
   oku runs none of them. It still asks for its `[env]`.
 
