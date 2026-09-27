@@ -548,3 +548,19 @@ func TestB205ATextARenderOrASecretMayBeExecutable(t *testing.T) {
 		}
 	}
 }
+
+func TestB414ATargetCannotLeaveItsLocation(t *testing.T) {
+	for name, list := range map[string]string{
+		"typed":         "[files]\n\"{{home}}/../../escaped\" = { text = \"x\" }\n",
+		"from-variable": "[vars]\nsub = \"../..\"\n[files]\n\"{{home}}/{{sub}}/escaped\" = { text = \"x\" }\n",
+	} {
+		t.Run(name, func(t *testing.T) {
+			m := newMachine(t)
+			m.writeFilesList(t, list)
+
+			if out, err := m.run(t, "", "sync"); err == nil || !strings.Contains(err.Error(), "leads outside {{home}}") {
+				t.Fatalf("want the target refused, got %v:\n%s", err, out)
+			}
+		})
+	}
+}

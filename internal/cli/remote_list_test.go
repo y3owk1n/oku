@@ -236,6 +236,28 @@ func TestB253AFilePathOfARepoListCannotLeaveTheRepo(t *testing.T) {
 	}
 }
 
+func TestB253AFileOfARepoListCannotReachOutThroughAPackage(t *testing.T) {
+	for name, entry := range map[string]string{
+		// A render or a secret is a file of the repo, and {{pkg.}} is not special.
+		"render": `{ render = "{{pkg.tool}}/../../../../.ssh/id_ed25519" }`,
+		// A link may name a file of a package, inside that package.
+		"link": `{ link = "{{pkg.tool}}/../../../../.ssh" }`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			m := newMachine(t)
+
+			machineRepo(t, &m, "9999999999999999999999999999999999999999", map[string]string{
+				"oku.toml": "[files]\n\"{{home}}/.x\" = " + entry + "\n",
+			})
+
+			_, err := m.run(t, "", "sync", "github:me/machines")
+			if err == nil || !strings.Contains(err.Error(), "outside the") {
+				t.Fatalf("want the path refused, got %v", err)
+			}
+		})
+	}
+}
+
 func TestB253AListAtAURLCannotHoldFiles(t *testing.T) {
 	m := newMachine(t)
 
