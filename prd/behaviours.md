@@ -1099,6 +1099,8 @@ order step in `prd/product.md`.
   `PATH`.
 - B429 [9] Outside Windows, and for oku itself under its own name, a `.shim`
   file beside the binary runs nothing.
+- B432 [9] On Windows `oku run` counts the programs of a package without the
+  `.shim` spec beside each, and starts the file that the spec names.
 - B82 [9] `oku hook pwsh` gives B61 to B68 in PowerShell, on Windows, macOS
   and Linux, and keeps `$LASTEXITCODE` across the prompt.
 - B412 [9] `oku hook pwsh` and `oku env --shell pwsh` double every single
