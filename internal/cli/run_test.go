@@ -279,3 +279,35 @@ func TestB396GcDeletesWhatRunPutInTheStore(t *testing.T) {
 		t.Fatalf("gc kept %v after:\n%s", left, out)
 	}
 }
+
+func TestB397RunAndShellTakeTheFlagsThatSteerInference(t *testing.T) {
+	m := newMachine(t)
+	archive, _ := m.archive(t, "odd", map[string]string{"main": "#!/bin/sh\necho steered\n"})
+
+	// The asset's name fits no platform, so inference cannot choose it alone.
+	inferServer(t, &m, map[string]string{"tool-v1.4.0-odd.tar.gz": archive})
+
+	_, err := m.run(t, "", "run", "github:owner/tool")
+	if err == nil || !strings.Contains(err.Error(), "--asset") {
+		t.Fatalf("want a failure that names --asset, got %v", err)
+	}
+
+	out, err := m.run(t, "", "run", "github:owner/tool", "--asset", "*-odd.*", "--bin", "main")
+	if err != nil || !strings.Contains(out, "steered") {
+		t.Fatalf("run with --asset and --bin: %v\n%s", err, out)
+	}
+
+	out, err = m.run(
+		t, "", "shell", "github:owner/tool", "--asset", "*-odd.*", "--bin", "main", "--", "main",
+	)
+	if err != nil || !strings.Contains(out, "steered") {
+		t.Fatalf("shell with --asset and --bin: %v\n%s", err, out)
+	}
+
+	_, err = m.run(
+		t, "", "shell", "github:owner/tool", "github:owner/other", "--asset", "*-odd.*",
+	)
+	if err == nil || !strings.Contains(err.Error(), "one download") {
+		t.Fatalf("want --asset to refuse two refs, got %v", err)
+	}
+}

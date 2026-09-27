@@ -19,7 +19,10 @@ type ExitError struct{ Code int }
 func (e ExitError) Error() string { return fmt.Sprintf("exit status %d", e.Code) }
 
 func newShellCmd(opts Options) *cobra.Command {
-	var flags buildFlags
+	var (
+		flags  buildFlags
+		chosen inferFlags
+	)
 
 	cmd := &cobra.Command{
 		Use:   "shell <ref>... [-- command [args...]]",
@@ -42,11 +45,12 @@ After "--", oku runs that command in place of a shell and exits with its code.`,
 				return errors.New("name at least one ref before --")
 			}
 
-			return runShell(cmd, opts, &flags, refs, command)
+			return runShell(cmd, opts, &flags, &chosen, refs, command)
 		},
 	}
 
 	flags.register(cmd)
+	chosen.register(cmd)
 
 	return cmd
 }
@@ -55,9 +59,10 @@ func runShell(
 	cmd *cobra.Command,
 	opts Options,
 	flags *buildFlags,
+	chosen *inferFlags,
 	refs, command []string,
 ) error {
-	held, err := openRefs(cmd, opts, flags, refs)
+	held, err := openRefs(cmd, opts, flags, chosen, refs)
 	if err != nil {
 		return err
 	}
@@ -82,6 +87,20 @@ func runShell(
 	return runCommand(cmd, command, held.path, environ)
 }
 
+// inferFlags steer the manifest oku infers for a ref that has none, as the
+// flags of the same name on "oku add" do.
+type inferFlags struct {
+	asset string
+	bins  []string
+}
+
+func (f *inferFlags) register(cmd *cobra.Command) {
+	cmd.Flags().StringVar(&f.asset, "asset", "",
+		"with no manifest, the release asset for this machine, as a glob")
+	cmd.Flags().StringArrayVar(&f.bins, "bin", nil,
+		"with no manifest, the file name of a program in the asset, once per program")
+}
+
 // opened holds the packages an install for "shell" or "run" put in the store,
 // and the environment their programs run with.
 type opened struct {
@@ -99,8 +118,15 @@ func openRefs(
 	cmd *cobra.Command,
 	opts Options,
 	flags *buildFlags,
+	chosen *inferFlags,
 	refs []string,
 ) (opened, error) {
+	if len(refs) > 1 && (chosen.asset != "" || len(chosen.bins) > 0) {
+		return opened{}, errors.New(
+			"--asset and --bin describe one download, so name that ref on its own",
+		)
+	}
+
 	e, err := loadEnv()
 	if err != nil {
 		return opened{}, err
@@ -146,6 +172,8 @@ func openRefs(
 		got, err := e.install(cmd.Context(), opts, request{
 			ref:        r,
 			releaseAge: age,
+			asset:      chosen.asset,
+			bins:       chosen.bins,
 			acceptKey:  flags.acceptKey,
 			approve:    e.approver(cmd, opts, flags),
 			checkAge:   e.ageChecker(cmd, opts, flags),

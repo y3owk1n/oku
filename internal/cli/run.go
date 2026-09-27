@@ -16,8 +16,9 @@ import (
 
 func newRunCmd(opts Options) *cobra.Command {
 	var (
-		flags buildFlags
-		app   string
+		flags  buildFlags
+		chosen inferFlags
+		app    string
 	)
 
 	cmd := &cobra.Command{
@@ -49,11 +50,12 @@ A package that ships no app and one program runs that program. Arguments after
 				)
 			}
 
-			return runApp(cmd, opts, &flags, refs[0], app, command)
+			return runApp(cmd, opts, &flags, &chosen, refs[0], app, command)
 		},
 	}
 
 	flags.register(cmd)
+	chosen.register(cmd)
 	cmd.Flags().StringVar(&app, "app", "", "the app to start, when the package ships several")
 
 	return cmd
@@ -63,10 +65,11 @@ func runApp(
 	cmd *cobra.Command,
 	opts Options,
 	flags *buildFlags,
+	chosen *inferFlags,
 	ref, app string,
 	args []string,
 ) error {
-	held, err := openRefs(cmd, opts, flags, []string{ref})
+	held, err := openRefs(cmd, opts, flags, chosen, []string{ref})
 	if err != nil {
 		return err
 	}
