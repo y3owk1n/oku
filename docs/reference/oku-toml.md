@@ -91,6 +91,7 @@ or a table:
 | `bin` | array of strings | For a repo with no manifest, the programs inside the asset. `oku add --bin` writes it. |
 | `min_release_age` | string | Replaces [`[lock]` `min_release_age`](#lock) for this package, such as `"0"` for a package you want as soon as it is released. |
 | `system` | boolean | `true` puts the package's apps, fonts and services in [system scope](../how-oku-works.md#system-scope). A plain `oku sync` lists those files and skips them, and `oku sync --system` applies them. `oku add --system` writes it. See [System-wide](../guides/system-wide.md). |
+| `run_as` | string | `"root"` runs the package's system services as root, or as `SYSTEM` on Windows. Without it they run as you, since their files are in your store. See [Choose who a system service runs as](../guides/system-wide.md#choose-who-a-system-service-runs-as). |
 
 ```toml
 [packages]
@@ -498,7 +499,7 @@ color-scheme = "prefer-dark"
   did not place, such as another app's launch agent.
 - Write a registry key in single quotes, so TOML keeps its backslashes.
 - On Linux oku skips `[dconf]` when the `dconf` tool is not installed, and
-  prints `[dconf] is skipped, because the dconf tool is not on PATH`.
+  prints `[dconf] is skipped, because the dconf tool is not in /usr/bin or /bin`.
 
 The type comes from the TOML value:
 

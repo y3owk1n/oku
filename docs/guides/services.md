@@ -125,5 +125,6 @@ See [Undo a change](undo-and-clean-up.md).
   packages, writes no unit, and prints
   `services are skipped, because systemd does not run this machine`. oku
   checks for `/run/systemd/system`, which systemd creates when it is the init.
-- A service runs as you, for your login. To run one as root from boot, for the
-  whole machine, see [Install for every user](system-wide.md).
+- A service runs as you, for your login. To run one from boot, for the whole
+  machine, see [Install for every user](system-wide.md), which also covers
+  `run_as = "root"`.

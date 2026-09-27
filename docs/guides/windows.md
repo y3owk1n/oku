@@ -153,9 +153,12 @@ before it writes.
 |---|---|
 | Apps | `%ProgramData%\Microsoft\Windows\Start Menu\Programs\oku-<name>.lnk` |
 | Fonts | `%SystemRoot%\Fonts\<file>`, and a value `oku <file>` under `HKLM\Software\Microsoft\Windows NT\CurrentVersion\Fonts` |
-| Services | A scheduled task `oku-<name>` that runs as the `SYSTEM` account, with a trigger at boot when turned on |
-| Service definitions and output | `%ProgramData%\oku\services\` and `%ProgramData%\oku\logs\` |
-| Shared store root | `%ProgramData%\oku`, from `oku setup --system`, with full control for your user |
+| Services | A scheduled task `oku-<name>` that runs as you from boot, through an S4U logon that needs no password. With `run_as = "root"` it runs as the `SYSTEM` account. |
+| Service definitions and output | `%ProgramData%\oku\services\`, and the output in your data directory, or in `%ProgramData%\oku\logs\` for a `SYSTEM` task |
+| Shared store root | `%ProgramData%\oku`, from `oku setup --system`. It takes no permission from `%ProgramData%`, Administrators own it, and only `SYSTEM`, Administrators and your user can write in it. |
+
+oku refuses `%ProgramData%\oku` when another user made it first, since any
+user can make a folder there. Delete it, then run the command again.
 
 Windows has no `sudo`. In a terminal that runs as administrator, oku does the
 privileged step directly. In a normal terminal it asks through the Windows
