@@ -247,6 +247,9 @@ order step in `prd/product.md`.
   and puts the global profile, the project's tools and their `[env]` on the
   `PATH` and in the environment of the later steps, on Linux, macOS and
   Windows. The action and action-tag jobs of `ci.yml` run it on all three.
+- B404 [2] The action runs the install script of its own checkout with
+  `OKU_REQUIRE_SIGNATURE=1` and a minisign it pins by sha256. It splits `args`
+  on spaces and never runs it as shell code.
 - B181 [2] `sync --locked` fails before any download when the lock does not pin
   a package of the list for the host, and names the packages and the platform.
   It also fails when the lock would change in any other way. It never writes
@@ -1130,6 +1133,10 @@ order step in `prd/product.md`.
   next commands: `oku doctor`, a first `oku add`, `oku self update`. When a
   startup file loads the hook already, it says so instead of printing the line
   again. On Windows that is any of the four files `$PROFILE` names.
+- B403 [11] With `minisign` on `PATH`, the install script checks the release
+  signature and its signed comment: `oku <OKU_VERSION>` when a release is
+  named, else an `oku v` release. `OKU_REQUIRE_SIGNATURE=1` refuses when
+  `minisign` is missing. A failed check installs nothing.
 
 ## Transactions
 
