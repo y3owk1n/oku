@@ -249,6 +249,10 @@ scriptlets of an `.rpm`, and the install scripts of a macOS `.pkg`.
   would, through other links too, and refuses the package when a link leads
   outside it. For example, `x -> .` followed by `x/l -> ../outside` fails, although each
   entry looks safe alone.
+- It refuses an archive that unpacks to more than 32 GiB, and an `.xz` file
+  that asks for a dictionary over 128 MiB, which the decoder would allocate
+  before it reads any data. A small download cannot fill the disk or the
+  memory.
 
 ## Projects and the shell hook
 

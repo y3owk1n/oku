@@ -851,10 +851,11 @@ freed 4.6 MiB from 1 store path
 - A dep counts as used while any generation holds a package that depends on
   it.
 - After `oku setup --system` it checks the shared store and the old one.
-- In the system's temporary directory it deletes the `oku-*` entries whose
-  oku process has ended, such as a half-done build. On macOS it first
-  detaches a disk image that such a process left mounted. It skips the
-  entries of a process that still runs and those of another user.
+- In the system's temporary directory it deletes the entries an oku process
+  made, named `oku-<kind>-<pid>-<number>`, whose process has ended, such as a
+  half-done build. On macOS it first detaches a disk image that such a
+  process left mounted. It skips the entries of a process that still runs,
+  those of another user, and any other name that starts with `oku-`.
 - Without `--cache` it does not touch the cache directory. It never touches
   `oku.toml` or `oku.lock`.
 - With `--cache` it deletes the downloads that no kept store path was made from,
