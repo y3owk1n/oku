@@ -11,9 +11,9 @@ One `oku.toml` names the tools, dotfiles, secrets and OS settings of your accoun
 [![License](https://img.shields.io/github/license/y3owk1n/oku?style=flat-square)](LICENSE)
 [![Sponsor](https://img.shields.io/badge/sponsor-%E2%9D%A4-30363D?style=flat-square)](https://github.com/sponsors/y3owk1n)
 
-|   Linux   |   macOS   |           Windows           |      Status       |
-| :-------: | :-------: | :-------------------------: | :---------------: |
-| Supported | Supported | Supported, no build sandbox | Early development |
+|   Linux   |   macOS   |           Windows           |             Status              |
+| :-------: | :-------: | :-------------------------: | :-----------------------------: |
+| Supported | Supported | Supported, no build sandbox | Alpha (Daily driving by myself) |
 
 <sub>Manifest keys, CLI flags and behaviour may still change between releases. See the [CHANGELOG](CHANGELOG.md).</sub>
 
