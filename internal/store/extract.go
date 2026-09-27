@@ -288,7 +288,14 @@ type fileWriter struct {
 	root *os.Root
 	name string
 	dir  *os.Root
+	// written counts the bytes of every file so far, against maxUnpacked.
+	written int64
 }
+
+// maxUnpacked is how many bytes one archive may unpack to. The digest pins what
+// a package downloads, and this stops a small download that expands without
+// end from filling the disk.
+const maxUnpacked = 32 << 30
 
 // write keeps the time the archive gives the file. make compares the times of a
 // source tree, and a release tarball relies on its generated files, such as
@@ -318,7 +325,11 @@ func (w *fileWriter) write(name string, mode fs.FileMode, modified time.Time, r 
 		return err
 	}
 
-	_, err = io.Copy(f, r)
+	n, err := io.Copy(f, io.LimitReader(r, maxUnpacked-w.written+1))
+	if w.written += n; err == nil && w.written > maxUnpacked {
+		err = fmt.Errorf("the archive unpacks to more than %d GiB", maxUnpacked>>30)
+	}
+
 	if closeErr := f.Close(); err == nil {
 		err = closeErr
 	}
@@ -342,7 +353,7 @@ func (w *fileWriter) close() {
 // stay in the store.
 func writeSymlink(root *os.Root, name, target string) error {
 	resolved := path.Join(path.Dir(name), target)
-	if path.IsAbs(target) || resolved == ".." || strings.HasPrefix(resolved, "../") {
+	if rooted(target) || resolved == ".." || strings.HasPrefix(resolved, "../") {
 		return fmt.Errorf("symlink target %q is outside the package", target)
 	}
 
@@ -381,7 +392,7 @@ func linksInside(dest string) error {
 			return err
 		}
 
-		if !resolvesInside(root, path.Dir(name)+"/"+filepath.ToSlash(target)) {
+		if rooted(target) || !resolvesInside(root, path.Dir(name)+"/"+filepath.ToSlash(target)) {
 			return fmt.Errorf("symlink %s -> %s leads outside the package", name, target)
 		}
 
@@ -432,7 +443,7 @@ func resolvesInside(root *os.Root, name string) bool {
 		}
 
 		target, err := root.Readlink(path.Join(next...))
-		if err != nil || path.IsAbs(target) || filepath.IsAbs(target) {
+		if err != nil || rooted(target) {
 			return false
 		}
 
@@ -440,4 +451,12 @@ func resolvesInside(root *os.Root, name string) bool {
 	}
 
 	return true
+}
+
+// rooted reports a link target that does not start from the link's directory:
+// an absolute path, a Windows drive or share, or a Windows path that starts at
+// the root of the current drive, such as \Windows.
+func rooted(target string) bool {
+	return filepath.IsAbs(target) || filepath.VolumeName(target) != "" ||
+		strings.HasPrefix(filepath.ToSlash(target), "/") || strings.HasPrefix(target, `\`)
 }

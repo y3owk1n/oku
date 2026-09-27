@@ -28,6 +28,8 @@ func detach(cmd *exec.Cmd) {
 // Run runs cmd from Command and waits for it. The terminal's interrupt no
 // longer reaches a command in its own session, so on SIGINT, SIGTERM or SIGHUP
 // Run kills the session and fails, and oku stops as after any failed build.
+// When the command ends, Run kills what it left running in its session, so no
+// process of a build step outlives it.
 func Run(cmd *exec.Cmd) error {
 	signals := make(chan os.Signal, 1)
 	signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP)
@@ -42,6 +44,8 @@ func Run(cmd *exec.Cmd) error {
 
 	select {
 	case err := <-done:
+		_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+
 		return err
 	case sig := <-signals:
 		_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
