@@ -185,9 +185,9 @@ func keep(path string, answer kept) {
 const AnswerRetention = 30 * 24 * time.Hour
 
 // StaleAnswers returns the answers under dir that no command has read for
-// AnswerRetention, with their sizes. Reading an answer sets the time on its
-// file, so the age is the time since oku last used it.
-func StaleAnswers(dir string, now time.Time) (map[string]int64, error) {
+// keepFor, with their sizes. Reading an answer sets the time on its file, so
+// the age is the time since oku last used it.
+func StaleAnswers(dir string, now time.Time, keepFor time.Duration) (map[string]int64, error) {
 	entries, err := os.ReadDir(dir)
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil, nil
@@ -205,7 +205,7 @@ func StaleAnswers(dir string, now time.Time) (map[string]int64, error) {
 			continue
 		}
 
-		if now.Sub(info.ModTime()) >= AnswerRetention {
+		if now.Sub(info.ModTime()) >= keepFor {
 			stale[filepath.Join(dir, entry.Name())] = info.Size()
 		}
 	}

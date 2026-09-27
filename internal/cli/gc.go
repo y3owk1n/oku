@@ -24,10 +24,11 @@ import (
 
 func newGCCmd() *cobra.Command {
 	var (
-		keep      int
-		olderThan string
-		dryRun    bool
-		cache     bool
+		keep           int
+		olderThan      string
+		cacheOlderThan string
+		dryRun         bool
+		cache          bool
 	)
 
 	cmd := &cobra.Command{
@@ -42,8 +43,10 @@ keeps the one that was active then, so you can still roll back to that date.
 With both, a generation stays when either flag keeps it.
 --cache also deletes the downloads that no kept store path was made from, the
 downloads that no install has used for two days, and the API answers that no
-command has read for a month. With --older-than, a download stays for that age
-instead of two days.
+command has read for a month. --cache-older-than sets that age for both and
+turns --cache on, so the cache clears without deleting a generation. With
+--older-than and no --cache-older-than, both stay for the age it names
+instead.
 
 gc also shares the identical files of store paths that an older oku installed,
 so the disk keeps each of them once.`,
@@ -54,19 +57,29 @@ so the disk keeps each of them once.`,
 			}
 
 			r := profile.Retention{Keep: keep}
-			keepFor := store.DownloadRetention
+			retain := ages{downloads: store.DownloadRetention, answers: forge.AnswerRetention}
 
 			if olderThan != "" {
-				age, err := parseAge(olderThan)
+				age, err := parseAge("--older-than", olderThan)
 				if err != nil {
 					return err
 				}
 
 				r.Since = time.Now().Add(-age)
-				keepFor = age
+				retain.downloads, retain.answers = age, age
 			}
 
-			return runGC(cmd, r, keepFor, dryRun, cache)
+			if cacheOlderThan != "" {
+				age, err := parseAge("--cache-older-than", cacheOlderThan)
+				if err != nil {
+					return err
+				}
+
+				retain.downloads, retain.answers = age, age
+				cache = true
+			}
+
+			return runGC(cmd, r, retain, dryRun, cache)
 		},
 	}
 
@@ -75,6 +88,10 @@ so the disk keeps each of them once.`,
 	cmd.Flags().StringVar(
 		&olderThan, "older-than", "",
 		"first delete the generations older than this, such as 30d or 2w",
+	)
+	cmd.Flags().StringVar(
+		&cacheOlderThan, "cache-older-than", "",
+		"delete the cached downloads and API answers unread for this long, and turn on --cache",
 	)
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "print what would be deleted and delete nothing")
 	cmd.Flags().BoolVar(
@@ -85,8 +102,9 @@ so the disk keeps each of them once.`,
 	return cmd
 }
 
-// parseAge reads a number of days or weeks, such as 30d or 2w.
-func parseAge(text string) (time.Duration, error) {
+// parseAge reads a number of days or weeks, such as 30d or 2w. An error names
+// the flag the age came from.
+func parseAge(flag, text string) (time.Duration, error) {
 	units := map[string]time.Duration{"d": 24 * time.Hour, "w": 7 * 24 * time.Hour}
 
 	n, err := strconv.Atoi(text[:max(len(text)-1, 0)])
@@ -94,14 +112,20 @@ func parseAge(text string) (time.Duration, error) {
 
 	if err != nil || !ok || n < 1 {
 		return 0, fmt.Errorf(
-			"--older-than takes a number of days or weeks, such as 30d or 2w, got %q", text,
+			"%s takes a number of days or weeks, such as 30d or 2w, got %q", flag, text,
 		)
 	}
 
 	return time.Duration(n) * unit, nil
 }
 
-func runGC(cmd *cobra.Command, r profile.Retention, keepFor time.Duration, dryRun, cache bool) error {
+// ages is how long each part of the cache stays after oku last read it.
+type ages struct {
+	downloads time.Duration
+	answers   time.Duration
+}
+
+func runGC(cmd *cobra.Command, r profile.Retention, retain ages, dryRun, cache bool) error {
 	e, err := loadEnv()
 	if err != nil {
 		return err
@@ -278,11 +302,12 @@ func runGC(cmd *cobra.Command, r profile.Retention, keepFor time.Duration, dryRu
 	var downloads, answers map[string]int64
 
 	if cache {
-		if downloads, err = e.staleDownloads(used, keepFor); err != nil {
+		if downloads, err = e.staleDownloads(used, retain.downloads); err != nil {
 			return err
 		}
 
-		if answers, err = forge.StaleAnswers(filepath.Join(e.cache, "api"), time.Now()); err != nil {
+		answers, err = forge.StaleAnswers(filepath.Join(e.cache, "api"), time.Now(), retain.answers)
+		if err != nil {
 			return err
 		}
 
