@@ -19,6 +19,8 @@ import (
 	"github.com/y3owk1n/oku/internal/list"
 	"github.com/y3owk1n/oku/internal/manifest"
 	"github.com/y3owk1n/oku/internal/platform"
+	"github.com/y3owk1n/oku/internal/sandbox"
+	"github.com/y3owk1n/oku/internal/source"
 	"github.com/y3owk1n/oku/internal/status"
 	"github.com/y3owk1n/oku/internal/trust"
 	"github.com/y3owk1n/oku/internal/ui"
@@ -165,6 +167,24 @@ func (e env) approver(
 			}
 		}
 
+		unsandboxed := ""
+		if ok, why := sandbox.Available(); !ok {
+			config, err := source.Read(e.configPath())
+			if err != nil {
+				return err
+			}
+
+			if config.RequireSandbox {
+				return fmt.Errorf(
+					"%s %s runs commands, and this host cannot sandbox them, because %s\n"+
+						"require_sandbox in config.toml refuses that, delete the line to run them anyway",
+					m.Package.Name, m.Version.Value, why,
+				)
+			}
+
+			unsandboxed = why
+		}
+
 		approvals, err := trust.Read(e.data)
 		if err != nil {
 			return err
@@ -242,6 +262,14 @@ func (e env) approver(
 					s.Accent(fmt.Sprintf("step %d", i+1)),
 					s.Warn(note),
 					s.Wrap("    "+strings.ReplaceAll(text, "\n", "\n    "), 6),
+				)
+			}
+
+			if unsandboxed != "" {
+				fmt.Fprintf(
+					out, "\n%s\n",
+					s.Warn("this host cannot sandbox commands, because "+unsandboxed+
+						", so they can use the network and read your files"),
 				)
 			}
 

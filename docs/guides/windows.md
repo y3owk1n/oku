@@ -168,7 +168,9 @@ package's program does not. The task runs from boot with no user logged on.
 ## Build from source
 
 Windows has no sandbox that oku can use, so a build from source can reach the
-network and read your files. oku prints that warning after every build. The
+network and read your files. oku says so in the approval prompt and after every
+build, and `require_sandbox = true` in `config.toml` refuses such builds. See
+[The build sandbox](../reference/sandbox.md#without-a-sandbox). The
 build still gets a scrubbed environment with a scratch home and temp
 directory, see [the build environment](../reference/manifest.md#the-build-environment).
 

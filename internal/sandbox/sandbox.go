@@ -30,9 +30,10 @@ type Spec struct {
 	Network bool
 }
 
-// Command returns the command for spec. why is empty when the command is
-// sandboxed. Otherwise it says in one sentence why this host cannot sandbox, and
-// the command runs unsandboxed.
+// Command returns the command for spec, to start with Run. why is empty when
+// the command is sandboxed. Otherwise it says in one sentence why this host
+// cannot sandbox, and the command runs unsandboxed. Either way, on Linux and
+// macOS the command has no access to the terminal oku runs in.
 func Command(ctx context.Context, spec Spec) (cmd *exec.Cmd, why string) {
 	spec.Home = resolve(spec.Home)
 	spec.Dir = resolve(spec.Dir)
@@ -47,6 +48,8 @@ func Command(ctx context.Context, spec Spec) (cmd *exec.Cmd, why string) {
 	if cmd == nil {
 		cmd = exec.CommandContext(ctx, spec.Argv[0], spec.Argv[1:]...)
 	}
+
+	detach(cmd)
 
 	cmd.Dir = spec.Dir
 	if cmd.Env == nil {
@@ -64,8 +67,14 @@ func Available() (bool, string) {
 }
 
 // resolve follows symlinks, because both mechanisms match real paths. On macOS
-// /tmp and /var are symlinks.
+// /tmp and /var are symlinks. An empty path stays empty, where EvalSymlinks
+// would make it the working directory, and hide the build's own directory
+// behind an empty Home.
 func resolve(path string) string {
+	if path == "" {
+		return ""
+	}
+
 	if real, err := filepath.EvalSymlinks(path); err == nil {
 		return real
 	}

@@ -39,6 +39,9 @@ type Config struct {
 	// provides it, as a ref or as a table with ref and version. An inferred
 	// manifest that needs the interpreter depends on that package.
 	Runtimes map[string]any `toml:"runtimes,omitempty"`
+	// RequireSandbox refuses to run a package's commands on a host that cannot
+	// sandbox them.
+	RequireSandbox bool `toml:"require_sandbox,omitempty"`
 }
 
 // Read parses the config at path. A missing file is an empty config.

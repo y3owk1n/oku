@@ -806,7 +806,7 @@ func runCommand(
 		cmd.Stdout, cmd.Stderr = io.MultiWriter(&output, log), io.MultiWriter(&output, log)
 	}
 
-	if err := cmd.Run(); err != nil {
+	if err := sandbox.Run(cmd); err != nil {
 		lines := strings.Split(strings.TrimRight(output.String(), "\n"), "\n")
 		if len(lines) > outputTail {
 			lines = lines[len(lines)-outputTail:]

@@ -184,34 +184,11 @@ first.
 ## The build sandbox
 
 On macOS and Linux, build commands run in a sandbox with no network, no access
-to your home directory, and a scrubbed environment. A step with
-`network = true` gets the network and still cannot read your home directory.
-The full list of what a build can reach is in the
-[manifest reference](manifest.md).
-
-The sandbox is not available everywhere. On Windows, and on a Linux host that
-forbids unprivileged user namespaces, oku builds without it and says so after
-the build:
-
-```
-tree was built without the sandbox, because this host does not let an unprivileged user set up namespaces (...)
-its build commands could use the network and read your files
-```
-
-`oku doctor` reports the same as a `note`.
-
-- Ubuntu 24.04 and later are such hosts by default. Their AppArmor policy lets
-  a program create a user namespace and then denies it every mount inside it.
-  To allow the sandbox, run
-  `sudo sysctl kernel.apparmor_restrict_unprivileged_userns=0`, and put the
-  same setting in a file under `/etc/sysctl.d/` to keep it after a reboot.
-- On macOS the tools in `/usr/bin` ask `xcrun` where the real tool is, and
-  `xcrun` caches the answer in a place the sandbox does not let it write. oku
-  points that cache at the build's own temporary directory, so `ar`,
-  `install_name_tool` and the others run without an "Operation not permitted"
-  warning.
-- On Windows the build still gets a scrubbed environment, see
-  [Windows](../guides/windows.md).
+to your home directory, and a scrubbed environment. Windows, and a Linux host
+that forbids unprivileged user namespaces, have no sandbox. oku says so in the
+approval prompt and after the build, and `require_sandbox = true` in
+`config.toml` makes it refuse instead. See [The build sandbox](sandbox.md) for
+what each platform blocks.
 
 The sandbox limits what an approved command can reach. It is not a reason to
 approve commands you have not read.

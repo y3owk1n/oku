@@ -288,7 +288,7 @@ install = { bin = ["target/release/fd"], man = ["doc/fd.1"] }
 - `when` limits the build to macOS and Linux, where `sh` exists.
 - `vendor = "cargo"` downloads the crates with the network on, and oku pins
   their digest. The `run` step has no network, see
-  [The build sandbox](../reference/manifest.md#the-build-sandbox).
+  [The build sandbox](../reference/sandbox.md).
 - `install` copies files from the source into the package.
 
 `oku manifest test` builds from source whenever the build applies to your

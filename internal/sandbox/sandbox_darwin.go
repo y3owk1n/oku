@@ -51,15 +51,26 @@ func profile(spec Spec) string {
 (deny process-exec (literal "/bin/launchctl"))
 `)
 
+	// cfprefsd reads the user's preferences under ~/Library/Preferences for the
+	// build, and securityd answers for the keychain, so the rule on Home below
+	// would not stop either.
+	b.WriteString(`(deny mach-lookup (global-name "com.apple.cfprefsd.agent") (global-name "com.apple.cfprefsd.daemon")` +
+		` (global-name "com.apple.SecurityServer") (global-name "com.apple.securityd"))
+`)
+
+	// The build runs in a session without a terminal, and this also keeps it from
+	// reading what the user types into one.
+	b.WriteString(`(deny file-read-data (literal "/dev/tty") (regex #"^/dev/ttys[0-9]+$"))
+`)
+
+	keep := append(append([]string{}, spec.Readable...), spec.Writable...)
+
 	if spec.Home != "" {
-		fmt.Fprintf(&b, "(deny file-read-data (require-all (subpath %q)", spec.Home)
-
-		for _, path := range append(append([]string{}, spec.Readable...), spec.Writable...) {
-			fmt.Fprintf(&b, " (require-not (subpath %q))", path)
-		}
-
-		b.WriteString("))\n")
+		denyRead(&b, spec.Home, keep)
 	}
+
+	// The user's temporary and cache directories are under /private/var/folders.
+	denyRead(&b, "/private/var/folders", keep)
 
 	b.WriteString("(deny file-write*)\n")
 
@@ -69,10 +80,22 @@ func profile(spec Spec) string {
 
 	// Shells and compilers write to these devices.
 	b.WriteString(
-		`(allow file-write* (literal "/dev/null") (literal "/dev/tty") (literal "/dev/dtracehelper") (subpath "/dev/fd"))` + "\n",
+		`(allow file-write* (literal "/dev/null") (literal "/dev/dtracehelper") (subpath "/dev/fd"))` + "\n",
 	)
 
 	return b.String()
+}
+
+// denyRead denies reading file contents and listings under dir, except under
+// the paths of keep.
+func denyRead(b *strings.Builder, dir string, keep []string) {
+	fmt.Fprintf(b, "(deny file-read-data (require-all (subpath %q)", dir)
+
+	for _, path := range keep {
+		fmt.Fprintf(b, " (require-not (subpath %q))", path)
+	}
+
+	b.WriteString("))\n")
 }
 
 // Init only exists for the Linux sandbox.

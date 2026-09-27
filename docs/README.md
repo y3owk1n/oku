@@ -66,6 +66,7 @@ Pick the task you have.
 | [oku.lock](reference/lock.md) | The lock file format |
 | [Paths](reference/paths.md) | Where oku keeps things, environment variables, what it writes elsewhere |
 | [Security](reference/security.md) | What oku checks, what it pins, and when it stops to ask |
+| [Build sandbox](reference/sandbox.md) | What a build can reach on macOS, Linux and Windows, and what oku does without a sandbox |
 
 ## Platforms
 
