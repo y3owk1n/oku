@@ -1073,6 +1073,9 @@ order step in `prd/product.md`.
   publishes no checksum prints the same warning.
 - B396 [11] The package `oku run` installed stays in the store and no generation
   holds it, so `oku gc` deletes it.
+- B398 [11] `oku run` starts the file itself, not the link the store holds to
+  it, so that macOS can issue a sandbox extension for a bundle and a program
+  finds what sits next to its own file.
 - B397 [11] `--asset` and `--bin` steer an inferred manifest on `oku run` and
   `oku shell` as on `oku add`, so a repo whose asset names no platform still
   runs. They describe one download, so `oku shell` fails when more than one ref
