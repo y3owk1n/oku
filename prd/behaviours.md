@@ -1073,6 +1073,10 @@ order step in `prd/product.md`.
   publishes no checksum prints the same warning.
 - B396 [11] The package `oku run` installed stays in the store and no generation
   holds it, so `oku gc` deletes it.
+- B397 [11] `--asset` and `--bin` steer an inferred manifest on `oku run` and
+  `oku shell` as on `oku add`, so a repo whose asset names no platform still
+  runs. They describe one download, so `oku shell` fails when more than one ref
+  comes with them.
 - B91 [11] `oku doctor` reports store root, sandbox availability, hook status,
   PATH order problems and broken profile links. It finds the hook line in any
   file the user's shells read at startup, whether the line names `oku` or
