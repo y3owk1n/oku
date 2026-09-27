@@ -152,6 +152,10 @@ var errUntranslatable = errors.New("oku cannot translate it")
 // source, the manifest follows the vendor. Otherwise it pins the recipe's
 // version with the recipe's downloads and digests.
 func (r recipe) text() (string, error) {
+	if err := manifest.CheckVersion(r.version); err != nil {
+		return "", fmt.Errorf("%s: %w", oneLine(r.source), err)
+	}
+
 	switch {
 	case len(r.artifacts) == 0 && r.dropped != "":
 		return "", fmt.Errorf("%s: %s, so %w", r.source, r.dropped, errUntranslatable)
@@ -176,7 +180,7 @@ func (r recipe) text() (string, error) {
 
 	var b strings.Builder
 
-	fmt.Fprintf(&b, "# Translated from %s.\n", r.source)
+	fmt.Fprintf(&b, "# Translated from %s.\n", oneLine(r.source))
 
 	var leftArgs []string
 
@@ -191,7 +195,7 @@ func (r recipe) text() (string, error) {
 	if len(leftArgs) > 0 {
 		fmt.Fprintf(
 			&b, "# The arguments of %s name folders of Scoop's, so oku runs it without them.\n",
-			strings.Join(leftArgs, ", "),
+			oneLine(strings.Join(leftArgs, ", ")),
 		)
 	}
 

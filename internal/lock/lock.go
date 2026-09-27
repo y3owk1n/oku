@@ -14,6 +14,7 @@ import (
 	"github.com/pelletier/go-toml/v2"
 
 	"github.com/y3owk1n/oku/internal/list"
+	"github.com/y3owk1n/oku/internal/manifest"
 	"github.com/y3owk1n/oku/internal/ref"
 )
 
@@ -174,7 +175,33 @@ func Parse(data []byte, origin string) (*Lock, error) {
 		return nil, fmt.Errorf("parse %s: %w", origin, err)
 	}
 
+	if err := checkVersions(l.Packages); err != nil {
+		return nil, fmt.Errorf("parse %s: %w", origin, err)
+	}
+
 	return &l, nil
+}
+
+// checkVersions fails for a version that could not name a store directory. A
+// lock comes from a repo, and its versions go into paths.
+func checkVersions(pkgs []Package) error {
+	for _, p := range pkgs {
+		if err := manifest.CheckVersion(p.Version); err != nil {
+			return fmt.Errorf("%s: %w", p.Name, err)
+		}
+
+		for key, at := range p.Platforms {
+			if err := manifest.CheckVersion(at.Version); err != nil {
+				return fmt.Errorf("%s on %s: %w", p.Name, key, err)
+			}
+		}
+
+		if err := checkVersions(p.Deps); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // Find returns the package called name.

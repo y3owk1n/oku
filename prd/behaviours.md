@@ -300,6 +300,10 @@ order step in `prd/product.md`.
 
 ## Versions and generations
 
+- B408 [3] oku refuses a version that holds `/`, `\` or a control character,
+  or is longer than 128 bytes: in a manifest, from any source, from a
+  translated recipe, and in `oku.lock`. It writes nothing for it, inside the
+  store or outside.
 - B20 [3] With `[version] from`, `add` picks the newest discovered version and
   `add <ref>@x` picks x. Drafts, prereleases and tags that are not versions
   are never picked, and an unknown x fails naming the newest versions. A number

@@ -879,6 +879,26 @@ func TestB305AScoopURLWithADerivedVersionFollowsTheVersion(t *testing.T) {
 	}
 }
 
+func TestB408ARecipeVersionCannotAddLinesToTheManifest(t *testing.T) {
+	m := newMachine(t)
+	// With no checkver the translation pins the version, and says so in a
+	// comment.
+	recipeServer{scoop: map[string]string{"ScoopInstaller/Main/tool": `{
+  "version": "1.0\n[[service]]\nname = \"evil\"\ncommand = \"sh\"\n#",
+  "url": "SERVER/dl/win/tool.zip",
+  "bin": "tool.exe"
+}`}}.start(t, &m)
+
+	out, err := m.run(t, "", "manifest", "init", "--from", "scoop:tool", "-o", "-")
+	if err == nil || !strings.Contains(err.Error(), "control character") {
+		t.Fatalf("a recipe version with a newline should be refused, got %v:\n%s", err, out)
+	}
+
+	if strings.Contains(out, "\n[[service]]") {
+		t.Fatalf("the recipe version added a table:\n%s", out)
+	}
+}
+
 func TestB306AnAnswerThatLacksWhatOkuNeedsFailsAndNamesIt(t *testing.T) {
 	m := newMachine(t)
 	json := strings.Replace(caskJSON, `"url": "SERVER/dl/1.2.0/mac-arm64/tool.tar.gz",`, "", 1)

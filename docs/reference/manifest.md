@@ -75,6 +75,11 @@ A manifest either fixes one version with `value` or discovers versions with
 `from`. Discovery suits a published manifest, because a new release needs no
 manifest change.
 
+A version is part of the name of the package's directory in the store, so oku
+refuses one that holds `/`, `\` or a control character such as a newline, or
+that is longer than 128 bytes. That holds for `value`, for a version any source
+finds, for a version a recipe pins, and for a version in `oku.lock`.
+
 | Key | Required | Meaning |
 |---|---|---|
 | `value` | one of `value` and `from` | The one version this manifest installs. |
