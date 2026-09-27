@@ -62,6 +62,85 @@ func TestB384GCCacheDeletesAnAnswerNoCommandHasReadForAMonth(t *testing.T) {
 	}
 }
 
+func TestB401GCOlderThanSetsHowLongAnAnswerStays(t *testing.T) {
+	m := newMachine(t)
+	server := newReleaseServer(t, "v1.0.0")
+	m.opts.GitHubAPI = server.URL + "/api"
+
+	_, err := m.run(t, "", "add", m.discoveredManifest(t, "1.0.0"))
+	must(t, err)
+
+	kept := apiAnswers(t, m)
+	if len(kept) != 1 {
+		t.Fatalf("the cache holds %d answers, want 1", len(kept))
+	}
+
+	week := time.Now().Add(-8 * 24 * time.Hour)
+	must(t, os.Chtimes(kept[0], week, week))
+
+	// By default an answer stays for a month, so this one stays.
+	out, err := m.run(t, "", "gc", "--cache")
+	must(t, err)
+
+	if len(apiAnswers(t, m)) != 1 {
+		t.Fatalf("gc deleted an answer read a week ago:\n%s", out)
+	}
+
+	// --older-than says how long it stays instead.
+	out, err = m.run(t, "", "gc", "--cache", "--older-than", "2d")
+	must(t, err)
+
+	if len(apiAnswers(t, m)) != 0 {
+		t.Fatalf("--older-than 2d kept an answer read a week ago:\n%s", out)
+	}
+
+	if !strings.Contains(out, "1 answer from the API cache") {
+		t.Fatalf("gc did not say what it deleted from the API cache:\n%s", out)
+	}
+}
+
+func TestB402GCCacheOlderThanClearsTheCacheAndKeepsEveryGeneration(t *testing.T) {
+	m := newMachine(t)
+	server := newReleaseServer(t, "v1.0.0")
+	m.opts.GitHubAPI = server.URL + "/api"
+
+	_, err := m.run(t, "", "add", m.discoveredManifest(t, "1.0.0"))
+	must(t, err)
+
+	before, err := m.run(t, "", "generations")
+	must(t, err)
+
+	kept := apiAnswers(t, m)
+	if len(kept) != 1 {
+		t.Fatalf("the cache holds %d answers, want 1", len(kept))
+	}
+
+	week := time.Now().Add(-8 * 24 * time.Hour)
+	must(t, os.Chtimes(kept[0], week, week))
+
+	// --cache-older-than turns --cache on by itself.
+	out, err := m.run(t, "", "gc", "--cache-older-than", "2d")
+	must(t, err)
+
+	if len(apiAnswers(t, m)) != 0 {
+		t.Fatalf("--cache-older-than 2d kept an answer read a week ago:\n%s", out)
+	}
+
+	// It names an age for the cache only, so every generation stays.
+	after, err := m.run(t, "", "generations")
+	must(t, err)
+
+	if after != before {
+		t.Fatalf("--cache-older-than changed the generations:\n%s\nwant:\n%s", after, before)
+	}
+
+	// The error for an age oku cannot read names the flag it came from.
+	_, err = m.run(t, "", "gc", "--cache-older-than", "soon")
+	if err == nil || !strings.Contains(err.Error(), "--cache-older-than takes") {
+		t.Fatalf("--cache-older-than with an age it cannot read: %v", err)
+	}
+}
+
 func TestB385AnAnswerFromAnOlderOkuIsAskedForAgain(t *testing.T) {
 	m := newMachine(t)
 	server := newReleaseServer(t, "v1.0.0")

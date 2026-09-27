@@ -80,7 +80,9 @@ the apps and fonts it copied out of the store, and the rest of its data.
 				return err
 			}
 
-			answers, err := forge.StaleAnswers(filepath.Join(e.cache, "api"), time.Now())
+			answers, err := forge.StaleAnswers(
+				filepath.Join(e.cache, "api"), time.Now(), forge.AnswerRetention,
+			)
 			if err != nil {
 				return err
 			}

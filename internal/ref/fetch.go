@@ -1,6 +1,8 @@
 package ref
 
 import (
+	"archive/tar"
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -15,6 +17,8 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+
+	"github.com/klauspost/compress/gzip"
 
 	"github.com/y3owk1n/oku/internal/forge"
 	"github.com/y3owk1n/oku/internal/status"
@@ -405,6 +409,10 @@ func (f *Fetcher) checkout(ctx context.Context, r Ref, commit string) (string, s
 // package name. A collection keeps them as "<name>.toml" at its root or under
 // "packages/". A URL cannot be listed.
 func (f *Fetcher) ListManifests(ctx context.Context, r Ref) (map[string][]byte, error) {
+	if r.Kind != File {
+		defer status.Start(ctx, "reading the packages of %s", r)()
+	}
+
 	switch r.Kind {
 	case File:
 		return readCollection(r.Location)
@@ -444,6 +452,8 @@ func readCollection(dir string) (map[string][]byte, error) {
 	return found, nil
 }
 
+// listForge reads a collection from its archive, so it costs one request
+// however many manifests the collection holds.
 func (f *Fetcher) listForge(ctx context.Context, r Ref) (map[string][]byte, error) {
 	host, repo, err := f.Hosts.Open(r.Scheme, r.Location)
 	if err != nil {
@@ -455,6 +465,85 @@ func (f *Fetcher) listForge(ctx context.Context, r Ref) (map[string][]byte, erro
 		return nil, fmt.Errorf("resolve %s: %w", r, notFound(err))
 	}
 
+	archive, err := host.Archive(ctx, repo, commit)
+	if errors.Is(err, forge.ErrTooLarge) {
+		// A repo that holds more than its manifests may be too large to download in
+		// one answer. Reading it file by file is slow, but it works.
+		return f.listForgeFiles(ctx, r, host, repo, commit)
+	}
+
+	if err != nil {
+		return nil, fmt.Errorf("download the files of %s: %w", r, notFound(err))
+	}
+
+	found, err := manifestsIn(archive)
+	if err != nil {
+		return nil, fmt.Errorf("read the files of %s: %w", r, err)
+	}
+
+	return found, nil
+}
+
+// maxCollection is the most an archive unpacks to. A collection of manifests is
+// far smaller, and an archive that claims more is not worth reading.
+const maxCollection = 256 << 20
+
+// manifestsIn returns the manifests of a collection's tar.gz, keyed by package
+// name. It passes over a file too large to be a manifest, the way search passes
+// over a TOML file that holds no manifest.
+func manifestsIn(archive []byte) (map[string][]byte, error) {
+	zipped, err := gzip.NewReader(bytes.NewReader(archive))
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = zipped.Close() }()
+
+	found := map[string][]byte{}
+	entries := tar.NewReader(io.LimitReader(zipped, maxCollection))
+
+	for {
+		head, err := entries.Next()
+		if errors.Is(err, io.EOF) {
+			return found, nil
+		}
+
+		if err != nil {
+			return nil, err
+		}
+
+		if head.Typeflag != tar.TypeReg || head.Size > maxManifest {
+			continue
+		}
+
+		// A forge wraps the files of a repo in one directory named after it. That
+		// directory is not part of the paths a collection uses.
+		_, at, _ := strings.Cut(path.Clean(head.Name), "/")
+
+		dir, name := path.Split(at)
+		if !strings.HasSuffix(name, ".toml") || dir != "" && dir != Manifest.Dir+"/" {
+			continue
+		}
+
+		data, err := io.ReadAll(entries)
+		if err != nil {
+			return nil, err
+		}
+
+		name = strings.TrimSuffix(name, ".toml")
+		if _, taken := found[name]; !taken || dir == "" {
+			found[name] = data
+		}
+	}
+}
+
+// listForgeFiles reads a collection one manifest at a time, which costs one
+// request for the file list and one for each manifest.
+func (f *Fetcher) listForgeFiles(
+	ctx context.Context,
+	r Ref,
+	host forge.Forge,
+	repo, commit string,
+) (map[string][]byte, error) {
 	paths, err := host.Files(ctx, repo, commit)
 	if err != nil {
 		return nil, fmt.Errorf("list %s: %w", r, notFound(err))

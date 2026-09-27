@@ -499,6 +499,11 @@ order step in `prd/product.md`.
 - B384 [3] `oku gc --cache` also deletes each API answer that no command has
   read for 30 days, and says how many and what that freed. An answer a lookup
   read since stays, because reading one sets the time on its file.
+- B401 [3] `--older-than` sets how long an API answer stays, the way it sets
+  how long a download stays. Without it an answer stays for 30 days.
+- B402 [3] `oku gc --cache-older-than AGE` sets how long a download and an API
+  answer stay, turns on `--cache`, and oku uses it instead of `--older-than`
+  for the cache. It deletes no generation, so every generation stays.
 - B347 [3] When `gc --keep` deletes generations and no store path becomes
   unused, it ends with `every store path is still used by a generation`,
   never with `nothing to delete`.
@@ -799,6 +804,9 @@ order step in `prd/product.md`.
   `oku.toml` gets the full ref, so the list works without the alias.
 - B31 [4] `oku search <term>` matches names and descriptions across the user's
   sources, and nothing else.
+- B400 [4] `oku search` reads a forge collection from its archive, so a source
+  costs one request however many manifests it holds. A repo too large to
+  download in one answer is read one manifest at a time.
 
 ## Builds
 
