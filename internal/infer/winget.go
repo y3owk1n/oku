@@ -145,6 +145,8 @@ func (inf *Inferrer) FromWinget(ctx context.Context, id string) (string, error) 
 	var locale struct {
 		ShortDescription string `yaml:"ShortDescription"`
 		PackageURL       string `yaml:"PackageUrl"`
+		// Moniker is the short name people type, such as nvim for Neovim.
+		Moniker string `yaml:"Moniker"`
 	}
 
 	// A package without its default locale still translates.
@@ -169,7 +171,9 @@ func (inf *Inferrer) FromWinget(ctx context.Context, id string) (string, error) 
 			continue
 		}
 
-		a, err := inf.wingetArtifact(ctx, i, r.name, version, platform.Selector{OS: "windows", Arch: arch.oku})
+		a, err := inf.wingetArtifact(
+			ctx, i, r.name, locale.Moniker, version, platform.Selector{OS: "windows", Arch: arch.oku},
+		)
 		if err != nil {
 			refused = cmp.Or(refused, err)
 
@@ -235,13 +239,14 @@ func pickInstaller(all []wingetInstaller, top wingetInstaller, arch string) (win
 	return fit[0], true
 }
 
-// wingetArtifact translates one installer of the package called name. oku
-// places a portable program or a zip of them as it is, and opens an MSI to find
-// the programs its commands name. It runs no other installer.
+// wingetArtifact translates one installer of the package called name, whose
+// locale gives moniker. oku places a portable program or a zip of them as it
+// is, and opens an MSI to find the programs its commands name. It runs no other
+// installer.
 func (inf *Inferrer) wingetArtifact(
 	ctx context.Context,
 	i wingetInstaller,
-	name, version string,
+	name, moniker, version string,
 	sel platform.Selector,
 ) (recipeArtifact, error) {
 	a := recipeArtifact{sel: sel, url: i.InstallerURL, sha256: strings.ToLower(i.InstallerSha256)}
@@ -277,10 +282,36 @@ func (inf *Inferrer) wingetArtifact(
 			return recipeArtifact{}, fmt.Errorf("open %s to find its programs: %w", a.url, err)
 		}
 
-		// Without commands, the program is the one named after the package.
+		// Without commands, the program is the one named after the package, or
+		// after its moniker, as nvim of Neovim, or the only program there is.
 		commands := i.Commands
 		if len(commands) == 0 {
-			commands = []string{name}
+			command := ""
+
+			for _, want := range []string{name, moniker} {
+				if want != "" && onlyExecutable(files, func(p string) bool {
+					return strings.EqualFold(path.Base(p), want+".exe")
+				}) != "" {
+					command = want
+
+					break
+				}
+			}
+
+			if command == "" {
+				only := onlyExecutable(files, func(p string) bool {
+					return strings.HasSuffix(strings.ToLower(p), ".exe")
+				})
+				if only == "" {
+					return recipeArtifact{}, fmt.Errorf(
+						"%s holds no program %s.exe, and winget names no command", a.url, cmp.Or(moniker, name),
+					)
+				}
+
+				command = strings.TrimSuffix(path.Base(only), path.Ext(only))
+			}
+
+			commands = []string{command}
 		}
 
 		for _, command := range commands {

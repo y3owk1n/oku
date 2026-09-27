@@ -753,6 +753,9 @@ order step in `prd/product.md`.
   file name the entry gives it, `bin` from `files`, and `sha256_url` from the
   checksum. An entry whose template oku cannot translate fails and names the
   template. A `github:` ref never reads the registry.
+- B434 [4] A `winget:` package whose MSI names no command takes the program
+  named after the package, else the one its `Moniker` names, as `nvim` of
+  `Neovim.Neovim`, else the only program in it.
 - B303 [4] `oku add winget:Publisher.Package` translates the newest version
   of a package of winget's community manifests into a manifest for Windows,
   one artifact per arch. A portable program, a zip of them, or an MSI whose
