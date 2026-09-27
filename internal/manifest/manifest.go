@@ -13,6 +13,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"unicode"
 
 	"aead.dev/minisign"
 
@@ -448,6 +449,8 @@ func (m *Manifest) validate() error {
 		errs = append(errs, errors.New("set version.value or version.from"))
 	case m.Version.From != "" && m.Version.Value != "":
 		errs = append(errs, errors.New("set version.value or version.from, not both"))
+	case CheckVersion(m.Version.Value) != nil:
+		errs = append(errs, fmt.Errorf("version.value: %w", CheckVersion(m.Version.Value)))
 	case m.Version.From == FromGitHubReleases && !repoRe.MatchString(m.Version.Repo):
 		errs = append(
 			errs,
@@ -1067,4 +1070,21 @@ func jsonPathErrors(paths []string, key string) []error {
 	}
 
 	return errs
+}
+
+// CheckVersion fails for a version that cannot be part of a file name. The
+// version is part of the package's directory name in the store and goes into
+// the comments of manifests oku writes, so it may hold no path separator, no
+// control character such as a newline, and at most 128 bytes.
+func CheckVersion(v string) error {
+	switch {
+	case len(v) > 128:
+		return fmt.Errorf("the version %.40q... is longer than 128 bytes", v)
+	case strings.ContainsAny(v, `/\`):
+		return fmt.Errorf("the version %q holds a path separator", v)
+	case strings.ContainsFunc(v, unicode.IsControl):
+		return fmt.Errorf("the version %q holds a control character", v)
+	}
+
+	return nil
 }

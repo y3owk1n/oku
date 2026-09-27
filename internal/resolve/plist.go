@@ -3,12 +3,17 @@ package resolve
 import (
 	"encoding/xml"
 	"errors"
+	"fmt"
 	"io"
 	"strings"
 )
 
 // errEnd is the end of a dict or an array, where plistValue finds no value.
 var errEnd = errors.New("end of the container")
+
+// maxPlistDepth is how deep dicts and arrays may nest. A real property list
+// nests a few levels, and each level costs a call.
+const maxPlistDepth = 64
 
 // parsePlist reads an XML property list into the values that encoding/json
 // gives: a dict is a map, an array a slice, and every other value its text.
@@ -24,14 +29,14 @@ func parsePlist(text string) (any, error) {
 		}
 
 		if start, ok := tok.(xml.StartElement); ok && start.Name.Local == "plist" {
-			return plistValue(dec)
+			return plistValue(dec, 0)
 		}
 	}
 }
 
 // plistValue reads the next value of dec. It returns errEnd at the end of the
 // dict or the array that holds it.
-func plistValue(dec *xml.Decoder) (any, error) {
+func plistValue(dec *xml.Decoder, depth int) (any, error) {
 	for {
 		tok, err := dec.Token()
 		if err != nil {
@@ -42,18 +47,22 @@ func plistValue(dec *xml.Decoder) (any, error) {
 		case xml.EndElement:
 			return nil, errEnd
 		case xml.StartElement:
-			return plistElement(dec, t)
+			return plistElement(dec, t, depth)
 		}
 	}
 }
 
-func plistElement(dec *xml.Decoder, start xml.StartElement) (any, error) {
+func plistElement(dec *xml.Decoder, start xml.StartElement, depth int) (any, error) {
+	if (start.Name.Local == "dict" || start.Name.Local == "array") && depth >= maxPlistDepth {
+		return nil, fmt.Errorf("the property list nests more than %d levels", maxPlistDepth)
+	}
+
 	switch start.Name.Local {
 	case "dict":
 		dict := map[string]any{}
 
 		for {
-			key, err := plistValue(dec)
+			key, err := plistValue(dec, depth+1)
 			if errors.Is(err, errEnd) {
 				return dict, nil
 			}
@@ -62,7 +71,7 @@ func plistElement(dec *xml.Decoder, start xml.StartElement) (any, error) {
 				return nil, err
 			}
 
-			value, err := plistValue(dec)
+			value, err := plistValue(dec, depth+1)
 			if err != nil {
 				return nil, err
 			}
@@ -74,7 +83,7 @@ func plistElement(dec *xml.Decoder, start xml.StartElement) (any, error) {
 		var list []any
 
 		for {
-			value, err := plistValue(dec)
+			value, err := plistValue(dec, depth+1)
 			if errors.Is(err, errEnd) {
 				return list, nil
 			}

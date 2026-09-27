@@ -891,6 +891,10 @@ func (e env) pickRelease(
 		release.Tag = release.Version
 	}
 
+	if err := manifest.CheckVersion(release.Version); err != nil {
+		return nil, resolve.Release{}, false, fmt.Errorf("%s: %w", r, err)
+	}
+
 	m.Version.Value, m.Tag, m.TagCommit = release.Version, release.Tag, release.Commit
 
 	return m, release, keep, nil
@@ -1066,6 +1070,10 @@ func (e env) artifactVersions(
 			}
 
 			found[fmt.Sprintf("%#v", source)] = release
+		}
+
+		if err := manifest.CheckVersion(release.Version); err != nil {
+			return resolve.Release{}, fmt.Errorf("%s for %s: %w", m.Package.Name, p, err)
 		}
 
 		m.Versions[p.String()] = release.Version

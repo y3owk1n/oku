@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"unicode"
 
 	xdg "github.com/y3owk1n/oku/internal/desktop"
 	"github.com/y3owk1n/oku/internal/forge"
@@ -315,7 +316,7 @@ func (inf *Inferrer) Manifest(
 			if len(c.others) > 0 {
 				fmt.Fprintf(
 					&b, "# These assets fit %s too: %s\n# Choose one with --asset.\n",
-					host, strings.Join(c.others, ", "),
+					host, oneLine(strings.Join(c.others, ", ")),
 				)
 			}
 		}
@@ -1267,4 +1268,17 @@ func Machine(p platform.Platform) string {
 	}
 
 	return p.String()
+}
+
+// oneLine turns every control character of s into a space. The comments of a
+// manifest oku writes quote names from a recipe or a release, and a newline in
+// one would start a line of TOML.
+func oneLine(s string) string {
+	return strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) {
+			return ' '
+		}
+
+		return r
+	}, s)
 }

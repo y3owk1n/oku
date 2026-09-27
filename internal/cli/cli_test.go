@@ -15,6 +15,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -7010,6 +7011,62 @@ func TestB221SelfUpdateKeepsANightlyAndTakesANamedRelease(t *testing.T) {
 	if _, err := m.run(t, "", "self", "update", "--to", "v9.9.9"); err == nil ||
 		!strings.Contains(err.Error(), "v9.9.9") {
 		t.Fatalf("--to a release that does not exist should fail and name it, got %v", err)
+	}
+}
+
+func TestB408AVersionThatCannotNameAStoreDirectoryIsRefused(t *testing.T) {
+	m := newMachine(t)
+	root := filepath.Dir(filepath.Dir(m.config))
+
+	// escaped reports a file or directory named after the escape anywhere under
+	// the machine's root.
+	escaped := func() string {
+		var found string
+
+		_ = filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+			if err == nil && strings.HasPrefix(d.Name(), "escaped") {
+				found = path
+			}
+
+			return nil
+		})
+
+		return found
+	}
+
+	archive, sum := m.archive(t, "tool", map[string]string{"tool": script})
+	path := filepath.Join(m.fixtures, "bad.toml")
+	must(t, os.WriteFile(path, fmt.Appendf(nil, `[package]
+name = "tool"
+[version]
+value = "../../../../escaped"
+[[artifact]]
+url = "file://%s"
+sha256 = "%s"
+bin = ["tool"]
+`, archive, sum), 0o644))
+
+	if out, err := m.run(t, "", "add", path); err == nil || !strings.Contains(err.Error(), "path separator") {
+		t.Fatalf("a manifest version with a path separator should be refused, got %v:\n%s", err, out)
+	}
+
+	// A lock from a repo pins the version sync installs.
+	_, err := m.run(t, "", "add", m.manifest(t, "tool", map[string]string{"tool": script}, `bin = ["tool"]`))
+	must(t, err)
+
+	lockPath := filepath.Join(m.config, "oku.lock")
+	locked, err := os.ReadFile(lockPath)
+	must(t, err)
+	must(t, os.WriteFile(lockPath,
+		[]byte(strings.ReplaceAll(string(locked), "'1.2.3'", "'../../../../escaped'")), 0o644))
+	must(t, os.RemoveAll(filepath.Join(m.data, "store")))
+
+	if out, err := m.run(t, "", "sync"); err == nil || !strings.Contains(err.Error(), "path separator") {
+		t.Fatalf("a locked version with a path separator should be refused, got %v:\n%s", err, out)
+	}
+
+	if found := escaped(); found != "" {
+		t.Fatalf("oku wrote %s", found)
 	}
 }
 
