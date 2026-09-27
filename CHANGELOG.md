@@ -1,5 +1,40 @@
 # Changelog
 
+## [0.10.0](https://github.com/y3owk1n/oku/compare/v0.9.0...v0.10.0) (2026-09-27)
+
+
+### Features
+
+* **run:** start a package's app without installing it ([#302](https://github.com/y3owk1n/oku/issues/302)) ([4569ef3](https://github.com/y3owk1n/oku/commit/4569ef35309e011802e25b0ad58d3fdea63495da))
+
+
+### Bug Fixes
+
+* **doctor:** find the hook line in every PowerShell profile ([#297](https://github.com/y3owk1n/oku/issues/297)) ([fc69db4](https://github.com/y3owk1n/oku/commit/fc69db488f002f6cc02faacfcfedbbdd2ef150a5))
+* **download:** keep tokens on the user's hosts, and refuse file and plain http where they leak ([#311](https://github.com/y3owk1n/oku/issues/311)) ([d6bd7dd](https://github.com/y3owk1n/oku/commit/d6bd7dd8d4664bea5553051a16b58e10ae7d2243))
+* **env:** ask before a package sets [env], and let exec apply only an allowed project ([#308](https://github.com/y3owk1n/oku/issues/308)) ([9871f99](https://github.com/y3owk1n/oku/commit/9871f99b3c37e5e872ebcf3a30daec5d45e2c92a))
+* **files:** keep targets, package links and settings where the list may write ([#310](https://github.com/y3owk1n/oku/issues/310)) ([ac41dab](https://github.com/y3owk1n/oku/commit/ac41dab85462743b23a1a13a40782339d3ac0407))
+* **infer:** find a winget MSI's program by its moniker ([#319](https://github.com/y3owk1n/oku/issues/319)) ([9d283fe](https://github.com/y3owk1n/oku/commit/9d283feb2cedca56204cd0b4641a9ee51ca733bb))
+* **infer:** keep the repo name for an asset that is another build of the program ([#318](https://github.com/y3owk1n/oku/issues/318)) ([ce36b9a](https://github.com/y3owk1n/oku/commit/ce36b9a48616dbb41c9786536d5f5496255537f6))
+* **install:** check release signatures in the install scripts and the action ([#304](https://github.com/y3owk1n/oku/issues/304)) ([4f8fb63](https://github.com/y3owk1n/oku/commit/4f8fb6399827fa1b454de10005a32b2bb751195d))
+* **manifest:** refuse a version that cannot name a store directory ([#306](https://github.com/y3owk1n/oku/issues/306)) ([aaeea89](https://github.com/y3owk1n/oku/commit/aaeea89d955bf5147bd2b006ecd50e543c5c3e5e))
+* **run:** count and start a Windows program through its spec ([#317](https://github.com/y3owk1n/oku/issues/317)) ([555e89e](https://github.com/y3owk1n/oku/commit/555e89eb1d49e36c3f68c3faa1d4fc1b1b2edc76))
+* **sandbox:** keep builds away from the terminal, preferences and temp dir ([#305](https://github.com/y3owk1n/oku/issues/305)) ([1647ddd](https://github.com/y3owk1n/oku/commit/1647dddc2680c21e578bb8db2729bba895020c70))
+* **service:** run system services as the user, and keep ProgramData to its owners ([#313](https://github.com/y3owk1n/oku/issues/313)) ([e6ea3df](https://github.com/y3owk1n/oku/commit/e6ea3dfbf73b9b760d565a1221e141d711b5e26c))
+* **signature:** bind signatures to their file, version or nightly commit ([#312](https://github.com/y3owk1n/oku/issues/312)) ([ce9ed87](https://github.com/y3owk1n/oku/commit/ce9ed87570a38eaa840774e46b0a9832a7e45efa))
+* **store:** keep the steps oku runs itself inside the build ([#307](https://github.com/y3owk1n/oku/issues/307)) ([7cad308](https://github.com/y3owk1n/oku/commit/7cad3089aed3062e1a20ab2f03725a8fee103c35))
+* **store:** read a file:// URL with a Windows drive or share ([#316](https://github.com/y3owk1n/oku/issues/316)) ([0856e68](https://github.com/y3owk1n/oku/commit/0856e6817c6987d9c894aacf59b27919f7f1ac05))
+* **store:** write the spec a package in the store is missing ([#300](https://github.com/y3owk1n/oku/issues/300)) ([d95159e](https://github.com/y3owk1n/oku/commit/d95159eb565206414e791511fa81367b11f99dcf))
+* **ui:** show the control characters of a package's text instead of sending them to the terminal ([#309](https://github.com/y3owk1n/oku/issues/309)) ([acc06a8](https://github.com/y3owk1n/oku/commit/acc06a8057e9fe711e4576efea47da90fa65a118))
+* **which:** read the shim spec, so a Windows program is found ([#301](https://github.com/y3owk1n/oku/issues/301)) ([5ac29b8](https://github.com/y3owk1n/oku/commit/5ac29b869c220208211ebf104ecda1642e888705))
+* **windows:** link dep DLLs beside the program, and let only Windows run a shim ([#315](https://github.com/y3owk1n/oku/issues/315)) ([8a38a04](https://github.com/y3owk1n/oku/commit/8a38a0453e25d2a907763b3b57470fc4aa5555d0))
+* **windows:** start a program's real file, so it finds its DLLs ([#299](https://github.com/y3owk1n/oku/issues/299)) ([5541d6d](https://github.com/y3owk1n/oku/commit/5541d6d9a0aeba9279ed63e7fe68bbb37401780b))
+
+
+### Performance Improvements
+
+* **search:** read a collection from its archive, and let gc set the cache age ([#303](https://github.com/y3owk1n/oku/issues/303)) ([b796323](https://github.com/y3owk1n/oku/commit/b79632385d13cbc5b299572f99ba474ee466c28a))
+
 ## [0.9.0](https://github.com/y3owk1n/oku/compare/v0.8.1...v0.9.0) (2026-09-26)
 
 
