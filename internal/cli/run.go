@@ -11,6 +11,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/y3owk1n/oku/internal/profile"
+	"github.com/y3owk1n/oku/internal/shim"
 	"github.com/y3owk1n/oku/internal/store"
 )
 
@@ -79,10 +80,12 @@ func runApp(
 		return err
 	}
 
-	// The store reaches an app and a program through a link. macOS cannot issue a
-	// sandbox extension for a bundle behind one, and a program that loads a file
-	// next to its own finds nothing there, so run starts the file itself.
-	program, err = filepath.EvalSymlinks(program)
+	// The store reaches an app and a program through a link, or on Windows
+	// through a copy with a spec beside it that names the file. macOS cannot
+	// issue a sandbox extension for a bundle behind a link, and a program that
+	// loads a file next to its own finds nothing there, so run starts the file
+	// itself.
+	program, err = runs(program)
 	if err != nil {
 		return fmt.Errorf("read %s: %w", program, err)
 	}
@@ -157,7 +160,8 @@ func appName(name string) string {
 	return strings.ToLower(strings.TrimSuffix(name, ".app"))
 }
 
-// storePrograms lists the files in the package's bin directory.
+// storePrograms lists the programs in the package's bin directory. The spec
+// file beside a program on Windows is not a program.
 func storePrograms(storePath string) ([]string, error) {
 	entries, err := os.ReadDir(filepath.Join(storePath, "bin"))
 	if err != nil && !errors.Is(err, fs.ErrNotExist) {
@@ -167,7 +171,7 @@ func storePrograms(storePath string) ([]string, error) {
 	programs := make([]string, 0, len(entries))
 
 	for _, entry := range entries {
-		if !entry.IsDir() {
+		if !entry.IsDir() && filepath.Ext(entry.Name()) != shim.Ext {
 			programs = append(programs, entry.Name())
 		}
 	}
