@@ -146,6 +146,10 @@ func Init() error {
 		return fmt.Errorf("give the build its own /dev/shm: %w", err)
 	}
 
+	if err := ownTerminals(); err != nil {
+		return err
+	}
+
 	env := make([]string, 0, len(spec.Env))
 	for _, kv := range spec.Env {
 		if !strings.HasPrefix(kv, specEnv+"=") {
@@ -330,4 +334,25 @@ func mountsUnder(path string) ([]string, error) {
 	}
 
 	return mounts, scanner.Err()
+}
+
+// ownTerminals hides the terminals of the user's session under /dev/pts, which
+// belong to the user, so the build can neither read what the user types nor
+// write to their screen. A new devpts instance still lets the build open
+// terminals of its own. A kernel that refuses one gets an empty tmpfs.
+func ownTerminals() error {
+	err := syscall.Mount("devpts", "/dev/pts", "devpts", 0, "newinstance,ptmxmode=0666,mode=0620")
+	if err == nil {
+		err = syscall.Mount("/dev/pts/ptmx", "/dev/ptmx", "", syscall.MS_BIND, "")
+	}
+
+	if err == nil || errors.Is(err, fs.ErrNotExist) {
+		return nil
+	}
+
+	if err := syscall.Mount("tmpfs", "/dev/pts", "tmpfs", 0, "mode=0755"); err != nil {
+		return fmt.Errorf("hide /dev/pts: %w", err)
+	}
+
+	return nil
 }

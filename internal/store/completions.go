@@ -57,7 +57,7 @@ func generateCompletions(
 			cmd.Stderr = io.MultiWriter(&stderr, log)
 		}
 
-		err = cmd.Run()
+		err = sandbox.Run(cmd)
 		if err == nil && stdout.Len() == 0 {
 			err = errors.New("printed nothing")
 		}

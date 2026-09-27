@@ -146,6 +146,22 @@ func TestMain(m *testing.M) {
 		os.Exit(0)
 	}
 
+	// On macOS t.TempDir is under /private/var/folders, which the build sandbox
+	// does not let a build read, and some builds read fixtures by path.
+	if runtime.GOOS == "darwin" {
+		dir, err := os.MkdirTemp("/private/tmp", "oku-test-")
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+
+		os.Setenv("TMPDIR", dir)
+
+		code := m.Run()
+		os.RemoveAll(dir)
+		os.Exit(code)
+	}
+
 	os.Exit(m.Run())
 }
 
@@ -4400,6 +4416,108 @@ install = { share = ["probe.txt"] }
 
 	if got := m.probeResult(t); strings.Contains(got, "ran") || strings.Contains(got, "visible") {
 		t.Fatalf("the run step reached the session: %q", got)
+	}
+}
+
+func TestB406RunStepCannotReachTheUsersTerminalsPreferencesOrTempDir(t *testing.T) {
+	realHome, err := os.UserHomeDir()
+	must(t, err)
+
+	m, _, _ := sandboxedMachine(t)
+
+	var probe string
+
+	switch runtime.GOOS {
+	case "darwin":
+		out, err := exec.Command("getconf", "DARWIN_USER_TEMP_DIR").Output()
+		must(t, err)
+
+		secret := filepath.Join(strings.TrimSpace(string(out)), "oku-probe-"+filepath.Base(t.TempDir()))
+		must(t, os.WriteFile(secret, []byte("hunter2"), 0o600))
+		t.Cleanup(func() { os.Remove(secret) })
+
+		// defaults keeps a domain under the real home whatever HOME says, so that
+		// is the home the sandbox must hide. The domain is the user's own, since
+		// the global domain also merges a system-wide file outside home.
+		t.Setenv("HOME", realHome)
+
+		domain := "dev.oku.okulivetest." + filepath.Base(t.TempDir())
+		must(t, exec.Command("defaults", "write", domain, "secret", "hunter2").Run())
+		t.Cleanup(func() {
+			// defaults delete empties the domain and leaves its file.
+			_ = exec.Command("defaults", "delete", domain).Run()
+			os.Remove(filepath.Join(realHome, "Library", "Preferences", domain+".plist"))
+		})
+
+		if err := exec.Command("defaults", "read", domain, "secret").Run(); err != nil {
+			t.Skip("defaults cannot read back what it wrote here either")
+		}
+
+		probe = fmt.Sprintf(`cat %q >/dev/null 2>&1 && echo temp=readable > probe.txt || echo temp=hidden > probe.txt
+defaults read %s secret >/dev/null 2>&1 && echo prefs=readable >> probe.txt || echo prefs=hidden >> probe.txt`,
+			secret, domain)
+	case "linux":
+		// Opening /dev/ptmx gives this process a terminal under /dev/pts.
+		terminal, err := os.OpenFile("/dev/ptmx", os.O_RDWR, 0)
+		if err != nil {
+			t.Skip("no /dev/ptmx: " + err.Error())
+		}
+
+		t.Cleanup(func() { terminal.Close() })
+
+		probe = `ls -A /dev/pts | grep -v '^ptmx$' | grep -q . && echo pts=visible > probe.txt || echo pts=hidden > probe.txt`
+	}
+
+	path := filepath.Join(m.fixtures, "peeker.toml")
+	must(t, os.WriteFile(path, []byte(fmt.Sprintf(`[package]
+name = "peeker"
+[version]
+value = "1.0.0"
+[build]
+[[build.step]]
+run = """
+%s
+"""
+shell = "sh"
+[[build.step]]
+install = { share = ["probe.txt"] }
+`, probe)), 0o644))
+
+	out, err := m.run(t, "", "add", path, "--yes")
+	if err != nil {
+		t.Fatalf("add: %v\n%s", err, out)
+	}
+
+	if got := m.probeResult(t); strings.Contains(got, "readable") || strings.Contains(got, "visible") {
+		t.Fatalf("the run step reached what it should not: %q", got)
+	}
+}
+
+func TestB407WithoutASandboxTheApprovalSaysSoAndRequireSandboxRefuses(t *testing.T) {
+	if ok, _ := sandbox.Available(); ok {
+		t.Skip("this host can sandbox")
+	}
+
+	m := newMachine(t)
+	ref := m.buildManifest(t, false, "", writeTool+installTool)
+
+	m.opts.Interactive = yes()
+
+	out, err := m.run(t, "n\n", "add", ref)
+	if err == nil || !strings.Contains(out, "cannot sandbox commands") {
+		t.Fatalf("the approval prompt should say the host cannot sandbox, got %v:\n%s", err, out)
+	}
+
+	must(t, os.MkdirAll(m.config, 0o755))
+	must(t, os.WriteFile(filepath.Join(m.config, "config.toml"), []byte("require_sandbox = true\n"), 0o644))
+
+	if out, err := m.run(t, "", "add", ref, "--yes"); err == nil ||
+		!strings.Contains(err.Error(), "require_sandbox") {
+		t.Fatalf("require_sandbox should refuse the build, got %v:\n%s", err, out)
+	}
+
+	if entries := m.storeEntries(t); len(entries) > 0 {
+		t.Fatalf("a refused build left the store with %v", entries)
 	}
 }
 
