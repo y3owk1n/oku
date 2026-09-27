@@ -1018,6 +1018,10 @@ order step in `prd/product.md`.
 
 ## Apps, fonts, services
 
+- B427 [8] A system service runs as the user who installs it, from boot: a
+  launchd `UserName`, a systemd `User=`, or an S4U task on Windows.
+  `run_as = "root"` on the entry runs it as root or SYSTEM, and `sync --system`
+  says so before it asks. Any other `run_as` is an error.
 - B417 [8] A systemd unit that oku writes holds each argument and variable on
   its own line: a control character becomes a `\xNN` escape, and `$` in an
   argument becomes `$$`.
@@ -1063,6 +1067,9 @@ order step in `prd/product.md`.
   second after starting it. A program that has exited by then is reported as
   `<name> started and then exited` with where its log is, and the command
   fails. `status` reports what the manager says and never fails for that.
+- B428 [8] `oku setup --system` refuses a root that exists and belongs to
+  someone other than root, Administrators or the user, or is a link, before it
+  elevates.
 - B75 [8] System scope needs `--system`. oku names what it will write and
   prompts before elevating. Without the flag oku never elevates. It leaves
   system scope unchanged and lists what is pending.
