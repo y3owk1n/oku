@@ -1,8 +1,10 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"slices"
@@ -55,9 +57,9 @@ func (e env) projectStates(profiles []*profile.Profile) ([]projectState, error) 
 		case s.dir == "":
 		case unmounted(s.dir):
 			s.away = true
-		case !exists(s.dir):
+		case gone(s.dir):
 			s.gone = "its folder is gone"
-		case !exists(filepath.Join(s.dir, list.FileName)):
+		case gone(filepath.Join(s.dir, list.FileName)):
 			s.gone = "its " + list.FileName + " is gone"
 		}
 
@@ -152,6 +154,14 @@ func unmounted(dir string) bool {
 
 	return slices.Contains(mounts, at) ||
 		(parent == "/media" || parent == "/run/media") && dir != at
+}
+
+// gone reports a path that does not exist. A path oku cannot read, such as one
+// in a folder without permission, may still be there, so it is not gone.
+func gone(path string) bool {
+	_, err := os.Stat(path)
+
+	return errors.Is(err, fs.ErrNotExist)
 }
 
 func exists(path string) bool {

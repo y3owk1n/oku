@@ -86,6 +86,27 @@ func TestB378GCRemovesAProjectThatIsGoneAndFreesItsPackages(t *testing.T) {
 	}
 }
 
+func TestB378GCKeepsAProjectItCannotRead(t *testing.T) {
+	if runtime.GOOS == "windows" || os.Geteuid() == 0 {
+		t.Skip("needs a folder the user cannot search, and root can search every folder")
+	}
+
+	m := newMachine(t)
+	locked := filepath.Join(t.TempDir(), "locked")
+	m.projectWith(t, filepath.Join(locked, "proj"), "tool")
+
+	must(t, os.Chmod(locked, 0))
+	t.Cleanup(func() { _ = os.Chmod(locked, 0o755) })
+
+	if out, err := m.run(t, "", "gc"); err != nil {
+		t.Fatalf("gc: %v\n%s", err, out)
+	}
+
+	if len(m.profiles(t)) != 1 {
+		t.Fatal("gc removed the profile of a project it could not read")
+	}
+}
+
 func TestB378GCKeepsAProjectOnADriveThatIsNotMountedAndOneItCannotPlace(t *testing.T) {
 	m := newMachine(t)
 

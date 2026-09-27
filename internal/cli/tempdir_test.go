@@ -30,11 +30,12 @@ func TestB286GCRemovesTemporaryFilesThatEndedOkuProcessesLeft(t *testing.T) {
 	t.Setenv("TMPDIR", dir)
 
 	ended := filepath.Join(dir, fmt.Sprintf("oku-build-%d-1", endedPid(t)))
-	legacy := filepath.Join(dir, "oku-build-4242")
 	live := filepath.Join(dir, fmt.Sprintf("oku-build-%d-2", os.Getpid()))
 	other := filepath.Join(dir, "not-oku")
+	// A folder of the user's whose name only starts like oku's.
+	mine := filepath.Join(dir, "oku-review")
 
-	for _, path := range []string{ended, legacy, live, other} {
+	for _, path := range []string{ended, live, other, mine} {
 		must(t, os.MkdirAll(filepath.Join(path, "mod"), 0o755))
 		must(t, os.WriteFile(filepath.Join(path, "mod", "go.mod"), []byte("module x\n"), 0o444))
 	}
@@ -52,11 +53,11 @@ func TestB286GCRemovesTemporaryFilesThatEndedOkuProcessesLeft(t *testing.T) {
 		t.Fatalf("gc: %v\n%s", err, out)
 	}
 
-	if exists(ended) || exists(legacy) {
+	if exists(ended) {
 		t.Fatalf("gc left what an ended oku process left:\n%s", out)
 	}
 
-	if !exists(live) || !exists(other) {
+	if !exists(live) || !exists(other) || !exists(mine) {
 		t.Fatalf("gc removed what a running process or another program uses:\n%s", out)
 	}
 

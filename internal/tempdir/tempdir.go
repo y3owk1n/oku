@@ -8,8 +8,8 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
-	"strings"
 )
 
 // Dir makes a directory in the system's temporary directory for kind, such as
@@ -30,9 +30,9 @@ func prefix(kind string) string {
 }
 
 // Stale returns the paths in the system's temporary directory that an oku
-// process made and no longer uses. These are the paths of a process that has
-// exited, and those from before oku put the pid in the name. It skips what
-// another user owns.
+// process made and no longer uses, which are the paths of a process that has
+// exited. It skips a name that Dir or File did not make, such as a user's
+// folder called oku-notes, and what another user owns.
 func Stale() ([]string, error) {
 	dir := os.TempDir()
 
@@ -45,16 +45,14 @@ func Stale() ([]string, error) {
 
 	for _, entry := range entries {
 		name := entry.Name()
-		if !strings.HasPrefix(name, "oku-") {
+
+		pid, ok := owner(name)
+		if !ok || pid == os.Getpid() || running(pid) {
 			continue
 		}
 
 		info, err := entry.Info()
 		if err != nil || !ownedByMe(info) {
-			continue
-		}
-
-		if pid, ok := owner(name); ok && (pid == os.Getpid() || running(pid)) {
 			continue
 		}
 
@@ -64,17 +62,21 @@ func Stale() ([]string, error) {
 	return stale, nil
 }
 
+// madeRe matches a name that Dir or File made: oku-<kind>-<pid>-<random>, with
+// the suffix of File after it.
+var madeRe = regexp.MustCompile(`^oku-[a-z]+-([1-9][0-9]*)-[0-9]+(\.[a-z]+)?$`)
+
 // owner returns the pid in a name that Dir or File made, such as
 // "oku-build-4242-123".
 func owner(name string) (int, bool) {
-	parts := strings.SplitN(name, "-", 4)
-	if len(parts) < 4 {
+	m := madeRe.FindStringSubmatch(name)
+	if m == nil {
 		return 0, false
 	}
 
-	pid, err := strconv.Atoi(parts[2])
+	pid, err := strconv.Atoi(m[1])
 
-	return pid, err == nil && pid > 0
+	return pid, err == nil
 }
 
 // Remove deletes a path that Stale returned. It first detaches a disk image
