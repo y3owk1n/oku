@@ -1052,8 +1052,10 @@ golang.org/x/tools/gopls v0.22.0
   names it.
 - Flags after the command go to the command.
 - It exits with the command's exit code.
-- A project needs no `oku allow` here, because you name the command yourself.
-  Its profile must match its `oku.lock`, or `exec` fails and names `oku sync`.
+- In a project, as for the shell hook, you must have run `oku allow`, and its
+  profile must match its `oku.lock`. Otherwise `exec` fails and names what to
+  run. An editor that runs `oku exec gopls` when you open a folder therefore
+  runs no program that a cloned repo put first on `PATH`.
 - `--global` leaves the project out.
 - For a program of a package you have not installed, use
   [oku run](#oku-run).

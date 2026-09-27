@@ -41,7 +41,7 @@ type buildFlags struct {
 
 func (f *buildFlags) register(cmd *cobra.Command) {
 	cmd.Flags().
-		BoolVarP(&f.yes, "yes", "y", false, "run a manifest's build commands without asking")
+		BoolVarP(&f.yes, "yes", "y", false, "approve a manifest's commands and [env] without asking")
 	cmd.Flags().
 		BoolVarP(&f.verbose, "verbose", "v", false, "show the output of build commands, and a manifest that oku inferred")
 	cmd.Flags().
@@ -151,9 +151,10 @@ func releaseAge(cmd *cobra.Command, own *list.List, entry list.Entry) (time.Dura
 	return age, nil
 }
 
-// approver returns the check that install runs before a build, or before an
-// artifact whose completions a command generates. A manifest that runs commands
-// needs the user's approval once per manifest hash.
+// approver returns the check that install runs before a build, before an
+// artifact whose completions a command generates, and before a package that
+// sets [env]. A manifest that runs commands, or sets variables in the user's
+// shell, needs the user's approval once per manifest hash.
 func (e env) approver(
 	cmd *cobra.Command,
 	opts Options,
@@ -162,13 +163,18 @@ func (e env) approver(
 	return func(m *manifest.Manifest, host platform.Platform, a *manifest.Artifact) error {
 		var steps map[int]manifest.Step
 		if a == nil {
-			if steps = m.Build.CommandSteps(host); len(steps) == 0 {
-				return nil
-			}
+			steps = m.Build.CommandSteps(host)
+		}
+
+		generates := a != nil && a.Completions.Generate != ""
+
+		runs := len(steps) > 0 || generates
+		if !runs && len(m.Env) == 0 {
+			return nil
 		}
 
 		unsandboxed := ""
-		if ok, why := sandbox.Available(); !ok {
+		if ok, why := sandbox.Available(); runs && !ok {
 			config, err := source.Read(e.configPath())
 			if err != nil {
 				return err
@@ -208,7 +214,8 @@ func (e env) approver(
 
 			out := io.Writer(&block)
 
-			if a != nil {
+			switch {
+			case generates:
 				fmt.Fprintf(
 					out,
 					"%s %s runs its download on your machine to generate completions:\n\n    %s\n"+
@@ -216,7 +223,7 @@ func (e env) approver(
 					s.Bold(m.Package.Name), m.Version.Value, a.Completions.Generate,
 					s.Warn("(once for each of "+strings.Join(manifest.Shells, ", ")+")"),
 				)
-			} else {
+			case len(steps) > 0:
 				fmt.Fprintf(
 					out,
 					"%s %s builds from source and runs these commands on your machine:\n\n",
@@ -265,6 +272,23 @@ func (e env) approver(
 				)
 			}
 
+			// A variable such as GIT_CONFIG_* or PAGER can run a program in every
+			// shell, so the user sees each one before it applies.
+			if len(m.Env) > 0 {
+				if runs {
+					fmt.Fprintln(out)
+				}
+
+				fmt.Fprintf(
+					out, "%s %s sets these variables in your shell while it is installed:\n\n",
+					s.Bold(m.Package.Name), m.Version.Value,
+				)
+
+				for _, name := range slices.Sorted(maps.Keys(m.Env)) {
+					fmt.Fprintf(out, "%s\n", s.Wrap("    "+name+" = "+m.Env[name], 6))
+				}
+			}
+
 			if unsandboxed != "" {
 				fmt.Fprintf(
 					out, "\n%s\n",
@@ -273,9 +297,18 @@ func (e env) approver(
 				)
 			}
 
-			question, them := "run them?", "them"
-			if a != nil {
-				question, them = "run it?", "it"
+			question, action := "run them?", "run them"
+
+			switch {
+			case generates:
+				question, action = "run it?", "run it"
+			case !runs:
+				question, action = "set them?", "set its variables"
+			}
+
+			if runs && len(m.Env) > 0 {
+				question = strings.TrimSuffix(question, "?") + " and set the variables?"
+				action += " and set its variables"
 			}
 
 			if !interactive(cmd, opts) {
@@ -284,8 +317,8 @@ func (e env) approver(
 				return notApprovedError{
 					version: m.Version.Value,
 					text: fmt.Sprintf(
-						"%s %s needs approval to run %s, and this is not a terminal\npass --yes to approve",
-						m.Package.Name, m.Version.Value, them,
+						"%s %s needs approval to %s, and this is not a terminal\npass --yes to approve",
+						m.Package.Name, m.Version.Value, action,
 					),
 					why: "oku cannot ask without a terminal, pass --yes to approve it",
 				}

@@ -850,6 +850,11 @@ oku rejects `PATH`, `HOME`, `SHELL`, `USER`, `IFS`, `ENV`, `BASH_ENV`, `PS1`,
 `PROMPT_COMMAND`, and any name that starts with `LD_`, `DYLD_` or `OKU_`. When
 two packages set the same variable, the one whose name sorts last wins.
 
+A variable can still make another program run code, such as `GIT_CONFIG_*`
+for git or `PAGER`. So a package that sets `[env]` needs your approval once
+per manifest, as a build does, and the prompt lists each variable with its
+value. See [Approve build commands](security.md#approve-build-commands).
+
 ## [runtime]
 
 | Key | Meaning |

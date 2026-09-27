@@ -164,17 +164,21 @@ run them? [y/N]
   gone.
 - A dep that builds from source asks for its own approval, before the package
   that needs it.
+- A package that sets [`[env]`](manifest.md#env) asks the same way, even when
+  it installs from a download, and lists each variable with its value. A
+  variable such as `GIT_CONFIG_*` or `PAGER` can make another program run code
+  in every shell. `oku run` and `oku shell` ask too.
 - An approval applies to one machine. `oku sync` on a new machine asks again.
 - The prompt shows `vendor` steps too. A vendor step runs the language's package tool with the
   network on, and `oku.lock` pins a digest of what it downloads.
 - A manifest with only `install`, `copy`, `fetch` and `extract` steps runs no
   commands and needs no approval, unless an `install` step generates
-  completions.
+  completions or the package sets `[env]`.
 - An artifact whose completions a command generates runs the download, so it
   asks with `run it? [y/N]`, and `oku.lock` records `commands = true`.
 - A step marked `(wants network)` in the prompt gets the network.
-- A package from a trusted cache needs no approval, because oku runs none of
-  its manifest's commands.
+- A package from a trusted cache needs no approval for its commands, because
+  oku runs none of them. It still asks for its `[env]`.
 
 On a terminal the prompt disappears once you answer, and one line stays:
 `✓ approved tree 2.3.2` or `✗ rejected tree 2.3.2`. Packages that install in
