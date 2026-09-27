@@ -423,6 +423,12 @@ func (s *Store) Build(
 
 	result.MissingDeps = s.missingDeps(prefix, opts.RuntimeDeps)
 
+	if err := linkDepDLLs([]string{filepath.Join(prefix, "bin")}, opts.RuntimeDeps); err != nil {
+		os.RemoveAll(prefix)
+
+		return Realized{}, fmt.Errorf("link the DLLs of the deps: %w", err)
+	}
+
 	// A store path that shares nothing still works, and gc shares it later.
 	_, _ = s.Share(prefix)
 

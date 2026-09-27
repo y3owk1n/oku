@@ -1199,6 +1199,46 @@ Oku add $pythonToml
 $version = & "$bin\python.exe" --version
 Check 'a program that loads a DLL beside it in its download runs from its shim' { $version -match '^Python 3\.13' }
 
+# A program whose dep ships a DLL gets a link to that DLL beside it. Windows
+# looks in the program's directory first, and in the working directory before
+# PATH, so a DLL of the same name where the user runs it does not load instead.
+$dllKit = Join-Path $fixtures 'dllkit'
+New-Item -ItemType Directory -Force $dllKit | Out-Null
+Set-Content (Join-Path $dllKit 'okudep.dll') 'a DLL of the dep'
+$dllZip = Join-Path $fixtures 'dllkit.zip'
+Compress-Archive -Force -Path (Join-Path $dllKit '*') -DestinationPath $dllZip
+Set-Content (Join-Path $fixtures 'dllkit.toml') @"
+[package]
+name = "dllkit"
+[version]
+value = "1.0.0"
+[[artifact]]
+url = "file:///$($dllZip -replace '\\', '/')"
+share = ["okudep.dll"]
+"@
+$dllKitRef = (Join-Path $fixtures 'dllkit.toml') -replace '\\', '/'
+Set-Content (Join-Path $fixtures 'dlluser.toml') @"
+[package]
+name = "dlluser"
+[version]
+value = "1.0.0"
+[runtime]
+deps = [{ ref = "$dllKitRef" }]
+[build]
+needs = ["go"]
+[[build.step]]
+run = "Copy-Item '$mainGo' main.go; Set-Content go.mod 'module dlluser'; go build -o dlluser.exe ."
+shell = "pwsh"
+[[build.step]]
+install = { bin = ["dlluser.exe"] }
+"@
+Oku add (Join-Path $fixtures 'dlluser.toml') --yes
+$dllUser = [regex]::Match(((Get-Content "$bin\dlluser.shim") -join "`n"), 'path = (.+)').Groups[1].Value.Trim()
+Check 'the DLL of a dep sits beside the program that loads it' {
+    Test-Path (Join-Path (Split-Path $dllUser) 'okudep.dll')
+}
+Oku remove dlluser
+
 # A machine without PowerShell 7 builds registry packages with the Windows
 # PowerShell 5.1 that Windows ships. The runner has PowerShell 7, so its
 # directory leaves PATH for these two builds.

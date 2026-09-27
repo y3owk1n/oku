@@ -268,6 +268,18 @@ func (s *Store) Realize(
 		return Realized{}, err
 	}
 
+	var wrapped []string
+
+	for _, w := range a.Wrap {
+		if w.Path != "" {
+			wrapped = append(wrapped, w.Path)
+		}
+	}
+
+	if err := linkDepDLLs(programDirs(filepath.Join(tmp, "pkg"), a.Bin, wrapped), deps); err != nil {
+		return Realized{}, fmt.Errorf("link the DLLs of the deps: %w", err)
+	}
+
 	if a.Completions.Generate != "" {
 		if realized.Unsandboxed, err = s.generateArtifactCompletions(ctx, a, tmp); err != nil {
 			return Realized{}, fmt.Errorf("%s: %w", m.Package.Name, err)
