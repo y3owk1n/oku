@@ -59,7 +59,9 @@ func decompress(r io.Reader) (io.Reader, error) {
 	case bytes.HasPrefix(head, magicBzip2):
 		return bzip2.NewReader(buffered), nil
 	case bytes.HasPrefix(head, magicXZ):
-		return xz.NewReader(buffered, 1<<30)
+		// The decoder allocates the dictionary before it reads any data, and the
+		// header sets its size. xz -9 needs 64 MiB, and 128 MiB leaves room for more.
+		return xz.NewReader(buffered, 1<<27)
 	case bytes.HasPrefix(head, magicZstd):
 		decoder, err := zstd.NewReader(buffered)
 		if err != nil {
@@ -280,7 +282,16 @@ func detachLeftovers(src string) error {
 
 // copyImage copies a mounted image. It leaves out Finder's hidden files and
 // links that point out of the image, such as the usual shortcut to /Applications.
+// Every write goes through an os.Root. On a case-insensitive disk a link in the
+// image can share a name with a directory that differs only in case, and the
+// root stops a later write through that link from leaving dest.
 func copyImage(mount, dest string) error {
+	root, err := os.OpenRoot(dest)
+	if err != nil {
+		return err
+	}
+	defer root.Close()
+
 	return filepath.WalkDir(mount, func(path string, entry fs.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -300,8 +311,6 @@ func copyImage(mount, dest string) error {
 			return nil
 		}
 
-		target := filepath.Join(dest, rel)
-
 		info, err := entry.Info()
 		if err != nil {
 			return err
@@ -309,7 +318,7 @@ func copyImage(mount, dest string) error {
 
 		switch {
 		case entry.IsDir():
-			return os.MkdirAll(target, 0o755)
+			return root.MkdirAll(rel, 0o755)
 		case info.Mode()&fs.ModeSymlink != 0:
 			link, err := os.Readlink(path)
 			if err != nil {
@@ -317,14 +326,30 @@ func copyImage(mount, dest string) error {
 			}
 
 			resolved := filepath.Join(filepath.Dir(rel), link)
-			if filepath.IsAbs(link) || resolved == ".." ||
+			if rooted(link) || resolved == ".." ||
 				strings.HasPrefix(resolved, ".."+string(filepath.Separator)) {
 				return nil
 			}
 
-			return os.Symlink(link, target)
+			return root.Symlink(link, rel)
 		default:
-			return copyFileMode(path, target, info.Mode().Perm()|0o600)
+			in, err := os.Open(path)
+			if err != nil {
+				return err
+			}
+			defer in.Close()
+
+			out, err := root.OpenFile(rel, os.O_CREATE|os.O_WRONLY|os.O_EXCL, info.Mode().Perm()|0o600)
+			if err != nil {
+				return err
+			}
+
+			_, err = io.Copy(out, in)
+			if closeErr := out.Close(); err == nil {
+				err = closeErr
+			}
+
+			return err
 		}
 	})
 }
@@ -339,11 +364,17 @@ func unmsi(src, dest string) error {
 	}
 
 	// msiexec wants the .msi ending, and the download cache names files by digest.
-	named := filepath.Join(filepath.Dir(dest), "package.msi")
+	// Each unpack gets its own directory, so two at once do not share the file.
+	staging, err := os.MkdirTemp(filepath.Dir(dest), ".msi-")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(staging)
+
+	named := filepath.Join(staging, "package.msi")
 	if err := copyFileMode(src, named, 0o644); err != nil {
 		return err
 	}
-	defer os.Remove(named)
 
 	if err := administrativeInstall(named, dest); err != nil {
 		return err

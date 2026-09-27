@@ -4524,6 +4524,81 @@ func TestB407WithoutASandboxTheApprovalSaysSoAndRequireSandboxRefuses(t *testing
 	}
 }
 
+func TestB409StepsOkuRunsItselfDoNotFollowALinkARunStepLeft(t *testing.T) {
+	m := newMachine(t)
+
+	// VICTIM stands for a directory outside the build, where a run step cannot
+	// write, one per case. secret is a file oku can read and a sandboxed run
+	// step cannot.
+	secret := filepath.Join(m.fixtures, "secret.txt")
+	must(t, os.WriteFile(secret, []byte("hunter2"), 0o600))
+
+	fetched := filepath.Join(m.fixtures, "fetched.txt")
+	must(t, os.WriteFile(fetched, []byte("fetched"), 0o644))
+	sum := sha256.Sum256([]byte("fetched"))
+
+	for name, tc := range map[string]struct{ run, step string }{
+		"patch": {
+			run: `ln -s VICTIM/patched new.txt
+printf 'diff --git a/new.txt b/new.txt\nnew file mode 100644\n--- /dev/null\n+++ b/new.txt\n@@ -0,0 +1 @@\n+evil\n' > p.diff`,
+			step: `patch = { file = "p.diff", strip = 1 }`,
+		},
+		"extract": {
+			run:  "mkdir x && echo evil > x/extracted && tar czf a.tgz x && ln -s VICTIM out",
+			step: `extract = { file = "a.tgz", to = "out" }`,
+		},
+		"fetch": {
+			run:  "ln -s VICTIM d",
+			step: fmt.Sprintf(`fetch = { url = "file://%s", sha256 = "%x", to = "d/fetched" }`, fetched, sum),
+		},
+		"install": {
+			run:  fmt.Sprintf("ln -s %s tool", secret),
+			step: `install = { bin = ["tool"] }`,
+		},
+		"prefix": {
+			run:  `echo tool > tool && ln -s VICTIM/meta "$OKU_PREFIX/oku-meta.toml"`,
+			step: `install = { bin = ["tool"] }`,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			victim := filepath.Join(m.fixtures, "victim-"+name)
+			must(t, os.MkdirAll(victim, 0o755))
+
+			path := filepath.Join(m.fixtures, name+".toml")
+			must(t, os.WriteFile(path, fmt.Appendf(nil, `[package]
+name = "linker-%s"
+[version]
+value = "1.0.0"
+[build]
+[[build.step]]
+run = """
+%s
+"""
+shell = "sh"
+[[build.step]]
+%s
+`, name, strings.ReplaceAll(tc.run, "VICTIM", victim), tc.step), 0o644))
+
+			out, err := m.run(t, "", "add", path, "--yes")
+			if err == nil {
+				t.Fatalf("the build followed the link and succeeded:\n%s", out)
+			}
+
+			if entries, _ := os.ReadDir(victim); len(entries) > 0 {
+				t.Fatalf("oku wrote %s outside the build", entries[0].Name())
+			}
+
+			_ = filepath.WalkDir(filepath.Join(m.data, "store"), func(p string, d fs.DirEntry, err error) error {
+				if data, readErr := os.ReadFile(p); err == nil && readErr == nil && string(data) == "hunter2" {
+					t.Fatalf("oku copied the secret into the store at %s", p)
+				}
+
+				return nil
+			})
+		})
+	}
+}
+
 func TestB53NetworkStepIsShownInThePromptAndMarksThePackageImpure(t *testing.T) {
 	m, url, secret := sandboxedMachine(t)
 	m.opts.Interactive = yes()

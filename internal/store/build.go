@@ -408,6 +408,10 @@ func (s *Store) Build(
 		URL: result.SourceURL, SHA256: result.SHA256, VendorSHA256: result.VendorSHA256,
 	})
 	if err == nil {
+		err = inside(prefix, metaFile)
+	}
+
+	if err == nil {
 		err = os.WriteFile(filepath.Join(prefix, metaFile), meta, 0o644)
 	}
 
@@ -733,6 +737,12 @@ func (s *Store) runStep(
 			return errors.New("extract paths must stay inside the source directory")
 		}
 
+		for _, rel := range []string{step.Extract.File, step.Extract.To} {
+			if err := inside(src, rel); err != nil {
+				return err
+			}
+		}
+
 		to := filepath.Join(src, step.Extract.To)
 		if err := os.MkdirAll(to, 0o755); err != nil {
 			return err
@@ -923,6 +933,14 @@ func installFiles(in manifest.Install, src, prefix string) error {
 			return fmt.Errorf("app %q points outside the source directory", bundle)
 		}
 
+		if err := inside(src, filepath.FromSlash(bundle)); err != nil {
+			return fmt.Errorf("app %q: %w", bundle, err)
+		}
+
+		if err := inside(prefix, filepath.Join("apps", path.Base(bundle))); err != nil {
+			return fmt.Errorf("app %q: %w", bundle, err)
+		}
+
 		target := filepath.Join(prefix, "apps", path.Base(bundle))
 		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
 			return err
@@ -962,17 +980,29 @@ func fixedDir(dir string) func(string) (string, error) {
 }
 
 // copyInto copies fromDir/from to toDir/to. Both relative paths must stay inside
-// their directory. A zero mode keeps the source file's mode.
+// their directory, and both go through an os.Root, so a symlink that a run step
+// left cannot make oku read or write outside them. A zero mode keeps the source
+// file's mode.
 func copyInto(fromDir, from, toDir, to string, mode os.FileMode) error {
 	if !filepath.IsLocal(filepath.FromSlash(from)) || !filepath.IsLocal(filepath.FromSlash(to)) {
 		return fmt.Errorf("%q or %q points outside its directory", from, to)
 	}
 
-	source := filepath.Join(fromDir, filepath.FromSlash(from))
-
-	info, err := os.Stat(source)
+	fromRoot, err := os.OpenRoot(fromDir)
 	if err != nil {
-		return fmt.Errorf("%s: no such file in the source directory", from)
+		return err
+	}
+	defer fromRoot.Close()
+
+	in, err := fromRoot.Open(filepath.FromSlash(from))
+	if err != nil {
+		return fmt.Errorf("%s: no such file in the source directory, or it leads outside", from)
+	}
+	defer in.Close()
+
+	info, err := in.Stat()
+	if err != nil {
+		return err
 	}
 
 	if !info.Mode().IsRegular() {
@@ -983,12 +1013,49 @@ func copyInto(fromDir, from, toDir, to string, mode os.FileMode) error {
 		mode = info.Mode().Perm() | 0o600
 	}
 
-	dest := filepath.Join(toDir, filepath.FromSlash(to))
-	if err := copyFile(source, dest); err != nil {
+	toRoot, err := os.OpenRoot(toDir)
+	if err != nil {
+		return err
+	}
+	defer toRoot.Close()
+
+	dest := filepath.FromSlash(to)
+	if err := toRoot.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
 		return err
 	}
 
-	return os.Chmod(dest, mode)
+	out, err := toRoot.OpenFile(dest, os.O_CREATE|os.O_WRONLY|os.O_EXCL, mode)
+	if err != nil {
+		return err
+	}
+
+	_, err = io.Copy(out, in)
+	if err == nil {
+		err = out.Chmod(mode)
+	}
+
+	if closeErr := out.Close(); err == nil {
+		err = closeErr
+	}
+
+	return err
+}
+
+// inside fails when rel, a path under dir, leads outside dir through a symlink.
+// A run step can leave symlinks in the source directory and the prefix, and the
+// steps oku does itself run outside the sandbox.
+func inside(dir, rel string) error {
+	root, err := os.OpenRoot(dir)
+	if err != nil {
+		return err
+	}
+	defer root.Close()
+
+	if !filepath.IsLocal(rel) || !resolvesInside(root, filepath.ToSlash(rel)) {
+		return fmt.Errorf("%s leads outside %s", filepath.ToSlash(rel), dir)
+	}
+
+	return nil
 }
 
 // BuildOptions are the inputs of a build besides the manifest.

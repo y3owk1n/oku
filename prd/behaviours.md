@@ -488,7 +488,8 @@ order step in `prd/product.md`.
 - B378 [3] `oku gc` removes the profile of a project whose folder, or whose
   `oku.toml`, is gone, which frees the packages only it used, and forgets the
   project's `oku allow`. It keeps a project on a volume that is not mounted,
-  and a profile whose folder oku does not know, and says so. `--dry-run` names
+  a project in a folder it cannot read, and a profile whose folder oku does
+  not know, and says so. `--dry-run` names
   what it would remove.
 - B371 [3] `oku gc --older-than 30d` first deletes the generations older than
   30 days, except the newest of them, which was active 30 days ago, and the
@@ -817,6 +818,15 @@ order step in `prd/product.md`.
 
 ## Builds
 
+- B409 [5] The steps oku does itself, `patch`, `extract`, `fetch`, `install`,
+  `copy`, wrappers, completions and `oku-meta.toml`, fail when a
+  symlink that a `run` step left leads outside the source directory or
+  `{{prefix}}`. oku writes nothing outside them and copies no file from
+  outside into the store. When a build command ends, oku kills what it left
+  running.
+- B410 [5] oku refuses an archive that unpacks to more than 32 GiB, and an
+  `.xz` file whose header asks for a dictionary over 128 MiB, before it
+  allocates it.
 - B35 [5] With no matching artifact, or with `--from-source`, oku runs
   `[build]` steps in order and installs what `install` steps name. The lock
   records the strategy, so `sync` builds on that platform too.
@@ -1174,9 +1184,10 @@ order step in `prd/product.md`.
   wait.
 - B244 [12] `oku gc` deletes a temporary directory that a killed install left
   in the store.
-- B286 [12] `oku gc` deletes the `oku-*` entries in the system's temporary
-  directory whose oku process has ended, and keeps those of a process that
-  runs. `--dry-run` names them and deletes nothing.
+- B286 [12] `oku gc` deletes the entries in the system's temporary directory
+  that an oku process made, named `oku-<kind>-<pid>-<number>`, whose process
+  has ended, and keeps those of a process that runs and any other name that
+  starts with `oku-`. `--dry-run` names them and deletes nothing.
 
 ## Files
 

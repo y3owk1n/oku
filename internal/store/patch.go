@@ -16,13 +16,20 @@ import (
 // applyPatch applies a unified diff to the files under src. It is written in Go
 // and does not call the patch program, so a step behaves the same on every OS.
 // A hunk that does not fit fails the step. oku applies no hunk at an offset or
-// with fuzz.
+// with fuzz. Every read and write goes through an os.Root, so a symlink that a
+// run step left cannot send a change outside src.
 func applyPatch(src string, step manifest.Patch) error {
 	if !filepath.IsLocal(filepath.FromSlash(step.File)) {
 		return fmt.Errorf("patch file %s is outside the source directory", step.File)
 	}
 
-	data, err := os.ReadFile(filepath.Join(src, filepath.FromSlash(step.File)))
+	root, err := os.OpenRoot(src)
+	if err != nil {
+		return err
+	}
+	defer root.Close()
+
+	data, err := root.ReadFile(filepath.FromSlash(step.File))
 	if err != nil {
 		return err
 	}
@@ -37,7 +44,7 @@ func applyPatch(src string, step manifest.Patch) error {
 	}
 
 	for _, file := range files {
-		if err := applyFile(src, file, step.Strip); err != nil {
+		if err := applyFile(root, file, step.Strip); err != nil {
 			return fmt.Errorf("%s: %w", step.File, err)
 		}
 	}
@@ -45,19 +52,19 @@ func applyPatch(src string, step manifest.Patch) error {
 	return nil
 }
 
-func applyFile(src string, file *gitdiff.File, strip int) error {
-	oldPath, err := patchPath(src, file.OldName, strip)
+func applyFile(root *os.Root, file *gitdiff.File, strip int) error {
+	oldPath, err := patchPath(file.OldName, strip)
 	if err != nil {
 		return err
 	}
 
-	newPath, err := patchPath(src, file.NewName, strip)
+	newPath, err := patchPath(file.NewName, strip)
 	if err != nil {
 		return err
 	}
 
 	if file.IsDelete {
-		if err := os.Remove(oldPath); err != nil {
+		if err := root.Remove(oldPath); err != nil {
 			return missing(err, file.OldName)
 		}
 
@@ -70,14 +77,14 @@ func applyFile(src string, file *gitdiff.File, strip int) error {
 	)
 
 	if !file.IsNew {
-		info, err := os.Stat(oldPath)
+		info, err := root.Stat(oldPath)
 		if err != nil {
 			return missing(err, file.OldName)
 		}
 
 		mode = info.Mode().Perm()
 
-		if before, err = os.ReadFile(oldPath); err != nil {
+		if before, err = root.ReadFile(oldPath); err != nil {
 			return err
 		}
 	}
@@ -96,21 +103,21 @@ func applyFile(src string, file *gitdiff.File, strip int) error {
 		return fmt.Errorf("%s: %w", file.NewName, err)
 	}
 
-	if err := os.MkdirAll(filepath.Dir(newPath), 0o755); err != nil {
+	if err := root.MkdirAll(filepath.Dir(newPath), 0o755); err != nil {
 		return err
 	}
 
-	if err := os.WriteFile(newPath, after.Bytes(), mode); err != nil {
+	if err := root.WriteFile(newPath, after.Bytes(), mode); err != nil {
 		return err
 	}
 
 	// WriteFile keeps the mode of a file that already exists.
-	if err := os.Chmod(newPath, mode); err != nil {
+	if err := root.Chmod(newPath, mode); err != nil {
 		return err
 	}
 
 	if file.IsRename && oldPath != newPath {
-		return os.Remove(oldPath)
+		return root.Remove(oldPath)
 	}
 
 	return nil
@@ -129,9 +136,10 @@ func missing(err error, name string) error {
 	)
 }
 
-// patchPath turns a name from the diff into a path under src. An empty name
-// belongs to the missing side of a new or a deleted file.
-func patchPath(src, name string, strip int) (string, error) {
+// patchPath turns a name from the diff into a path relative to the source
+// directory. An empty name belongs to the missing side of a new or a deleted
+// file.
+func patchPath(name string, strip int) (string, error) {
 	// A patch file with Windows line endings leaves a carriage return on the names
 	// in its header.
 	name = strings.TrimRight(name, "\r")
@@ -149,5 +157,5 @@ func patchPath(src, name string, strip int) (string, error) {
 		return "", fmt.Errorf("%s is outside the source directory", name)
 	}
 
-	return filepath.Join(src, rel), nil
+	return rel, nil
 }

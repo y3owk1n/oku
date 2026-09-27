@@ -18,6 +18,13 @@ oku does `fetch`, `extract`, `patch`, `install` and `copy` steps itself, and
 unpacks downloads itself. It never runs a script that a package ships, such as
 the maintainer scripts of a `.deb` or the install scripts of a `.pkg`.
 
+These steps run outside the sandbox, after `run` steps that could leave
+symlinks in the source directory and in `{{prefix}}`. oku follows such a link
+only while it stays inside the directory it is in. A step that reaches a link
+leading outside fails, so a `run` step cannot use one to make oku read your
+files or write elsewhere. When a command ends, oku also stops anything it left
+running, so nothing changes a link while oku works.
+
 Every command above needs your [approval](security.md#approve-build-commands)
 first, once per manifest hash.
 

@@ -74,9 +74,12 @@ func generateCompletions(
 			)
 		}
 
-		to := filepath.Join(
-			prefix, "share", "completions", name, manifest.File(name, c.Name),
-		)
+		rel := filepath.Join("share", "completions", name, manifest.File(name, c.Name))
+		if err := inside(prefix, rel); err != nil {
+			return why, err
+		}
+
+		to := filepath.Join(prefix, rel)
 		if err := os.MkdirAll(filepath.Dir(to), 0o755); err != nil {
 			return why, err
 		}

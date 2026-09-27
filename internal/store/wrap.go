@@ -70,6 +70,10 @@ func writeWraps(
 		return nil
 	}
 
+	if err := inside(filepath.Dir(bin), filepath.Base(bin)); err != nil {
+		return err
+	}
+
 	if err := os.MkdirAll(bin, 0o755); err != nil {
 		return err
 	}
@@ -97,6 +101,10 @@ func writeWraps(
 		// wrapper runs that program itself.
 		if len(words) > 1 && local != nil && nativeProgram(local(words[1])) {
 			words = words[1:]
+		}
+
+		if err := inside(filepath.Dir(bin), filepath.Join(filepath.Base(bin), w.Name)); err != nil {
+			return err
 		}
 
 		var err error
@@ -195,26 +203,34 @@ func bundleCommands(apps []manifest.AppEntry, bins []string, wraps []manifest.Wr
 	return commands
 }
 
-// writeAppCommand replaces the program dest with a script that runs the copy
-// of bundle in an Applications folder. macOS grants permissions such as
-// Accessibility to that copy, so the command and the app share them. A copy
+// writeAppCommand replaces the program dest with a script that runs program, a
+// path inside bundle, from the copy of bundle in an Applications folder. macOS
+// grants permissions such as Accessibility to that copy, so the command and the
+// app share them. A copy
 // counts when its Info.plist is the one of bundle, which is this build, and
 // otherwise the script runs the program in bundle itself.
-func writeAppCommand(dest, bundle, inside string) error {
+func writeAppCommand(dest, bundle, program string) error {
+	// dest may be a link into the package, which Remove deletes and does not
+	// follow. Only the directory it is in has to stay inside the package.
+	bin := filepath.Dir(dest)
+	if err := inside(filepath.Dir(bin), filepath.Base(bin)); err != nil {
+		return err
+	}
+
 	if err := os.Remove(dest); err != nil && !os.IsNotExist(err) {
 		return err
 	}
 
 	name := shellQuote(filepath.Base(bundle))
-	program := shellQuote(inside)
+	quoted := shellQuote(program)
 	plist := shellQuote(filepath.Join(bundle, "Contents", "Info.plist"))
 
 	script := "#!/bin/sh\n" +
 		`for app in "$HOME"/Applications/` + name + " /Applications/" + name + "; do\n" +
 		`	if cmp -s "$app"/Contents/Info.plist ` + plist + "; then\n" +
-		`		exec "$app"/` + program + ` "$@"` + "\n" +
+		`		exec "$app"/` + quoted + ` "$@"` + "\n" +
 		"\tfi\ndone\n" +
-		"exec " + shellQuote(filepath.Join(bundle, filepath.FromSlash(inside))) + ` "$@"` + "\n"
+		"exec " + shellQuote(filepath.Join(bundle, filepath.FromSlash(program))) + ` "$@"` + "\n"
 
 	return os.WriteFile(dest, []byte(script), 0o755)
 }
