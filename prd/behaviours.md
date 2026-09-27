@@ -1085,6 +1085,8 @@ order step in `prd/product.md`.
 - B430 [9] On Windows each DLL of a runtime dep has a hard link beside the
   package's programs in the store, unless the package ships a file of that
   name, so a DLL of the same name in the working directory does not load first.
+  The profile leaves these links out of its `bin`, so two packages with one dep
+  install together.
 - B288 [9] On Windows, two `.msi` downloads in one sync both unpack, one
   after the other.
 - B269 [9] On Windows, a build step with `shell = "pwsh"`, and oku's own steps

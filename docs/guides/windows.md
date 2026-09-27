@@ -63,7 +63,8 @@ Windows looks for a DLL in the program's directory, then in the working
 directory, and only then on `PATH`. So oku also puts a hard link to each DLL of
 a runtime dep beside the package's programs in the store, unless the package
 ships a file of that name. A DLL of the same name in the folder you run the
-program from then does not load instead of the dep's.
+program from then does not load instead of the dep's. The links stay in the
+store and do not appear in your profile's `bin`.
 
 Shims are hard links to one copy of oku in `%LOCALAPPDATA%\oku\shims\`, so they
 take no extra space. After you replace `oku.exe`, new shims use a new copy, and
