@@ -303,8 +303,10 @@ func tellExposed(notice io.Writer, before, after []expose.Item, rewritten []stri
 			done("wrote %s", item.Target)
 		case item.Kind != "service":
 			done("exposed %s %s", item.Kind, item.Target)
+		case item.Enabled && item.System && item.User == "":
+			done("service %s is running as root and starts at boot", item.Name)
 		case item.Enabled && item.System:
-			done("service %s is running and starts at boot", item.Name)
+			done("service %s is running as %s and starts at boot", item.Name, item.User)
 		case item.Enabled:
 			done("service %s is running and starts at login", item.Name)
 		default:
@@ -326,7 +328,12 @@ func pendingSystem(have, wanted []expose.Item) []string {
 
 	for _, item := range wanted {
 		if item.System && !slices.Contains(have, item) {
-			lines = append(lines, fmt.Sprintf("  write  %-8s %s\n", item.Kind, item.Target))
+			note := ""
+			if item.Kind == "service" && item.User == "" {
+				note = "  (runs as root because of run_as = \"root\", and your user can change its files)"
+			}
+
+			lines = append(lines, fmt.Sprintf("  write  %-8s %s%s\n", item.Kind, item.Target, note))
 		}
 	}
 

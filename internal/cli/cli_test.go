@@ -21,6 +21,7 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
+	"os/user"
 	"path/filepath"
 	"runtime"
 	"slices"
@@ -6172,6 +6173,24 @@ func (m *machine) sharedRoot(t *testing.T) (string, *[][]string) {
 	return root, elevated
 }
 
+func TestB428SetupSystemRefusesARootThatIsNotRootsOrTheUsers(t *testing.T) {
+	m := newMachine(t)
+	root, elevated := m.sharedRoot(t)
+
+	// A link in place of the root leads wherever whoever made it chose. A
+	// directory of another user takes the same way, and a test cannot make one.
+	must(t, os.MkdirAll(filepath.Dir(root), 0o755))
+	must(t, os.Symlink(t.TempDir(), root))
+
+	if _, err := m.run(t, "", "setup", "--system", "--yes"); err == nil || !strings.Contains(err.Error(), "belongs to another user") {
+		t.Fatalf("want a root that is a link refused, got %v", err)
+	}
+
+	if len(*elevated) != 0 {
+		t.Fatalf("setup elevated for a root it refused: %v", *elevated)
+	}
+}
+
 func TestB75SetupSystemNamesTheRootAndAsksBeforeElevating(t *testing.T) {
 	m := newMachine(t)
 	root, elevated := m.sharedRoot(t)
@@ -6391,6 +6410,43 @@ func TestB75SystemServiceNeedsTheFlagToStart(t *testing.T) {
 
 	if m.services.state["food"].running || !strings.Contains(out, "system scope") {
 		t.Fatalf("service stop --system did not stop it:\n%s", out)
+	}
+}
+
+func TestB427ASystemServiceRunsAsTheUserUnlessTheListSaysRoot(t *testing.T) {
+	m := newMachine(t)
+	m.systemScope(t)
+
+	me, err := user.Current()
+	must(t, err)
+
+	out, err := m.run(t, "y\n", "add", m.serviceManifest(t), "--system", "--service")
+	must(t, err)
+
+	if got := m.services.state["food"]; got == nil || got.def.User != me.Username ||
+		!strings.Contains(out, "running as "+me.Username) {
+		t.Fatalf("the system service should run as %s: %+v\n%s", me.Username, got, out)
+	}
+
+	listPath := filepath.Join(m.config, "oku.toml")
+	listed, err := os.ReadFile(listPath)
+	must(t, err)
+	must(t, os.WriteFile(listPath,
+		[]byte(strings.Replace(string(listed), "system = true", `system = true, run_as = "root"`, 1)), 0o644))
+
+	out, err = m.run(t, "y\n", "sync", "--system")
+	must(t, err)
+
+	if got := m.services.state["food"]; got == nil || got.def.User != "" ||
+		!strings.Contains(out, `run_as = "root"`) || !strings.Contains(out, "running as root") {
+		t.Fatalf("run_as = root should run the service as root and say so: %+v\n%s", got, out)
+	}
+
+	must(t, os.WriteFile(listPath,
+		[]byte(strings.Replace(string(listed), "system = true", `system = true, run_as = "admin"`, 1)), 0o644))
+
+	if _, err := m.run(t, "", "sync"); err == nil || !strings.Contains(err.Error(), "run_as") {
+		t.Fatalf("want run_as = admin refused, got %v", err)
 	}
 }
 

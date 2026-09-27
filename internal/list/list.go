@@ -35,6 +35,9 @@ type Entry struct {
 	// System puts the package's apps, fonts and services in system scope, for
 	// every user of the machine. Applying it needs administrator rights.
 	System bool
+	// RunAs is "root" for a system service that must run as root. Empty runs it
+	// as the user, since its files are in the store that the user owns.
+	RunAs string
 	// Asset and Bins are the "--asset" and "--bin" oku infers the package's
 	// manifest with.
 	Asset string
@@ -503,9 +506,14 @@ func toEntry(value any) (Entry, error) {
 		e.Service, _ = v["service"].(bool)
 		e.System, _ = v["system"].(bool)
 		e.Asset, _ = v["asset"].(string)
+		e.RunAs, _ = v["run_as"].(string)
 
 		if e.Ref == "" {
 			return e, errors.New("ref is required")
+		}
+
+		if e.RunAs != "" && e.RunAs != "root" {
+			return e, fmt.Errorf("run_as is %q, and the one value it takes is \"root\"", e.RunAs)
 		}
 
 		age, ok := v["min_release_age"].(string)

@@ -14,6 +14,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/y3owk1n/oku/internal/dirs"
 	"github.com/y3owk1n/oku/internal/source"
 	"github.com/y3owk1n/oku/internal/status"
 )
@@ -53,7 +54,7 @@ func systemRoot(opts Options) string {
 	}
 
 	if runtime.GOOS == "windows" {
-		return filepath.Join(os.Getenv("ProgramData"), "oku")
+		return filepath.Join(dirs.ProgramData(), "oku")
 	}
 
 	return "/opt/oku"
@@ -77,6 +78,10 @@ func runSetup(cmd *cobra.Command, opts Options, yes bool) error {
 	owner, err := user.Current()
 	if err != nil {
 		return fmt.Errorf("find the current user: %w", err)
+	}
+
+	if err := checkRootOwner(root); err != nil {
+		return err
 	}
 
 	fmt.Fprintln(out, "this creates, with administrator rights:")

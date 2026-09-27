@@ -26,6 +26,9 @@ type Definition struct {
 	Restart string
 	// LogFile is where the service's output goes on systems without a journal.
 	LogFile string
+	// User is the account a system service runs as. Empty runs it as root, or
+	// as SYSTEM on Windows. A user service runs as its user either way.
+	User string
 }
 
 // Label is the name the OS knows the service by.

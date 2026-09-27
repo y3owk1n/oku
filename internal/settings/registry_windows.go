@@ -4,14 +4,17 @@ import (
 	"bytes"
 	"fmt"
 	"os/exec"
+	"path/filepath"
 	"strings"
+
+	"golang.org/x/sys/windows"
 )
 
 // Registry is the registry of the current user, through reg.exe.
 type Registry struct{}
 
 func reg(args ...string) (string, error) {
-	out, err := exec.Command("reg", args...).CombinedOutput()
+	out, err := exec.Command(regPath(), args...).CombinedOutput()
 	if err != nil {
 		return "", fmt.Errorf("reg %s: %w: %s", args[0], err, bytes.TrimSpace(out))
 	}
@@ -59,3 +62,14 @@ func (Registry) Applied([]string) {}
 
 // OS returns the settings mechanism of this OS.
 func OS() (Store, string) { return Registry{}, "registry" }
+
+// regPath is reg.exe of the system directory, so a reg.exe on PATH does not
+// run in its place.
+func regPath() string {
+	dir, err := windows.GetSystemDirectory()
+	if err != nil {
+		return "reg"
+	}
+
+	return filepath.Join(dir, "reg.exe")
+}

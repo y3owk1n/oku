@@ -171,6 +171,11 @@ func (s *systemd) unitFile(d Definition) []byte {
 
 	fmt.Fprintf(&b, "Restart=%s\n", restart)
 
+	// A system unit runs as root unless it names its user.
+	if d.User != "" {
+		fmt.Fprintf(&b, "User=%s\n", quoteUnit(d.User))
+	}
+
 	names := make([]string, 0, len(d.Env))
 	for name := range d.Env {
 		names = append(names, name)

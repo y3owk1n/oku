@@ -280,6 +280,7 @@ func reconcile(
 				keepVersion:     !fresh && previous.Ref == r.String(),
 				service:         entry.Service,
 				system:          entry.System,
+				runAs:           entry.RunAs,
 				verbose:         flags.verbose,
 				approve:         e.approver(cmd, opts, flags),
 				checkAge:        e.ageChecker(cmd, opts, flags),

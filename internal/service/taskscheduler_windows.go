@@ -4,13 +4,18 @@ import (
 	"context"
 	"encoding/json"
 	"encoding/xml"
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"os/exec"
 	"os/user"
 	"path/filepath"
 	"strings"
 	"unicode/utf16"
+
+	"github.com/y3owk1n/oku/internal/dirs"
+	"golang.org/x/sys/windows"
 )
 
 // RunCommand is the hidden oku subcommand that a scheduled task starts. A task
@@ -19,7 +24,7 @@ import (
 const RunCommand = "service-run"
 
 // systemDir is where oku keeps the definitions and logs of system services.
-func systemDir() string { return filepath.Join(os.Getenv("ProgramData"), "oku") }
+func systemDir() string { return filepath.Join(dirs.ProgramData(), "oku") }
 
 // SystemLogDir is where a system service's output goes.
 func SystemLogDir() string { return filepath.Join(systemDir(), "logs") }
@@ -30,8 +35,9 @@ func SystemLogDir() string { return filepath.Join(systemDir(), "logs") }
 type taskScheduler struct {
 	// dir holds one JSON file per service, which "oku service-run" reads.
 	dir string
-	// system makes the task run as the SYSTEM account from boot, with no user
-	// logged on. Registering such a task needs administrator rights.
+	// system makes the task run from boot, with no user logged on, as the user
+	// of the definition or as SYSTEM for one that runs as root. Registering such
+	// a task needs administrator rights.
 	system bool
 }
 
@@ -91,8 +97,28 @@ func (t *taskScheduler) Install(ctx context.Context, d Definition, enabled bool)
 		return err
 	}
 
+	// A system task reads its definition, and a root one writes its log, in
+	// ProgramData, where any user can make files.
+	if t.system {
+		dirs := []string{systemDir(), t.dir}
+		if d.User == "" {
+			dirs = append(dirs, filepath.Dir(d.LogFile))
+		}
+
+		for _, dir := range dirs {
+			if err := protect(dir); err != nil {
+				return err
+			}
+		}
+	}
+
 	data, err := json.MarshalIndent(Stored{Definition: d, Enabled: enabled}, "", "  ")
 	if err != nil {
+		return err
+	}
+
+	// A file that someone else made keeps them as its owner, so it goes first.
+	if err := os.Remove(t.File(d)); err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return err
 	}
 
@@ -235,9 +261,14 @@ func taskXML(d Definition, self, stored, account string, enabled, system bool) s
 	principal := "<UserId>" + esc(account) + "</UserId>\n    " +
 		"<LogonType>InteractiveToken</LogonType>\n    <RunLevel>LeastPrivilege</RunLevel>"
 
-	// S-1-5-18 is the SYSTEM account, which needs no password and no logon.
 	if system {
-		principal = "<UserId>S-1-5-18</UserId>\n    <RunLevel>HighestAvailable</RunLevel>"
+		// S4U runs the task as the user from boot without their password. S-1-5-18
+		// is the SYSTEM account, for a service the list runs as root.
+		principal = "<UserId>" + esc(d.User) + "</UserId>\n    " +
+			"<LogonType>S4U</LogonType>\n    <RunLevel>LeastPrivilege</RunLevel>"
+		if d.User == "" {
+			principal = "<UserId>S-1-5-18</UserId>\n    <RunLevel>HighestAvailable</RunLevel>"
+		}
 
 		if enabled {
 			trigger = "<BootTrigger><Enabled>true</Enabled></BootTrigger>"
@@ -269,4 +300,52 @@ func taskXML(d Definition, self, stored, account string, enabled, system bool) s
   </Exec></Actions>
 </Task>
 `
+}
+
+// protect lets only SYSTEM, Administrators and the user who installs system
+// services write in dir. It refuses a dir that another user owns, since that
+// user could have put a definition in it that a task would run.
+func protect(dir string) error {
+	sd, err := windows.GetNamedSecurityInfo(dir, windows.SE_FILE_OBJECT, windows.OWNER_SECURITY_INFORMATION)
+	if err != nil {
+		return fmt.Errorf("read the owner of %s: %w", dir, err)
+	}
+
+	owner, _, err := sd.Owner()
+	if err != nil {
+		return err
+	}
+
+	me, err := windows.GetCurrentProcessToken().GetTokenUser()
+	if err != nil {
+		return err
+	}
+
+	mine := me.User.Sid.String()
+
+	switch owner.String() {
+	case "S-1-5-18", "S-1-5-32-544", mine:
+	default:
+		return fmt.Errorf("%s belongs to another user, remove it first", dir)
+	}
+
+	// D:P takes nothing from ProgramData. SY is SYSTEM and BA Administrators,
+	// and OICI passes each entry on to what dir holds.
+	descriptor, err := windows.SecurityDescriptorFromString(
+		"D:P(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;FA;;;" + mine + ")",
+	)
+	if err != nil {
+		return err
+	}
+
+	list, _, err := descriptor.DACL()
+	if err != nil {
+		return err
+	}
+
+	return windows.SetNamedSecurityInfo(
+		dir, windows.SE_FILE_OBJECT,
+		windows.DACL_SECURITY_INFORMATION|windows.PROTECTED_DACL_SECURITY_INFORMATION,
+		nil, nil, list, nil,
+	)
 }
