@@ -589,6 +589,11 @@ Check 'two .msi downloads unpack in one sync' {
     (Get-Content (Join-Path $msiProject 'oku.lock') -Raw) -match "msi-a[\s\S]*msi-b"
 }
 
+# A winget package whose MSI names no command gets the program its moniker
+# names, as nvim of Neovim.Neovim, and not one named after the package.
+$nvimManifest = (& $oku add winget:Neovim.Neovim --manifest) -join "`n"
+Check 'a winget MSI without commands takes the program of its moniker' { $nvimManifest -match 'nvim\.exe' }
+
 # A temporary directory that an ended oku process left, which gc removes.
 $ended = Start-Process cmd -ArgumentList '/c', 'exit' -PassThru -Wait -WindowStyle Hidden
 $leftover = Join-Path $env:TEMP "oku-build-$($ended.Id)-1"
