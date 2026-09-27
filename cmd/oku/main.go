@@ -50,7 +50,9 @@ func main() {
 // are indented, and each `command` to type is in colour.
 func fail(err error) {
 	s := ui.For(os.Stderr)
-	first, rest, more := strings.Cut(suggest(err.Error()), "\n")
+	// An error can quote a package's text, which must not reach the terminal
+	// as escape codes.
+	first, rest, more := strings.Cut(suggest(ui.Clean(err.Error())), "\n")
 
 	fmt.Fprintln(os.Stderr, s.Wrap(s.Alert("oku:")+" "+s.Code(s.Homes(first)), 2))
 

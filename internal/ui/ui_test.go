@@ -241,3 +241,17 @@ func TestB229LinesCountsWhatTheTerminalShows(t *testing.T) {
 		t.Fatalf("21 columns take %d rows, want 2", n)
 	}
 }
+
+func TestB413CleanShowsControlCharactersAndKeepsTabsAndNewlines(t *testing.T) {
+	for in, want := range map[string]string{
+		"plain text":            "plain text",
+		"tab\tand\nnewline":     "tab\tand\nnewline",
+		"hide\x1b[8mthis":       `hide\x1b[8mthis`,
+		"back\rover":            `back\x0dover`,
+		"csi\u009b2J and\u007f": `csi\x9b2J and\x7f`,
+	} {
+		if got := ui.Clean(in); got != want {
+			t.Errorf("Clean(%q) = %q, want %q", in, got, want)
+		}
+	}
+}

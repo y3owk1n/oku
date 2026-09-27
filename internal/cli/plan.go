@@ -433,31 +433,35 @@ func (p planned) pairs(s ui.Style) [][2]string {
 		installed = p.Name + " " + p.Installed
 	}
 
+	// Everything but oku's own words comes from the manifest or its source.
+	c := ui.Clean
+	list := func(items []string) string { return c(strings.Join(items, ", ")) }
+
 	return [][2]string{
 		{"name", s.Bold(p.Name)},
 		{"version", p.Version},
-		{"about", p.Description},
-		{"homepage", p.Homepage},
-		{"license", p.License},
+		{"about", c(p.Description)},
+		{"homepage", c(p.Homepage)},
+		{"license", c(p.License)},
 		{"ref", s.Home(p.Ref)},
 		{"manifest", manifestRow},
 		{"commit", commit},
-		{"asset", p.Asset},
-		{"also fits", strings.Join(p.OtherAssets, ", ")},
+		{"asset", c(p.Asset)},
+		{"also fits", list(p.OtherAssets)},
 		{"install", install},
-		{source, p.URL},
-		{"verify", p.Verify},
+		{source, c(p.URL)},
+		{"verify", c(p.Verify)},
 		{"signed", signed},
 		{"commands", commands},
-		{"needs", strings.Join(p.Needs, ", ")},
-		{"build deps", strings.Join(p.BuildDeps, ", ")},
-		{"deps", strings.Join(p.Deps, ", ")},
-		{"programs", strings.Join(p.Programs, ", ")},
-		{"apps", strings.Join(p.Apps, ", ")},
-		{"fonts", strings.Join(p.Fonts, ", ")},
-		{"services", strings.Join(p.Services, ", ")},
-		{"env", strings.Join(p.Env, ", ")},
-		{"platforms", strings.Join(p.Platforms, ", ")},
+		{"needs", list(p.Needs)},
+		{"build deps", list(p.BuildDeps)},
+		{"deps", list(p.Deps)},
+		{"programs", list(p.Programs)},
+		{"apps", list(p.Apps)},
+		{"fonts", list(p.Fonts)},
+		{"services", list(p.Services)},
+		{"env", list(p.Env)},
+		{"platforms", list(p.Platforms)},
 		{"installed", installed},
 		{"list", s.Home(p.List)},
 	}

