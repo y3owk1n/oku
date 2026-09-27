@@ -1073,6 +1073,8 @@ order step in `prd/product.md`.
   publishes no checksum prints the same warning.
 - B396 [11] The package `oku run` installed stays in the store and no generation
   holds it, so `oku gc` deletes it.
+- B399 [11] `--from-source` on `oku run` and `oku shell` builds the package even
+  though a prebuilt download fits, as on `oku add`.
 - B398 [11] `oku run` starts the file itself, not the link the store holds to
   it, so that macOS can issue a sandbox extension for a bundle and a program
   finds what sits next to its own file.
