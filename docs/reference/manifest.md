@@ -400,7 +400,7 @@ machine, so put specific entries before general ones.
 | Key | Required | Meaning |
 |---|---|---|
 | `match` | no | `{ os, arch, libc }`, see [Match and when](#match-and-when). A missing key matches anything, and a missing `match` matches every machine. |
-| `url` | yes | Where the download is. `https://`, `http://` or `file://`. Expands [template variables](#template-variables). |
+| `url` | yes | Where the download is. `https://`, `http://` or `file://`, the last only in a manifest on this machine. On Windows `file:///C:/tools/x.zip` names a drive and `file://server/share/x.zip` a share. Expands [template variables](#template-variables). |
 | `sha256` | no | The download's digest, 64 lowercase hex characters. Not with `sha256_url`. |
 | `sha256_url` | no | The URL of a checksum file, see [Checksums](#checksums). Not with `sha256`. |
 | `version` | no | Where this artifact's own version comes from, see [A version for each platform](#a-version-for-each-platform). |
