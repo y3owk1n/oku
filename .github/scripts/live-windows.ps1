@@ -43,6 +43,11 @@ Check 'bin is a junction to the links that generations share' {
 $version = & "$bin\rg.exe" --version
 Check 'the shim passes arguments and stdout through' { $version -match '^ripgrep \d' }
 
+# The store's bin holds rg.exe and the spec beside it. oku run takes the one
+# program, not the spec, and starts the file the spec names.
+$ran = (& $oku run github:BurntSushi/ripgrep -- --version) -join ' '
+Check 'run starts the one program of a package and not its spec' { $ran -match '^ripgrep \d' }
+
 $whichRg = (& $oku which rg) -join "`n"
 Check 'which names the package of a shim and the file it runs' {
     ($whichRg -match 'ripgrep') -and ($whichRg -match '\\store\\ripgrep-') -and ($whichRg -notmatch 'not from oku')
