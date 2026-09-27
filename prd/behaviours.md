@@ -1048,6 +1048,31 @@ order step in `prd/product.md`.
 
 - B90 [11] `oku shell <ref>...` opens a shell with those packages on PATH and
   leaves `oku.toml`, the lock and every profile unchanged.
+- B388 [11] `oku run <ref>` puts the package in the store, starts its app and
+  exits with the app's code. It leaves `oku.toml`, the lock and every profile
+  unchanged, and places no launcher, no copy of an app and no font.
+- B389 [11] `oku run` takes the app from the package's store spec on Linux and
+  Windows, and on macOS from a bundle under `apps/`. In a bundle it starts the
+  program `CFBundleExecutable` names, or the only program in `Contents/MacOS`
+  when the plist does not say.
+- B390 [11] A package with no app and one program in `bin` runs that program.
+  With no app and several programs `oku run` fails, names them and points at
+  `oku shell <ref> -- <program>`. A package with neither fails naming the
+  package.
+- B391 [11] A package with several apps fails and names them. `--app <name>`
+  picks one, ignoring case and a `.app` suffix, and a name the package does not
+  have fails naming the apps it does have.
+- B392 [11] Arguments after `--` reach the program `oku run` starts, and its
+  standard input, output and error are oku's own.
+- B393 [11] That program runs with the package's `bin` first on `PATH` and its
+  `[env]` set, as in `oku shell`.
+- B394 [11] `oku run` takes one ref. A second ref fails and points at
+  `oku shell`.
+- B395 [11] `--yes`, `--accept-key`, `--min-release-age`, `--accept-unknown-age`
+  and `--verbose` work on `oku run` as on `oku shell`, and a download that
+  publishes no checksum prints the same warning.
+- B396 [11] The package `oku run` installed stays in the store and no generation
+  holds it, so `oku gc` deletes it.
 - B91 [11] `oku doctor` reports store root, sandbox availability, hook status,
   PATH order problems and broken profile links. It finds the hook line in any
   file the user's shells read at startup, whether the line names `oku` or
