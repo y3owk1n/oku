@@ -11,8 +11,8 @@ import (
 
 // exclusive are the commands that change what oku keeps. Two at once would
 // undo each other's change or delete a package the other one is building, so
-// each waits for the other. "shell" and "self uninstall" take the lock for part
-// of their run.
+// each waits for the other. "shell", "run" and "self uninstall" take the lock
+// for part of their run.
 var exclusive = [][]string{
 	{"add"},
 	{"remove"},

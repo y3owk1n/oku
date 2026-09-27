@@ -122,7 +122,7 @@ All sixteen steps are built, and `docs/` describes what works today.
 8. Apps, fonts, services, system scope.
 9. Windows parity: shims, DLL search path, pwsh hook, `.msi` unpacking.
 10. Build cache and signing.
-11. `oku shell`, `doctor`, `self update`, install script.
+11. `oku shell`, `oku run`, `doctor`, `self update`, install script.
 12. Transactions: check before the first change, revert on failure, recover
     after a crash. Covers the apps, fonts and services of step 8.
 13. Files: `[files]` with `link` and `text`, location variables, targets oku

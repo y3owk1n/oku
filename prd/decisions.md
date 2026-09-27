@@ -1751,3 +1751,19 @@ digest pinned in oku.lock, so oku can fetch one again, and the case worth saving
 the network for is redoing an install from the last day or two. A week of retention freed nothing on that
 machine, since its whole cache was younger than a week. Two days freed 5.7 GiB
 and leaves the cache at about two days of installs.
+
+## D106. One command runs a package that is not installed
+
+`oku run <ref>` starts a package's app, or its one program, without installing
+it. There is no second command for a trial the desktop can see. An app in a
+menu, in Spotlight or in "Open with" has to be placed, which is an install, so
+that case is `oku add` and `oku remove`. If an expiring trial is worth having
+later, it becomes a flag on `add`, not a verb of its own.
+
+Why: the choice only has two questions, whether the package is installed and
+whether the user wants one run or a session. `oku exec` is installed and one
+run, the shell hook is installed and a session, `oku shell` is neither and a
+session, and `run` was the empty cell. A second command for the same cell would
+leave two commands with no rule for picking one. `run` starts the program in the
+store itself, as the command of a macOS bundle already does. That keeps the
+environment, the exit code and the signals, which `open` drops.

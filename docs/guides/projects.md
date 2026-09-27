@@ -292,7 +292,9 @@ oku shell github:BurntSushi/ripgrep -- rg TODO src/
 ```
 
 No generation uses these packages, so the next `oku gc` deletes them. The
-details are in [oku shell](../reference/commands.md#oku-shell).
+details are in [oku shell](../reference/commands.md#oku-shell). For one
+program, or for an app, [oku run](../reference/commands.md#oku-run) starts it
+and installs nothing.
 
 ## Share the project with teammates
 

@@ -36,7 +36,7 @@ per command. These are `add`, `remove`, `list`, `sync`, `update`, `outdated`,
 |---|---|
 | `0` | The command succeeded. |
 | `1` | The command failed. oku prints `oku: <reason>` on stderr, and the lines after it say what to do when there is something to do. |
-| the command's code | `oku exec` and `oku shell -- <command>` exit with the code of the command they ran, and add no message. |
+| the command's code | `oku exec`, `oku run` and `oku shell -- <command>` exit with the code of the program they ran, and add no message. |
 
 `oku doctor` and `oku manifest lint` exit with `1` when they find a problem.
 `--json` does not change an exit code. A command that gets the wrong number of
@@ -380,10 +380,13 @@ oku shell <ref>... [-- command [args...]]
 
 Puts packages in the store and starts `$SHELL` with their programs first on
 `PATH` and their `[env]` set. It changes no `oku.toml`, no `oku.lock` and no
-profile.
+profile. For one program, or for an app, use [oku run](#oku-run).
 
 | Flag | Effect |
 |---|---|
+| `--asset <glob>` | As in `oku add`. It describes one download, so it takes one ref. |
+| `--bin <name>` | As in `oku add`. It describes one download, so it takes one ref. |
+| `--from-source` | As in `oku add`. |
 | `--yes`, `-y` | As in `oku add`. |
 | `--accept-key` | As in `oku add`. |
 | `--min-release-age AGE` | As in `oku add`. |
@@ -407,6 +410,63 @@ $ exit
   deletes them. With a published checksum the next `oku shell` reuses them.
   Without one oku downloads the file again and trusts it again, because
   `shell` writes no lock.
+
+### oku run
+
+```
+oku run <ref> [--app <name>] [-- args...]
+```
+
+Puts a package in the store and starts its app, without installing it. It
+changes no `oku.toml`, no `oku.lock` and no profile, and it places no launcher
+and no copy of an app.
+
+| What you want | Command |
+|---|---|
+| One run of a program you installed | `oku exec <command>` |
+| A session with what you installed | The [shell hook](#oku-hook) |
+| One run of a package you have not installed | `oku run <ref>` |
+| A session with packages you have not installed | `oku shell <ref>...` |
+
+| Flag | Effect |
+|---|---|
+| `--app <name>` | The app to start, of a package that ships several. The name ignores case and a `.app` suffix. |
+| `--asset <glob>` | As in `oku add`. |
+| `--bin <name>` | As in `oku add`. |
+| `--from-source` | As in `oku add`. |
+| `--yes`, `-y` | As in `oku add`. |
+| `--accept-key` | As in `oku add`. |
+| `--min-release-age AGE` | As in `oku add`. |
+| `--accept-unknown-age` | As in `oku add`. |
+| `--verbose`, `-v` | As in `oku add`. |
+
+```
+$ oku run cask:rectangle
+$ oku run github:BurntSushi/ripgrep -- TODO src/
+```
+
+- The app is the package's `app` entry, which is a bundle on macOS and a
+  desktop entry or a program on Linux and Windows. A package with several apps
+  fails and names them, and `--app` picks one.
+- A package that ships no app and one program runs that program. With several
+  programs it fails and names them, since `oku shell <ref> -- <program>` says
+  which one to run.
+- Arguments after `--` reach the program. A macOS app that opens a document
+  through Finder may ignore a file name there.
+- The program runs with the package's `bin` first on `PATH` and its `[env]`
+  set, as in `oku shell`, and oku exits with the program's code.
+- A ref takes `@version` as in `oku add`. `run` reads the ref again on each
+  run, so it may start a newer version than the one you have installed.
+- For a repo with no manifest, `--asset` and `--bin` steer what oku infers, and
+  `--from-source` takes a manifest's build over its prebuilt download, as in
+  `oku add`.
+- Nothing of the app reaches the desktop. It is in no menu, in no Spotlight
+  result and in no "Open with" list. macOS ties a permission such as
+  Accessibility to the app that asked for it, so a later install asks for it
+  again. `oku add` places an app to keep.
+- The package stays in the store and no generation uses it, so `oku gc` deletes
+  it. As in `oku shell`, oku trusts a download with no published checksum again
+  on each run, because `run` writes no lock.
 
 ## The machine
 
@@ -992,6 +1052,8 @@ golang.org/x/tools/gopls v0.22.0
 - A project needs no `oku allow` here, because you name the command yourself.
   Its profile must match its `oku.lock`, or `exec` fails and names `oku sync`.
 - `--global` leaves the project out.
+- For a program of a package you have not installed, use
+  [oku run](#oku-run).
 
 ## Manifests
 

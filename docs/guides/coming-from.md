@@ -103,6 +103,7 @@ What oku does not do:
 | Generations and `--rollback` | `oku generations` and `oku rollback` |
 | `nix-collect-garbage` | `oku gc` |
 | `nix shell nixpkgs#<pkg>` | `oku shell <ref>` |
+| `nix run nixpkgs#<pkg>` | `oku run <ref>`, which starts an app too |
 | A dev shell with direnv | A [project](projects.md) `oku.toml` with the shell hook, `[env]` for the `.envrc` exports, and `[[env.file]]` for `dotenv` and `dotenv_if_exists` |
 
 What oku does not do:
@@ -133,7 +134,7 @@ What oku does not do:
 | The npm, pipx, go and cargo backends | `npm:`, `pypi:`, `go:` and `cargo:` refs, see [npm, PyPI, Go and Cargo](npm-pypi-go-cargo.md) |
 | A language version, such as node 22 | `[runtimes]` |
 | `mise activate` | `oku hook <shell>` |
-| `mise exec` | `oku exec`, or `oku shell <ref> -- <command>` for a tool you have not added |
+| `mise exec` | `oku exec`, or `oku run <ref>` for a tool you have not added |
 | Dotfiles and macOS defaults | `[files]` and `[defaults]` |
 
 What oku does not do:
