@@ -135,6 +135,9 @@ order step in `prd/product.md`.
   another machine is an error. `http://127.0.0.1` and `localhost` work.
 - B422 [2] `oku manifest lint` fails on an artifact or a build source at an
   `http://` URL without a `sha256`.
+- B431 [2] A `file://` URL names a file of this machine: `file:///C:/x` a
+  drive and `file://server/share/x` a share on Windows, and `file:///x` a path
+  elsewhere. A missing file is a 404.
 - B423 [2] A git collection reads its manifests inside the clone, so a manifest
   file that is a link out of the repo reads nothing outside it.
 - B10 [2] `add` accepts file, https, `github:`, `codeberg:`, `gitea:`,
