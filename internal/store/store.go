@@ -87,7 +87,7 @@ type Meta struct {
 // New returns the store under dataDir that caches downloads under cacheDir.
 func New(dataDir, cacheDir string) *Store {
 	transport := http.DefaultTransport.(*http.Transport).Clone()
-	transport.RegisterProtocol("file", http.NewFileTransport(http.Dir("/")))
+	transport.RegisterProtocol("file", fileTransport{})
 
 	return &Store{
 		dir:   filepath.Join(dataDir, "store"),
