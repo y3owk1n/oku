@@ -123,6 +123,20 @@ order step in `prd/product.md`.
 
 ## Refs, list and lock
 
+- B418 [2] oku sends `GH_ENTERPRISE_TOKEN`, `GITEA_TOKEN` and
+  `GITLAB_SERVER_TOKEN` only to a host that `[forge] hosts` in `config.toml`
+  lists with that kind. Any other host gets no token.
+- B419 [2] A download follows no redirect to a `file://` URL and none from
+  https to another scheme, and fails naming both URLs.
+- B420 [2] Only a manifest that is a file on this machine, or in a
+  `git+file://` repo, may name a `file://` URL. Any other fails before a
+  download.
+- B421 [2] A manifest or list ref over plain `http://`, or `git+http://`, to
+  another machine is an error. `http://127.0.0.1` and `localhost` work.
+- B422 [2] `oku manifest lint` fails on an artifact or a build source at an
+  `http://` URL without a `sha256`.
+- B423 [2] A git collection reads its manifests inside the clone, so a manifest
+  file that is a link out of the repo reads nothing outside it.
 - B10 [2] `add` accepts file, https, `github:`, `codeberg:`, `gitea:`,
   `gitlab:`, `npm:` and `git+` refs.
 - B114 [2] `github:host/owner/repo` reads a GitHub Enterprise Server at `host`.
