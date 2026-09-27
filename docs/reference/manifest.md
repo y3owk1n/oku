@@ -1751,17 +1751,11 @@ On Windows the link is a shim, and the environment differs, see
 
 ## The build sandbox
 
-On macOS and Linux a `run` step runs in a sandbox:
-
-- It has no network.
-- It cannot read the user's home directory. The store and the directories of the
-  `needs` tools stay readable, even when they are inside it.
-- It can only write to the source directory, its temporary `HOME` and `TMPDIR`,
-  and `{{prefix}}`. On Linux everything else is mounted read-only, and
-  `/dev/shm` is the build's own.
-- It cannot ask the user's session to start a program. On macOS Apple Events,
-  LaunchServices and `launchctl` are denied. On Linux `/run/user`, which holds
-  the user's D-Bus and systemd sockets, and the X server's sockets are hidden.
+On macOS and Linux a `run` step runs in a sandbox. It has no network, cannot
+read the user's home directory, and can only write to the source directory, its
+temporary `HOME` and `TMPDIR`, and `{{prefix}}`. The store and the directories
+of the `needs` tools stay readable. See [The build sandbox](sandbox.md) for the
+full list per platform, and for hosts without a sandbox.
 
 A build must therefore get everything it downloads through `source`, a `fetch`
 step, or a [`vendor` step](#vendoring). oku checks all three against a digest.
@@ -1777,9 +1771,3 @@ run = "npm ci"
 shell = "sh"
 network = true
 ```
-
-oku uses `sandbox-exec` on macOS and user, mount and network namespaces on
-Linux. A default Docker container and a default Ubuntu 24.04 forbid
-unprivileged user namespaces. On such a Linux host, and on Windows, the step
-runs with the scrubbed environment only. oku then warns that the build could
-use the network and read the user's files.

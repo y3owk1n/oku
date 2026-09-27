@@ -79,7 +79,7 @@ What it does, in order:
 2. Picks the first `[[artifact]]` whose `match` fits this machine. With none,
    or with `--from-source`, it builds from source.
 3. Downloads the artifact, verifies the checksum and unpacks it into the
-   store. A build runs its steps in the [sandbox](security.md#the-build-sandbox)
+   store. A build runs its steps in the [sandbox](sandbox.md)
    and installs into the store.
 4. Activates a new [generation](../how-oku-works.md#generation) that includes
    the package.
