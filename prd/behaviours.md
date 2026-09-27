@@ -349,9 +349,10 @@ order step in `prd/product.md`.
   about a `crates` source that is the crate's `.crate` file.
 - B267 [3] `oku exec <command>` runs the command with the global profile's
   `bin` on `PATH` and its packages' `[env]`, and in a project with the
-  project's `bin` and `[env]` first, without `oku allow`. Flags after the
-  command go to the command, and oku exits with its exit code. oku refuses a
-  project whose profile is behind its lock and names `oku sync`.
+  project's `bin` and `[env]` first. Flags after the command go to the
+  command, and oku exits with its exit code. oku refuses a project that is not
+  allowed and names `oku allow`, and one whose profile is behind its lock and
+  names `oku sync`.
 - B266 [3] A version source reads a tag with or without a `v` in front, whatever
   `strip_prefix` says, so the releases from before a repo changed its tag style
   stay visible. When both forms of a version exist, the tag in the declared form
@@ -855,6 +856,9 @@ order step in `prd/product.md`.
   asks for approval. The same manifest hash is never asked twice. A changed
   manifest asks again. A dep that builds asks for itself.
 - B42 [5] Non-interactive runs refuse unapproved `run` steps unless `--yes`.
+- B411 [5] A package that sets `[env]` asks for approval as a build does, even
+  from a download, and the prompt lists each variable with its value. Without
+  a terminal oku refuses unless `--yes`. The same manifest never asks twice.
 - B377 [5] When the build of a new version is not approved, or cannot be asked
   about without a terminal, a package that `oku.lock` holds stays at its locked
   version from the manifest the lock pins, oku says so, and the rest of the
@@ -974,7 +978,8 @@ order step in `prd/product.md`.
   and makes `oku exec` refuse.
 - B323 [7] `oku allow` covers every overlay that git tracks, whatever
   `OKU_ENV` names. An untracked overlay, and the `.env` files it loads, change
-  without a new allow.
+  without a new allow. Asking git runs no program the repo names, such as its
+  `core.fsmonitor`.
 - B324 [7] The hook sets `OKU_PROJECT` to the project's directory while the
   project applies, and removes it outside one or when the project does not
   apply. `oku exec` sets it for its command in a project.
@@ -1054,6 +1059,8 @@ order step in `prd/product.md`.
   `PATH`.
 - B82 [9] `oku hook pwsh` gives B61 to B68 in PowerShell, on Windows, macOS
   and Linux, and keeps `$LASTEXITCODE` across the prompt.
+- B412 [9] `oku hook pwsh` and `oku env --shell pwsh` double every single
+  quote PowerShell reads in a value, U+0027 and U+2018 to U+201B.
 - B366 [9] On Windows, `oku gc` deletes old generations and unused store paths
   while a program that oku installed runs, through its shim or from the store.
   What Windows keeps in use moves to `<data>/oku/trash` or the store root's
