@@ -25,9 +25,11 @@ type gitlabRelease struct {
 	// count as published.
 	Upcoming bool `json:"upcoming_release"`
 	// Released is when the release was published, or the date its author set
-	// for it.
+	// for it, which may be in the past.
 	Released time.Time `json:"released_at"`
-	Commit   struct {
+	// Created is when the server made the release, which its author cannot set.
+	Created time.Time `json:"created_at"`
+	Commit  struct {
 		ID string `json:"id"`
 	} `json:"commit"`
 	Assets struct {
@@ -42,7 +44,14 @@ type gitlabRelease struct {
 }
 
 func (r gitlabRelease) release() Release {
-	out := Release{Tag: r.Tag, Commit: r.Commit.ID, Draft: r.Upcoming, Published: r.Released}
+	// The minimum release age counts from the later of the two, so a release
+	// dated in the past does not pass for an old one.
+	published := r.Released
+	if r.Created.After(published) {
+		published = r.Created
+	}
+
+	out := Release{Tag: r.Tag, Commit: r.Commit.ID, Draft: r.Upcoming, Published: published}
 
 	for _, link := range r.Assets.Links {
 		at := link.Direct
