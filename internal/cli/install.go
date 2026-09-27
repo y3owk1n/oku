@@ -585,8 +585,13 @@ func (e env) installFrom(
 
 	switch {
 	case cached:
-		// A package from a cache runs none of the manifest's commands, so it needs
-		// no approval. A cache never holds an impure package.
+		// A package from a cache runs none of the manifest's commands. Only its
+		// [env] needs approval, and an empty artifact makes the approver ask about
+		// that alone. A cache never holds an impure package.
+		if err := req.approve(m, host, &manifest.Artifact{}); err != nil {
+			return installed{}, err
+		}
+
 		deps.substituted = append(deps.substituted, m.Package.Name)
 
 		// The cache entry holds the pins of the build that made it.
@@ -723,7 +728,7 @@ func (e env) installFrom(
 
 		auth := e.fetcher(opts).Hosts.AuthFor(m.Version.From, m.Version.Repo)
 
-		if artifact.Completions.Generate != "" {
+		if artifact.Completions.Generate != "" || len(m.Env) > 0 {
 			if err := req.approve(m, host, &artifact); err != nil {
 				return installed{}, err
 			}

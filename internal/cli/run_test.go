@@ -102,7 +102,7 @@ func TestB388RunStartsTheAppAndChangesNothing(t *testing.T) {
 	ref := m.desktopManifest(t)
 	app, font := m.exposedPaths()
 
-	out, err := m.run(t, "", "run", ref)
+	out, err := m.run(t, "", "run", "--yes", ref)
 	if err != nil {
 		t.Fatalf("run: %v\n%s", err, out)
 	}
@@ -127,7 +127,7 @@ func TestB388RunStartsTheAppAndChangesNothing(t *testing.T) {
 		t, "exiting", map[string]string{"exiting": "#!/bin/sh\nexit 7\n"}, "",
 	)
 
-	_, err = m.run(t, "", "run", exiting)
+	_, err = m.run(t, "", "run", "--yes", exiting)
 
 	var exit cli.ExitError
 	if !errors.As(err, &exit) || exit.Code != 7 {
@@ -139,7 +139,7 @@ func TestB390RunTakesTheOneProgramOfAPackageWithNoApp(t *testing.T) {
 	m := newMachine(t)
 	one := m.manifest(t, "one", map[string]string{"one": script}, `bin = ["one"]`)
 
-	out, err := m.run(t, "", "run", one)
+	out, err := m.run(t, "", "run", "--yes", one)
 	if err != nil || !strings.Contains(out, "hello from tool") {
 		t.Fatalf("run did not start the package's one program: %v\n%s", err, out)
 	}
@@ -151,7 +151,7 @@ func TestB390RunTakesTheOneProgramOfAPackageWithNoApp(t *testing.T) {
 		`bin = ["first", "second"]`,
 	)
 
-	out, err = m.run(t, "", "run", two)
+	out, err = m.run(t, "", "run", "--yes", two)
 	if err == nil {
 		t.Fatalf("run started something from a package with two programs:\n%s", out)
 	}
@@ -164,7 +164,7 @@ func TestB390RunTakesTheOneProgramOfAPackageWithNoApp(t *testing.T) {
 
 	none := m.manifest(t, "none", map[string]string{"share/none/data": "text"}, `data = true`)
 
-	_, err = m.run(t, "", "run", none)
+	_, err = m.run(t, "", "run", "--yes", none)
 	if err == nil || !strings.Contains(err.Error(), "no app and no program") {
 		t.Fatalf("want an error for a package that runs nothing, got %v", err)
 	}
@@ -179,7 +179,7 @@ func TestB391RunNamesSeveralAppsAndAppPicksOne(t *testing.T) {
 		"beta":  "#!/bin/sh\necho started beta\n",
 	}, "beta")
 
-	out, err := m.run(t, "", "run", ref)
+	out, err := m.run(t, "", "run", "--yes", ref)
 	if err == nil {
 		t.Fatalf("run started something from a package with two apps:\n%s", out)
 	}
@@ -191,17 +191,17 @@ func TestB391RunNamesSeveralAppsAndAppPicksOne(t *testing.T) {
 	}
 
 	// The name ignores case, and the suffix a macOS bundle carries.
-	out, err = m.run(t, "", "run", ref, "--app", "ALPHA")
+	out, err = m.run(t, "", "run", "--yes", ref, "--app", "ALPHA")
 	if err != nil || !strings.Contains(out, "started alpha") {
 		t.Fatalf("--app ALPHA did not start alpha: %v\n%s", err, out)
 	}
 
-	out, err = m.run(t, "", "run", ref, "--app", "beta.app")
+	out, err = m.run(t, "", "run", "--yes", ref, "--app", "beta.app")
 	if err != nil || !strings.Contains(out, "started beta") {
 		t.Fatalf("--app beta.app did not start beta: %v\n%s", err, out)
 	}
 
-	_, err = m.run(t, "", "run", ref, "--app", "gamma")
+	_, err = m.run(t, "", "run", "--yes", ref, "--app", "gamma")
 	if err == nil || !strings.Contains(err.Error(), "no app gamma") {
 		t.Fatalf("want an error naming the app that is missing, got %v", err)
 	}
@@ -213,7 +213,7 @@ func TestB392RunPassesTheArgumentsAndTheEnvironment(t *testing.T) {
 		"gui": "#!/bin/sh\necho \"args=$*\"\necho \"home=$APP_HOME\"\ncommand -v gui\n",
 	}, "")
 
-	out, err := m.run(t, "", "run", ref, "--", "one", "two")
+	out, err := m.run(t, "", "run", "--yes", ref, "--", "one", "two")
 	if err != nil {
 		t.Fatalf("run: %v\n%s", err, out)
 	}
@@ -236,7 +236,7 @@ func TestB394RunTakesOneRef(t *testing.T) {
 	one := m.manifest(t, "one", map[string]string{"one": script}, `bin = ["one"]`)
 	two := m.manifest(t, "two", map[string]string{"two": script}, `bin = ["two"]`)
 
-	_, err := m.run(t, "", "run", one, two)
+	_, err := m.run(t, "", "run", "--yes", one, two)
 	if err == nil || !strings.Contains(err.Error(), "oku shell "+one+" "+two) {
 		t.Fatalf("want an error pointing at oku shell, got %v", err)
 	}
@@ -249,7 +249,7 @@ func TestB395RunWarnsForADownloadWithNoChecksum(t *testing.T) {
 		"[[artifact]]\nurl = \"file://%s\"\nbin = [\"tool\"]\n", archive,
 	))
 
-	out, err := m.run(t, "", "run", ref)
+	out, err := m.run(t, "", "run", "--yes", ref)
 	if err != nil {
 		t.Fatalf("run: %v\n%s", err, out)
 	}
@@ -263,7 +263,7 @@ func TestB396GcDeletesWhatRunPutInTheStore(t *testing.T) {
 	m := newMachine(t)
 	ref := m.manifest(t, "tool", map[string]string{"tool": script}, `bin = ["tool"]`)
 
-	out, err := m.run(t, "", "run", ref)
+	out, err := m.run(t, "", "run", "--yes", ref)
 	if err != nil {
 		t.Fatalf("run: %v\n%s", err, out)
 	}
@@ -284,12 +284,12 @@ func TestB399RunAndShellBuildFromSourceOnRequest(t *testing.T) {
 	m := newMachine(t)
 	ref := m.buildManifest(t, true, `needs = ["sh"]`, writeTool+installTool)
 
-	out, err := m.run(t, "", "run", ref)
+	out, err := m.run(t, "", "run", "--yes", ref)
 	if err != nil || !strings.Contains(out, "prebuilt") {
 		t.Fatalf("run took %v, want the prebuilt artifact\n%s", err, out)
 	}
 
-	out, err = m.run(t, "", "run", ref, "--from-source", "--yes")
+	out, err = m.run(t, "", "run", "--yes", ref, "--from-source", "--yes")
 	if err != nil || !strings.Contains(out, "built 1.0.0") {
 		t.Fatalf("run --from-source: %v\n%s", err, out)
 	}
@@ -304,7 +304,7 @@ func TestB398RunStartsTheFileItselfAndNotTheLinkToIt(t *testing.T) {
 	m := newMachine(t)
 	ref := m.appManifest(t, "at", map[string]string{"at": "#!/bin/sh\necho \"at=$0\"\n"}, "")
 
-	out, err := m.run(t, "", "run", ref)
+	out, err := m.run(t, "", "run", "--yes", ref)
 	if err != nil {
 		t.Fatalf("run: %v\n%s", err, out)
 	}
@@ -322,12 +322,12 @@ func TestB397RunAndShellTakeTheFlagsThatSteerInference(t *testing.T) {
 	// The asset's name fits no platform, so inference cannot choose it alone.
 	inferServer(t, &m, map[string]string{"tool-v1.4.0-odd.tar.gz": archive})
 
-	_, err := m.run(t, "", "run", "github:owner/tool")
+	_, err := m.run(t, "", "run", "--yes", "github:owner/tool")
 	if err == nil || !strings.Contains(err.Error(), "--asset") {
 		t.Fatalf("want a failure that names --asset, got %v", err)
 	}
 
-	out, err := m.run(t, "", "run", "github:owner/tool", "--asset", "*-odd.*", "--bin", "main")
+	out, err := m.run(t, "", "run", "--yes", "github:owner/tool", "--asset", "*-odd.*", "--bin", "main")
 	if err != nil || !strings.Contains(out, "steered") {
 		t.Fatalf("run with --asset and --bin: %v\n%s", err, out)
 	}

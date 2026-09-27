@@ -153,7 +153,10 @@ func allowDigest(listed []byte, tracked []string) string {
 // gitTracks reports whether git tracks path in the repo of dir. Without git,
 // or outside a repo, nothing is tracked.
 func gitTracks(dir, path string) bool {
-	return exec.Command("git", "-C", dir, "ls-files", "--error-unmatch", "--", path).Run() == nil
+	// A repo can name a program as its fsmonitor, which git would run.
+	return exec.Command(
+		"git", "-C", dir, "-c", "core.fsmonitor=false", "ls-files", "--error-unmatch", "--", path,
+	).Run() == nil
 }
 
 // modTime returns the modification time of path in Unix nanoseconds, or 0 when

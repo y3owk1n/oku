@@ -4599,6 +4599,50 @@ shell = "sh"
 	}
 }
 
+func TestB411APackageThatSetsEnvNeedsApprovalAndShowsItsVariables(t *testing.T) {
+	m := newMachine(t)
+	ref := m.envManifest(t, "gtool", "GIT_CONFIG_COUNT")
+
+	if _, err := m.run(t, "", "add", ref); err == nil || !strings.Contains(err.Error(), "needs approval to set its variables") {
+		t.Fatalf("want a refusal without a terminal, got %v", err)
+	}
+
+	m.opts.Interactive = yes()
+
+	out, err := m.run(t, "n\n", "add", ref)
+	if err == nil || !strings.Contains(out, "sets these variables") || !strings.Contains(out, "GIT_CONFIG_COUNT = ") {
+		t.Fatalf("the prompt should name the variable and a no should refuse, got %v:\n%s", err, out)
+	}
+
+	if out, err := m.run(t, "y\n", "add", ref); err != nil {
+		t.Fatalf("add after yes: %v\n%s", err, out)
+	}
+
+	// The approval holds for the same manifest.
+	m.opts.Interactive = nil
+
+	if out, err := m.run(t, "", "sync"); err != nil {
+		t.Fatalf("sync asked again for an approved manifest: %v\n%s", err, out)
+	}
+}
+
+func TestB412PwshOutputDoublesEveryKindOfSingleQuote(t *testing.T) {
+	m := newMachine(t)
+	path := m.namedManifest(t, "quoter", "quoter", "quoter")
+
+	body, err := os.ReadFile(path)
+	must(t, err)
+	must(t, os.WriteFile(path, append(body, []byte("\n[env]\nQUOTED = \"a\u2019; b\u2018 c' d\"\n")...), 0o644))
+
+	_, err = m.run(t, "", "add", path, "--yes")
+	must(t, err)
+
+	out := m.stdout(t, "env", "--shell", "pwsh")
+	if !strings.Contains(out, "'a\u2019\u2019; b\u2018\u2018 c'' d'") {
+		t.Fatalf("pwsh output does not double each quote:\n%s", out)
+	}
+}
+
 func TestB53NetworkStepIsShownInThePromptAndMarksThePackageImpure(t *testing.T) {
 	m, url, secret := sandboxedMachine(t)
 	m.opts.Interactive = yes()
@@ -4923,7 +4967,7 @@ func (m *machine) hookProject(t *testing.T) string {
 
 	m.opts.WorkDir = project
 
-	_, err := m.run(t, "", "add", m.envManifest(t, "ptool", "PTOOL_HOME"))
+	_, err := m.run(t, "", "add", m.envManifest(t, "ptool", "PTOOL_HOME"), "--yes")
 	must(t, err)
 
 	return project
@@ -5238,7 +5282,7 @@ func TestB68GlobalPackageEnvIsExportedInEveryShell(t *testing.T) {
 	m := newMachine(t)
 	t.Setenv("PATH", "/usr/bin:/bin")
 
-	_, err := m.run(t, "", "add", m.envManifest(t, "gtool", "GTOOL_HOME"))
+	_, err := m.run(t, "", "add", m.envManifest(t, "gtool", "GTOOL_HOME"), "--yes")
 	must(t, err)
 
 	m.apply(t)
@@ -5271,7 +5315,7 @@ func TestB128EnvPkgNamesTheFilesOfAnArtifact(t *testing.T) {
 		path, append(body, []byte("\n[env]\nJDK_HOME = \"{{pkg}}/lib/jvm\"\n")...), 0o644,
 	))
 
-	_, err = m.run(t, "", "add", path)
+	_, err = m.run(t, "", "add", path, "--yes")
 	must(t, err)
 
 	m.apply(t)
@@ -6483,6 +6527,7 @@ func TestB90ShellRunsWithThePackagesOnPathAndChangesNothing(t *testing.T) {
 		"",
 		"shell",
 		ref,
+		"--yes",
 		"--",
 		"sh",
 		"-c",

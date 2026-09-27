@@ -36,10 +36,18 @@ func TestB267ExecRunsACommandWithTheProgramsOfTheDirectory(t *testing.T) {
 
 	m.opts.WorkDir = project
 
-	_, err = m.run(t, "", "add", local)
+	_, err = m.run(t, "", "add", local, "--yes")
 	must(t, err)
 
-	// The project was never allowed, and its program and [env] still come first.
+	// A project's [env] could put its own programs first on PATH, so exec
+	// applies it only once the user allowed it, as the hook does.
+	if _, err := m.run(t, "", "exec", "tool", "a"); err == nil || !strings.Contains(err.Error(), "oku allow") {
+		t.Fatalf("want exec refused in a project that is not allowed, got %v", err)
+	}
+
+	_, err = m.run(t, "", "allow")
+	must(t, err)
+
 	if out := strings.TrimSpace(m.stdout(t, "exec", "tool", "a")); out != "project hi a" {
 		t.Fatalf("exec in a project printed %q", out)
 	}

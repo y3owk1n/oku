@@ -23,8 +23,10 @@ global oku.toml and its packages, as the shell hook does. In a project it puts
 the project's programs first and sets the variables of its oku.toml and its
 packages too. oku stops when a variable that a list requires is not set.
 
-The project needs no "oku allow", since you asked for the command, but its
-profile must match its oku.lock, so run "oku sync" first.
+In a project, as for the shell hook, you must have run "oku allow" for its
+oku.toml, and its profile must match its oku.lock, so run "oku sync" first.
+Without that oku stops and says what to run, since a project's [env] can put
+its own programs first on PATH.
 
 An editor or a script that does not run the shell hook can start a program
 this way, such as a language server "oku exec gopls". oku exits with the
@@ -38,8 +40,12 @@ command's exit code.`,
 				return err
 			}
 
-			if e.project != "" && !e.projectSynced() {
-				return fmt.Errorf("the profile of %s is behind its oku.lock, run `oku sync`", e.project)
+			// A project's [env] can put its own programs first on PATH, so exec
+			// applies it only as the hook does, once the user allowed it.
+			if e.project != "" {
+				if active, why := e.projectActive(); !active {
+					return errors.New(why)
+				}
 			}
 
 			environ, path, err := e.execEnviron()

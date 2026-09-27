@@ -280,6 +280,9 @@ func StartupFile(shell string) string {
 	return ""
 }
 
+var pwshQuotes = strings.NewReplacer("'", "''", "\u2018", "\u2018\u2018", "\u2019", "\u2019\u2019",
+	"\u201a", "\u201a\u201a", "\u201b", "\u201b\u201b")
+
 // quoter returns the function that wraps a string in single quotes for shell.
 // fish escapes a quote inside them with a backslash. bash and zsh cannot, so the
 // string is closed, an escaped quote added, and reopened.
@@ -290,9 +293,10 @@ func quoter(shell string) func(string) string {
 			return "'" + strings.NewReplacer(`\`, `\\`, "'", `\'`).Replace(s) + "'"
 		}
 	case "pwsh":
-		// PowerShell doubles a quote inside single quotes.
+		// PowerShell doubles a quote inside single quotes, and it reads the
+		// typographic single quotes U+2018 to U+201B as quotes too.
 		return func(s string) string {
-			return "'" + strings.ReplaceAll(s, "'", "''") + "'"
+			return "'" + pwshQuotes.Replace(s) + "'"
 		}
 	}
 

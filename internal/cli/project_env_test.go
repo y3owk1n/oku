@@ -702,3 +702,46 @@ func TestB324OkuProjectNamesTheProjectThatApplies(t *testing.T) {
 		t.Fatalf("exec outside a project saw OKU_PROJECT=%q", got)
 	}
 }
+
+func TestB323AllowRunsNoProgramTheRepoNamesForGit(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("needs git")
+	}
+
+	m := newMachine(t)
+	t.Setenv("OKU_ENV", "prod")
+
+	project := filepath.Join(m.fixtures, "proj")
+	must(t, os.MkdirAll(project, 0o755))
+	must(t, os.WriteFile(filepath.Join(project, "oku.toml"), []byte("[env]\nSTAGE = \"dev\"\n"), 0o644))
+	must(t, os.WriteFile(filepath.Join(project, "oku.prod.toml"), []byte("[env]\nSTAGE = \"prod\"\n"), 0o644))
+
+	// A repo that arrives with its .git names a program git runs as its
+	// fsmonitor.
+	marker := filepath.Join(m.fixtures, "ran")
+	monitor := filepath.Join(m.fixtures, "monitor.sh")
+	must(t, os.WriteFile(monitor, []byte("#!/bin/sh\ntouch "+marker+"\n"), 0o755))
+
+	for _, args := range [][]string{
+		{"init", "-q"}, {"add", "oku.toml", "oku.prod.toml"}, {"config", "core.fsmonitor", monitor},
+	} {
+		must(t, exec.Command("git", append([]string{"-C", project}, args...)...).Run())
+	}
+
+	// git itself runs it.
+	_ = exec.Command("git", "-C", project, "ls-files", "--error-unmatch", "oku.prod.toml").Run()
+	if !exists(marker) {
+		t.Skip("this git does not run core.fsmonitor for ls-files")
+	}
+
+	must(t, os.Remove(marker))
+
+	m.opts.WorkDir = project
+
+	_, err := m.run(t, "", "allow")
+	must(t, err)
+
+	if exists(marker) {
+		t.Fatal("oku allow ran the fsmonitor that the repo names")
+	}
+}
