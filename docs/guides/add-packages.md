@@ -235,6 +235,10 @@ oku add scoop:chawyehsu/dorado/aapt2
 oku add winget:jqlang.jq
 ```
 
+To see an app before you keep it, `oku run cask:visual-studio-code` starts it
+out of the store and installs nothing. See
+[oku run](../reference/commands.md#oku-run).
+
 oku writes a manifest of its own from the recipe, which downloads from the
 vendor and follows the vendor's versions. oku never runs brew, scoop or winget,
 and none needs to be installed. `--verbose` prints the manifest, and

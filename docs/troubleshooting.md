@@ -354,6 +354,20 @@ oku: <a> and <b> both provide bin/<program>
 Two packages ship a file of the same name, so oku refuses the second one. Keep
 one of them.
 
+## oku run does not know what to start
+
+| Message | Fix |
+|---|---|
+| `<pkg> ships 2 apps, so name one with --app: <a>, <b>` | Pick one, as in `oku run <ref> --app <a>`. |
+| `<pkg> ships no app and 3 programs, so run one with oku shell <ref> -- <program>` | The package is a set of command line programs, so name the one to run. |
+| `<pkg> ships no app and no program to run` | The package only holds files, such as fonts or templates. There is nothing to start. |
+| `<pkg> ships no app <name>, it ships <a>, <b>` | `--app` named an app the package does not have. |
+| `oku run takes one ref, so use oku shell <ref> <ref> for several` | `run` starts one thing. A shell holds as many packages as you name. |
+
+An app that `oku run` starts is in no menu and in no Spotlight result. A
+permission you grant it may not carry over to a later install. Add it with
+`oku add` to keep it.
+
 ## oku remove or oku add refuses
 
 | Message | Fix |
