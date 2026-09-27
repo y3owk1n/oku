@@ -21,7 +21,7 @@ func (e ExitError) Error() string { return fmt.Sprintf("exit status %d", e.Code)
 func newShellCmd(opts Options) *cobra.Command {
 	var (
 		flags  buildFlags
-		chosen inferFlags
+		chosen pickFlags
 	)
 
 	cmd := &cobra.Command{
@@ -59,7 +59,7 @@ func runShell(
 	cmd *cobra.Command,
 	opts Options,
 	flags *buildFlags,
-	chosen *inferFlags,
+	chosen *pickFlags,
 	refs, command []string,
 ) error {
 	held, err := openRefs(cmd, opts, flags, chosen, refs)
@@ -87,18 +87,22 @@ func runShell(
 	return runCommand(cmd, command, held.path, environ)
 }
 
-// inferFlags steer the manifest oku infers for a ref that has none, as the
-// flags of the same name on "oku add" do.
-type inferFlags struct {
-	asset string
-	bins  []string
+// pickFlags choose what a "shell" or a "run" installs: the asset and the
+// programs of a manifest oku infers, and a build in place of a prebuilt
+// download. They are the flags of the same name on "oku add".
+type pickFlags struct {
+	asset      string
+	bins       []string
+	fromSource bool
 }
 
-func (f *inferFlags) register(cmd *cobra.Command) {
+func (f *pickFlags) register(cmd *cobra.Command) {
 	cmd.Flags().StringVar(&f.asset, "asset", "",
 		"with no manifest, the release asset for this machine, as a glob")
 	cmd.Flags().StringArrayVar(&f.bins, "bin", nil,
 		"with no manifest, the file name of a program in the asset, once per program")
+	cmd.Flags().BoolVar(&f.fromSource, "from-source", false,
+		"build from source even when a prebuilt download fits")
 }
 
 // opened holds the packages an install for "shell" or "run" put in the store,
@@ -118,7 +122,7 @@ func openRefs(
 	cmd *cobra.Command,
 	opts Options,
 	flags *buildFlags,
-	chosen *inferFlags,
+	chosen *pickFlags,
 	refs []string,
 ) (opened, error) {
 	if len(refs) > 1 && (chosen.asset != "" || len(chosen.bins) > 0) {
@@ -174,6 +178,7 @@ func openRefs(
 			releaseAge: age,
 			asset:      chosen.asset,
 			bins:       chosen.bins,
+			fromSource: chosen.fromSource,
 			acceptKey:  flags.acceptKey,
 			approve:    e.approver(cmd, opts, flags),
 			checkAge:   e.ageChecker(cmd, opts, flags),

@@ -280,6 +280,26 @@ func TestB396GcDeletesWhatRunPutInTheStore(t *testing.T) {
 	}
 }
 
+func TestB399RunAndShellBuildFromSourceOnRequest(t *testing.T) {
+	m := newMachine(t)
+	ref := m.buildManifest(t, true, `needs = ["sh"]`, writeTool+installTool)
+
+	out, err := m.run(t, "", "run", ref)
+	if err != nil || !strings.Contains(out, "prebuilt") {
+		t.Fatalf("run took %v, want the prebuilt artifact\n%s", err, out)
+	}
+
+	out, err = m.run(t, "", "run", ref, "--from-source", "--yes")
+	if err != nil || !strings.Contains(out, "built 1.0.0") {
+		t.Fatalf("run --from-source: %v\n%s", err, out)
+	}
+
+	out, err = m.run(t, "", "shell", ref, "--from-source", "--yes", "--", "tool")
+	if err != nil || !strings.Contains(out, "built 1.0.0") {
+		t.Fatalf("shell --from-source: %v\n%s", err, out)
+	}
+}
+
 func TestB398RunStartsTheFileItselfAndNotTheLinkToIt(t *testing.T) {
 	m := newMachine(t)
 	ref := m.appManifest(t, "at", map[string]string{"at": "#!/bin/sh\necho \"at=$0\"\n"}, "")

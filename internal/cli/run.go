@@ -17,7 +17,7 @@ import (
 func newRunCmd(opts Options) *cobra.Command {
 	var (
 		flags  buildFlags
-		chosen inferFlags
+		chosen pickFlags
 		app    string
 	)
 
@@ -65,7 +65,7 @@ func runApp(
 	cmd *cobra.Command,
 	opts Options,
 	flags *buildFlags,
-	chosen *inferFlags,
+	chosen *pickFlags,
 	ref, app string,
 	args []string,
 ) error {
