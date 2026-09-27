@@ -79,6 +79,14 @@ func runApp(
 		return err
 	}
 
+	// The store reaches an app and a program through a link. macOS cannot issue a
+	// sandbox extension for a bundle behind one, and a program that loads a file
+	// next to its own finds nothing there, so run starts the file itself.
+	program, err = filepath.EvalSymlinks(program)
+	if err != nil {
+		return fmt.Errorf("read %s: %w", program, err)
+	}
+
 	return runCommand(cmd, append([]string{program}, args...), held.path, held.environ)
 }
 

@@ -280,6 +280,21 @@ func TestB396GcDeletesWhatRunPutInTheStore(t *testing.T) {
 	}
 }
 
+func TestB398RunStartsTheFileItselfAndNotTheLinkToIt(t *testing.T) {
+	m := newMachine(t)
+	ref := m.appManifest(t, "at", map[string]string{"at": "#!/bin/sh\necho \"at=$0\"\n"}, "")
+
+	out, err := m.run(t, "", "run", ref)
+	if err != nil {
+		t.Fatalf("run: %v\n%s", err, out)
+	}
+
+	// The store holds apps/<name>.app and bin/<name> as links into pkg.
+	if !strings.Contains(out, string(filepath.Separator)+"pkg"+string(filepath.Separator)) {
+		t.Fatalf("run started the link, not the file it points at:\n%s", out)
+	}
+}
+
 func TestB397RunAndShellTakeTheFlagsThatSteerInference(t *testing.T) {
 	m := newMachine(t)
 	archive, _ := m.archive(t, "odd", map[string]string{"main": "#!/bin/sh\necho steered\n"})
