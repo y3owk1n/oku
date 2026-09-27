@@ -384,6 +384,8 @@ profile. For one program, or for an app, use [oku run](#oku-run).
 
 | Flag | Effect |
 |---|---|
+| `--asset <glob>` | As in `oku add`. It describes one download, so it takes one ref. |
+| `--bin <name>` | As in `oku add`. It describes one download, so it takes one ref. |
 | `--yes`, `-y` | As in `oku add`. |
 | `--accept-key` | As in `oku add`. |
 | `--min-release-age AGE` | As in `oku add`. |
@@ -428,6 +430,8 @@ and no copy of an app.
 | Flag | Effect |
 |---|---|
 | `--app <name>` | The app to start, of a package that ships several. The name ignores case and a `.app` suffix. |
+| `--asset <glob>` | As in `oku add`. |
+| `--bin <name>` | As in `oku add`. |
 | `--yes`, `-y` | As in `oku add`. |
 | `--accept-key` | As in `oku add`. |
 | `--min-release-age AGE` | As in `oku add`. |
@@ -451,6 +455,8 @@ $ oku run github:BurntSushi/ripgrep -- TODO src/
   set, as in `oku shell`, and oku exits with the program's code.
 - A ref takes `@version` as in `oku add`. `run` reads the ref again on each
   run, so it may start a newer version than the one you have installed.
+- For a repo with no manifest, `--asset` and `--bin` steer what oku infers, as
+  in `oku add`.
 - Nothing of the app reaches the desktop. It is in no menu, in no Spotlight
   result and in no "Open with" list. macOS ties a permission such as
   Accessibility to the app that asked for it, so a later install asks for it
