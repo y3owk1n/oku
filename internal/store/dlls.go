@@ -11,14 +11,17 @@ import (
 )
 
 // linkDepDLLs puts a hard link to each DLL of deps beside the programs in dirs,
-// unless the package has a file of that name there. Windows looks for a DLL in
-// the program's directory first, and in the working directory before PATH, so
-// without the link a DLL of the same name in the folder the user runs the
-// program from would load instead of the dep's.
-func linkDepDLLs(dirs []string, deps []Dep) error {
+// unless the package has a file of that name there, and returns the links it
+// made relative to root. Windows looks for a DLL in the program's directory
+// first, and in the working directory before PATH, so without the link a DLL of
+// the same name in the folder the user runs the program from would load
+// instead of the dep's.
+func linkDepDLLs(root string, dirs []string, deps []Dep) ([]string, error) {
 	if runtime.GOOS != "windows" || len(deps) == 0 {
-		return nil
+		return nil, nil
 	}
+
+	var linked []string
 
 	var dlls []string
 
@@ -37,13 +40,20 @@ func linkDepDLLs(dirs []string, deps []Dep) error {
 			// A dep in another store has another volume, where a hard link fails.
 			if err := os.Link(dll, dest); err != nil {
 				if err := copyFile(dll, dest); err != nil {
-					return err
+					return nil, err
 				}
 			}
+
+			rel, err := filepath.Rel(root, dest)
+			if err != nil {
+				return nil, err
+			}
+
+			linked = append(linked, filepath.ToSlash(rel))
 		}
 	}
 
-	return nil
+	return linked, nil
 }
 
 // programDirs returns the directories under pkg of the programs that bin and

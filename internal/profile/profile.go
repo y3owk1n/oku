@@ -839,6 +839,17 @@ func writeOrReuse(gen, prev, rel string, data []byte, mode fs.FileMode) error {
 func linkTree(gen string, pkg Package, sub, into string, owners map[string]string) error {
 	root := filepath.Join(pkg.StorePath, sub)
 
+	// On Windows the store puts links to the DLLs of deps beside a package's
+	// programs, for the loader. Two packages with one dep have the same ones, so
+	// the profile leaves them out.
+	var meta struct {
+		DepDLLs []string `toml:"dep_dlls"`
+	}
+
+	if data, err := os.ReadFile(filepath.Join(pkg.StorePath, "oku-meta.toml")); err == nil {
+		_ = toml.Unmarshal(data, &meta)
+	}
+
 	err := filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
 		if err != nil || entry.IsDir() {
 			return err
@@ -847,6 +858,10 @@ func linkTree(gen string, pkg Package, sub, into string, owners map[string]strin
 		rel, err := filepath.Rel(root, path)
 		if err != nil {
 			return err
+		}
+
+		if slices.Contains(meta.DepDLLs, filepath.ToSlash(filepath.Join(sub, rel))) {
+			return nil
 		}
 
 		rel = filepath.Join(into, rel)
