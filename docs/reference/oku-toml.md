@@ -428,6 +428,9 @@ Rules:
 
 - oku refuses a path that exists and that it did not write. It names the
   path and changes nothing.
+- A path must stay inside its location. `"{{home}}/../../usr/local/bin/git"`
+  is an error, and so is a `[vars]` value with `..` that leads out of it.
+- A `{{pkg.<name>}}/...` link must stay inside that package.
 - The next `oku sync` removes a path whose entry left the list. A file of
   your own that replaced oku's link stays.
 - A `mode` of `"0600"` or tighter, or a `secret`, makes a directory that oku
@@ -490,6 +493,9 @@ color-scheme = "prefer-dark"
 
 - Quote a domain that has a dot. `[defaults.com.apple.dock]` without quotes is
   a table `com` that holds a table `apple`.
+- A `[defaults]` domain is a name such as `com.apple.dock`. A path, with `/`,
+  `\` or a leading `~`, is an error, so a list cannot edit a plist that oku
+  did not place, such as another app's launch agent.
 - Write a registry key in single quotes, so TOML keeps its backslashes.
 - On Linux oku skips `[dconf]` when the `dconf` tool is not installed, and
   prints `[dconf] is skipped, because the dconf tool is not on PATH`.
