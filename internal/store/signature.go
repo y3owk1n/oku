@@ -5,7 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	neturl "net/url"
 	"os"
+	"path"
+	"strings"
 
 	"aead.dev/minisign"
 )
@@ -14,8 +17,10 @@ import (
 var ErrSignature = errors.New("signature check failed")
 
 // verifySignature checks the file at download against the minisign signature at
-// url + ".minisig".
-func (s *Store) verifySignature(ctx context.Context, keyText, url, download string) error {
+// url + ".minisig". The key signs every release, so the signed trusted comment
+// must also name this file, as minisign's "file:<name>" does, or the version, or
+// an older signed file could pass for this one.
+func (s *Store) verifySignature(ctx context.Context, keyText, url, version, download string) error {
 	var key minisign.PublicKey
 	if err := key.UnmarshalText([]byte(keyText)); err != nil {
 		return fmt.Errorf("signing_key %s: %w", keyText, err)
@@ -42,7 +47,48 @@ func (s *Store) verifySignature(ctx context.Context, keyText, url, download stri
 		return fmt.Errorf("%w: %s is not signed by %s", ErrSignature, url, keyText)
 	}
 
+	var parsed minisign.Signature
+	if err := parsed.UnmarshalText(signature); err != nil {
+		return err
+	}
+
+	name := path.Base(url)
+	if u, err := neturl.Parse(url); err == nil {
+		name = path.Base(u.Path)
+	}
+
+	if !strings.Contains(parsed.TrustedComment, "file:"+name) && !namesVersion(parsed.TrustedComment, version) {
+		return fmt.Errorf(
+			"%w: the signed comment %q names neither file:%s nor the version %s",
+			ErrSignature, parsed.TrustedComment, name, version,
+		)
+	}
+
 	return nil
+}
+
+// namesVersion reports whether comment holds version as a word of its own, so
+// that 1.2 does not match inside 1.2.3.
+func namesVersion(comment, version string) bool {
+	if version == "" {
+		return false
+	}
+
+	part := func(b byte) bool { return b == '.' || b >= '0' && b <= '9' }
+
+	for rest, at := comment, 0; ; {
+		i := strings.Index(rest, version)
+		if i < 0 {
+			return false
+		}
+
+		start, end := at+i, at+i+len(version)
+		if (start == 0 || !part(comment[start-1])) && (end == len(comment) || !part(comment[end])) {
+			return true
+		}
+
+		rest, at = rest[i+1:], at+i+1
+	}
 }
 
 // verifyFile accepts both kinds of minisign signature. The current one signs a

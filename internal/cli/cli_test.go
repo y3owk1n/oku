@@ -2535,6 +2535,49 @@ func TestB115AddInfersFromACodebergRepoAndUpdateListsItsReleases(t *testing.T) {
 	}
 }
 
+func TestB426AGitLabReleaseDatedInThePastCountsFromWhenItWasMade(t *testing.T) {
+	m := newMachine(t)
+	archive, _ := m.archive(t, "release", map[string]string{"tool": script})
+
+	// Whoever makes a release on GitLab sets released_at, even to a month ago.
+	// created_at is when the server made it.
+	release := fmt.Sprintf(
+		`{"tag_name": "v1.4.0", "commit": {"id": "5555555555555555555555555555555555555555"},`+
+			` "released_at": %q, "created_at": %q,`+
+			` "assets": {"links": [{"name": %q, "direct_asset_url": "file://%s"}]}}`,
+		time.Now().AddDate(0, -1, 0).Format(time.RFC3339), time.Now().Format(time.RFC3339),
+		hostAssetName(), archive,
+	)
+
+	const project = "/api/v4/projects/owner%2Ftool"
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.EscapedPath() {
+		case project + "/repository/commits":
+			_, _ = w.Write([]byte(`[{"id": "5555555555555555555555555555555555555555"}]`))
+		case project + "/releases/permalink/latest":
+			_, _ = w.Write([]byte(release))
+		case project + "/releases":
+			_, _ = w.Write([]byte("[" + release + "]"))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(server.Close)
+
+	target, err := url.Parse(server.URL)
+	must(t, err)
+
+	client := http.DefaultClient.Transport
+	http.DefaultClient.Transport = rewriteHost{host: "gitlab.com", server: target}
+
+	t.Cleanup(func() { http.DefaultClient.Transport = client })
+
+	if out, err := m.run(t, "", "add", "gitlab:owner/tool"); err == nil || !strings.Contains(err.Error(), "release age") {
+		t.Fatalf("a release made today should wait for the minimum release age, got %v:\n%s", err, out)
+	}
+}
+
 func TestB116AddInfersFromAGitLabProjectInASubgroup(t *testing.T) {
 	m := newMachine(t)
 	archive, _ := m.archive(t, "release", map[string]string{"tool": script})
@@ -6517,7 +6560,8 @@ func TestB88NonRelocatableEntryFromAnotherStoreRootIsNotUsed(t *testing.T) {
 }
 
 // signedManifest writes a manifest with the signing key public, or with none when
-// public is empty. It writes the artifact and the artifact's signature by secret.
+// public is empty. It writes the artifact and the artifact's signature by secret,
+// with the trusted comment minisign writes, which names the file.
 func (m machine) signedManifest(
 	t *testing.T,
 	public string,
@@ -6526,17 +6570,30 @@ func (m machine) signedManifest(
 ) string {
 	t.Helper()
 
+	return m.signedManifestWith(t, public, secret, legacy, "timestamp:1790000000\tfile:tool.tar.gz")
+}
+
+func (m machine) signedManifestWith(
+	t *testing.T,
+	public string,
+	secret minisign.PrivateKey,
+	legacy bool,
+	comment string,
+) string {
+	t.Helper()
+
 	archive, _ := m.archive(t, "tool", map[string]string{"tool": script})
 	data, err := os.ReadFile(archive)
 	must(t, err)
-	// Sign writes the legacy kind of signature, and a Reader the current kind.
-	signature := minisign.Sign(secret, data)
+	// SignWithComments writes the legacy kind of signature, and a Reader the
+	// current kind.
+	signature := minisign.SignWithComments(secret, data, comment, "")
 	if !legacy {
 		reader := minisign.NewReader(bytes.NewReader(data))
 		_, err = io.Copy(io.Discard, reader)
 		must(t, err)
 
-		signature = reader.Sign(secret)
+		signature = reader.SignWithComments(secret, comment, "")
 	}
 
 	must(t, os.WriteFile(archive+".minisig", signature, 0o644))
@@ -6554,6 +6611,30 @@ func (m machine) signedManifest(
 	), 0o644))
 
 	return path
+}
+
+func TestB424ASignedArtifactMustBeSignedForThisFileOrVersion(t *testing.T) {
+	public, secret, err := minisign.GenerateKey(rand.Reader)
+	must(t, err)
+
+	for comment, ok := range map[string]bool{
+		"timestamp:1790000000\tfile:tool.tar.gz":  true,
+		"tool 1.2.3":                              true,
+		"timestamp:1790000000\tfile:tool-old.tgz": false,
+		"tool 1.2.30":                             false,
+		"timestamp:1790000000":                    false,
+	} {
+		m := newMachine(t)
+
+		_, err := m.run(t, "", "add", m.signedManifestWith(t, public.String(), secret, false, comment))
+		if ok && err != nil {
+			t.Fatalf("a signature with the comment %q should pass: %v", comment, err)
+		}
+
+		if !ok && (err == nil || !strings.Contains(err.Error(), "names neither")) {
+			t.Fatalf("a signature with the comment %q should be refused, got %v", comment, err)
+		}
+	}
 }
 
 func TestB89SigningKeyVerifiesArtifactsAndAChangedKeyStopsUntilAccepted(t *testing.T) {
@@ -7038,13 +7119,35 @@ func (m *machine) releaseWith(t *testing.T, body, tag string, secret minisign.Pr
 	binary := filepath.Join(m.fixtures, name)
 	must(t, os.WriteFile(binary, []byte(body), 0o755))
 
-	reader := minisign.NewReader(strings.NewReader(body))
-	_, err := io.Copy(io.Discard, reader)
-	must(t, err)
-	signature := reader.SignWithComments(secret, "oku "+tag, "")
-	must(t, os.WriteFile(binary+".minisig", signature, 0o644))
+	sign := func(path, comment string) {
+		data, err := os.ReadFile(path)
+		must(t, err)
 
-	inferServer(t, m, map[string]string{name: binary, name + ".minisig": binary + ".minisig"})
+		reader := minisign.NewReader(bytes.NewReader(data))
+		_, err = io.Copy(io.Discard, reader)
+		must(t, err)
+		must(t, os.WriteFile(path+".minisig", reader.SignWithComments(secret, comment, ""), 0o644))
+	}
+
+	sign(binary, "oku "+tag)
+
+	// The release workflow signs the checksums of a nightly with its full
+	// version. inferServer makes each release from commit 7777777.
+	sum := sha256.Sum256([]byte(body))
+	checksums := filepath.Join(m.fixtures, "checksums.txt")
+	must(t, os.WriteFile(checksums, fmt.Appendf(nil, "%x  %s\n", sum, name), 0o644))
+
+	comment := "oku " + tag
+	if tag == "nightly" {
+		comment = "oku nightly-20260927000000-7777777"
+	}
+
+	sign(checksums, comment)
+
+	inferServer(t, m, map[string]string{
+		name: binary, name + ".minisig": binary + ".minisig",
+		"checksums.txt": checksums, "checksums.txt.minisig": checksums + ".minisig",
+	})
 	m.opts.ReleaseRepo = "owner/tool"
 }
 
@@ -7188,6 +7291,58 @@ func TestB111SelfUpdateNightlyTakesTheNightlyBuildAfterTheSameCheck(t *testing.T
 		!strings.Contains(out, "is the newest nightly build") {
 		t.Fatalf("self update --nightly replaced the build it already is:\n%s", out)
 	}
+}
+
+func TestB425SelfUpdateRefusesAnOlderNightlyServedAsTheNewest(t *testing.T) {
+	public, secret, err := minisign.GenerateKey(rand.Reader)
+	must(t, err)
+
+	m := newMachine(t)
+	m.opts.ReleaseKey = public.String()
+	m.releaseWith(t, "an older nightly oku", "nightly", secret)
+
+	// This build is newer than the one the checksums are signed for.
+	m.opts.Version = "nightly-20260928000000-aaaaaaa"
+
+	if _, err := m.run(t, "", "self", "update", "--nightly"); err == nil || !strings.Contains(err.Error(), "is not newer than") {
+		t.Fatalf("want an older nightly refused, got %v", err)
+	}
+
+	// The checksums of another commit, and a binary they do not list.
+	m.opts.Version = "test"
+	checksums := filepath.Join(m.fixtures, "checksums.txt")
+
+	for name, edit := range map[string]func(){
+		"commit": func() { resignChecksums(t, checksums, secret, "oku nightly-20260927000000-1234567") },
+		"digest": func() {
+			must(t, os.WriteFile(checksums, []byte("0000  oku-"+runtime.GOOS+"-"+runtime.GOARCH+"\n"), 0o644))
+			resignChecksums(t, checksums, secret, "oku nightly-20260927000000-7777777")
+		},
+	} {
+		m.releaseWith(t, "a nightly oku", "nightly", secret)
+		edit()
+
+		if _, err := m.run(t, "", "self", "update", "--nightly"); err == nil {
+			t.Fatalf("%s: self update took checksums that do not fit the release", name)
+		}
+	}
+
+	if data, _ := os.ReadFile(m.exe); string(data) != "binary" {
+		t.Fatalf("a refused nightly replaced oku with %q", data)
+	}
+}
+
+// resignChecksums signs the checksums file at path again with comment.
+func resignChecksums(t *testing.T, path string, secret minisign.PrivateKey, comment string) {
+	t.Helper()
+
+	data, err := os.ReadFile(path)
+	must(t, err)
+
+	reader := minisign.NewReader(bytes.NewReader(data))
+	_, err = io.Copy(io.Discard, reader)
+	must(t, err)
+	must(t, os.WriteFile(path+".minisig", reader.SignWithComments(secret, comment, ""), 0o644))
 }
 
 func TestB221SelfUpdateKeepsANightlyAndTakesANamedRelease(t *testing.T) {

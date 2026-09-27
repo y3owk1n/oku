@@ -373,7 +373,7 @@ func (s *Store) vouched(
 	}
 
 	if m.Package.SigningKey != "" {
-		if err := s.verifySignature(ctx, m.Package.SigningKey, a.URL, download); err != nil {
+		if err := s.verifySignature(ctx, m.Package.SigningKey, a.URL, m.Version.Value, download); err != nil {
 			return false, fmt.Errorf("%s: %w", m.Package.Name, err)
 		}
 	}

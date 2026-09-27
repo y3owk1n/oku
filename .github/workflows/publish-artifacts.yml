@@ -60,10 +60,14 @@ jobs:
 
       # "oku self update" refuses a file that the release key did not sign, so
       # nobody could update from a release that was made without the secret.
+      # Every nightly is "nightly", so the checksums of a nightly are signed
+      # with its full version, such as "oku nightly-20260927084032-b796323",
+      # and self update refuses a nightly older than the one it runs.
       - name: Sign every file with the release key
         env:
           MINISIGN_SECRET_KEY: ${{ secrets.minisign_secret_key }}
           RELEASE_TAG: ${{ inputs.release_tag }}
+          VERSION_OVERRIDE: ${{ inputs.version_override }}
         run: |
           if [ -z "$MINISIGN_SECRET_KEY" ]; then
             echo "the MINISIGN_SECRET_KEY secret is not set" >&2
@@ -74,7 +78,11 @@ jobs:
           key="$RUNNER_TEMP/release.key"
           printf '%s\n' "$MINISIGN_SECRET_KEY" > "$key"
           for file in dist/*; do
-            minisign -S -s "$key" -m "$file" -t "oku $RELEASE_TAG"
+            comment="oku $RELEASE_TAG"
+            if [ "$RELEASE_TAG" = nightly ] && [ "$(basename "$file")" = checksums.txt ]; then
+              comment="oku $VERSION_OVERRIDE"
+            fi
+            minisign -S -s "$key" -m "$file" -t "$comment"
           done
           rm -f "$key"
 

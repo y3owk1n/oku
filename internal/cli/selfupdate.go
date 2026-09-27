@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -12,6 +14,7 @@ import (
 	"time"
 	"unicode"
 
+	"aead.dev/minisign"
 	"github.com/spf13/cobra"
 
 	"github.com/y3owk1n/oku/internal/forge"
@@ -292,6 +295,12 @@ func runSelfUpdate(cmd *cobra.Command, opts Options, check, nightly, release boo
 		return fmt.Errorf("release %s: %w", found.Tag, err)
 	}
 
+	if nightly {
+		if err := e.checkNightly(cmd, key, urls, found, opts.Version, binary, downloaded); err != nil {
+			return fmt.Errorf("release %s: %w", found.Tag, err)
+		}
+	}
+
 	if err := swapBinary(downloaded, opts.Executable); err != nil {
 		return fmt.Errorf("replace %s: %w", opts.Executable, err)
 	}
@@ -337,4 +346,94 @@ func swapBinary(source, executable string) error {
 	}
 
 	return os.Rename(staged, filepath.Clean(executable))
+}
+
+// checkNightly checks the signed checksums of a nightly. Every nightly binary
+// is signed "oku nightly", so an older one would pass that check. The release
+// workflow signs checksums.txt with the full version, such as
+// "oku nightly-20260927084032-b796323". It must name the commit of the release,
+// be newer than the nightly that runs, and list the sha256 of the binary.
+func (e env) checkNightly(
+	cmd *cobra.Command,
+	key string,
+	urls map[string]string,
+	found forge.Release,
+	running, binary, downloaded string,
+) error {
+	if urls[checksumsFile] == "" || urls[checksumsFile+".minisig"] == "" {
+		return fmt.Errorf("the release has no signed %s", checksumsFile)
+	}
+
+	checksums, err := e.store().Download(cmd.Context(), urls[checksumsFile])
+	if err != nil {
+		return err
+	}
+
+	signaturePath, err := e.store().Download(cmd.Context(), urls[checksumsFile+".minisig"])
+	if err != nil {
+		return err
+	}
+
+	signature, err := os.ReadFile(signaturePath)
+	if err != nil {
+		return err
+	}
+
+	var parsed minisign.Signature
+	if err := parsed.UnmarshalText(signature); err != nil {
+		return err
+	}
+
+	// VerifyDetached checks the comment too, which the release key signs.
+	version, ok := strings.CutPrefix(parsed.TrustedComment, "oku ")
+	if err := store.VerifyDetached(key, checksums, signaturePath, parsed.TrustedComment); err != nil {
+		return err
+	}
+
+	stamp, commit, _ := strings.Cut(strings.TrimPrefix(version, nightlyTag+"-"), "-")
+	if !ok || !strings.HasPrefix(version, nightlyTag+"-") || commit != found.Commit[:7] {
+		return fmt.Errorf("the checksums are signed for %q, not for a nightly of commit %s", version, found.Commit[:7])
+	}
+
+	if now, _, isNightly := strings.Cut(strings.TrimPrefix(running, nightlyTag+"-"), "-"); isNightly &&
+		strings.HasPrefix(running, nightlyTag+"-") && stamp <= now {
+		return fmt.Errorf("%s is not newer than %s, which runs", version, running)
+	}
+
+	data, err := os.ReadFile(checksums)
+	if err != nil {
+		return err
+	}
+
+	sum, err := fileSHA256(downloaded)
+	if err != nil {
+		return err
+	}
+
+	for line := range strings.Lines(string(data)) {
+		if fields := strings.Fields(line); len(fields) == 2 && fields[1] == binary && fields[0] == sum {
+			return nil
+		}
+	}
+
+	return fmt.Errorf("the signed %s does not list %s with the sha256 of the download", checksumsFile, binary)
+}
+
+// checksumsFile is the file of a release that lists the sha256 of each binary.
+const checksumsFile = "checksums.txt"
+
+// fileSHA256 returns the hex sha256 of the file at path.
+func fileSHA256(path string) (string, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+
+	h := sha256.New()
+	if _, err := io.Copy(h, f); err != nil {
+		return "", err
+	}
+
+	return hex.EncodeToString(h.Sum(nil)), nil
 }

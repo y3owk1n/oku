@@ -502,6 +502,9 @@ order step in `prd/product.md`.
   about.
 - B376 [3] The `pubDate` of a Sparkle feed's item is its release time, so the
   minimum release age checks it.
+- B426 [3] A GitLab release counts its age from the later of its
+  `released_at`, which its author sets, and its `created_at`, which GitLab
+  sets. A release made today and dated a month back waits.
 - B378 [3] `oku gc` removes the profile of a project whose folder, or whose
   `oku.toml`, is gone, which frees the packages only it used, and forgets the
   project's `oku allow`. It keeps a project on a volume that is not mounted,
@@ -1092,6 +1095,9 @@ order step in `prd/product.md`.
 
 ## Cache and signing
 
+- B424 [10] An artifact with a `signing_key` installs only when the signed
+  comment names its file as `file:<name>` or holds the version as a word of
+  its own. A signature for another file or version fails.
 - B85 [10] With a cache configured and its key trusted, a package present in
   the cache is substituted and no build step runs.
 - B86 [10] A cache entry with a missing, invalid or untrusted signature is
@@ -1154,6 +1160,10 @@ order step in `prd/product.md`.
   where Windows records it, which OneDrive may move.
 - B92 [11] `oku self update` replaces the oku binary after verifying its
   signature.
+- B425 [11] `oku self update --nightly` checks the nightly's signed
+  `checksums.txt`: the comment names the release's commit and a time newer
+  than the running nightly, and the file lists the sha256 of the binary.
+  Otherwise it fails and leaves oku as it was.
 - B246 [11] `oku self update` refuses a binary whose signature the release key
   made for another release, and names both releases.
 - B374 [11] `oku self update` takes the newest release made at least the
