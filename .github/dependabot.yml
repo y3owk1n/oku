@@ -1,0 +1,13 @@
+# The workflows and action.yml pin actions by commit SHA. Dependabot moves the
+# pins to each new release, in one pull request a week.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
+    commit-message:
+      prefix: ci

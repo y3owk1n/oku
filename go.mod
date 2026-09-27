@@ -2,6 +2,8 @@ module github.com/y3owk1n/oku
 
 go 1.26.4
 
+toolchain go1.26.8
+
 require (
 	aead.dev/minisign v0.3.0
 	filippo.io/age v1.3.2
