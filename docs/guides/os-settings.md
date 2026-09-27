@@ -110,7 +110,7 @@ On a machine without the `dconf` tool, such as a server, oku skips the table
 and says so:
 
 ```
-[dconf] is skipped, because the dconf tool is not on PATH
+[dconf] is skipped, because the dconf tool is not in /usr/bin or /bin
 ```
 
 ## Know how a value maps

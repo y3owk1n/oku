@@ -3,6 +3,7 @@ package settings
 import (
 	"bytes"
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 )
@@ -11,8 +12,20 @@ import (
 // dconf tool. Writing needs the dconf service and a D-Bus session.
 type Dconf struct{}
 
+// dconfPath is the dconf of the system. A program called dconf on the user's
+// PATH, which a package could ship, would get every setting oku writes.
+func dconfPath() string {
+	for _, path := range []string{"/usr/bin/dconf", "/bin/dconf"} {
+		if _, err := os.Stat(path); err == nil {
+			return path
+		}
+	}
+
+	return ""
+}
+
 func dconf(args ...string) (string, error) {
-	out, err := exec.Command("dconf", args...).CombinedOutput()
+	out, err := exec.Command(dconfPath(), args...).CombinedOutput()
 	if err != nil {
 		return "", fmt.Errorf("dconf %s: %w: %s", args[0], err, bytes.TrimSpace(out))
 	}
@@ -22,8 +35,8 @@ func dconf(args ...string) (string, error) {
 
 // Unavailable reports a machine without the dconf tool, such as a server.
 func (Dconf) Unavailable() string {
-	if _, err := exec.LookPath("dconf"); err != nil {
-		return "the dconf tool is not on PATH"
+	if dconfPath() == "" {
+		return "the dconf tool is not in /usr/bin or /bin"
 	}
 
 	return ""

@@ -206,16 +206,36 @@ func writeSecret(path string, content sealed, ownDir bool) error {
 		}
 	}
 
-	// An earlier copy may be read-only.
+	// The file is restricted before it holds the secret, and then takes the
+	// place of the old copy, which may be read-only. A rename keeps the
+	// permissions, so the secret is never readable by anyone else.
+	tmp, err := os.CreateTemp(dir, ".oku-secret-*")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(tmp.Name())
+
+	if err := secret.Restrict(tmp.Name(), content.mode); err != nil {
+		tmp.Close()
+
+		return err
+	}
+
+	if _, err := tmp.Write(content.data); err != nil {
+		tmp.Close()
+
+		return err
+	}
+
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+
 	if err := os.Remove(path); err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return err
 	}
 
-	if err := os.WriteFile(path, content.data, content.mode); err != nil {
-		return err
-	}
-
-	return secret.Restrict(path, content.mode)
+	return os.Rename(tmp.Name(), path)
 }
 
 // removeSecretTarget deletes the link or the copy that oku made. A target that

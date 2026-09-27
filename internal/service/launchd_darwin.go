@@ -247,6 +247,11 @@ func plist(d Definition) []byte {
 
 	b.WriteString("\t</array>\n\t<key>RunAtLoad</key>\n\t<true/>\n")
 
+	// A daemon runs as root unless it names its user.
+	if d.User != "" {
+		fmt.Fprintf(&b, "\t<key>UserName</key>\n\t<string>%s</string>\n", esc(d.User))
+	}
+
 	switch d.Restart {
 	case "always":
 		b.WriteString("\t<key>KeepAlive</key>\n\t<true/>\n")

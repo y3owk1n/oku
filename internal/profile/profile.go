@@ -52,6 +52,8 @@ type Package struct {
 	// System reports that the list puts the package's apps, fonts and services
 	// in system scope.
 	System bool `toml:"system,omitempty"`
+	// RunAs is "root" when the list runs the package's system services as root.
+	RunAs string `toml:"run_as,omitempty"`
 }
 
 // File is one path in the home directory that a generation sets up.
@@ -422,7 +424,8 @@ func (p *Profile) Replace(
 		return a.Name == b.Name && a.Version == b.Version && a.Ref == b.Ref &&
 			a.StorePath == b.StorePath && slices.Equal(a.Closure, b.Closure) &&
 			slices.Equal(a.BuildOnly, b.BuildOnly) &&
-			maps.Equal(a.Env, b.Env) && a.Service == b.Service && a.System == b.System
+			maps.Equal(a.Env, b.Env) && a.Service == b.Service && a.System == b.System &&
+			a.RunAs == b.RunAs
 	}
 
 	sameFile := func(a, b File) bool {

@@ -17,6 +17,7 @@ import (
 	"github.com/pelletier/go-toml/v2"
 
 	"github.com/y3owk1n/oku/internal/clone"
+	"github.com/y3owk1n/oku/internal/dirs"
 	"github.com/y3owk1n/oku/internal/list"
 )
 
@@ -36,6 +37,8 @@ type Item struct {
 	// System reports that Target is in system scope, so writing and removing it
 	// needs administrator rights.
 	System bool `toml:"system,omitempty"`
+	// User is the account a system service runs as, empty for root.
+	User string `toml:"user,omitempty"`
 	// Hash is the sha256 of a file that oku copied to Target, which is how
 	// Windows gets a file of the list. It is empty for a link.
 	Hash string `toml:"hash,omitempty"`
@@ -162,7 +165,7 @@ func SystemDirs() Dirs {
 	case "windows":
 		return Dirs{
 			Apps: filepath.Join(
-				os.Getenv("ProgramData"), "Microsoft", "Windows", "Start Menu", "Programs",
+				dirs.ProgramData(), "Microsoft", "Windows", "Start Menu", "Programs",
 			),
 			Fonts: filepath.Join(os.Getenv("SystemRoot"), "Fonts"),
 		}

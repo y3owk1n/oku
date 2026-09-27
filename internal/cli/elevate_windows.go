@@ -2,6 +2,8 @@ package cli
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"os/user"
@@ -53,10 +55,45 @@ func quoteArgs(args []string) []string {
 func createRootArgv(dir string, owner *user.User) []string {
 	// The directory can exist already, because system services keep their
 	// definitions and logs in it, and mkdir fails on a directory that exists.
+	// Inheritance from ProgramData would let every user add files. The root
+	// keeps SYSTEM, Administrators and owner only, and Administrators owns it.
 	return []string{
 		"cmd", "/c", "(if", "not", "exist", dir, "mkdir", dir + ")", "&&",
-		"icacls", dir, "/grant", owner.Username + ":(OI)(CI)F",
+		"icacls", dir, "/inheritance:r", "/grant:r",
+		"*S-1-5-18:(OI)(CI)F", "*S-1-5-32-544:(OI)(CI)F", owner.Username + ":(OI)(CI)F", "&&",
+		"icacls", dir, "/setowner", "*S-1-5-32-544",
 	}
+}
+
+// checkRootOwner fails when dir exists and belongs to someone other than
+// SYSTEM, Administrators or the user. Any user can make a folder in
+// ProgramData, and one made before setup would stay theirs.
+func checkRootOwner(dir string) error {
+	sd, err := windows.GetNamedSecurityInfo(dir, windows.SE_FILE_OBJECT, windows.OWNER_SECURITY_INFORMATION)
+	if errors.Is(err, windows.ERROR_FILE_NOT_FOUND) || errors.Is(err, windows.ERROR_PATH_NOT_FOUND) {
+		return nil
+	}
+
+	if err != nil {
+		return err
+	}
+
+	owner, _, err := sd.Owner()
+	if err != nil {
+		return err
+	}
+
+	me, err := windows.GetCurrentProcessToken().GetTokenUser()
+	if err != nil {
+		return err
+	}
+
+	switch owner.String() {
+	case "S-1-5-18", "S-1-5-32-544", me.User.Sid.String():
+		return nil
+	}
+
+	return fmt.Errorf("%s exists and belongs to another user, remove it first", dir)
 }
 
 func removeDirArgv(dir string) []string { return []string{"cmd", "/c", "rmdir", dir} }

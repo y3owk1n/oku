@@ -23,3 +23,14 @@ func TestB417AUnitFileHoldsEachValueOnItsOwnLine(t *testing.T) {
 		t.Fatalf("the unit does not escape the newline and the dollar:\n%s", unit)
 	}
 }
+
+func TestB427ASystemUnitNamesTheUserItRunsAs(t *testing.T) {
+	unit := string((&systemd{scope: "--system"}).unitFile(Definition{Name: "food", Program: "/p", User: "kyle"}))
+	if !strings.Contains(unit, "User=\"kyle\"\n") {
+		t.Fatalf("the unit does not run as its user:\n%s", unit)
+	}
+
+	if unit := string((&systemd{scope: "--system"}).unitFile(Definition{Name: "food", Program: "/p"})); strings.Contains(unit, "User=") {
+		t.Fatalf("a root unit names a user:\n%s", unit)
+	}
+}

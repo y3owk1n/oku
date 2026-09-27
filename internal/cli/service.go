@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"maps"
 	"os"
+	"os/user"
 	"path/filepath"
 	"runtime"
 	"slices"
@@ -55,8 +56,19 @@ func (e env) definition(pkg profile.Package, svc manifest.Service) (service.Defi
 		LogFile: filepath.Join(e.data, "logs", svc.Name+".log"),
 	}
 
+	// The store belongs to the user, so a system service runs as the user
+	// unless the list says run_as = "root", and then logs where root does.
 	if pkg.System {
-		d.LogFile = filepath.Join(service.SystemLogDir(), svc.Name+".log")
+		me, err := user.Current()
+		if err != nil {
+			return d, err
+		}
+
+		d.User = me.Username
+
+		if pkg.RunAs == "root" {
+			d.User, d.LogFile = "", filepath.Join(service.SystemLogDir(), svc.Name+".log")
+		}
 	}
 
 	// A service also takes the locations that a [files] target takes, so it can
@@ -146,6 +158,7 @@ func (e env) serviceItems(
 			items = append(items, expose.Item{
 				Kind: "service", Package: pkg.Name, Source: d.Program,
 				Target: manager.File(d), Name: d.Name, Enabled: pkg.Service, System: pkg.System,
+				User: d.User,
 			})
 		}
 	}

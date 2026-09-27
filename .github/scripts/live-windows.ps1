@@ -479,15 +479,31 @@ Check 'the shortcut and the font are in the machine-wide places' {
     (Test-Path $sysShortcut) -and (Test-Path $sysFont) -and
     ((Get-ItemProperty $sysFontsKey).'oku OkuSystem.ttf' -eq $sysFont)
 }
-Check 'the service task runs as SYSTEM from boot' {
+# The store belongs to the user, so a system service runs as the user.
+Check 'the service task runs as the user from boot' {
     $task = Get-ScheduledTask -TaskName 'oku-sysdemo'
-    ($task.Principal.UserId -eq 'SYSTEM') -and ($task.Triggers[0].CimClass.CimClassName -eq 'MSFT_TaskBootTrigger')
+    ($task.Principal.UserId -match [regex]::Escape($env:USERNAME)) -and ($task.Principal.LogonType -eq 'S4U') -and
+    ($task.Triggers[0].CimClass.CimClassName -eq 'MSFT_TaskBootTrigger')
 }
-Check 'the program runs as SYSTEM' {
-    (Get-Process sysdemo -IncludeUserName).UserName -match 'SYSTEM'
+Check 'the program runs as the user' {
+    (Get-Process sysdemo -IncludeUserName).UserName -match [regex]::Escape($env:USERNAME)
 }
-Check 'its log is under ProgramData' {
-    (Get-Content (Join-Path $env:ProgramData 'oku\logs\sysdemo.log')) -match 'PORT=9090 and --system'
+Check 'its log is in the user''s data directory' {
+    (Get-Content (Join-Path $env:XDG_DATA_HOME 'oku\logs\sysdemo.log')) -match 'PORT=9090 and --system'
+}
+Check 'only SYSTEM, Administrators and the user can write the service definitions' {
+    $acl = Get-Acl (Join-Path $env:ProgramData 'oku\services')
+    $acl.AreAccessRulesProtected -and -not ($acl.Access | Where-Object { $_.IdentityReference -match 'Users$' })
+}
+
+# run_as = "root" makes it a SYSTEM task, and sync --system warns before it.
+$list = Join-Path $env:XDG_CONFIG_HOME 'oku\oku.toml'
+(Get-Content -Raw $list) -replace 'system = true', 'system = true, run_as = "root"' | Set-Content $list
+$rooted = ('y' | & $oku sync --system 2>&1) -join "`n"
+if ($LASTEXITCODE -ne 0) { throw "oku sync --system failed: $rooted" }
+Start-Sleep -Seconds 3
+Check 'run_as = root says so and runs the task as SYSTEM' {
+    ($rooted -match 'run_as = "root"') -and ((Get-ScheduledTask -TaskName 'oku-sysdemo').Principal.UserId -eq 'SYSTEM')
 }
 
 $left = (& $oku remove sysdemo 2>&1) -join "`n"
@@ -512,6 +528,11 @@ $shared = Join-Path $env:ProgramData 'oku'
 Oku setup --system --yes
 Check 'setup --system creates the shared root and lets the user write to it' {
     (Test-Path $shared) -and ((Get-Content "$env:XDG_CONFIG_HOME\oku\config.toml") -match 'store_root')
+}
+Check 'the shared root takes nothing from ProgramData and belongs to Administrators' {
+    $acl = Get-Acl $shared
+    $acl.AreAccessRulesProtected -and ($acl.Owner -match 'Administrators') -and
+    -not ($acl.Access | Where-Object { $_.IdentityReference -match 'Users$' })
 }
 Oku sync
 Check 'sync installs into the shared root' { Get-ChildItem (Join-Path $shared 'store') }

@@ -1,7 +1,7 @@
 # Install for every user of the machine
 
 You end up with a package's apps, fonts and services placed for every account
-on the machine, with its services running as root from boot. This is
+on the machine, with its services running from boot. This is
 [system scope](../how-oku-works.md#system-scope). A second, separate step on
 this page moves the store to a shared root, so machines can share packages
 built from source.
@@ -11,8 +11,8 @@ built from source.
 By default oku places apps, fonts and services for your user and needs no
 administrator rights. That covers a personal machine. Use system scope when:
 
-- a service has to run from boot, before anyone logs in, or as root. A
-  user service runs only while you are logged in.
+- a service has to run from boot, before anyone logs in. A user service runs
+  only while you are logged in.
 - other accounts on the machine need the app or the font.
 
 System scope changes where apps, fonts and services go. A package's programs
@@ -46,6 +46,31 @@ postgres = { ref = "github:you/recipes#postgres", service = true, system = true 
 
 You can also add `system = true` by hand and run `oku sync --system`.
 
+## Choose who a system service runs as
+
+A system service runs as you, from boot. Its program and the libraries it
+loads are in your store, which your user owns, so running them as root would
+let anything that runs as you become root at the next boot.
+
+A service that needs root, such as one that binds a port below 1024 or manages
+the network, says so in its entry:
+
+```toml
+[packages]
+dnsd = { ref = "github:you/recipes#dnsd", service = true, system = true, run_as = "root" }
+```
+
+oku then runs it as root, or as `SYSTEM` on Windows, and marks it before it
+asks for your password:
+
+```
+this changes, with administrator rights:
+  write  service  /Library/LaunchDaemons/dev.oku.dnsd.plist  (runs as root because of run_as = "root", and your user can change its files)
+```
+
+A root service logs where root does, and a service that runs as you logs to
+your data directory. `oku service logs` finds either.
+
 ## Know when oku asks for sudo
 
 Only these commands use `sudo`:
@@ -56,6 +81,9 @@ Only these commands use `sudo`:
 - `oku service <action> <name> --system`
 - `oku self uninstall`
 - `oku setup --system`
+
+oku runs `/usr/bin/sudo`, and never a `sudo` on your `PATH`, which a package
+could ship.
 
 Every other command leaves system scope as it is and tells you what it left:
 
@@ -127,6 +155,10 @@ run "oku sync" to install your packages there, then "oku gc" to delete the old c
 directory. The directory then belongs to your user, and nothing after this
 needs `sudo`. `--yes`, or `-y`, skips the question. Without `--system`,
 `oku setup` fails and does nothing.
+
+When `/opt/oku` exists already and belongs to another user, or is a link,
+`oku setup --system` refuses it, since that user could have put programs in
+it that you would then run.
 
 oku records the root as `store_root = "/opt/oku"` in
 `~/.config/oku/config.toml`. Then:

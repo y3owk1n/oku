@@ -128,6 +128,8 @@ type request struct {
 	service bool
 	// system puts the package's apps, fonts and services in system scope.
 	system bool
+	// runAs is the list's run_as for the package's system services.
+	runAs string
 	// fromSource builds even when a prebuilt artifact fits the host.
 	fromSource bool
 	// platforms are the platforms besides the host that the lock entry covers.
@@ -795,6 +797,7 @@ func (e env) installFrom(
 			Env:       env,
 			Service:   req.service,
 			System:    req.system,
+			RunAs:     req.runAs,
 		},
 		lock:           lockEntry(req, m, fetched, inferred, platforms, deps.locks),
 		closure:        append([]string{realized.Path}, deps.closure...),
