@@ -1,8 +1,11 @@
 name: ci
 
+# A pull request runs every check, and main only takes merged pull requests, so
+# a push to main runs nothing more here. The release pull request only bumps
+# the version and the changelog, so every job skips it. A skipped job counts as
+# passed for a required check, where a path filter on the whole workflow would
+# leave the checks pending and block the merge.
 on:
-  push:
-    branches: [main]
   pull_request:
 
 permissions:
@@ -14,6 +17,7 @@ concurrency:
 
 jobs:
   test:
+    if: ${{ !startsWith(github.head_ref, 'release-please--') }}
     strategy:
       fail-fast: false
       matrix:
@@ -46,6 +50,7 @@ jobs:
         run: .github/scripts/live-windows.ps1
 
   action:
+    if: ${{ !startsWith(github.head_ref, 'release-please--') }}
     # The action in action.yml, with the oku of this commit on PATH, which the
     # action then uses in place of a release.
     strategy:
@@ -76,6 +81,7 @@ jobs:
         run: fd --version
 
   action-tag:
+    if: ${{ !startsWith(github.head_ref, 'release-please--') }}
     # The action used by a release tag, with no oku on PATH, installs that
     # release. A local action in a directory named like the tag stands in for
     # y3owk1n/oku@v0.6.0.
@@ -100,6 +106,7 @@ jobs:
         run: oku --version | grep -F 0.6.0
 
   lint:
+    if: ${{ !startsWith(github.head_ref, 'release-please--') }}
     # Files with a build tag for another OS are only linted under that GOOS, so
     # one run per OS, all on the Linux runner.
     strategy:

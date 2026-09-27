@@ -7,7 +7,7 @@
 One `oku.toml` names the tools, dotfiles, secrets and OS settings of your account. A lock pins the sha256 of every download. `oku sync` builds that machine on Linux, macOS or Windows, and `oku rollback` puts the previous one back. oku needs no registry, no language to learn and no root.
 
 [![Latest Release](https://img.shields.io/github/v/release/y3owk1n/oku?style=flat-square)](https://github.com/y3owk1n/oku/releases)
-[![CI](https://img.shields.io/github/actions/workflow/status/y3owk1n/oku/ci.yml?branch=main&style=flat-square&label=ci)](https://github.com/y3owk1n/oku/actions/workflows/ci.yml)
+[![CI](https://img.shields.io/github/actions/workflow/status/y3owk1n/oku/ci.yml?event=pull_request&style=flat-square&label=ci)](https://github.com/y3owk1n/oku/actions/workflows/ci.yml)
 [![License](https://img.shields.io/github/license/y3owk1n/oku?style=flat-square)](LICENSE)
 [![Sponsor](https://img.shields.io/badge/sponsor-%E2%9D%A4-30363D?style=flat-square)](https://github.com/sponsors/y3owk1n)
 

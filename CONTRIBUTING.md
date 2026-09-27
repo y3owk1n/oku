@@ -42,7 +42,9 @@ Run these before you open a pull request. CI runs the same checks.
 
 CI in `.github/workflows/ci.yml` runs `go vet ./...` and `go test ./...` on
 ubuntu, macOS and Windows runners, lints once per `GOOS` on Linux, and runs the
-live scripts below. It installs its tools with the `oku` action from
+live scripts below. It runs on pull requests only. `main` takes merged pull
+requests, so a merge runs nothing again, and the release pull request, which
+only bumps the version and the changelog, skips every job. It installs its tools with the `oku` action from
 `oku.lock`, with the nightly oku, so a broken commit cannot break the tools
 that test it.
 
