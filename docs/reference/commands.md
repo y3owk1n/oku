@@ -1245,8 +1245,8 @@ core/ripgrep  Recursively search directories for a regex pattern
   sources it fails and says how to add one.
 - oku skips a source it cannot list, such as a URL, and prints a notice.
 - oku ignores TOML files in a collection that are not manifests.
-- A `github:` source costs one request for the file list, then one per
-  manifest.
+- A `github:` source costs one request, which downloads the whole collection.
+  A repo too large to download in one answer is read one manifest at a time.
 
 ### oku cache
 

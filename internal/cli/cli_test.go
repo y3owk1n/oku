@@ -26,6 +26,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -3375,9 +3376,17 @@ func TestB121AddInfersFromACompressedSingleBinary(t *testing.T) {
 	}
 }
 
+// collection counts what a search read, so a test can tell one archive from one
+// request per manifest. huge makes the archive too large to read.
+type collection struct {
+	files    atomic.Int64
+	archives atomic.Int64
+	huge     atomic.Bool
+}
+
 // collectionServer fakes the GitHub repo someone/recipes, a collection that
 // holds the given manifest files by path.
-func collectionServer(t *testing.T, m *machine, files map[string][]byte) {
+func collectionServer(t *testing.T, m *machine, files map[string][]byte) *collection {
 	t.Helper()
 
 	const commit = "6666666666666666666666666666666666666666"
@@ -3387,6 +3396,8 @@ func collectionServer(t *testing.T, m *machine, files map[string][]byte) {
 		items = append(items, fmt.Sprintf(`{"path": %q, "type": "blob"}`, path))
 	}
 
+	read := &collection{}
+
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		file, isFile := files[strings.TrimPrefix(r.URL.Path, "/raw/someone/recipes/"+commit+"/")]
 
@@ -3395,7 +3406,19 @@ func collectionServer(t *testing.T, m *machine, files map[string][]byte) {
 			_, _ = w.Write([]byte(commit))
 		case r.URL.Path == "/api/repos/someone/recipes/git/trees/"+commit:
 			_, _ = w.Write([]byte(`{"tree": [` + strings.Join(items, ",") + `]}`))
+		case r.URL.Path == "/api/repos/someone/recipes/tarball/"+commit:
+			read.archives.Add(1)
+
+			if read.huge.Load() {
+				_, _ = io.CopyN(w, zeros{}, 32<<20+1)
+
+				return
+			}
+
+			_, _ = w.Write(tarball(t, "recipes-"+commit[:7], files))
 		case isFile:
+			read.files.Add(1)
+
 			_, _ = w.Write(file)
 		default:
 			http.NotFound(w, r)
@@ -3405,6 +3428,41 @@ func collectionServer(t *testing.T, m *machine, files map[string][]byte) {
 
 	m.opts.GitHubAPI = server.URL + "/api"
 	m.opts.GitHubRaw = server.URL + "/raw"
+
+	return read
+}
+
+// zeros is a body of any length, for an answer that is too large to read.
+type zeros struct{}
+
+func (zeros) Read(p []byte) (int, error) {
+	clear(p)
+
+	return len(p), nil
+}
+
+// tarball packs files the way a forge serves a repo, under one directory.
+func tarball(t *testing.T, wrapper string, files map[string][]byte) []byte {
+	t.Helper()
+
+	var out bytes.Buffer
+
+	zipped := gzip.NewWriter(&out)
+	entries := tar.NewWriter(zipped)
+
+	for at, body := range files {
+		must(t, entries.WriteHeader(&tar.Header{
+			Name: wrapper + "/" + at, Mode: 0o644, Size: int64(len(body)), Typeflag: tar.TypeReg,
+		}))
+
+		_, err := entries.Write(body)
+		must(t, err)
+	}
+
+	must(t, entries.Close())
+	must(t, zipped.Close())
+
+	return out.Bytes()
 }
 
 func (m machine) describedManifest(t *testing.T, name, description string) []byte {
@@ -3503,14 +3561,58 @@ func TestB31SearchMatchesNamesAndDescriptionsInSourcesOnly(t *testing.T) {
 		t.Fatalf("search for a term with no match:\n%s", out)
 	}
 
-	out, err = m.run(t, "", "search", "grep", "--json")
-	must(t, err)
-
+	// The wait goes to stderr, so stdout holds only the JSON.
 	var hits []map[string]string
-	must(t, json.Unmarshal([]byte(out), &hits))
+	must(t, json.Unmarshal([]byte(m.stdout(t, "search", "grep", "--json")), &hits))
 
 	if len(hits) != 2 || hits[0]["ref"] != "core/finder" || hits[1]["description"] == "" {
 		t.Fatalf("search --json: %v", hits)
+	}
+}
+
+func TestB400SearchReadsACollectionInOneRequest(t *testing.T) {
+	m := newMachine(t)
+	server := collectionServer(t, &m, map[string][]byte{
+		"packages/grepper.toml": m.describedManifest(t, "grepper", "searches text"),
+		"packages/finder.toml":  m.describedManifest(t, "finder", "finds files"),
+		"packages/other.toml":   m.describedManifest(t, "other", "unrelated"),
+	})
+
+	_, err := m.run(t, "", "source", "add", "core", "github:someone/recipes")
+	must(t, err)
+
+	out, err := m.run(t, "", "search", "grep")
+	must(t, err)
+
+	if !strings.Contains(out, "core/grepper") {
+		t.Fatalf("search lacks core/grepper:\n%s", out)
+	}
+
+	if got := server.archives.Load(); got != 1 {
+		t.Fatalf("search read %d archives, want 1", got)
+	}
+
+	if got := server.files.Load(); got != 0 {
+		t.Fatalf("search read %d manifests one at a time, want 0", got)
+	}
+
+	// Reading a collection needs the network, so search says what it is waiting for.
+	if !strings.Contains(out, "reading the packages of github:someone/recipes") {
+		t.Fatalf("search did not say it was reading the collection:\n%s", out)
+	}
+
+	// A repo too large to download whole is read one manifest at a time.
+	server.huge.Store(true)
+
+	out, err = m.run(t, "", "search", "grep")
+	must(t, err)
+
+	if !strings.Contains(out, "core/grepper") {
+		t.Fatalf("search of a repo too large for one archive lacks core/grepper:\n%s", out)
+	}
+
+	if got := server.files.Load(); got != 3 {
+		t.Fatalf("search read %d manifests one at a time, want 3", got)
 	}
 }
 

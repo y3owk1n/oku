@@ -280,7 +280,7 @@ func (g *github) page(ctx context.Context, url, accept string) ([]byte, string, 
 	}
 
 	if len(body) > maxBody {
-		return nil, "", fmt.Errorf("response is larger than %d bytes", maxBody)
+		return nil, "", fmt.Errorf("%w of %d bytes", ErrTooLarge, maxBody)
 	}
 
 	return body, resp.Header.Get("Link"), nil

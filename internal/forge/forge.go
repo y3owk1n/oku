@@ -21,6 +21,10 @@ import (
 // release.
 var ErrNotFound = errors.New("not found")
 
+// ErrTooLarge reports that an answer was over maxBody, so the forge did not
+// read it.
+var ErrTooLarge = errors.New("response is larger than the limit")
+
 // The kinds of forge. A manifest's version.from is a kind plus "-releases".
 const (
 	KindGitHub = "github"
