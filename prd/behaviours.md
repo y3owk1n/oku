@@ -297,6 +297,8 @@ order step in `prd/product.md`.
   them from the repo's files at the list's commit, a `link` leads into the
   store, and `gc` keeps what a generation links to. A path that leaves the repo
   is an error, and a list at a URL with `[files]` or `[secrets]` is an error.
+  Only a `link` may start with `{{pkg.<name>}}`, and it must stay inside that
+  package.
 
 ## Versions and generations
 
@@ -999,6 +1001,9 @@ order step in `prd/product.md`.
 
 ## Apps, fonts, services
 
+- B417 [8] A systemd unit that oku writes holds each argument and variable on
+  its own line: a control character becomes a `\xNN` escape, and `$` in an
+  argument becomes `$$`.
 - B70 [8] A package `app` appears in the OS launcher for the current user.
   `remove` and `rollback` take it away again.
 - B175 [8] A `font` or `man` entry may be a pattern such as `fonts/*.ttf` or
@@ -1201,6 +1206,12 @@ order step in `prd/product.md`.
 
 ## Files
 
+- B414 [13] A `[files]` target must stay inside its location after oku fills
+  in the list's variables. One that leads out, typed or through a variable,
+  is an error, and `sync` changes nothing.
+- B415 [13] `oku system-apply`, which runs as root, takes only an app or font
+  target directly inside the system apps or fonts directory. It refuses a path
+  that cleaning changes, such as one with `..` or `.` in it.
 - B135 [13] A `link` entry makes the target a link to the source. An edit to
   the source shows at the target without a sync.
 - B136 [13] A `text` entry writes that text to the target, with `mode` when
@@ -1263,6 +1274,8 @@ order step in `prd/product.md`.
 
 ## Settings
 
+- B416 [15] A `[defaults]` domain with `/`, `\` or a leading `~` is an error,
+  since it names a plist file and not a domain.
 - B149 [15] After `sync` a key under `[defaults.<domain>]` has the value and
   the type from the list: boolean, integer, float, string, array or table.
 - B168 [15] A key under `[defaults-currenthost.<domain>]` is set for this Mac

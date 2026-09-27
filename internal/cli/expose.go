@@ -517,8 +517,12 @@ func applySystem(cmd *cobra.Command, opts Options, action string, change systemC
 		return fmt.Errorf("unknown action %s", action)
 	}
 
+	// The target comes from exposed.toml, which the user's own processes can
+	// write, and this runs as root. A path that cleaning changes, such as
+	// /Applications/.., is not a file in /Applications.
 	dirs := systemDirs(opts)
-	if dir := filepath.Dir(item.Target); dir != dirs.Apps && dir != dirs.Fonts {
+	if dir := filepath.Dir(item.Target); filepath.Clean(item.Target) != item.Target ||
+		dir != dirs.Apps && dir != dirs.Fonts {
 		return fmt.Errorf("%s is outside %s and %s", item.Target, dirs.Apps, dirs.Fonts)
 	}
 

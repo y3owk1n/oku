@@ -347,12 +347,19 @@ func toLock(table map[string]any) ([]platform.Platform, string, string, error) {
 
 // toSettings reads the domains of one settings table.
 func toSettings(backend string, domains map[string]any) ([]Setting, error) {
-	var settings []Setting
+	var out []Setting
 
 	for domain, value := range domains {
 		keys, ok := value.(map[string]any)
 		if !ok {
 			return nil, fmt.Errorf("%s.%q must be a table of keys", backend, domain)
+		}
+
+		// A domain that is a path would let a list edit any plist, such as another
+		// app's launch agent, which oku did not place.
+		if name := strings.TrimPrefix(domain, settings.CurrentHost); backend == "defaults" &&
+			(strings.ContainsAny(name, `/\`) || strings.HasPrefix(name, "~")) {
+			return nil, fmt.Errorf("defaults.%q must be a domain such as com.apple.dock, not a path", domain)
 		}
 
 		// oku writes settings of the current user only.
@@ -365,14 +372,14 @@ func toSettings(backend string, domains map[string]any) ([]Setting, error) {
 		}
 
 		for key, v := range keys {
-			settings = append(
-				settings,
+			out = append(
+				out,
 				Setting{Backend: backend, Domain: domain, Key: key, Value: v},
 			)
 		}
 	}
 
-	return settings, nil
+	return out, nil
 }
 
 // flattenVars adds the strings of table to vars, with prefix before each name.

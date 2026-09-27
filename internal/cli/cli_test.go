@@ -6166,6 +6166,29 @@ func TestB98UninstallNamesTheSharedRootAndAsksBeforeElevating(t *testing.T) {
 	}
 }
 
+func TestB415SystemApplyTakesATargetOnlyDirectlyInTheSystemDirectories(t *testing.T) {
+	m := newMachine(t)
+	dirs, _ := m.systemScope(t)
+
+	// The directory above the apps directory holds something that is not oku's.
+	must(t, os.MkdirAll(dirs.Apps, 0o755))
+	keep := filepath.Join(filepath.Dir(dirs.Apps), "keep")
+	must(t, os.WriteFile(keep, []byte("mine"), 0o644))
+
+	for _, target := range []string{dirs.Apps + "/..", dirs.Apps + "/.", dirs.Apps + "/x/../.."} {
+		change, err := json.Marshal(map[string]any{"Item": map[string]string{"Kind": "app", "Target": target}})
+		must(t, err)
+
+		if _, err := m.run(t, "", "system-apply", "remove", string(change)); err == nil {
+			t.Fatalf("system-apply took %s", target)
+		}
+	}
+
+	if !exists(keep) {
+		t.Fatal("system-apply deleted a file above the apps directory")
+	}
+}
+
 // systemScope gives the machine throwaway system directories and an Elevate that
 // runs "oku system-apply" in this process, as sudo would run it as root.
 func (m *machine) systemScope(t *testing.T) (expose.Dirs, *int) {

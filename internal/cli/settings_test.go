@@ -224,3 +224,14 @@ func TestB168ASettingOfThisMacGoesToItsOwnDomain(t *testing.T) {
 		t.Fatalf("the setting of this Mac should be back at its old value, it is %q", got)
 	}
 }
+
+func TestB416ADefaultsDomainIsADomainAndNotAPath(t *testing.T) {
+	for _, domain := range []string{"~/Library/LaunchAgents/evil", "/Library/Preferences/x", `a\b`} {
+		m := newMachine(t)
+		m.writeFilesList(t, fmt.Sprintf("[defaults.%q]\nkey = 1\n", domain))
+
+		if _, err := m.run(t, "", "sync"); err == nil || !strings.Contains(err.Error(), "not a path") {
+			t.Fatalf("want the domain %s refused, got %v", domain, err)
+		}
+	}
+}

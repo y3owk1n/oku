@@ -88,7 +88,14 @@ func target(written string, locations, vars map[string]string) (string, error) {
 		return "", err
 	}
 
-	return filepath.Join(base, filepath.FromSlash(rest)), nil
+	// A list's variables fill in the rest, so ".." there, typed or from a
+	// variable, could name a file outside the location.
+	rel := strings.TrimLeft(filepath.FromSlash(rest), `/\`)
+	if !filepath.IsLocal(rel) {
+		return "", fmt.Errorf("the target %s leads outside {{%s}}", written, name)
+	}
+
+	return filepath.Join(base, rel), nil
 }
 
 // linkSource returns the absolute path a link entry points at.
@@ -110,7 +117,12 @@ func linkSource(f listedFile, pkgs []profile.Package) (string, error) {
 				files = pkg.StorePath
 			}
 
-			return filepath.Join(files, filepath.FromSlash(rest)), nil
+			rel := strings.TrimLeft(filepath.FromSlash(rest), `/\`)
+			if !filepath.IsLocal(rel) {
+				return "", fmt.Errorf("%s leads outside the package %s", source, name)
+			}
+
+			return filepath.Join(files, rel), nil
 		}
 
 		return "", fmt.Errorf("%s is not a package of the list on this machine", name)

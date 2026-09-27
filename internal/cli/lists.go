@@ -363,10 +363,11 @@ func (m *merger) merge(
 }
 
 // inRepo fails when a path of the [files] or [secrets] of l, a list in the
-// directory dir of a repo, is absolute or leaves the repo.
+// directory dir of a repo, is absolute or leaves the repo. Only a link may name
+// a file of a package, and that path must stay inside the package.
 func inRepo(l *list.List, dir string) error {
 	check := func(what, p string) error {
-		if p == "" || strings.HasPrefix(p, pkgPrefix) {
+		if p == "" {
 			return nil
 		}
 
@@ -379,8 +380,19 @@ func inRepo(l *list.List, dir string) error {
 	}
 
 	for _, f := range l.Files {
-		for _, p := range []string{f.Link, f.Render, f.Secret} {
-			if err := check(fmt.Sprintf("files.%q:", f.Target), p); err != nil {
+		what := fmt.Sprintf("files.%q:", f.Target)
+
+		if rest, ok := strings.CutPrefix(f.Link, pkgPrefix); ok {
+			_, inside, _ := strings.Cut(rest, "}}")
+			if !filepath.IsLocal(strings.TrimLeft(filepath.FromSlash(inside), `/\`)) {
+				return fmt.Errorf("%s %s leads outside the package", what, f.Link)
+			}
+		} else if err := check(what, f.Link); err != nil {
+			return err
+		}
+
+		for _, p := range []string{f.Render, f.Secret} {
+			if err := check(what, p); err != nil {
 				return err
 			}
 		}

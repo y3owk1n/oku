@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"unicode"
 )
 
 // systemd manages user units. A unit file is always in the user's unit
@@ -155,9 +156,10 @@ func (s *systemd) unitFile(d Definition) []byte {
 
 	fmt.Fprintf(&b, "[Unit]\nDescription=%s, installed by oku\n\n[Service]\n", d.Name)
 
-	command := []string{quoteUnit(d.Program)}
+	// systemd expands $NAME in ExecStart, and $$ is a plain dollar there.
+	command := []string{strings.ReplaceAll(quoteUnit(d.Program), "$", "$$")}
 	for _, arg := range d.Args {
-		command = append(command, quoteUnit(arg))
+		command = append(command, strings.ReplaceAll(quoteUnit(arg), "$", "$$"))
 	}
 
 	fmt.Fprintf(&b, "ExecStart=%s\n", strings.Join(command, " "))
@@ -192,7 +194,19 @@ func (s *systemd) unitFile(d Definition) []byte {
 	return []byte(b.String())
 }
 
-// quoteUnit quotes one word of a unit file.
+// quoteUnit quotes one word of a unit file. A control character becomes a
+// \xNN escape, since a newline would end the line and start a directive of
+// the manifest's choosing.
 func quoteUnit(s string) string {
-	return `"` + strings.NewReplacer(`\`, `\\`, `"`, `\"`, "%", "%%").Replace(s) + `"`
+	var b strings.Builder
+
+	for _, r := range strings.NewReplacer(`\`, `\\`, `"`, `\"`, "%", "%%").Replace(s) {
+		if unicode.IsControl(r) && r < 0x80 {
+			fmt.Fprintf(&b, `\x%02x`, r)
+		} else {
+			b.WriteRune(r)
+		}
+	}
+
+	return `"` + b.String() + `"`
 }
