@@ -543,6 +543,7 @@ and you may edit it by hand.
 | `trusted_keys` | array of strings | `oku key trust`, `oku key revoke` | minisign public keys whose cache entries oku accepts. |
 | `[runtimes]` | table | by hand | The same table as in [oku.toml](#runtimes). oku uses it when no list names that runtime. A relative path starts at the directory of `config.toml`, and a ref may be a source alias such as `core/node`. |
 | `require_sandbox` | boolean | by hand | `true` refuses to run a package's commands on a host that cannot sandbox them. See [Refuse to build without a sandbox](sandbox.md#refuse-to-build-without-a-sandbox). |
+| `[forge] hosts` | table of strings | by hand | Servers of your own and their kind, `"github"`, `"gitea"` or `"gitlab"`, such as `"git.example.com" = "gitea"`. oku sends `GH_ENTERPRISE_TOKEN`, `GITEA_TOKEN` and `GITLAB_SERVER_TOKEN` only to a host listed here. See [tokens per host](refs.md#tokens-per-host). |
 | `store_root` | string | `oku setup --system` | The shared store root, such as `/opt/oku`. Delete the line to go back to the store in the data directory, then run `oku sync`. |
 
 ```toml
