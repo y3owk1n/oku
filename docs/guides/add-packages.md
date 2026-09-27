@@ -353,6 +353,11 @@ atuin = "github:atuinsh/atuin"
 atuin-server = { ref = "github:atuinsh/atuin", asset = "atuin-server-*" }
 ```
 
+The package takes the other name only when the asset holds a program of that
+name. An asset that is another build of the same program, such as
+`mouseless-portable_v1.0.0.zip` holding `mouseless.exe`, keeps the repo's name:
+`oku add github:cymian/mouseless --asset '*-portable*'` adds `mouseless`.
+
 When an install from an inferred manifest fails, the error names the file oku
 chose, lists the other files that fit your machine, and gives the
 `oku add --asset` command that picks one. [Troubleshooting](../troubleshooting.md#oku-picked-the-wrong-file-of-a-release)
