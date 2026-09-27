@@ -188,7 +188,7 @@ func newMachine(t *testing.T) machine {
 
 	// WorkDir keeps a stray oku.toml above the repo from turning tests into
 	// project runs.
-	m.opts = cli.Options{Version: "test", Executable: m.exe, WorkDir: m.fixtures}
+	m.opts = cli.Options{Version: "test", Executable: m.exe, WorkDir: m.fixtures, FileDownloads: true}
 
 	// A real service manager would load agents into the login session of whoever
 	// runs the tests.
@@ -2402,6 +2402,69 @@ func TestB114AddReadsAGitHubEnterpriseHostFromTheRef(t *testing.T) {
 
 	if !strings.Contains(string(list), "github:ghe.example.com/owner/tool") {
 		t.Fatalf("oku.toml lacks the ref with its host:\n%s", list)
+	}
+}
+
+func TestB418AForgeTokenGoesOnlyToAHostTheUserListed(t *testing.T) {
+	m := newMachine(t)
+	archive, _ := m.archive(t, "release", map[string]string{"tool": script})
+
+	t.Setenv("GITEA_TOKEN", "for-my-gitea")
+
+	release := fmt.Sprintf(
+		`{"tag_name": "v1.4.0", "assets": [{"name": %q, "browser_download_url": "file://%s"}]}`,
+		hostAssetName(), archive,
+	)
+
+	var tokens []string
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		tokens = append(tokens, r.Header.Get("Authorization"))
+
+		switch r.URL.Path {
+		case "/api/v1/repos/owner/tool/commits":
+			_, _ = w.Write([]byte(`[{"sha": "5555555555555555555555555555555555555555"}]`))
+		case "/api/v1/repos/owner/tool/releases/latest":
+			_, _ = w.Write([]byte(release))
+		case "/api/v1/repos/owner/tool/releases":
+			_, _ = w.Write([]byte("[" + release + "]"))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(server.Close)
+
+	target, err := url.Parse(server.URL)
+	must(t, err)
+
+	client := http.DefaultClient.Transport
+	http.DefaultClient.Transport = rewriteHost{host: "git.example.com", server: target}
+
+	t.Cleanup(func() { http.DefaultClient.Transport = client })
+
+	// A manifest or a ref names the host, so it gets no token of the user's.
+	if out, err := m.run(t, "", "add", "gitea:git.example.com/owner/tool"); err != nil {
+		t.Fatalf("add: %v\n%s", err, out)
+	}
+
+	for _, token := range tokens {
+		if token != "" {
+			t.Fatalf("a host the user did not list got the token %q", token)
+		}
+	}
+
+	must(t, os.MkdirAll(m.config, 0o755))
+	must(t, os.WriteFile(filepath.Join(m.config, "config.toml"),
+		[]byte("[forge.hosts]\n\"git.example.com\" = \"gitea\"\n"), 0o644))
+
+	tokens = nil
+
+	if out, err := m.run(t, "", "update"); err != nil {
+		t.Fatalf("update: %v\n%s", err, out)
+	}
+
+	if !slices.Contains(tokens, "token for-my-gitea") {
+		t.Fatalf("the listed host got %q, want its token", tokens)
 	}
 }
 

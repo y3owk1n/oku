@@ -825,6 +825,12 @@ func (e env) pickRelease(
 		return nil, resolve.Release{}, false, err
 	}
 
+	if !opts.FileDownloads {
+		if err := localURLs(r, m); err != nil {
+			return nil, resolve.Release{}, false, err
+		}
+	}
+
 	if req.wantManifest != "" && req.wantManifest != m.SHA256 {
 		return nil, resolve.Release{}, false, errManifestChanged
 	}
@@ -2153,4 +2159,37 @@ func (set depSet) buildOnly(first int) []string {
 	}
 
 	return only
+}
+
+// localURLs fails when a manifest from elsewhere names a file:// URL. Such a
+// URL reads a file of this machine, such as a key under ~/.ssh, into the store
+// or into a build. A manifest from a file or a git repo on this machine may.
+func localURLs(r ref.Ref, m *manifest.Manifest) error {
+	if r.Kind == ref.File || r.Kind == ref.Git && strings.HasPrefix(r.Location, "file://") {
+		return nil
+	}
+
+	var urls []string
+
+	for _, a := range m.Artifacts {
+		urls = append(urls, a.URL, a.SHA256URL)
+	}
+
+	if m.Build != nil {
+		urls = append(urls, m.Build.Source.URL, m.Build.Source.SHA256URL)
+
+		for _, step := range m.Build.Steps {
+			if step.Fetch != nil {
+				urls = append(urls, step.Fetch.URL, step.Fetch.SHA256URL)
+			}
+		}
+	}
+
+	for _, u := range urls {
+		if strings.HasPrefix(strings.ToLower(strings.TrimSpace(u)), "file:") {
+			return fmt.Errorf("%s names %s, and only a manifest on this machine may read a local file", r, u)
+		}
+	}
+
+	return nil
 }

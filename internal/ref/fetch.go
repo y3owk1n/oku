@@ -53,7 +53,7 @@ var ErrNotFound = errors.New("not found")
 // of forge APIs there.
 func NewFetcher(cacheDir string) *Fetcher {
 	return &Fetcher{
-		HTTP:     http.DefaultClient,
+		HTTP:     &http.Client{CheckRedirect: forge.CheckRedirect},
 		Hosts:    forge.Hosts{HTTP: forge.Revalidating(filepath.Join(cacheDir, "api"))},
 		GitCache: filepath.Join(cacheDir, "git"),
 	}
@@ -415,14 +415,14 @@ func (f *Fetcher) ListManifests(ctx context.Context, r Ref) (map[string][]byte, 
 
 	switch r.Kind {
 	case File:
-		return readCollection(r.Location)
+		return readCollection(r.Location, false)
 	case Git:
 		dir, _, err := f.checkout(ctx, r, "")
 		if err != nil {
 			return nil, err
 		}
 
-		return readCollection(dir)
+		return readCollection(dir, true)
 	case Forge:
 		return f.listForge(ctx, r)
 	default:
@@ -430,8 +430,35 @@ func (f *Fetcher) ListManifests(ctx context.Context, r Ref) (map[string][]byte, 
 	}
 }
 
-func readCollection(dir string) (map[string][]byte, error) {
+// readCollection reads the manifests of the collection in dir. For a clone,
+// confine is true: a file of the repo can be a link to any file of this
+// machine, and an os.Root stops the read at the repo. A folder of the user's
+// own may link where it likes.
+func readCollection(dir string, confine bool) (map[string][]byte, error) {
 	found := map[string][]byte{}
+
+	read := os.ReadFile
+	if confine {
+		root, err := os.OpenRoot(dir)
+		if err != nil {
+			return nil, err
+		}
+		defer root.Close()
+
+		read = func(path string) ([]byte, error) {
+			rel, err := filepath.Rel(dir, path)
+			if err != nil {
+				return nil, err
+			}
+
+			data, err := root.ReadFile(rel)
+			if err != nil {
+				return nil, fmt.Errorf("%s is a link out of the repository, or unreadable: %w", filepath.ToSlash(rel), err)
+			}
+
+			return data, nil
+		}
+	}
 
 	for _, sub := range []string{Manifest.Dir, ""} {
 		paths, err := filepath.Glob(filepath.Join(dir, sub, "*.toml"))
@@ -440,7 +467,7 @@ func readCollection(dir string) (map[string][]byte, error) {
 		}
 
 		for _, path := range paths {
-			data, err := os.ReadFile(path)
+			data, err := read(path)
 			if err != nil {
 				return nil, err
 			}
