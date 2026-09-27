@@ -461,6 +461,15 @@ only:
 | codeberg.org | `CODEBERG_TOKEN` |
 | another Gitea or Forgejo server | `GITEA_TOKEN` |
 
+For a server of your own, also name it in `config.toml`, since oku sends
+`GH_ENTERPRISE_TOKEN`, `GITEA_TOKEN` and `GITLAB_SERVER_TOKEN` only to a host
+listed there. See [tokens per host](../reference/refs.md#tokens-per-host).
+
+```toml
+[forge.hosts]
+"git.example.com" = "gitea"
+```
+
 The same tokens install from a private repo on Codeberg, Gitea, Forgejo and
 GitLab. On GitHub a token reads a private repo's manifest and releases, but the
 download of a private release fails, because GitHub serves those files through

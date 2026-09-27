@@ -176,11 +176,24 @@ redirects to another host.
 | Variable | Host |
 |---|---|
 | `GITHUB_TOKEN` | github.com. Never sent to a GitHub Enterprise Server. |
-| `GH_ENTERPRISE_TOKEN` | A GitHub Enterprise Server of a `github:host/...` ref. Never sent to github.com. |
+| `GH_ENTERPRISE_TOKEN` | A GitHub Enterprise Server that `[forge] hosts` lists as `"github"`. Never sent to github.com. |
 | `CODEBERG_TOKEN` | codeberg.org. |
-| `GITEA_TOKEN` | Any other Gitea or Forgejo server. |
+| `GITEA_TOKEN` | A Gitea or Forgejo server that `[forge] hosts` lists as `"gitea"`. |
 | `GITLAB_TOKEN` | gitlab.com. |
-| `GITLAB_SERVER_TOKEN` | Any other GitLab server. |
+| `GITLAB_SERVER_TOKEN` | A GitLab server that `[forge] hosts` lists as `"gitlab"`. |
+
+A manifest or a ref names the host oku reads, so oku sends the token of a
+server of your own only to a host you list in `config.toml`:
+
+```toml
+[forge.hosts]
+"git.example.com" = "gitea"
+"gitlab.example.com" = "gitlab"
+"github.example.com" = "github"
+```
+
+A host that is not listed gets no token, and a private repo there fails as if
+there were none.
 
 When `GITHUB_TOKEN` or `GH_ENTERPRISE_TOKEN` is not set and the `gh` CLI is on
 `PATH`, oku runs `gh auth token --hostname <host>` once per run and sends that

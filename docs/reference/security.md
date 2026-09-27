@@ -129,10 +129,26 @@ always trusts that download on first use.
 ## Tokens
 
 oku sends a forge token to the host it is for and to no other, over https, and
-not across a redirect to another host. When `GITHUB_TOKEN` or
+not across a redirect to another host. The token of a server of your own goes
+only to a host that `[forge] hosts` in `config.toml` lists, since a manifest
+names the host oku reads. When `GITHUB_TOKEN` or
 `GH_ENTERPRISE_TOKEN` is not set and `gh` is on `PATH`, oku runs
 `gh auth token --hostname <host>` and sends that login to the same host only.
 The variables and their hosts are in [tokens per host](refs.md#tokens-per-host).
+
+## Downloads
+
+- oku follows at most 10 redirects, never from https to plain http, and never
+  to a `file://` URL.
+- A manifest or a list ref over plain `http://` is an error, except on this
+  machine, such as `http://127.0.0.1`. `oku manifest lint` refuses an
+  `http://` download without a `sha256`.
+- Only a manifest that is a file on this machine, or in a `git+file://` repo,
+  may name a `file://` URL. A manifest from anywhere else could otherwise read
+  a file such as `~/.aws/credentials` into the store or into a build.
+- A git collection reads its manifests inside the clone. When a manifest file
+  is a link out of the repo, oku reads none of the collection, and
+  `oku search` skips that source and names the file.
 
 ## Approve build commands
 

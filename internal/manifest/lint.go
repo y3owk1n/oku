@@ -141,6 +141,14 @@ func Lint(data []byte) Report {
 			}
 		}
 
+		// Over plain http anyone on the network can change the download, and a
+		// sha256_url that comes the same way with it.
+		if strings.HasPrefix(a.URL, "http://") && a.SHA256 == "" && full.Package.SigningKey == "" {
+			report.Errors = append(report.Errors, fmt.Sprintf(
+				"artifact[%d]: an http:// url needs sha256 or a signing_key, since the network can change it", i,
+			))
+		}
+
 		switch {
 		case a.SHA256 != "" || a.SHA256URL != "" || a.Integrity != "" ||
 			full.Package.SigningKey != "" || version.From == FromNPM:
@@ -159,6 +167,11 @@ func Lint(data []byte) Report {
 					"and users trust the first download", i, fromRelease,
 			))
 		}
+	}
+
+	if source := full.Build.Source; strings.HasPrefix(source.URL, "http://") && source.SHA256 == "" {
+		report.Errors = append(report.Errors,
+			"build.source: an http:// url needs sha256, since the network can change it")
 	}
 
 	switch source := full.Build.Source; {

@@ -74,6 +74,9 @@ type Options struct {
 	GitHubAPI string
 	GitHubRaw string
 	GitHubWeb string
+	// FileDownloads lets a manifest from any ref download from a file:// URL. The
+	// tests serve their downloads that way.
+	FileDownloads bool
 	// NPMRegistry replaces the URL of the npm registry when set.
 	NPMRegistry string
 	// PyPIIndex replaces the URL of the Python Package Index when set.
@@ -534,6 +537,11 @@ func (e env) fetcher(opts Options) *ref.Fetcher {
 	// The resolver takes these hosts. It reads a git URL on github.com through
 	// the API, so a test's github.com belongs here too.
 	f.Hosts.GitHubWeb = opts.GitHubWeb
+
+	// A config.toml that does not parse fails the command elsewhere.
+	if config, err := source.Read(e.configPath()); err == nil {
+		f.Hosts.Trusted = config.Forge.Hosts
+	}
 
 	return f
 }

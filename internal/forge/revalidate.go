@@ -25,7 +25,7 @@ import (
 // request with a token. The host checks every request, so the answer is never
 // stale.
 func Revalidating(dir string) *http.Client {
-	return &http.Client{Transport: revalidator{dir: dir}}
+	return &http.Client{Transport: revalidator{dir: dir}, CheckRedirect: CheckRedirect}
 }
 
 type revalidator struct{ dir string }

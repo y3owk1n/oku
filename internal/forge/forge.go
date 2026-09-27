@@ -252,6 +252,11 @@ type Hosts struct {
 	GitHubRaw string
 	// GitHubWeb replaces https://github.com, for tests.
 	GitHubWeb string
+	// Trusted maps a host of the user's own, such as a Gitea server, to its
+	// kind: "github", "gitea" or "gitlab". A manifest names the host it reads,
+	// so oku sends GH_ENTERPRISE_TOKEN, GITEA_TOKEN and GITLAB_SERVER_TOKEN only
+	// to a host listed here with that kind.
+	Trusted map[string]string
 }
 
 // GitHub returns github.com for an empty host, else the GitHub Enterprise
@@ -269,7 +274,7 @@ func (h Hosts) github(host string) *github {
 			host:  host,
 			web:   "https://" + host,
 			api:   "https://" + host + "/api/v3",
-			token: tokenFor("GH_ENTERPRISE_TOKEN", host),
+			token: tokenFor("GH_ENTERPRISE_TOKEN", host, h.Trusted[host] == KindGitHub),
 			env:   "GH_ENTERPRISE_TOKEN",
 		}
 	}
@@ -279,7 +284,7 @@ func (h Hosts) github(host string) *github {
 		web:   "https://github.com",
 		api:   "https://api.github.com",
 		raw:   "https://raw.githubusercontent.com",
-		token: tokenFor("GITHUB_TOKEN", "github.com"),
+		token: tokenFor("GITHUB_TOKEN", "github.com", true),
 		env:   "GITHUB_TOKEN",
 	}
 
@@ -302,11 +307,12 @@ func (h Hosts) github(host string) *github {
 // runs gh once per host.
 var ghTokens sync.Map
 
-// tokenFor returns the variable env, or else the token that the gh CLI holds
-// for host, or "". Many users log in with gh and set no variable, and GitHub
-// counts every request without a token against a limit of 60 an hour.
-func tokenFor(env, host string) string {
-	if token := os.Getenv(env); token != "" {
+// tokenFor returns the variable env when useEnv, or else the token that the gh
+// CLI holds for host, or "". Many users log in with gh and set no variable, and
+// GitHub counts every request without a token against a limit of 60 an hour. gh
+// holds a token only for a host the user logged in to.
+func tokenFor(env, host string, useEnv bool) string {
+	if token := os.Getenv(env); useEnv && token != "" {
 		return token
 	}
 
@@ -352,15 +358,15 @@ func (h Hosts) Open(scheme, location string) (Forge, string, error) {
 			host = ""
 		}
 
-		// GITLAB_TOKEN is for gitlab.com and GITLAB_SERVER_TOKEN for every other
-		// host.
-		env := "GITLAB_TOKEN"
+		// GITLAB_TOKEN is for gitlab.com and GITLAB_SERVER_TOKEN for a host in
+		// Trusted.
+		token := os.Getenv("GITLAB_TOKEN")
 		if host != "" {
-			env = "GITLAB_SERVER_TOKEN"
+			token = h.trustedToken("GITLAB_SERVER_TOKEN", KindGitLab, host)
 		}
 
 		return checked{
-			Forge: &gitlab{http: h.HTTP, host: host, token: os.Getenv(env)}, name: cmp.Or(host, "GitLab"),
+			Forge: &gitlab{http: h.HTTP, host: host, token: token}, name: cmp.Or(host, "GitLab"),
 		}, repo, nil
 	default:
 		return nil, "", fmt.Errorf("%q is not a forge oku knows", scheme)
@@ -435,14 +441,24 @@ func (h Hosts) AuthFor(from, repo string) Auth {
 }
 
 // gitea returns the Gitea or Forgejo server at host. CODEBERG_TOKEN is for
-// codeberg.org and GITEA_TOKEN for every other host.
+// codeberg.org and GITEA_TOKEN for a host in Trusted.
 func (h Hosts) gitea(host string) Forge {
-	env := "GITEA_TOKEN"
-	if host == "codeberg.org" {
-		env = "CODEBERG_TOKEN"
+	token := os.Getenv("CODEBERG_TOKEN")
+	if host != "codeberg.org" {
+		token = h.trustedToken("GITEA_TOKEN", KindGitea, host)
 	}
 
-	return &gitea{http: h.HTTP, host: host, token: os.Getenv(env)}
+	return &gitea{http: h.HTTP, host: host, token: token}
+}
+
+// trustedToken returns the variable env when the user listed host as a forge of
+// kind, and "" otherwise.
+func (h Hosts) trustedToken(env, kind, host string) string {
+	if h.Trusted[host] != kind {
+		return ""
+	}
+
+	return os.Getenv(env)
 }
 
 // Split cuts the host off a location such as "git.example.com/owner/repo". A
@@ -454,4 +470,19 @@ func Split(location string) (string, string) {
 	}
 
 	return "", location
+}
+
+// CheckRedirect is the redirect policy of every client oku downloads with. It
+// follows at most 10 redirects, and none from https to another scheme, where a
+// network attacker could change the answer or read a token, and none to a
+// local file.
+func CheckRedirect(req *http.Request, via []*http.Request) error {
+	switch {
+	case len(via) >= 10:
+		return errors.New("stopped after 10 redirects")
+	case req.URL.Scheme == "file" || via[len(via)-1].URL.Scheme == "https" && req.URL.Scheme != "https":
+		return fmt.Errorf("%s redirects to %s, which oku does not follow", via[0].URL, req.URL)
+	}
+
+	return nil
 }

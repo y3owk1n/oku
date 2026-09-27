@@ -4,6 +4,7 @@ package ref
 import (
 	"errors"
 	"fmt"
+	"net"
 	"net/url"
 	"os"
 	"path"
@@ -229,10 +230,18 @@ func ParseIn(dir, s string) (Ref, error) {
 			return Ref{}, fmt.Errorf("%s: want git+https://, git+ssh:// or git+file://", s)
 		}
 
+		if err := encrypted(r.Location); err != nil {
+			return Ref{}, fmt.Errorf("%s: %w", s, err)
+		}
+
 		if r.Fragment != "" && !filepath.IsLocal(filepath.FromSlash(r.Fragment)) {
 			return Ref{}, fmt.Errorf("%s: %q is outside the repository", s, r.Fragment)
 		}
 	case strings.HasPrefix(body, "https://"), strings.HasPrefix(body, "http://"):
+		if err := encrypted(body); err != nil {
+			return Ref{}, fmt.Errorf("%s: %w", s, err)
+		}
+
 		r.Kind = HTTP
 		r.Location = body
 	case strings.Contains(body, "://"):
@@ -373,4 +382,24 @@ func hasAnyPrefix(s string, prefixes []string) bool {
 	}
 
 	return false
+}
+
+// encrypted fails for a plain http:// URL to another machine, since anyone on
+// the network could change the manifest or list it serves. A server on this
+// machine, such as a test's, may use http://.
+func encrypted(location string) error {
+	if !strings.HasPrefix(location, "http://") {
+		return nil
+	}
+
+	u, err := url.Parse(location)
+	if err != nil {
+		return err
+	}
+
+	if host := u.Hostname(); host == "localhost" || net.ParseIP(host).IsLoopback() {
+		return nil
+	}
+
+	return errors.New("http:// is not encrypted, use https://")
 }

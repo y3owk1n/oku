@@ -89,7 +89,7 @@ func New(dataDir, cacheDir string) *Store {
 	return &Store{
 		dir:   filepath.Join(dataDir, "store"),
 		cache: cacheDir,
-		http:  &http.Client{Transport: transport},
+		http:  &http.Client{Transport: transport, CheckRedirect: forge.CheckRedirect},
 	}
 }
 

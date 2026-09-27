@@ -42,6 +42,15 @@ type Config struct {
 	// RequireSandbox refuses to run a package's commands on a host that cannot
 	// sandbox them.
 	RequireSandbox bool `toml:"require_sandbox,omitempty"`
+	// Forge holds the user's own forge servers.
+	Forge Forge `toml:"forge,omitempty"`
+}
+
+// Forge is the [forge] table of config.toml.
+type Forge struct {
+	// Hosts maps a host to its kind, "github", "gitea" or "gitlab". oku sends that
+	// kind's token for other hosts only to a host listed here.
+	Hosts map[string]string `toml:"hosts,omitempty"`
 }
 
 // Read parses the config at path. A missing file is an empty config.
@@ -58,6 +67,12 @@ func Read(path string) (*Config, error) {
 
 	if c.Sources == nil {
 		c.Sources = map[string]string{}
+	}
+
+	for host, kind := range c.Forge.Hosts {
+		if kind != "github" && kind != "gitea" && kind != "gitlab" {
+			return nil, fmt.Errorf("%s: forge.hosts.%q must be \"github\", \"gitea\" or \"gitlab\"", path, host)
+		}
 	}
 
 	return c, nil
