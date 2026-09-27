@@ -204,7 +204,8 @@ oku sets these for others:
 | `OKU_HOOK_SAVED`, `OKU_HOOK_ADDED`, `OKU_HOOK_HINT` | Your shell, by the hook, to undo what it applied. The hook removes `OKU_HOOK_PATH` and `OKU_HOOK_KEYS`, the state of an older oku. |
 
 The install scripts read `OKU_INSTALL_DIR` and `OKU_VERSION`, see
-[Getting started](../getting-started.md).
+[Getting started](../getting-started.md), and `OKU_REQUIRE_SIGNATURE`, see
+[Self update signatures](security.md#self-update-signatures).
 
 ## How a change applies
 

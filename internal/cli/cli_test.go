@@ -6978,6 +6978,79 @@ func TestB93InstallScriptPutsOneBinaryInPlaceAndEditsNothing(t *testing.T) {
 	}
 }
 
+func TestB403InstallScriptChecksTheSignatureAndItsComment(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("install.ps1 is covered by the live test on the Windows runner")
+	}
+
+	root := t.TempDir()
+	download := filepath.Join(root, "release", "download", "v0.0.2")
+	must(t, os.MkdirAll(download, 0o755))
+
+	name := "oku-" + runtime.GOOS + "-" + runtime.GOARCH
+	body := []byte("#!/bin/sh\necho oku\n")
+	must(t, os.WriteFile(filepath.Join(download, name), body, 0o644))
+	must(t, os.WriteFile(filepath.Join(download, name+".minisig"), []byte("sig"), 0o644))
+
+	digest := sha256.Sum256(body)
+	must(t, os.WriteFile(filepath.Join(download, "checksums.txt"),
+		fmt.Appendf(nil, "%s  %s\n", hex.EncodeToString(digest[:]), name), 0o644))
+
+	server := httptest.NewServer(http.FileServer(http.Dir(filepath.Join(root, "release"))))
+	t.Cleanup(server.Close)
+
+	// A fake minisign behaves like the real one: -Q prints the signed comment,
+	// and a signature that does not verify exits 1.
+	fake := filepath.Join(root, "fake")
+	must(t, os.MkdirAll(fake, 0o755))
+	must(t, os.WriteFile(filepath.Join(fake, "minisign"),
+		[]byte("#!/bin/sh\necho \"$FAKE_COMMENT\"\nexit \"${FAKE_EXIT:-0}\"\n"), 0o755))
+
+	install := func(path string, env ...string) (string, bool) {
+		home := t.TempDir()
+		cmd := exec.Command("sh", filepath.Join("..", "..", "install.sh"))
+		cmd.Env = append([]string{
+			"HOME=" + home, "SHELL=/bin/sh", "PATH=" + path,
+			"OKU_RELEASE_URL=" + server.URL, "OKU_VERSION=v0.0.2",
+		}, env...)
+
+		out, err := cmd.CombinedOutput()
+		_, statErr := os.Stat(filepath.Join(home, ".local", "bin", "oku"))
+
+		if (err == nil) != (statErr == nil) {
+			t.Fatalf("install.sh exited %v, and the binary exists is %v:\n%s", err, statErr == nil, out)
+		}
+
+		return string(out), err == nil
+	}
+
+	withFake := fake + string(os.PathListSeparator) + os.Getenv("PATH")
+
+	if out, ok := install(withFake, "FAKE_COMMENT=oku v0.0.2"); !ok ||
+		!strings.Contains(out, "checked the minisign signature") {
+		t.Fatalf("a signature for the release asked for should install:\n%s", out)
+	}
+
+	if out, ok := install(withFake, "FAKE_COMMENT=oku v0.0.1"); ok || !strings.Contains(out, "not oku v0.0.2") {
+		t.Fatalf("a signature for another release should be refused:\n%s", out)
+	}
+
+	if out, ok := install(withFake, "FAKE_EXIT=1"); ok || !strings.Contains(out, "not from oku's release key") {
+		t.Fatalf("a signature that does not verify should be refused:\n%s", out)
+	}
+
+	if _, err := exec.LookPath("minisign"); err == nil {
+		t.Log("minisign is on PATH, so the case without it is not run")
+
+		return
+	}
+
+	if out, ok := install(os.Getenv("PATH"), "OKU_REQUIRE_SIGNATURE=1"); ok ||
+		!strings.Contains(out, "minisign is not installed") {
+		t.Fatalf("OKU_REQUIRE_SIGNATURE=1 without minisign should refuse:\n%s", out)
+	}
+}
+
 func TestB341HookFindsProgramsOfANewGeneration(t *testing.T) {
 	m := newMachine(t)
 

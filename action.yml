@@ -36,7 +36,29 @@ runs:
           export OKU_VERSION="$ref"
         fi
         if ! command -v oku >/dev/null 2>&1; then
-          curl -fsSL https://raw.githubusercontent.com/y3owk1n/oku/main/install.sh | sh
+          # The install script of the action's own checkout checks the release's
+          # minisign signature with a minisign pinned here by its sha256.
+          # minisign has an arm64 macOS build only, so an Intel Mac installs it
+          # with Homebrew.
+          ms="$RUNNER_TEMP/oku-minisign"
+          mkdir -p "$ms"
+          from=https://github.com/jedisct1/minisign/releases/download/0.12
+          case "$RUNNER_OS-$(uname -m)" in
+          Linux-*)
+            curl -fsSL --proto '=https' "$from/minisign-0.12-linux.tar.gz" -o "$ms/minisign.tar.gz"
+            echo "9a599b48ba6eb7b1e80f12f36b94ceca7c00b7a5173c95c3efc88d9822957e73  $ms/minisign.tar.gz" | sha256sum -c --quiet
+            tar --warning=no-unknown-keyword -xzf "$ms/minisign.tar.gz" -C "$ms"
+            PATH="$ms/minisign-linux/$(uname -m):$PATH"
+            ;;
+          macOS-arm64)
+            curl -fsSL --proto '=https' "$from/minisign-0.12-macos.zip" -o "$ms/minisign.zip"
+            echo "89000b19535765f9cffc65a65d64a820f433ef6db8020667f7570e06bf6aac63  $ms/minisign.zip" | shasum -a 256 -c --quiet
+            unzip -q "$ms/minisign.zip" minisign -d "$ms"
+            PATH="$ms:$PATH"
+            ;;
+          *) HOMEBREW_NO_AUTO_UPDATE=1 brew install --quiet minisign ;;
+          esac
+          OKU_REQUIRE_SIGNATURE=1 sh "$GITHUB_ACTION_PATH/install.sh"
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
         fi
 
@@ -49,7 +71,20 @@ runs:
         $ref = Split-Path -Leaf $env:GITHUB_ACTION_PATH
         if (-not $env:OKU_VERSION -and $ref -match '^v\d+\.\d+\.\d+$') { $env:OKU_VERSION = $ref }
         if (-not (Get-Command oku -ErrorAction SilentlyContinue)) {
-          Invoke-RestMethod https://raw.githubusercontent.com/y3owk1n/oku/main/install.ps1 | Invoke-Expression
+          # The install script of the action's own checkout checks the release's
+          # minisign signature with a minisign pinned here by its sha256.
+          $ms = Join-Path $env:RUNNER_TEMP 'oku-minisign'
+          New-Item -ItemType Directory -Force $ms | Out-Null
+          $zip = Join-Path $ms 'minisign.zip'
+          Invoke-WebRequest https://github.com/jedisct1/minisign/releases/download/0.12/minisign-0.12-win64.zip -OutFile $zip -UseBasicParsing
+          if ((Get-FileHash $zip -Algorithm SHA256).Hash -ne '37B600344E20C19314B2E82813DB2BFDCC408B77B876F7727889DBD46D539479') {
+            throw 'minisign-0.12-win64.zip does not match its pinned sha256'
+          }
+          Expand-Archive $zip -DestinationPath $ms
+          $cpu = if ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64') { 'aarch64' } else { 'x86_64' }
+          $env:Path = (Join-Path $ms "minisign-win64\$cpu") + ';' + $env:Path
+          $env:OKU_REQUIRE_SIGNATURE = '1'
+          & (Join-Path $env:GITHUB_ACTION_PATH 'install.ps1')
           Join-Path $env:LOCALAPPDATA 'oku\bin' | Out-File -Append -Encoding utf8 $env:GITHUB_PATH
         }
 
@@ -57,7 +92,7 @@ runs:
     # older store is a safe start for a newer lock.
     - name: Cache the store
       if: inputs.cache == 'true'
-      uses: actions/cache@v6
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: |
           ~/.local/share/oku/store
@@ -73,10 +108,16 @@ runs:
       if: runner.os != 'Windows'
       shell: bash
       working-directory: ${{ inputs.path }}
+      env:
+        OKU_ARGS: ${{ inputs.args }}
       run: |
         oku="$(command -v oku || echo "$HOME/.local/bin/oku")"
+        # The step splits the arguments on spaces. It runs none of them as code
+        # and expands none of them as a glob.
+        set -f
         # shellcheck disable=SC2086
-        "$oku" sync --yes ${{ inputs.args }}
+        "$oku" sync --yes $OKU_ARGS
+        set +f
         echo "${XDG_DATA_HOME:-$HOME/.local/share}/oku/profiles/global/current/bin" >> "$GITHUB_PATH"
         [ -f oku.toml ] || exit 0
         "$oku" allow
@@ -93,10 +134,14 @@ runs:
       if: runner.os == 'Windows'
       shell: pwsh
       working-directory: ${{ inputs.path }}
+      env:
+        OKU_ARGS: ${{ inputs.args }}
       run: |
         $oku = (Get-Command oku -ErrorAction SilentlyContinue).Source
         if (-not $oku) { $oku = Join-Path $env:LOCALAPPDATA 'oku\bin\oku.exe' }
-        & $oku sync --yes ${{ inputs.args }}
+        # The step splits the arguments on spaces and runs none of them as code.
+        $okuArgs = @($env:OKU_ARGS -split '\s+' | Where-Object { $_ })
+        & $oku sync --yes @okuArgs
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         $data = if ($env:XDG_DATA_HOME) { Join-Path $env:XDG_DATA_HOME 'oku' } else { Join-Path $env:LOCALAPPDATA 'oku' }
         Join-Path $data 'profiles\global\current\bin' | Out-File -Append -Encoding utf8 $env:GITHUB_PATH

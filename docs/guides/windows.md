@@ -13,7 +13,8 @@ irm https://raw.githubusercontent.com/y3owk1n/oku/main/install.ps1 | iex
 ```
 
 The script puts `oku.exe` in `%LOCALAPPDATA%\oku\bin` after it checks the
-sha256 against the release's `checksums.txt`. It edits no file of yours.
+sha256 against the release's `checksums.txt`, and the minisign signature when
+`minisign` is on `PATH`. It edits no file of yours.
 
 ## Set up PowerShell
 

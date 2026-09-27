@@ -38,7 +38,10 @@ jobs:
 
 The action does this:
 
-1. It installs oku, unless an `oku` is already on `PATH`.
+1. It installs oku, unless an `oku` is already on `PATH`. It runs the install
+   script of the action's own tag, which checks the release's minisign
+   signature with a minisign the action pins by its sha256. A tag of the action
+   therefore pins the script too.
 2. It restores the store and the downloads from the Actions cache.
 3. It runs `oku sync --yes --locked` in the directory of your `oku.toml`.
 4. It puts the programs of the global profile and of the
@@ -55,7 +58,7 @@ GitHub rate limits anonymous API calls from a shared runner.
 |---|---|---|
 | `version` | `""` | The oku release to install, such as `v0.6.0` or `nightly`. Empty installs the release of the action's own tag, as in `y3owk1n/oku@v0.6.1`, and the newest release otherwise. The action uses an oku already on `PATH` as it is. |
 | `path` | `.` | The directory that holds the `oku.toml` to sync. Its lock must pin the runner's platform. |
-| `args` | `--locked` | What `oku sync` gets besides `--yes`. |
+| `args` | `--locked` | What `oku sync` gets besides `--yes`. The action splits it on spaces and runs none of it as a shell command. |
 | `cache` | `"true"` | Keep the store and the downloads between runs, keyed by `oku.lock`. `"false"` turns it off. |
 
 ```yaml
@@ -112,10 +115,13 @@ terminal oku cannot ask, and stops with
 
 ## Run oku in another CI
 
-Outside GitHub Actions, do what the action does:
+Outside GitHub Actions, do what the action does. Install
+[minisign](https://jedisct1.github.io/minisign/) first, and
+`OKU_REQUIRE_SIGNATURE=1` makes the script refuse a binary whose signature it
+cannot check:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/y3owk1n/oku/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/y3owk1n/oku/main/install.sh | OKU_REQUIRE_SIGNATURE=1 sh
 export PATH="$HOME/.local/bin:$HOME/.local/share/oku/profiles/global/current/bin:$PATH"
 oku sync --yes --locked
 oku allow
