@@ -21,7 +21,7 @@ These work on every command.
 | Flag | Effect |
 |---|---|
 | `--global`, `-g` | Uses the global list even inside a [project](../how-oku-works.md#project). |
-| `--json` | Prints data as JSON on stdout, on the commands that print data. See [JSON output](#json-output). |
+| `--json` | Prints data as JSON on stdout, on the commands that print data. Other commands refuse it. See [JSON output](#json-output). |
 | `--help`, `-h` | Prints the help of the command. |
 
 Inside a directory tree that has an `oku.toml`, the commands that read or
@@ -1102,7 +1102,8 @@ oku: 1 of 1 manifests have errors
 ```
 
 It prints one line per problem, then `<file>: ok` for each file with no
-errors. It exits with `1` when any file has an error. `oku add` ignores keys
+errors. On a terminal an error starts with a red `✗`, a warning with a yellow
+`!` and a file with no errors with a green `✓`. It exits with `1` when any file has an error. `oku add` ignores keys
 it does not know, so an older oku still installs a newer manifest. Lint knows
 the whole schema.
 
@@ -1458,9 +1459,10 @@ prints a completion script. The hook loads the completions of `oku` already.
 
 ## JSON output
 
-The commands that print data take `--json` and then print JSON on stdout in
-place of text. Messages and errors still go to stderr as text. On a command
-that prints no data, `--json` changes nothing.
+The commands in this table take `--json` and then print JSON on stdout in
+place of text. Messages and errors still go to stderr as text. Any other
+command fails with `oku <command> has no --json output` and does nothing.
+`oku add` takes `--json` only with `--plan`.
 
 | Command | JSON |
 |---|---|
@@ -1477,7 +1479,10 @@ that prints no data, `--json` changes nothing.
 | `oku cache list` | A list of locations. |
 | `oku key list` | `yours` and `trusted`. |
 | `oku service list` | A list of `name`, `package`, `installed`, `enabled`, `running`, `system`, `detail`. |
-| `oku service status <name>` | One such object. |
+| `oku service status <name>` | One such object. `start`, `stop` and `restart` print it too. |
+| `oku add --plan` | A list with one object per ref, with fields such as `ref`, `name`, `version`, `inferred`, `asset`, `install`, `platform`, `commands`, `needs`, `deps` and `build_deps`. |
+| `oku env` | Every variable the directory sets, with `null` for one it unsets. |
+| `oku manifest lint` | A list of `file`, `errors`, `warnings`. It still exits with `1` when a file has an error. |
 | `oku doctor` | `problems`, and `checks`, a list of `status` and `message`. |
 | `oku du` | `areas`, a list of `area`, `paths`, `bytes`, then `total`, `gc_frees` and `gc_cache_frees`, all in bytes. |
 | `oku du --packages` | A list of `name`, `version`, `path`, `bytes`, `profiles`, `dep_of`, `old`, `unused`. |

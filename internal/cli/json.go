@@ -3,6 +3,7 @@ package cli
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 
 	"github.com/spf13/cobra"
 )
@@ -37,6 +38,33 @@ func minArgs(n int) cobra.PositionalArgs {
 
 		return nil
 	}
+}
+
+// jsonCommands are the commands that print JSON with --json. Any other command
+// refuses the flag, so that a script never reads text as JSON.
+var jsonCommands = []string{
+	"oku add", "oku cache list", "oku doctor", "oku du", "oku env", "oku generations",
+	"oku info", "oku key list", "oku list", "oku manifest lint", "oku outdated",
+	"oku search", "oku service list", "oku service restart", "oku service start",
+	"oku service status", "oku service stop", "oku source list", "oku which", "oku why",
+}
+
+// checkJSON refuses --json on a command that has no JSON output. "oku add"
+// prints JSON only for --plan.
+func checkJSON(cmd *cobra.Command) error {
+	if !wantJSON(cmd) {
+		return nil
+	}
+
+	if !slices.Contains(jsonCommands, cmd.CommandPath()) {
+		return fmt.Errorf("%s has no --json output", cmd.CommandPath())
+	}
+
+	if plan, err := cmd.Flags().GetBool("plan"); err == nil && !plan {
+		return fmt.Errorf("%s prints JSON only with --plan", cmd.CommandPath())
+	}
+
+	return nil
 }
 
 // wantJSON reports whether the user asked for JSON in place of text.
