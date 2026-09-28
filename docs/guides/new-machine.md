@@ -313,7 +313,7 @@ If you do not want a clone on the new machine, point `oku sync` at the repo:
 
 ```
 $ oku sync github:you/machines
-adopted github:you/machines with 23 locked packages
+✓ adopted github:you/machines with 23 locked packages
 profile now holds 23 packages
 ```
 

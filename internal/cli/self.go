@@ -17,6 +17,7 @@ import (
 	"github.com/y3owk1n/oku/internal/service"
 	"github.com/y3owk1n/oku/internal/source"
 	"github.com/y3owk1n/oku/internal/trash"
+	"github.com/y3owk1n/oku/internal/ui"
 )
 
 // listFiles are what --keep-list leaves in the config directory.
@@ -69,6 +70,7 @@ func runUninstall(
 	defer release()
 
 	out := cmd.OutOrStdout()
+	s := ui.For(out)
 	binDir := e.globalProfile().BinDir()
 
 	var kept []string
@@ -81,14 +83,14 @@ func runUninstall(
 		}
 	}
 
-	fmt.Fprintln(out, "this removes:")
-	fmt.Fprintf(out, "  store and profiles  %s\n", e.data)
-	fmt.Fprintf(out, "  cache               %s\n", e.cache)
-	fmt.Fprintf(out, "  config              oku's own files in %s\n", e.config)
-	fmt.Fprintf(out, "  binary              %s\n", executable)
+	fmt.Fprintln(out, s.Bold("this removes:"))
+	fmt.Fprintf(out, "  store and profiles  %s\n", s.Home(e.data))
+	fmt.Fprintf(out, "  cache               %s\n", s.Home(e.cache))
+	fmt.Fprintf(out, "  config              oku's own files in %s\n", s.Home(e.config))
+	fmt.Fprintf(out, "  binary              %s\n", s.Home(executable))
 
 	if e.root != e.data {
-		fmt.Fprintf(out, "  shared store root   %s (needs administrator rights)\n", e.root)
+		fmt.Fprintf(out, "  shared store root   %s%s\n", s.Home(e.root), s.Warn(" (needs administrator rights)"))
 	}
 
 	ledger, err := expose.ReadLedger(e.data)
@@ -102,14 +104,14 @@ func runUninstall(
 		note := ""
 		if item.System {
 			needsRoot = true
-			note = " (needs administrator rights)"
+			note = s.Warn(" (needs administrator rights)")
 		}
 
-		fmt.Fprintf(out, "  %-19s %s%s\n", item.Kind, item.Target, note)
+		fmt.Fprintf(out, "  %-19s %s%s\n", item.Kind, s.Home(item.Target), note)
 	}
 
 	if len(kept) > 0 {
-		fmt.Fprintf(out, "keeps:\n  %s\n", strings.Join(kept, "\n  "))
+		fmt.Fprintf(out, "%s\n  %s\n", s.Bold("keeps:"), s.Homes(strings.Join(kept, "\n  ")))
 	}
 
 	in := cmd.InOrStdin()
@@ -183,37 +185,45 @@ func runUninstall(
 		}
 	}
 
-	fmt.Fprintln(out, "oku is uninstalled")
+	finished(out, "oku is uninstalled")
+
+	// Each list is a note with its items under it. A command to run is not
+	// wrapped, so that it copies as one line.
+	left := func(note string, items []string) {
+		warn(out, "%s", note)
+
+		for _, item := range items {
+			fmt.Fprintf(out, "  %s\n", s.Home(item))
+		}
+	}
+
+	commands := func(lines ...string) {
+		for _, line := range lines {
+			fmt.Fprintf(out, "  %s\n", s.Accent(line))
+		}
+	}
 
 	if len(aside) > 0 {
-		fmt.Fprintf(
-			out, "a program that oku installed still runs, and its files go once it ends:\n  %s\n",
-			strings.Join(aside, "\n  "),
-		)
+		left("a program that oku installed still runs, and its files go once it ends:", aside)
 	}
 
 	if len(notOkus) > 0 {
-		fmt.Fprintf(
-			out, "left in place, because oku did not write them:\n  %s\n",
-			strings.Join(notOkus, "\n  "),
-		)
+		left("left in place, because oku did not write them:", notOkus)
 	}
 
 	if emptyRoot != "" {
-		fmt.Fprintf(
-			out,
-			"left in place, empty:\n  %s\nremove it with: sudo rmdir %s\n",
-			emptyRoot,
-			emptyRoot,
-		)
+		left("left in place, empty:", []string{emptyRoot})
+		fmt.Fprintln(out, "remove it with:")
+		commands("sudo rmdir " + emptyRoot)
 	}
 
 	if len(stay) > 0 {
-		fmt.Fprintln(out, "left in place, because removing them needs administrator rights:")
-
+		var items []string
 		for _, item := range stay {
-			fmt.Fprintf(out, "  %-8s %s\n", item.Kind, item.Target)
+			items = append(items, fmt.Sprintf("%-8s %s", item.Kind, item.Target))
 		}
+
+		left("left in place, because removing them needs administrator rights:", items)
 
 		if runtime.GOOS == "windows" {
 			fmt.Fprintln(out, "remove them in a terminal that runs as administrator, with:")
@@ -223,23 +233,19 @@ func runUninstall(
 
 		for _, item := range stay {
 			if item.Kind == "service" {
-				fmt.Fprintf(out, "  %s\n", stopCommand(item.Name))
+				commands(stopCommand(item.Name))
 			}
 
-			fmt.Fprintf(out, "  %s\n", removeCommand(item.Target))
+			commands(removeCommand(item.Target))
 		}
 	}
 
 	if lines := hookLines(); len(lines) > 0 {
-		fmt.Fprintf(
-			out,
-			"remove the oku hook from your shell startup file:\n  %s\n",
-			strings.Join(lines, "\n  "),
-		)
+		left("remove the oku hook from your shell startup file:", lines)
 	}
 
 	if slices.Contains(filepath.SplitList(os.Getenv("PATH")), binDir) {
-		fmt.Fprintf(out, "remove %s from PATH in your shell config\n", binDir)
+		warn(out, "remove %s from PATH in your shell config", binDir)
 	}
 
 	return nil

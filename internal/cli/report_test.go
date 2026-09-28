@@ -564,3 +564,47 @@ func TestB438ATerminalNoteStartsWithAMark(t *testing.T) {
 		t.Fatalf("key generate should mark the file and the note:\n%q", out)
 	}
 }
+
+func TestB439GCAndConfigCommandsMarkTheirLines(t *testing.T) {
+	t.Setenv("NO_COLOR", "")
+	t.Setenv("FORCE_COLOR", "1")
+
+	m := newMachine(t)
+	ref := m.manifest(t, "tool", map[string]string{"tool": script}, `bin = ["tool"]`)
+
+	_, err := m.run(t, "", "add", ref)
+	must(t, err)
+
+	leftover := filepath.Join(m.data, "store", "left-1.0.0-0123456789abcdef")
+	must(t, os.MkdirAll(leftover, 0o755))
+
+	out, err := m.run(t, "", "gc", "--dry-run")
+	if err != nil || !strings.Contains(out, "~\x1b[0m would remove left-1.0.0-") ||
+		!strings.Contains(out, "~\x1b[0m would free") {
+		t.Fatalf("a dry run of gc should mark each line with a tilde: %v\n%s", err, out)
+	}
+
+	out, err = m.run(t, "", "gc")
+	if err != nil || !strings.Contains(out, "-\x1b[0m removed left-1.0.0-") ||
+		!strings.Contains(out, "✓\x1b[0m freed") {
+		t.Fatalf("gc should mark a removal with a minus and the total with a check: %v\n%s", err, out)
+	}
+
+	m.writeFilesList(t, "[packages]\n")
+
+	out, err = m.run(t, "", "sync", "--dry-run")
+	if err != nil || !strings.Contains(out, "~\x1b[0m would remove the package tool") ||
+		!strings.Contains(out, "\x1b[2mdry run: nothing was changed") {
+		t.Fatalf("a dry run should mark what it would do and end with a dim line: %v\n%s", err, out)
+	}
+
+	out, err = m.run(t, "", "source", "add", "core", "github:someone/recipes")
+	if err != nil || !strings.Contains(out, "✓\x1b[0m core is github:someone/recipes") {
+		t.Fatalf("source add should mark its line with a check: %v\n%s", err, out)
+	}
+
+	out, err = m.run(t, "", "source", "remove", "core")
+	if err != nil || !strings.Contains(out, "-\x1b[0m removed core") {
+		t.Fatalf("source remove should mark its line with a minus: %v\n%s", err, out)
+	}
+}

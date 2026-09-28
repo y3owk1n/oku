@@ -592,11 +592,11 @@ write.
 
 ```
 $ oku sync --dry-run
-would remove the package fd
-would install ripgrep 15.2.0
-would change the content of /home/you/.config/ghostty/config
-would write the file /home/you/.config/git/config
-would write the setting com.apple.dock tilesize
+~ would remove the package fd
+~ would install ripgrep 15.2.0
+~ would change the content of /home/you/.config/ghostty/config
+~ would write the file /home/you/.config/git/config
+~ would write the setting com.apple.dock tilesize
 dry run: nothing was changed
 ```
 
@@ -627,7 +627,7 @@ See [New machine](../guides/new-machine.md) for when to use it.
 
 ```
 $ oku sync github:you/machines
-adopted github:you/machines with 23 locked packages
+✓ adopted github:you/machines with 23 locked packages
 profile now holds 23 packages
 ```
 
@@ -696,8 +696,8 @@ $ oku setup --system
 this creates, with administrator rights:
   /opt/oku  owned by you
 ✓ continue? yes
-the store root is now /opt/oku
-run "oku sync" to install your packages there, then "oku gc" to delete the old copies
+✓ the store root is now /opt/oku
+run oku sync to install your packages there, then oku gc to delete the old copies
 ```
 
 - The root is `/opt/oku`, and `%ProgramData%\oku` on Windows.
@@ -806,9 +806,9 @@ identical files of store paths that an older oku installed, see
 
 ```
 $ oku gc --keep 2
-removed generation 1
-removed ripgrep-14.0.3-4c8fe21b8d1d13c4 (4.6 MiB)
-freed 4.6 MiB from 1 store path
+- removed generation 1
+- removed ripgrep-14.0.3-4c8fe21b8d1d13c4 (4.6 MiB)
+✓ freed 4.6 MiB from 1 store path
 ```
 
 - Old generations keep their packages, so a plain `oku gc` usually finds
@@ -823,7 +823,7 @@ freed 4.6 MiB from 1 store path
   its own. `--dry-run` names such projects and removes nothing.
 
   ```
-  removed project ~/Dev/old-thing, its folder is gone (3 generations)
+  - removed project ~/Dev/old-thing, its folder is gone (3 generations)
   ```
 - It keeps a project on a drive that is not mounted, such as one under
   `/Volumes`, `/media` or `/mnt`, or on a missing Windows drive, and says so.
@@ -841,7 +841,7 @@ freed 4.6 MiB from 1 store path
   ```
   $ oku gc
   shared the identical files of 109 store paths (728.4 MiB)
-  freed 728.4 MiB from identical files
+  ✓ freed 728.4 MiB from identical files
   ```
 - Windows refuses to delete a program that runs. When a program of an old
   generation or of an unused store path still runs, gc moves its files into a
@@ -875,11 +875,11 @@ freed 4.6 MiB from 1 store path
 
 ```
 $ oku gc --keep 1 --cache
-removed generation 1
-removed ripgrep-14.0.3-4c8fe21b8d1d13c4 (4.6 MiB)
-removed 38 files from the download cache (1.9 GiB)
+- removed generation 1
+- removed ripgrep-14.0.3-4c8fe21b8d1d13c4 (4.6 MiB)
+- removed 38 files from the download cache (1.9 GiB)
 removed 12 answers from the API cache (3.1 MiB)
-freed 1.9 GiB from 1 store path, 38 cached files and 12 kept answers
+✓ freed 1.9 GiB from 1 store path, 38 cached files and 12 kept answers
 ```
 - It refuses to run while an unfinished change waits to be put back.
 - You cannot roll back to a deleted generation.
@@ -965,7 +965,7 @@ back.
 
 ```
 $ oku allow
-allowed /home/you/work/api
+✓ allowed /home/you/work/api
 ```
 
 ### oku hook
@@ -1218,7 +1218,7 @@ a full ref. See [Sources](refs.md#sources-and-aliases).
 
 ```
 $ oku source add core github:you/recipes
-core is github:you/recipes
+✓ core is github:you/recipes
 $ oku source list
 core  github:you/recipes
 ```
@@ -1430,10 +1430,11 @@ need administrator rights, a second question asks about them:
   shared store root   /opt/oku (needs administrator rights)
 ✓ continue? yes
 ✗ remove what needs administrator rights? no
-oku is uninstalled
-left in place, empty:
+✓ oku is uninstalled
+! left in place, empty:
   /opt/oku
-remove it with: sudo rmdir /opt/oku
+remove it with:
+  sudo rmdir /opt/oku
 ```
 
 Answering no still empties `/opt/oku`, because your user owns it, and prints

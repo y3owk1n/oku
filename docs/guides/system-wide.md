@@ -147,8 +147,8 @@ $ oku setup --system
 this creates, with administrator rights:
   /opt/oku  owned by you
 ✓ continue? yes
-the store root is now /opt/oku
-run "oku sync" to install your packages there, then "oku gc" to delete the old copies
+✓ the store root is now /opt/oku
+run oku sync to install your packages there, then oku gc to delete the old copies
 ```
 
 `/opt` belongs to root, so oku runs one command through `sudo` to create the
@@ -188,8 +188,8 @@ about it in a second question:
   service             /etc/systemd/system/oku-postgres.service (needs administrator rights)
 ✓ continue? yes
 ✗ remove what needs administrator rights? no
-oku is uninstalled
-left in place, because removing them needs administrator rights:
+✓ oku is uninstalled
+! left in place, because removing them needs administrator rights:
   service  /etc/systemd/system/oku-postgres.service
 remove them with:
   sudo systemctl disable --now oku-postgres.service
@@ -207,10 +207,11 @@ After `oku setup --system` the list includes the shared store root:
   shared store root   /opt/oku (needs administrator rights)
 ✓ continue? yes
 ✗ remove what needs administrator rights? no
-oku is uninstalled
-left in place, empty:
+✓ oku is uninstalled
+! left in place, empty:
   /opt/oku
-remove it with: sudo rmdir /opt/oku
+remove it with:
+  sudo rmdir /opt/oku
 ```
 
 Answering no still deletes everything inside `/opt/oku`, because your user owns

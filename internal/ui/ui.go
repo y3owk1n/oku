@@ -228,6 +228,16 @@ func (s Style) Gone(text string) string {
 
 	return s.Bad("-") + " " + text
 }
+
+// Would marks a line for something a dry run would change, with a yellow tilde
+// in front on a terminal.
+func (s Style) Would(text string) string {
+	if !s.on {
+		return text
+	}
+
+	return s.Warn("~") + " " + text
+}
 func (s Style) Bullet() string { return s.Dim(s.Pick("•", "-")) }
 func (s Style) Arrow() string  { return s.Pick("→", "->") }
 

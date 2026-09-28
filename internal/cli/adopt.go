@@ -80,7 +80,7 @@ func adopt(cmd *cobra.Command, opts Options, e env, arg string) error {
 			}
 		}
 
-		fmt.Fprintf(out, "adopted %s with %d locked packages\n", r, len(adopted.Packages))
+		finished(out, "adopted %s with %d locked packages", r, len(adopted.Packages))
 	}
 
 	sum := sha256.Sum256(fetched.Data)

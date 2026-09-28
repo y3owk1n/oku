@@ -50,7 +50,7 @@ can edit:
 $ oku manifest init --from sharkdp/fd
 downloading https://github.com/sharkdp/fd/releases/download/v10.5.0/fd-v10.5.0-x86_64-unknown-linux-gnu.tar.gz
 downloading https://github.com/sharkdp/fd/releases/download/v10.5.0/fd-v10.5.0-x86_64-pc-windows-gnu.zip
-wrote oku.pkg.toml
+✓ wrote oku.pkg.toml
 ```
 
 It opens one asset per archive format to see the layout, and writes an artifact
@@ -333,7 +333,7 @@ bin = ["fd"]
 ```
 $ oku manifest bump
 looking up the versions of sharkdp/fd
-fd 10.4.2 -> 10.5.0, 1 checksums updated in oku.pkg.toml
+✓ fd 10.4.2 → 10.5.0, 1 checksums updated in oku.pkg.toml
 ```
 
 It edits the file as text, so comments and layout stay. `--to` picks another

@@ -18,6 +18,7 @@ import (
 	"github.com/y3owk1n/oku/internal/platform"
 	"github.com/y3owk1n/oku/internal/ref"
 	"github.com/y3owk1n/oku/internal/tempdir"
+	"github.com/y3owk1n/oku/internal/ui"
 )
 
 func newManifestCmd(opts Options) *cobra.Command {
@@ -101,7 +102,7 @@ this machine to find the executable, so run it where a release asset exists.`,
 				return err
 			}
 
-			fmt.Fprintf(cmd.OutOrStdout(), "wrote %s\n", output)
+			finished(cmd.OutOrStdout(), "wrote %s", output)
 
 			return nil
 		},
@@ -432,11 +433,12 @@ func runBump(cmd *cobra.Command, opts Options, file, repo, prefix, to string) er
 		return err
 	}
 
-	fmt.Fprintf(
+	finished(
 		out,
-		"%s %s -> %s, %d checksums updated in %s\n",
+		"%s %s %s %s, %d checksums updated in %s",
 		m.Package.Name,
 		old,
+		ui.For(out).Arrow(),
 		release.Version,
 		updated,
 		file,

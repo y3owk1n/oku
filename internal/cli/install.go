@@ -1753,6 +1753,20 @@ func warn(w io.Writer, format string, args ...any) {
 	fmt.Fprintln(w, text)
 }
 
+// finished prints a line for something a command did, with a check in front
+// on a terminal.
+func finished(w io.Writer, format string, args ...any) {
+	s := ui.For(w)
+	fmt.Fprintln(w, s.Done(s.Homes(fmt.Sprintf(format, args...))))
+}
+
+// removed prints a line for something a command took away, with a minus in
+// front on a terminal.
+func removed(w io.Writer, format string, args ...any) {
+	s := ui.For(w)
+	fmt.Fprintln(w, s.Gone(s.Homes(fmt.Sprintf(format, args...))))
+}
+
 // reportNarrowed says which platforms the package has no artifact or build
 // for, and the when that list now says for it.
 func reportNarrowed(w io.Writer, got installed, listPath string) {

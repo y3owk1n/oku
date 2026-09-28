@@ -167,10 +167,10 @@ old generations first with `--keep`:
 
 ```
 $ oku gc --keep 2
-removed generation 1
-removed generation 2
-removed ripgrep-14.1.1-77da99cdceeb3140 (4.5 MiB)
-freed 4.5 MiB from 1 store path
+- removed generation 1
+- removed generation 2
+- removed ripgrep-14.1.1-77da99cdceeb3140 (4.5 MiB)
+✓ freed 4.5 MiB from 1 store path
 ```
 
 - `--keep N` deletes every generation except the newest N, in every profile,
@@ -206,10 +206,10 @@ command has read for 30 days:
 
 ```
 $ oku gc --keep 1 --cache
-removed generation 1
-removed ripgrep-14.0.3-4c8fe21b8d1d13c4 (4.6 MiB)
-removed 38 files from the download cache (1.9 GiB)
-freed 1.9 GiB from 1 store path and 38 cached files
+- removed generation 1
+- removed ripgrep-14.0.3-4c8fe21b8d1d13c4 (4.6 MiB)
+- removed 38 files from the download cache (1.9 GiB)
+✓ freed 1.9 GiB from 1 store path and 38 cached files
 ```
 
 A package whose download gc deleted still runs, because its store path holds the

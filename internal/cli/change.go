@@ -250,7 +250,7 @@ func (e env) describe(cmd *cobra.Command, c change, plan exposePlan) error {
 	say := func(format string, args ...any) {
 		lines++
 
-		fmt.Fprintln(out, s.Homes(fmt.Sprintf(format, args...)))
+		fmt.Fprintln(out, s.Would(s.Homes(fmt.Sprintf(format, args...))))
 	}
 
 	have, err := prof.PackagesOf(prof.Current())
@@ -304,12 +304,12 @@ func (e env) describe(cmd *cobra.Command, c change, plan exposePlan) error {
 	}
 
 	if lines == 0 {
-		fmt.Fprintln(out, "dry run: already in sync")
+		fmt.Fprintln(out, s.Dim("dry run: already in sync"))
 
 		return nil
 	}
 
-	fmt.Fprintln(out, "dry run: nothing was changed")
+	fmt.Fprintln(out, s.Dim("dry run: nothing was changed"))
 
 	return nil
 }

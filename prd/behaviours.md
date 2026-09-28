@@ -57,6 +57,12 @@ order step in `prd/product.md`.
   it when two columns do not fit. A pipe gets the text unchanged.
 - B235 [1] A command names its project on stderr once. On a terminal the
   rows of `sync --dry-run` start with a yellow tilde, not a check.
+- B439 [1] On a terminal each line of a dry run starts with a yellow tilde,
+  and its closing `dry run:` line is dim. `gc` starts each removal with a red
+  minus and its closing line with a check. `source`, `cache`, `key trust`,
+  `key revoke`, `allow`, `deny`, `adopt`, `manifest init`, `manifest bump`,
+  `setup` and `self uninstall` print a check before what they did and a minus
+  before what they took away. A note of what they left starts with `!`.
 - B236 [1] `oku add` takes several refs and adds them one after another, one
   generation each, and says once how to run their programs, with "it" for one
   package and "them" for several. A failure stops

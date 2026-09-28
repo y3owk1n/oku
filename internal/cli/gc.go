@@ -147,15 +147,16 @@ func runGC(cmd *cobra.Command, r profile.Retention, retain ages, dryRun, cache b
 	s := ui.For(out)
 	verb := "removed"
 
-	// A dry run removes nothing, so its lines carry no check.
-	mark := s.Done
+	// A removal gets a minus and the closing line a check. A dry run changes
+	// nothing, so each of its lines gets a tilde.
+	gone, done := s.Gone, s.Done
 	if dryRun {
-		verb, mark = "would remove", func(text string) string { return text }
+		verb, gone, done = "would remove", s.Would, s.Would
 	}
 
 	// A project that is gone takes its profile with it, and gc then frees the
 	// store paths that only it used.
-	goneProjects, err := e.removeGoneProjects(out, profiles, verb, mark, dryRun)
+	goneProjects, err := e.removeGoneProjects(out, profiles, verb, gone, dryRun)
 	if err != nil {
 		return err
 	}
@@ -173,7 +174,7 @@ func runGC(cmd *cobra.Command, r profile.Retention, retain ages, dryRun, cache b
 			}
 
 			for _, n := range pruned[prof] {
-				fmt.Fprintln(out, mark(fmt.Sprintf("%s generation %d", verb, n)))
+				fmt.Fprintln(out, gone(fmt.Sprintf("%s generation %d", verb, n)))
 			}
 		}
 	}
@@ -212,7 +213,7 @@ func runGC(cmd *cobra.Command, r profile.Retention, retain ages, dryRun, cache b
 
 			unused[path] = found[path]
 			freed += found[path]
-			fmt.Fprintln(out, mark(fmt.Sprintf(
+			fmt.Fprintln(out, gone(fmt.Sprintf(
 				"%s %s (%s)", verb, filepath.Base(path), status.Size(found[path]),
 			)))
 		}
@@ -269,10 +270,10 @@ func runGC(cmd *cobra.Command, r profile.Retention, retain ages, dryRun, cache b
 
 	switch {
 	case dryRun && sharedPaths > 0:
-		fmt.Fprintf(out, "would share the identical files of %s\n", count(sharedPaths, "store path"))
+		fmt.Fprintln(out, done("would share the identical files of "+count(sharedPaths, "store path")))
 	case saved > 0:
 		freed += saved
-		fmt.Fprintln(out, mark(fmt.Sprintf(
+		fmt.Fprintln(out, done(fmt.Sprintf(
 			"shared the identical files of %s (%s)", count(sharedPaths, "store path"), status.Size(saved),
 		)))
 	}
@@ -294,7 +295,7 @@ func runGC(cmd *cobra.Command, r profile.Retention, retain ages, dryRun, cache b
 		}
 
 		freed += size
-		fmt.Fprintln(out, mark(fmt.Sprintf(
+		fmt.Fprintln(out, gone(fmt.Sprintf(
 			"%s %s, left by an oku process that ended (%s)", verb, path, status.Size(size),
 		)))
 	}
@@ -335,7 +336,7 @@ func runGC(cmd *cobra.Command, r profile.Retention, retain ages, dryRun, cache b
 
 			if len(part.files) > 0 {
 				freed += size
-				fmt.Fprintln(out, mark(fmt.Sprintf(
+				fmt.Fprintln(out, gone(fmt.Sprintf(
 					"%s %s from the %s (%s)",
 					verb, count(len(part.files), part.noun), part.what, status.Size(size),
 				)))
@@ -358,7 +359,7 @@ func runGC(cmd *cobra.Command, r profile.Retention, retain ages, dryRun, cache b
 			text += ", and every cached download belongs to one"
 		}
 
-		fmt.Fprintln(out, mark(text))
+		fmt.Fprintln(out, done(text))
 
 		return nil
 	}
@@ -397,7 +398,7 @@ func runGC(cmd *cobra.Command, r profile.Retention, retain ages, dryRun, cache b
 		summary = "would free"
 	}
 
-	fmt.Fprintln(out, mark(fmt.Sprintf("%s %s from %s", summary, status.Size(freed), noun)))
+	fmt.Fprintln(out, done(fmt.Sprintf("%s %s from %s", summary, status.Size(freed), noun)))
 
 	return nil
 }
