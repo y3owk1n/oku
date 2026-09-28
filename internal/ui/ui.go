@@ -1,7 +1,8 @@
-// Package ui styles the text that oku prints. On a terminal that accepts colour
-// it adds ANSI codes, unicode glyphs and column headers. Anywhere else, such as
-// a pipe, a CI log or a test, every function returns its input unchanged, so
-// the plain text a script reads never depends on the terminal.
+// Package ui styles the text that oku prints. On a terminal it adds unicode
+// glyphs, column headers and "~" paths, and colour unless NO_COLOR is set.
+// Anywhere else, such as a pipe, a CI log or a test, every function returns its
+// input unchanged, so the plain text a script reads never depends on the
+// terminal.
 package ui
 
 import (
@@ -19,6 +20,9 @@ import (
 // Style renders text for one writer.
 type Style struct {
 	on bool
+	// colour is whether a styled writer also gets colour codes. NO_COLOR turns
+	// it off.
+	colour bool
 	// width is the columns of the terminal, and 0 when w is not one.
 	width int
 }
@@ -27,14 +31,18 @@ type Style struct {
 // buffer under FORCE_COLOR.
 const defaultWidth = 80
 
-// For returns the Style of w. Colour is on when w is a terminal, TERM is not
-// "dumb" and NO_COLOR is unset. FORCE_COLOR turns it on for any writer, so a
-// pager or a screenshot script can ask for it, and COLUMNS then sets the width.
+// For returns the Style of w. Styling is on when w is a terminal and TERM is not
+// "dumb". FORCE_COLOR turns it on for any writer, so a pager or a screenshot
+// script can ask for it, and COLUMNS then sets the width. NO_COLOR keeps the
+// styling and drops only the colour.
 func For(w io.Writer) Style {
-	if os.Getenv("NO_COLOR") != "" {
-		return Style{}
-	}
+	s := forWriter(w)
+	s.colour = s.on && os.Getenv("NO_COLOR") == ""
 
+	return s
+}
+
+func forWriter(w io.Writer) Style {
 	file, ok := w.(*os.File)
 	if ok && term.IsTerminal(int(file.Fd())) && os.Getenv("TERM") != "dumb" {
 		width, _, err := term.GetSize(int(file.Fd()))
@@ -134,7 +142,7 @@ const (
 )
 
 func (s Style) wrap(code, text string) string {
-	if !s.on || text == "" {
+	if !s.colour || text == "" {
 		return text
 	}
 
@@ -166,9 +174,9 @@ func (s Style) Alert(text string) string { return s.wrap(bold+red, text) }
 func (s Style) Heading(text string) string { return s.wrap(bold+blue, text) }
 
 // Code shows each `command` in text in the accent colour and drops its
-// backticks. Off a terminal the backticks stay.
+// backticks. Without colour the backticks stay.
 func (s Style) Code(text string) string {
-	if !s.on {
+	if !s.colour {
 		return text
 	}
 
