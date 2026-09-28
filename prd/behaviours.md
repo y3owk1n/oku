@@ -1212,6 +1212,10 @@ order step in `prd/product.md`.
   the password for `sudo`, the rows and build logs of the packages that
   install in parallel wait, and appear below the answer once the user gives it. Two
   packages that need an approval ask one after the other.
+- B436 [11] A yes or no question defaults to no. On a terminal one key
+  answers it. `y` is yes, and `n`, Enter, Esc or Ctrl-C is no. The question
+  then becomes one line with the answer. From a pipe each question reads its
+  own line, and only `y` or `yes` is yes.
 - B176 [11] While oku waits for a download, a lookup, a clone, an unpack, a
   cache or a build step, stderr says what it waits for and for which package.
   A terminal shows one line per package, from its first wait to its last, with
