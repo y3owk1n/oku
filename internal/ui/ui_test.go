@@ -248,6 +248,7 @@ func TestB413CleanShowsControlCharactersAndKeepsTabsAndNewlines(t *testing.T) {
 		"tab\tand\nnewline":     "tab\tand\nnewline",
 		"hide\x1b[8mthis":       `hide\x1b[8mthis`,
 		"back\rover":            `back\x0dover`,
+		"line end\r\nnext":      "line end\nnext",
 		"csi\u009b2J and\u007f": `csi\x9b2J and\x7f`,
 	} {
 		if got := ui.Clean(in); got != want {
