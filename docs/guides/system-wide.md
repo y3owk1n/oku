@@ -27,7 +27,7 @@ Add the package with `--system`:
 $ oku add github:you/recipes#postgres --system --service
 this changes, with administrator rights:
   write  service  /etc/systemd/system/oku-postgres.service
-continue? [y/N] y
+✓ continue? yes
 service postgres is running and starts at boot
 added postgres 16.3
 ```
@@ -146,7 +146,7 @@ Prebuilt downloads work from any store, so skip this unless you share builds.
 $ oku setup --system
 this creates, with administrator rights:
   /opt/oku  owned by you
-continue? [y/N] y
+✓ continue? yes
 the store root is now /opt/oku
 run "oku sync" to install your packages there, then "oku gc" to delete the old copies
 ```
@@ -186,8 +186,8 @@ about it in a second question:
 
 ```
   service             /etc/systemd/system/oku-postgres.service (needs administrator rights)
-continue? [y/N] y
-remove what needs administrator rights? [y/N] n
+✓ continue? yes
+✗ remove what needs administrator rights? no
 oku is uninstalled
 left in place, because removing them needs administrator rights:
   service  /etc/systemd/system/oku-postgres.service
@@ -205,8 +205,8 @@ After `oku setup --system` the list includes the shared store root:
 
 ```
   shared store root   /opt/oku (needs administrator rights)
-continue? [y/N] y
-remove what needs administrator rights? [y/N] n
+✓ continue? yes
+✗ remove what needs administrator rights? no
 oku is uninstalled
 left in place, empty:
   /opt/oku

@@ -695,7 +695,7 @@ builds from source can be shared. See [Build caches](../guides/build-caches.md).
 $ oku setup --system
 this creates, with administrator rights:
   /opt/oku  owned by you
-continue? [y/N] y
+✓ continue? yes
 the store root is now /opt/oku
 run "oku sync" to install your packages there, then "oku gc" to delete the old copies
 ```
@@ -1422,13 +1422,13 @@ Anything else in the config directory is yours, such as the sources of
 `[files]`, your own manifests or a `.git` directory. It stays, and uninstall
 lists it. A project's `oku.toml` and `oku.lock` stay too.
 
-Any answer other than `y` or `yes` cancels and removes nothing. When some items
+Any answer other than yes cancels and removes nothing. When some items
 need administrator rights, a second question asks about them:
 
 ```
   shared store root   /opt/oku (needs administrator rights)
-continue? [y/N] y
-remove what needs administrator rights? [y/N] n
+✓ continue? yes
+✗ remove what needs administrator rights? no
 oku is uninstalled
 left in place, empty:
   /opt/oku
@@ -1540,6 +1540,11 @@ These rules apply to every command.
   platform with a dim `·`. The last line of a change says what it did, such
   as `✓ done in 3s` or `✓ freed 1.2 GiB from 14 store paths`. A command to type
   in a hint shows in colour, without its backticks.
+- **Questions.** A yes or no question starts with `?` and ends with `y/N`,
+  where no is the default. On a terminal one key answers it. `y` goes ahead,
+  and `n`, Enter or Esc says no. The question then turns into one line with
+  `✓` or `✗` and the answer. From a pipe oku reads a line, and only `y` or
+  `yes` goes ahead.
 - **Width.** A table fits the terminal. Its last column wraps under itself.
   oku cuts a column that must give room and ends it with `…`. Under 60
   columns, a table that does not fit prints each row as a block of label and

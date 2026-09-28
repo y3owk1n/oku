@@ -8208,3 +8208,25 @@ func TestB358SyncOfAnNPMPackageInTheStoreRunsNoNPM(t *testing.T) {
 		t.Fatalf("sync built the package again:\n%s", out)
 	}
 }
+
+func TestB436TwoQuestionsReadTheirOwnAnswers(t *testing.T) {
+	m := newMachine(t)
+	m.opts.Interactive = yes()
+
+	var refs []string
+
+	for _, name := range []string{"one", "two"} {
+		path := filepath.Join(m.fixtures, name+".toml")
+		must(t, os.WriteFile(path, []byte(
+			"[package]\nname = \""+name+"\"\n[version]\nvalue = \"1.0.0\"\n[build]\n"+
+				strings.ReplaceAll(writeTool+installTool, "tool", name),
+		), 0o644))
+
+		refs = append(refs, path)
+	}
+
+	out, err := m.run(t, "y\ny\n", append([]string{"add"}, refs...)...)
+	if err != nil || !strings.Contains(out, "approved one") || !strings.Contains(out, "approved two") {
+		t.Fatalf("want both approved from one stdin: %v\n%s", err, out)
+	}
+}

@@ -254,7 +254,7 @@ just 1.58.0 builds from source and runs these commands on your machine:
   step 1  (downloads packages, checked against oku.lock)
     vendor cargo, which installs just and its dependencies and runs none of their scripts
 
-run them? [y/N]
+? run them? y/N
 ```
 
 oku remembers the answer for that exact manifest. When stdin is not a
