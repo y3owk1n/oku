@@ -1216,6 +1216,8 @@ order step in `prd/product.md`.
   answers it. `y` is yes, and `n`, Enter, Esc or Ctrl-C is no. The question
   then becomes one line with the answer. From a pipe each question reads its
   own line, and only `y` or `yes` is yes.
+- B437 [11] With `NO_COLOR` set, a terminal prints no colour codes and keeps
+  its glyphs, table headers, `~` paths, fitted widths and live wait lines.
 - B176 [11] While oku waits for a download, a lookup, a clone, an unpack, a
   cache or a build step, stderr says what it waits for and for which package.
   A terminal shows one line per package, from its first wait to its last, with
