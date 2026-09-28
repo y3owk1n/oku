@@ -889,7 +889,8 @@ order step in `prd/product.md`.
 - B42 [5] Non-interactive runs refuse unapproved `run` steps unless `--yes`.
 - B413 [5] oku prints each control character in a package's text, other than
   a tab or a newline, as `\x1b` and the like: in the approval prompt, in
-  `--plan`, in `oku info`, in search results and in error messages.
+  `--plan`, in `oku info`, in search results and in error messages. oku drops a
+  carriage return that comes before a newline.
 - B411 [5] A package that sets `[env]` asks for approval as a build does, even
   from a download, and the prompt lists each variable with its value. Without
   a terminal oku refuses unless `--yes`. The same manifest never asks twice.

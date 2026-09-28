@@ -768,10 +768,12 @@ func (s Style) KV(w io.Writer, pairs ...[2]string) error {
 }
 
 // Clean makes the control characters in text visible, an escape as \x1b, and
-// keeps tabs and newlines. Text from a package, such as its description or a
-// command it runs, could otherwise move the cursor, hide the rest of a line or
-// write to the terminal's clipboard.
+// keeps tabs and newlines. It drops a carriage return before a newline, which
+// is how ssh and Windows programs end a line. Text from a package, such as its
+// description or a command it runs, could otherwise move the cursor, hide the
+// rest of a line or write to the terminal's clipboard.
 func Clean(text string) string {
+	text = strings.ReplaceAll(text, "\r\n", "\n")
 	if !strings.ContainsFunc(text, hidden) {
 		return text
 	}
