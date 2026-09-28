@@ -608,3 +608,56 @@ func TestB439GCAndConfigCommandsMarkTheirLines(t *testing.T) {
 		t.Fatalf("source remove should mark its line with a minus: %v\n%s", err, out)
 	}
 }
+
+func TestB440JSONIsRefusedWhereACommandHasNone(t *testing.T) {
+	m := newMachine(t)
+	ref := m.manifest(t, "tool", map[string]string{"tool": script}, `bin = ["tool"]`)
+
+	out, err := m.run(t, "", "sync", "--json")
+	if err == nil || !strings.Contains(err.Error(), "oku sync has no --json output") {
+		t.Fatalf("sync --json should fail: %v\n%s", err, out)
+	}
+
+	if _, err := m.run(t, "", "add", ref, "--json"); err == nil ||
+		!strings.Contains(err.Error(), "oku add prints JSON only with --plan") {
+		t.Fatalf("add --json without --plan should fail: %v", err)
+	}
+
+	if exists(m.profile("bin", "tool")) {
+		t.Fatal("a refused --json still installed the package")
+	}
+
+	out, err = m.run(t, "", "manifest", "lint", ref, "--json")
+	must(t, err)
+
+	var got []struct {
+		File     string   `json:"file"`
+		Errors   []string `json:"errors"`
+		Warnings []string `json:"warnings"`
+	}
+	must(t, json.Unmarshal([]byte(out), &got))
+
+	if len(got) != 1 || got[0].File != ref || got[0].Errors == nil || len(got[0].Errors) != 0 {
+		t.Fatalf("manifest lint --json = %s", out)
+	}
+}
+
+func TestB441LintMarksEachLineOnATerminal(t *testing.T) {
+	m := newMachine(t)
+	good := m.manifest(t, "tool", map[string]string{"tool": script}, `bin = ["tool"]`)
+	bad := filepath.Join(m.fixtures, "bad.toml")
+	must(t, os.WriteFile(bad, []byte("[package]\nname = \"bad\"\nversionn = 1\n"), 0o644))
+
+	out, err := m.run(t, "", "manifest", "lint", good, bad)
+	if err == nil || !strings.Contains(out, good+": ok") || !strings.Contains(out, bad+": error: ") {
+		t.Fatalf("a pipe should keep the file: kind: text lines: %v\n%s", err, out)
+	}
+
+	t.Setenv("NO_COLOR", "")
+	t.Setenv("FORCE_COLOR", "1")
+
+	out, _ = m.run(t, "", "manifest", "lint", good, bad)
+	if !strings.Contains(out, "✓\x1b[0m "+good) || !strings.Contains(out, "✗\x1b[0m \x1b[1m"+bad+":") {
+		t.Fatalf("a terminal should mark each file:\n%q", out)
+	}
+}

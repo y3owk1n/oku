@@ -135,7 +135,16 @@ status 1 when any file has an error. Warnings do not fail it.`,
 			}
 
 			out := cmd.OutOrStdout()
+			s := ui.For(out)
 			failed := 0
+
+			type linted struct {
+				File     string   `json:"file"`
+				Errors   []string `json:"errors"`
+				Warnings []string `json:"warnings"`
+			}
+
+			var reports []linted
 
 			for _, file := range args {
 				data, err := os.ReadFile(file)
@@ -144,19 +153,49 @@ status 1 when any file has an error. Warnings do not fail it.`,
 				}
 
 				report := manifest.Lint(data)
+				if len(report.Errors) > 0 {
+					failed++
+				}
 
+				if wantJSON(cmd) {
+					// A script iterates over each list, so an empty one is [] and not null.
+					reports = append(reports, linted{
+						file, append([]string{}, report.Errors...), append([]string{}, report.Warnings...),
+					})
+
+					continue
+				}
+
+				// A terminal gets a mark in front of each line. A pipe keeps the
+				// "file: kind: text" form that editors read.
 				for _, problem := range report.Errors {
-					fmt.Fprintf(out, "%s: error: %s\n", file, problem)
+					if s.On() {
+						fmt.Fprintf(out, "%s %s %s\n", s.Cross(), s.Bold(file+":"), s.Code(problem))
+					} else {
+						fmt.Fprintf(out, "%s: error: %s\n", file, problem)
+					}
 				}
 
 				for _, warning := range report.Warnings {
-					fmt.Fprintf(out, "%s: warning: %s\n", file, warning)
+					if s.On() {
+						fmt.Fprintf(out, "%s %s %s\n", s.Note(), s.Bold(file+":"), s.Code(warning))
+					} else {
+						fmt.Fprintf(out, "%s: warning: %s\n", file, warning)
+					}
 				}
 
-				if len(report.Errors) > 0 {
-					failed++
-				} else {
-					fmt.Fprintf(out, "%s: ok\n", file)
+				if len(report.Errors) == 0 {
+					if s.On() {
+						fmt.Fprintln(out, s.Done(file))
+					} else {
+						fmt.Fprintf(out, "%s: ok\n", file)
+					}
+				}
+			}
+
+			if wantJSON(cmd) {
+				if err := printJSON(cmd, reports); err != nil {
+					return err
 				}
 			}
 
@@ -531,12 +570,14 @@ func runManifestTest(
 		approve:    e.approver(cmd, opts, flags),
 		log:        buildLog(cmd, flags),
 		progress: func(step, total int, kind string, err error) {
-			result := "ok"
+			s := ui.For(out)
+			result := s.Pick(s.Check(), "ok")
+
 			if err != nil {
-				result = "FAILED"
+				result = s.Pick(s.Cross()+" "+s.Bad("failed"), "FAILED")
 			}
 
-			fmt.Fprintf(out, "[%d/%d] %-8s %s\n", step+1, total, kind, result)
+			fmt.Fprintf(out, "%s %-8s %s\n", s.Dim(fmt.Sprintf("[%d/%d]", step+1, total)), kind, result)
 		},
 	})
 	if err != nil {
@@ -548,14 +589,7 @@ func runManifestTest(
 	reportCache(cmd.ErrOrStderr(), got)
 
 	strategy := got.lock.Platforms[platform.Host().String()].Strategy
-	fmt.Fprintf(
-		out,
-		"%s %s works on %s (%s)\n",
-		got.lock.Name,
-		got.lock.Version,
-		platform.Host(),
-		strategy,
-	)
+	finished(out, "%s %s works on %s (%s)", got.lock.Name, got.lock.Version, platform.Host(), strategy)
 
 	for _, sub := range []string{"bin", "share/man", "share/completions"} {
 		_ = filepath.WalkDir(
@@ -572,7 +606,7 @@ func runManifestTest(
 	}
 
 	if keep {
-		fmt.Fprintf(out, "kept %s\n", got.profile.StorePath)
+		finished(out, "kept %s", got.profile.StorePath)
 	}
 
 	return nil

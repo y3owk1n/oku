@@ -98,9 +98,15 @@ func NewRootCmd(opts Options) *cobra.Command {
 		Version:       opts.Version,
 		SilenceUsage:  true,
 		SilenceErrors: true,
-		PersistentPreRun: func(cmd *cobra.Command, _ []string) {
+		PersistentPreRunE: func(cmd *cobra.Command, _ []string) error {
+			if err := checkJSON(cmd); err != nil {
+				return err
+			}
+
 			ctx := status.With(cmd.Context(), status.New(cmd.ErrOrStderr()))
 			cmd.SetContext(resolve.WithMemo(forge.WithAnswers(ctx)))
+
+			return nil
 		},
 	}
 
