@@ -313,6 +313,25 @@ with `--yes`. Answering no to the question gives
 | `no version satisfies ">=9", the versions found are ...` | A dep's version constraint matches nothing upstream. |
 | `dependency cycle: ...` | Two manifests depend on each other. Fix one of them. |
 
+## A git fetch fails with an ssh error
+
+```
+oku: tool: fetch the source: git ... fetch ...: exit status 128: Host key verification failed.
+```
+
+oku never lets ssh ask a question, since the progress line would hide it. So
+ssh fails when it would ask to trust a new host or to unlock a key. A manifest
+may name an `https://` repo, and your git config can still send it over ssh:
+
+```ini
+[url "git@github.com:"]
+	insteadOf = "https://github.com/"
+```
+
+Change `insteadOf` to `pushInsteadOf`, so fetches stay on https and only pushes
+use ssh. Or, to keep ssh, run `ssh -T git@github.com` once to trust the host,
+and `ssh-add` to load the key into your agent.
+
 ## A build ran without the sandbox
 
 ```
