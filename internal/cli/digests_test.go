@@ -142,6 +142,8 @@ func digestInferServer(t *testing.T, m *machine, files, digests map[string]strin
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
+		case "/api/repos/owner/tool/commits/HEAD":
+			fmt.Fprint(w, strings.Repeat("c", 40))
 		case "/api/repos/owner/tool/releases/latest":
 			fmt.Fprintf(w, `{"tag_name": "v1.4.0", "assets": [%s]}`, strings.Join(items, ","))
 		case "/api/repos/owner/tool/releases":

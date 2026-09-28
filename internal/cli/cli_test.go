@@ -7236,7 +7236,8 @@ func TestB92SelfUpdateReplacesTheBinaryOnlyAfterItsSignatureChecksOut(t *testing
 	out, err := m.run(t, "", "self", "update", "--check")
 	must(t, err)
 
-	if !strings.Contains(out, "1.4.0 is available") || current() != "binary" {
+	if !strings.Contains(out, "1.4.0 is available") || !strings.Contains(out, "run `oku self update` to take it") ||
+		current() != "binary" {
 		t.Fatalf("--check should report and change nothing:\n%s", out)
 	}
 

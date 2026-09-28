@@ -64,7 +64,9 @@ dep.`,
 			found := answer.InList != "" || len(answer.NeededBy) > 0
 
 			if !found {
-				return fmt.Errorf("%s is neither in your list nor a dep of anything in it", args[0])
+				return fmt.Errorf(
+					"%s is neither in your list nor a dep of anything in it, see `oku list`", args[0],
+				)
 			}
 
 			return nil

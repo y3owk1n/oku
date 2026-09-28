@@ -661,3 +661,30 @@ func TestB441LintMarksEachLineOnATerminal(t *testing.T) {
 		t.Fatalf("a terminal should mark each file:\n%q", out)
 	}
 }
+
+func TestB442AnErrorNamesTheNextStep(t *testing.T) {
+	m := newMachine(t)
+
+	_, err := m.run(t, "", "list", "--bogus")
+	if err == nil || !strings.Contains(err.Error(), "unknown flag: --bogus\nsee `oku list --help`") {
+		t.Fatalf("an unknown flag should point at the help: %v", err)
+	}
+
+	_, err = m.run(t, "", "why", "nothing")
+	if err == nil || !strings.Contains(err.Error(), "see `oku list`") {
+		t.Fatalf("why should point at the list: %v", err)
+	}
+
+	// A forge that has no such repo.
+	server := httptest.NewServer(http.NotFoundHandler())
+	t.Cleanup(server.Close)
+
+	m.opts.GitHubAPI = server.URL + "/api"
+	m.opts.GitHubRaw = server.URL + "/raw"
+
+	_, err = m.run(t, "", "add", "github:someone/typo")
+	if err == nil || !strings.Contains(err.Error(), "there is no repo at ") ||
+		strings.Contains(err.Error(), "no release to infer") {
+		t.Fatalf("add should say the repo is not there: %v", err)
+	}
+}
