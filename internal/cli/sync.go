@@ -369,8 +369,8 @@ func reconcile(
 		return err
 	}
 
-	// A failure leaves the profile as it was. The rows a terminal got already
-	// start with a check, so the error says that none of them was installed.
+	// A failure leaves the profile as it was. A terminal already got rows for
+	// the packages that were ready, so the error says that none was installed.
 	unchanged := func(err error) error {
 		if !rowsShown {
 			return err
@@ -802,15 +802,23 @@ func syncRow(_ ui.Style, tab *ui.Table, _, name, version, note string) {
 	tab.Row(line)
 }
 
-// liveRow is the line a terminal gets when a package finishes, in the style
-// of a package manager's install log: a green check for a package that is
-// installed, a dim dot for one pinned for another platform, a red minus for
-// one that left, and a yellow tilde for one a dry run would change. The name
-// is padded to the longest one, so the rows align.
+// liveRow is the line a terminal gets when a package is ready, before the
+// change commits. Its mark says what the change does to the package, and only
+// the closing line has a check. The marks are a green plus for a new package,
+// a cyan arrow for a new version, a cyan tilde for the same version changed, a
+// dim dot for one pinned for another platform, a red minus for one that left,
+// and a yellow tilde for one a dry run would change. The name is padded to the
+// longest one, so the rows align.
 func liveRow(s ui.Style, nameWidth int, kind, name, version, note string) string {
-	glyph := s.Good(s.Pick("✓", "ok"))
+	var glyph string
 
 	switch kind {
+	case "+":
+		glyph = s.Good("+")
+	case "^":
+		glyph = s.Accent(s.Pick("↑", "^"))
+	case "~":
+		glyph = s.Accent("~")
 	case "·":
 		glyph = s.Dim("·")
 	case "-":
