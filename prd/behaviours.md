@@ -63,6 +63,14 @@ order step in `prd/product.md`.
   `key revoke`, `allow`, `deny`, `adopt`, `manifest init`, `manifest bump`,
   `setup` and `self uninstall` print a check before what they did and a minus
   before what they took away. A note of what they left starts with `!`.
+- B440 [1] `--json` on a command that has no JSON output fails with
+  `oku <command> has no --json output` before it does anything, and `oku add`
+  takes it only with `--plan`. `manifest lint --json` prints a list of
+  `file`, `errors` and `warnings`, and still exits with 1 on an error.
+- B441 [1] On a terminal `manifest lint` starts an error with a red cross, a
+  warning with a yellow `!` and a file with no errors with a check, and
+  `manifest test` marks each step and its closing line. A pipe keeps the
+  `file: error: text` lines.
 - B236 [1] `oku add` takes several refs and adds them one after another, one
   generation each, and says once how to run their programs, with "it" for one
   package and "them" for several. A failure stops
