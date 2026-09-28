@@ -105,11 +105,8 @@ func runSetup(cmd *cobra.Command, opts Options, yes bool) error {
 		return err
 	}
 
-	fmt.Fprintf(out, "the store root is now %s\n", root)
-	fmt.Fprintln(
-		out,
-		`run "oku sync" to install your packages there, then "oku gc" to delete the old copies`,
-	)
+	finished(out, "the store root is now %s", root)
+	hint(out, "run `oku sync` to install your packages there, then `oku gc` to delete the old copies")
 
 	return nil
 }

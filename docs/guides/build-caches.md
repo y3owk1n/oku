@@ -15,9 +15,9 @@ Add the cache and trust the key of whoever fills it:
 
 ```
 $ oku cache add https://example.com/oku-cache
-added cache https://example.com/oku-cache
+✓ added cache https://example.com/oku-cache
 $ oku key trust RWRICenwB0kA6NZY/uo0EqhV0q1L4PIRu5svVTC7aZKX8n3URx0QbjmF
-trusted RWRICenwB0kA6NZY/uo0EqhV0q1L4PIRu5svVTC7aZKX8n3URx0QbjmF
+✓ trusted RWRICenwB0kA6NZY/uo0EqhV0q1L4PIRu5svVTC7aZKX8n3URx0QbjmF
 ```
 
 The location is an http(s) URL or a directory, such as a shared drive. Get the

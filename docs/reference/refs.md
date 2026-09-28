@@ -106,7 +106,7 @@ sources.
 
 ```
 $ oku source add core github:you/recipes
-core is github:you/recipes
+✓ core is github:you/recipes
 $ oku add core/ripgrep
 $ oku search grep
 core/ripgrep  Recursively search directories for a regex pattern

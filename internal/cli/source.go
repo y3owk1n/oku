@@ -54,7 +54,7 @@ with no sources.`,
 				return err
 			}
 
-			fmt.Fprintf(cmd.OutOrStdout(), "%s is %s\n", args[0], config.Sources[args[0]])
+			finished(cmd.OutOrStdout(), "%s is %s", args[0], config.Sources[args[0]])
 
 			return nil
 		},
@@ -85,7 +85,7 @@ with no sources.`,
 				return err
 			}
 
-			fmt.Fprintf(cmd.OutOrStdout(), "removed %s\n", args[0])
+			removed(cmd.OutOrStdout(), "removed %s", args[0])
 
 			return nil
 		},

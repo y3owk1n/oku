@@ -107,7 +107,7 @@ an entry only when a key from "oku key trust" signed it.`,
 					return err
 				}
 
-				fmt.Fprintf(cmd.OutOrStdout(), "added cache %s\n", location)
+				finished(cmd.OutOrStdout(), "added cache %s", location)
 
 				return nil
 			},
@@ -131,7 +131,7 @@ an entry only when a key from "oku key trust" signed it.`,
 						)
 					}
 
-					fmt.Fprintf(cmd.OutOrStdout(), "removed cache %s\n", args[0])
+					removed(cmd.OutOrStdout(), "removed cache %s", args[0])
 
 					return nil
 				})
@@ -351,7 +351,7 @@ func newKeyCmd() *cobra.Command {
 						c.TrustedKeys = append(c.TrustedKeys, key.String())
 					}
 
-					fmt.Fprintf(cmd.OutOrStdout(), "trusted %s\n", key)
+					finished(cmd.OutOrStdout(), "trusted %s", key)
 
 					return nil
 				})
@@ -372,7 +372,7 @@ func newKeyCmd() *cobra.Command {
 						return fmt.Errorf("%s is not a trusted key, see `oku key list`", args[0])
 					}
 
-					fmt.Fprintf(cmd.OutOrStdout(), "revoked %s\n", args[0])
+					removed(cmd.OutOrStdout(), "revoked %s", args[0])
 
 					return nil
 				})

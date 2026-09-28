@@ -1406,7 +1406,7 @@ writes a manifest from the repo's newest release and installs from it.
 
 ```
 $ oku manifest init --from owner/repo
-wrote oku.pkg.toml
+✓ wrote oku.pkg.toml
 ```
 
 | Ref | Inferred `version.from` |

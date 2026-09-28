@@ -108,7 +108,7 @@ Ask oku what that would change, without changing anything:
 
 ```
 $ oku sync --dry-run
-would change ripgrep from 14.1.1 to 15.2.0
+~ would change ripgrep from 14.1.1 to 15.2.0
 dry run: nothing was changed
 ```
 

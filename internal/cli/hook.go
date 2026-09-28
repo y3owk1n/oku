@@ -384,7 +384,7 @@ func setAllowed(cmd *cobra.Command, opts Options, args []string, allow bool) err
 			return err
 		}
 
-		fmt.Fprintf(cmd.OutOrStdout(), "denied %s\n", e.project)
+		removed(cmd.OutOrStdout(), "denied %s", e.project)
 
 		return nil
 	}
@@ -398,7 +398,7 @@ func setAllowed(cmd *cobra.Command, opts Options, args []string, allow bool) err
 		return err
 	}
 
-	fmt.Fprintf(cmd.OutOrStdout(), "allowed %s\n", e.project)
+	finished(cmd.OutOrStdout(), "allowed %s", e.project)
 
 	for _, path := range tracked {
 		fmt.Fprintf(cmd.OutOrStdout(), "  git tracks %s, so a change to it needs a new allow\n", path)

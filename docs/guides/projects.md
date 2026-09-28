@@ -69,7 +69,7 @@ Then allow the project, once:
 $ cd ~/work/api
 oku: /home/you/work/api/oku.toml is not allowed, run `oku allow` to use its programs here
 $ oku allow
-allowed /home/you/work/api
+✓ allowed /home/you/work/api
 $ which rg
 /home/you/.local/share/oku/profiles/project-2d27013d8c67/current/bin/rg
 $ cd ~ && which rg
@@ -142,7 +142,7 @@ to change without a new allow:
 
 ```
 $ oku allow
-allowed /home/you/work/api
+✓ allowed /home/you/work/api
   git tracks /home/you/work/api/.env, so a change to it needs a new allow
   git does not track /home/you/work/api/.env.deploy, so it is yours to change
 ```
