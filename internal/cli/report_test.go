@@ -536,3 +536,27 @@ func TestB242AnUpdateNamesEveryPackageThatDriftedFromTheLock(t *testing.T) {
 	_, err = m.run(t, "", "sync")
 	must(t, err)
 }
+
+func TestB438ATerminalNoteStartsWithAMark(t *testing.T) {
+	t.Setenv("NO_COLOR", "")
+	t.Setenv("FORCE_COLOR", "1")
+	t.Setenv("SHELL", "")
+
+	m := newMachine(t)
+	ref := m.manifest(t, "tool", map[string]string{"tool": script}, `bin = ["tool"]`)
+
+	out, err := m.run(t, "", "add", ref)
+	must(t, err)
+
+	if !strings.Contains(out, "!\x1b[0m add ") || !strings.Contains(out, " to PATH to run it") {
+		t.Fatalf("add should mark its PATH note:\n%q", out)
+	}
+
+	out, err = m.run(t, "", "key", "generate")
+	must(t, err)
+
+	if !strings.Contains(out, "✓\x1b[0m wrote the secret key") ||
+		!strings.Contains(out, "!\x1b[0m the key has no password") {
+		t.Fatalf("key generate should mark the file and the note:\n%q", out)
+	}
+}

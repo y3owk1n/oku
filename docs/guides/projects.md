@@ -20,7 +20,7 @@ $ cd src/handlers
 $ oku add github:BurntSushi/ripgrep@14.1.1
 project /home/you/work/api
 added ripgrep 14.1.1
-this project's programs are in /home/you/.local/share/oku/profiles/project-2d27013d8c67/current/bin
+! this project's programs are in ~/.local/share/oku/profiles/project-2d27013d8c67/current/bin
 ```
 
 oku wrote `oku.toml` and `oku.lock` in `~/work/api`. Commit both. The first

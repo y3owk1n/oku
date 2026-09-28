@@ -430,15 +430,12 @@ func (e env) recoverPending(cmd *cobra.Command, opts Options) error {
 	}
 
 	if p.From == 0 {
-		fmt.Fprintln(cmd.ErrOrStderr(), "the last change did not finish, so oku undid it")
+		warn(cmd.ErrOrStderr(), "the last change did not finish, so oku undid it")
 
 		return nil
 	}
 
-	fmt.Fprintf(
-		cmd.ErrOrStderr(),
-		"the last change did not finish, so oku put generation %d back\n", p.From,
-	)
+	warn(cmd.ErrOrStderr(), "the last change did not finish, so oku put generation %d back", p.From)
 
 	return nil
 }

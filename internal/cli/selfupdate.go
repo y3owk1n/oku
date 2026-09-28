@@ -117,10 +117,10 @@ func (e env) oldEnoughRelease(
 		return latest, false, nil
 	}
 
-	fmt.Fprintf(
+	warn(
 		cmd.OutOrStdout(),
 		"oku %s came out less than %s ago, so it waits until %s. "+
-			"--min-release-age 0 takes it now\n",
+			"`--min-release-age 0` takes it now",
 		strings.TrimPrefix(latest.Tag, "v"), resolve.FormatAge(age),
 		latest.Published.Add(age).Local().Format("2006-01-02 15:04"),
 	)

@@ -154,15 +154,12 @@ func (e env) planExposed(
 	}
 
 	if reason := e.skippedServices(opts, pkgs); reason != "" && e.project == "" {
-		fmt.Fprintf(notice, "services are skipped, because %s\n", reason)
+		warn(notice, "services are skipped, because %s", reason)
 	}
 
 	if e.project != "" {
 		if len(wanted) > 0 {
-			fmt.Fprintln(
-				notice,
-				"apps, fonts and services are only set up from the global list, not from a project",
-			)
+			warn(notice, "apps, fonts and services are only set up from the global list, not from a project")
 		}
 
 		return exposePlan{}, nil
@@ -185,7 +182,7 @@ func (e env) planExposed(
 		if system {
 			fmt.Fprintln(notice, "this changes, with administrator rights:")
 		} else {
-			fmt.Fprintln(notice, "left unchanged, because system scope needs administrator rights:")
+			warn(notice, "left unchanged, because system scope needs administrator rights:")
 		}
 
 		fmt.Fprint(notice, strings.Join(pending, ""))
@@ -195,7 +192,7 @@ func (e env) planExposed(
 		}
 
 		if !system {
-			fmt.Fprintln(notice, `run "oku sync --system" to apply them`)
+			hint(notice, "run `oku sync --system` to apply them")
 
 			wanted = keepSystem(ledger.Items, wanted)
 		}

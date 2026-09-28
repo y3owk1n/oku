@@ -35,7 +35,7 @@ func resolveSettings(
 
 	mine := slices.ContainsFunc(listed, func(s list.Setting) bool { return s.Backend == backend })
 	if mine && store.Unavailable() != "" {
-		fmt.Fprintf(notice, "[%s] is skipped, because %s\n", backend, store.Unavailable())
+		warn(notice, "[%s] is skipped, because %s", backend, store.Unavailable())
 
 		return nil, nil
 	}

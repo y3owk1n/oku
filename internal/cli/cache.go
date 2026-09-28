@@ -328,8 +328,10 @@ func newKeyCmd() *cobra.Command {
 				}
 
 				out := cmd.OutOrStdout()
-				fmt.Fprintf(out, "wrote the secret key to %s, it has no password\n", path)
-				fmt.Fprintf(out, "people who use your cache run:\n  oku key trust %s\n", public)
+				s := ui.For(out)
+				fmt.Fprintln(out, s.Done("wrote the secret key to "+s.Home(path)))
+				warn(out, "the key has no password, so keep the file private")
+				fmt.Fprintf(out, "people who use your cache run:\n  %s\n", s.Accent(fmt.Sprintf("oku key trust %s", public)))
 
 				return nil
 			},

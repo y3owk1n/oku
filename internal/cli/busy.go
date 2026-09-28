@@ -7,6 +7,7 @@ import (
 
 	"github.com/y3owk1n/oku/internal/busy"
 	"github.com/y3owk1n/oku/internal/dirs"
+	"github.com/y3owk1n/oku/internal/status"
 )
 
 // exclusive are the commands that change what oku keeps. Two at once would
@@ -62,12 +63,16 @@ func lockMachine(cmd *cobra.Command) (func(), error) {
 		return nil, err
 	}
 
+	// The wait is a status line, which goes away once oku has the lock.
+	stop := func() {}
+	defer func() { stop() }()
+
 	return busy.Lock(cmd.Context(), data, func(pid int) {
 		holder := "another oku process"
 		if pid > 0 {
 			holder = fmt.Sprintf("oku process %d", pid)
 		}
 
-		fmt.Fprintf(cmd.ErrOrStderr(), "waiting for %s to finish\n", holder)
+		stop = status.Start(cmd.Context(), "waiting for %s to finish", holder)
 	})
 }

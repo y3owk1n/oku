@@ -85,7 +85,8 @@ Create a signing key once, then push the packages you built:
 
 ```
 $ oku key generate
-wrote the secret key to ~/.config/oku/signing.key, it has no password
+✓ wrote the secret key to ~/.config/oku/signing.key
+! the key has no password, so keep the file private
 people who use your cache run:
   oku key trust RWRICenwB0kA6NZY/uo0EqhV0q1L4PIRu5svVTC7aZKX8n3URx0QbjmF
 $ oku cache push ./oku-cache jq
