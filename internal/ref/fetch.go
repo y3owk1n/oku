@@ -21,6 +21,7 @@ import (
 	"github.com/klauspost/compress/gzip"
 
 	"github.com/y3owk1n/oku/internal/forge"
+	"github.com/y3owk1n/oku/internal/gitcmd"
 	"github.com/y3owk1n/oku/internal/status"
 )
 
@@ -261,9 +262,7 @@ func git(ctx context.Context, dir string, args ...string) error {
 }
 
 func gitOutput(ctx context.Context, dir string, args ...string) (string, error) {
-	cmd := exec.CommandContext(ctx, "git", append([]string{"-C", dir}, args...)...)
-	// A credential prompt would hang a non-interactive install.
-	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+	cmd := gitcmd.Command(ctx, append([]string{"-C", dir}, args...)...)
 
 	out, err := cmd.CombinedOutput()
 	if err != nil {

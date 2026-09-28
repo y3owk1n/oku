@@ -395,6 +395,9 @@ order step in `prd/product.md`.
 - B177 [3] With `version.from = "git-branch"`, `add` builds the newest commit of
   `version.branch` as version `<date>-<commit>`. `sync` builds the locked commit
   after the branch has moved, and `update` takes the newest commit.
+- B435 [3] oku runs git's ssh in BatchMode. A fetch where ssh would ask about
+  an unknown host or a locked key fails with ssh's message and does not wait.
+  A `core.sshCommand` of OpenSSH still runs, with BatchMode added.
 - B381 [3] With `version.from = "git-tags"` on github.com, gitlab.com or
   codeberg.org, oku lists the tags through the host's API, and picks the same
   version as `git ls-remote` gives.

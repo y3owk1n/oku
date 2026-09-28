@@ -25,6 +25,7 @@ import (
 
 	"github.com/y3owk1n/oku/internal/clone"
 	"github.com/y3owk1n/oku/internal/expose"
+	"github.com/y3owk1n/oku/internal/gitcmd"
 	"github.com/y3owk1n/oku/internal/goproxy"
 	"github.com/y3owk1n/oku/internal/manifest"
 	"github.com/y3owk1n/oku/internal/npm"
@@ -604,10 +605,7 @@ func (s *Store) fetchSource(
 			{"-C", src, "fetch", "--quiet", "--depth", "1", "--", source.Git, commit},
 			{"-C", src, "checkout", "--quiet", "FETCH_HEAD"},
 		} {
-			cmd := exec.CommandContext(ctx, "git", args...)
-			cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
-
-			if out, err := cmd.CombinedOutput(); err != nil {
+			if out, err := gitcmd.Command(ctx, args...).CombinedOutput(); err != nil {
 				return fetchedSource{}, fmt.Errorf(
 					"git %s: %w: %s", strings.Join(args, " "), err, strings.TrimSpace(string(out)),
 				)
@@ -628,8 +626,7 @@ func (s *Store) fetchSource(
 
 		defer status.Start(ctx, "cloning %s", source.Git)()
 
-		cmd := exec.CommandContext(ctx, "git", append(args, "--", source.Git, src)...)
-		cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+		cmd := gitcmd.Command(ctx, append(args, "--", source.Git, src)...)
 
 		if out, err := cmd.CombinedOutput(); err != nil {
 			return fetchedSource{}, fmt.Errorf(

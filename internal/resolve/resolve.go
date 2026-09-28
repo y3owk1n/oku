@@ -17,6 +17,7 @@ import (
 	"unicode"
 
 	"github.com/y3owk1n/oku/internal/forge"
+	"github.com/y3owk1n/oku/internal/gitcmd"
 	"github.com/y3owk1n/oku/internal/manifest"
 	"github.com/y3owk1n/oku/internal/status"
 	"github.com/y3owk1n/oku/internal/tempdir"
@@ -763,12 +764,10 @@ func cloneHead(ctx context.Context, v manifest.Version) (Release, error) {
 	}
 	defer os.RemoveAll(dir)
 
-	clone := exec.CommandContext(
-		ctx, "git", "clone", "--quiet", "--bare", "--depth", "1", "--filter=tree:0",
+	clone := gitcmd.Command(
+		ctx, "clone", "--quiet", "--bare", "--depth", "1", "--filter=tree:0",
 		"--single-branch", "--branch", v.Branch, "--", v.Repo, dir,
 	)
-	// A credential prompt would hang a non-interactive install.
-	clone.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
 
 	if out, err := clone.CombinedOutput(); err != nil {
 		return Release{}, fmt.Errorf("%s: %w: %s", what, err, strings.TrimSpace(string(out)))
@@ -829,9 +828,7 @@ func gitTags(ctx context.Context, url string) ([]string, error) {
 		)
 	}
 
-	cmd := exec.CommandContext(ctx, "git", "ls-remote", "--tags", "--refs", "--", url)
-	// A credential prompt would hang a non-interactive install.
-	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+	cmd := gitcmd.Command(ctx, "ls-remote", "--tags", "--refs", "--", url)
 
 	out, err := cmd.Output()
 	if err != nil {
