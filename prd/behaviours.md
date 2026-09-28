@@ -71,6 +71,12 @@ order step in `prd/product.md`.
   warning with a yellow `!` and a file with no errors with a check, and
   `manifest test` marks each step and its closing line. A pipe keeps the
   `file: error: text` lines.
+- B442 [1] An error names what to do next. An unknown flag adds
+  ``see `oku <command> --help` ``. `why` of a name it does not find points at
+  `oku list`. A forge ref whose repo is not there fails with
+  `there is no repo at <url>`, and oku does not infer a manifest for it.
+  `self update --check` names the command that takes the newer version, with
+  the flags that chose it. `self update` marks what it did with a check.
 - B236 [1] `oku add` takes several refs and adds them one after another, one
   generation each, and says once how to run their programs, with "it" for one
   package and "them" for several. A failure stops
