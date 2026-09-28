@@ -241,11 +241,11 @@ this removes:
   cache               ~/.cache/oku
   config              oku's own files in ~/.config/oku
   binary              ~/.local/bin/oku
-continue? [y/N]
+? continue? y/N
 ```
 
-It lists what it deletes and asks once. Any answer other than `y` or `yes`
-cancels and removes nothing. It then removes:
+It lists what it deletes and asks once. Press `y` to go ahead. Any other
+answer cancels and removes nothing. It then removes:
 
 - every app, font, service and home file oku placed, each listed by path.
   Services stop first.

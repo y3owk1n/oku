@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"bufio"
 	"cmp"
 	"errors"
 	"fmt"
@@ -105,18 +104,15 @@ func (e env) ageChecker(
 		defer status.Pause(cmd.Context())()
 
 		out := cmd.OutOrStdout()
-		s := ui.For(out)
 
-		keeps := ""
+		question := "take it?"
 		if locked != "" {
-			keeps = fmt.Sprintf(" (no keeps %s)", locked)
+			question = fmt.Sprintf("take it? (no keeps %s)", locked)
 		}
 
-		fmt.Fprintf(out, "%s, so oku cannot check how old it is. %s [y/N]%s ",
-			why, s.Bold("take it?"), keeps)
+		fmt.Fprintf(out, "%s, so oku cannot check how old it is.\n", why)
 
-		answer, _ := bufio.NewReader(cmd.InOrStdin()).ReadString('\n')
-		if !slices.Contains([]string{"y", "yes"}, strings.ToLower(strings.TrimSpace(answer))) {
+		if !confirm(cmd.InOrStdin(), out, question) {
 			return false, fmt.Errorf("%s %s: %w", name, version, errNotTaken)
 		}
 
@@ -328,17 +324,14 @@ func (e env) approver(
 				}
 			}
 
-			fmt.Fprint(out, "\n"+s.Bold(question)+" [y/N] ")
+			fmt.Fprintln(out)
 			fmt.Fprint(terminal, block.String())
 
-			answer, _ := bufio.NewReader(cmd.InOrStdin()).ReadString('\n')
-			approved := slices.Contains(
-				[]string{"y", "yes"}, strings.ToLower(strings.TrimSpace(answer)),
-			)
+			approved := confirm(cmd.InOrStdin(), terminal, question)
 
-			// The answer took its own line. The block stays only while it is
-			// asked, and one line records what the user decided.
-			s.Erase(terminal, s.Lines(block.String()+answer))
+			// Once the user answers, oku erases the block and the question, and one
+			// line records what the user decided.
+			s.Erase(terminal, s.Lines(block.String())+1)
 
 			if !approved {
 				fmt.Fprintf(

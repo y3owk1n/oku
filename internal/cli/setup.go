@@ -1,11 +1,9 @@
 package cli
 
 import (
-	"bufio"
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"os/user"
 	"path/filepath"
@@ -87,7 +85,7 @@ func runSetup(cmd *cobra.Command, opts Options, yes bool) error {
 	fmt.Fprintln(out, "this creates, with administrator rights:")
 	fmt.Fprintf(out, "  %s  owned by %s\n", root, owner.Username)
 
-	if !yes && !confirm(bufio.NewReader(cmd.InOrStdin()), out, "continue? [y/N] ") {
+	if !yes && !confirm(cmd.InOrStdin(), out, "continue?") {
 		return errors.New("setup cancelled, nothing was created")
 	}
 
@@ -114,17 +112,6 @@ func runSetup(cmd *cobra.Command, opts Options, yes bool) error {
 	)
 
 	return nil
-}
-
-// confirm asks a yes or no question. Callers that ask twice share one reader,
-// because a reader buffers past the first answer.
-func confirm(in *bufio.Reader, out io.Writer, question string) bool {
-	fmt.Fprint(out, question)
-
-	answer, _ := in.ReadString('\n')
-	a := strings.ToLower(strings.TrimSpace(answer))
-
-	return a == "y" || a == "yes"
 }
 
 // elevate runs argv with administrator rights. With those rights already, it

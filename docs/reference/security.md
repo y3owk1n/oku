@@ -73,7 +73,7 @@ does with a new version from such a source:
 
 | Value | What happens |
 |---|---|
-| `"warn"` | The default. On a terminal oku asks `take it? [y/N]`. Without one, as in CI, it does not take the version. |
+| `"warn"` | The default. On a terminal oku asks `take it?`. Without one, as in CI, it does not take the version. |
 | `"refuse"` | oku does not take the version. |
 | `"allow"` | oku takes the version and says that it could not check it. |
 
@@ -166,7 +166,7 @@ tree 2.3.2 builds from source and runs these commands on your machine:
   step 1
     make -j{{jobs}}
 
-run them? [y/N]
+? run them? y/N
 ```
 
 - oku records your answer for that exact manifest, by its sha256, in
@@ -195,7 +195,7 @@ run them? [y/N]
   commands and needs no approval, unless an `install` step generates
   completions or the package sets `[env]`.
 - An artifact whose completions a command generates runs the download, so it
-  asks with `run it? [y/N]`, and `oku.lock` records `commands = true`.
+  asks `run it?`, and `oku.lock` records `commands = true`.
 - A step marked `(wants network)` in the prompt gets the network.
 - oku prints a control character in a package's text as `\x1b` and the like,
   in the prompt, in `--plan`, in `oku info`, in search results and in errors.

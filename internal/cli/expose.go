@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"bufio"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -192,7 +191,7 @@ func (e env) planExposed(
 		fmt.Fprint(notice, strings.Join(pending, ""))
 
 		if system {
-			system = confirm(bufio.NewReader(cmd.InOrStdin()), notice, "continue? [y/N] ")
+			system = confirm(cmd.InOrStdin(), notice, "continue?")
 		}
 
 		if !system {

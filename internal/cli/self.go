@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"bufio"
 	"context"
 	"errors"
 	"fmt"
@@ -113,15 +112,15 @@ func runUninstall(
 		fmt.Fprintf(out, "keeps:\n  %s\n", strings.Join(kept, "\n  "))
 	}
 
-	in := bufio.NewReader(cmd.InOrStdin())
+	in := cmd.InOrStdin()
 
-	if !yes && !confirm(in, out, "continue? [y/N] ") {
+	if !yes && !confirm(in, out, "continue?") {
 		return errors.New("uninstall cancelled, nothing was removed")
 	}
 
 	// --yes alone never elevates.
 	if needsRoot && !yes {
-		system = confirm(in, out, "remove what needs administrator rights? [y/N] ")
+		system = confirm(in, out, "remove what needs administrator rights?")
 	}
 
 	// Files outside oku's directories go first, while the ledger still exists.
