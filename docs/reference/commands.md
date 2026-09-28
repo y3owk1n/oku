@@ -1552,5 +1552,7 @@ These rules apply to every command.
 - **Pipes.** In a pipe, a CI log or with `TERM=dumb`, oku prints plain text
   with no header, no glyph and no cut, and each wait is one plain line. A
   script reads the same text wherever it runs.
-- **Variables.** `NO_COLOR=1` turns colour off on a terminal. `FORCE_COLOR=1`
-  turns it on for a pipe, such as a pager, and `COLUMNS` then sets the width.
+- **Variables.** `NO_COLOR=1` turns colour off on a terminal and keeps the
+  glyphs, headers, `~` paths and live wait lines. `FORCE_COLOR=1` styles
+  output into a pipe, such as a pager, as if it were a terminal. `COLUMNS`
+  then sets the width.

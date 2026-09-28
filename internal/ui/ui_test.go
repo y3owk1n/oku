@@ -72,12 +72,32 @@ func TestForcedColourStylesAndKeepsColumns(t *testing.T) {
 	}
 }
 
-func TestNoColorWins(t *testing.T) {
+func TestB437NoColorKeepsTheLayoutWithoutColour(t *testing.T) {
 	t.Setenv("FORCE_COLOR", "1")
 	t.Setenv("NO_COLOR", "1")
 
-	if ui.For(&bytes.Buffer{}).On() {
-		t.Fatal("NO_COLOR should turn styling off")
+	var out bytes.Buffer
+
+	s := ui.For(&out)
+
+	tab := s.Table("name", "version")
+	tab.Row(s.Bold("ripgrep"), "15.2.0")
+
+	if err := tab.Write(&out); err != nil {
+		t.Fatal(err)
+	}
+
+	out.WriteString(s.Done("added") + "\n" + s.Code("run `oku sync`") + "\n")
+
+	got := out.String()
+	if strings.Contains(got, "\x1b") {
+		t.Fatalf("NO_COLOR printed colour codes:\n%q", got)
+	}
+
+	for _, want := range []string{"NAME", "ripgrep", "✓ added", "run `oku sync`"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("NO_COLOR dropped %q:\n%s", want, got)
+		}
 	}
 }
 
