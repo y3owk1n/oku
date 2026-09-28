@@ -137,7 +137,7 @@ func TestB226ListShowsTheFilesAndTheSettingsOfTheList(t *testing.T) {
 	}
 }
 
-func TestB228ATerminalGetsEachPackageRowWithACheckAsItFinishes(t *testing.T) {
+func TestB228ATerminalGetsEachPackageRowMarkedWithItsChange(t *testing.T) {
 	t.Setenv("NO_COLOR", "")
 	t.Setenv("FORCE_COLOR", "1")
 
@@ -149,8 +149,8 @@ func TestB228ATerminalGetsEachPackageRowWithACheckAsItFinishes(t *testing.T) {
 	out, err := m.run(t, "", "sync")
 	must(t, err)
 
-	if !strings.Contains(out, "✓\x1b[0m \x1b[1mtool\x1b[0m  1.2.3") {
-		t.Fatalf("sync should print a checked row for the package:\n%s", out)
+	if !strings.Contains(out, "+\x1b[0m \x1b[1mtool\x1b[0m  1.2.3") {
+		t.Fatalf("sync should print a plus row for the new package:\n%s", out)
 	}
 
 	m.writeFilesList(t, "[packages]\n")
@@ -513,7 +513,7 @@ func TestB242AnUpdateNamesEveryPackageThatDriftedFromTheLock(t *testing.T) {
 	}
 
 	// An update of one name still names the other, and keeps the first. On a
-	// terminal first gets a checked row, so the error says it was not installed.
+	// terminal first gets a row, so the error says it was not installed.
 	t.Setenv("NO_COLOR", "")
 	t.Setenv("FORCE_COLOR", "1")
 
@@ -525,7 +525,11 @@ func TestB242AnUpdateNamesEveryPackageThatDriftedFromTheLock(t *testing.T) {
 
 	if !strings.Contains(out, "\x1b[1mfirst\x1b[0m") ||
 		!strings.Contains(err.Error(), "nothing was installed") {
-		t.Fatalf("after a checked row the error should say nothing was installed: %v\n%s", err, out)
+		t.Fatalf("after a row the error should say nothing was installed: %v\n%s", err, out)
+	}
+
+	if strings.Contains(out, "✓") {
+		t.Fatalf("a failed update should show no check:\n%s", out)
 	}
 
 	t.Setenv("FORCE_COLOR", "")

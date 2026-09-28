@@ -1537,9 +1537,13 @@ These rules apply to every command.
 - **Terminal.** On a terminal oku uses colour, glyphs, column headers and `~`
   for your home directory. A finished line starts with a green `✓`, a removal
   with a red `-`, a dry-run change with a yellow `~`, and a pin for another
-  platform with a dim `·`. The last line of a change says what it did, such
-  as `✓ done in 3s` or `✓ freed 1.2 GiB from 14 store paths`. A command to type
-  in a hint shows in colour, without its backticks.
+  platform with a dim `·`. While `sync` or `update` runs, each package that is
+  ready gets a row whose mark says what changes: a green `+` for a new
+  package, a `↑` for a new version and a `~` for the same version changed.
+  Only the last line has a `✓`, so a run that fails shows none. The last line
+  of a change says what it did, such as `✓ done in 3s` or `✓ freed 1.2 GiB
+  from 14 store paths`. A command to type in a hint shows in colour, without
+  its backticks.
 - **Questions.** A yes or no question starts with `?` and ends with `y/N`,
   where no is the default. On a terminal one key answers it. `y` goes ahead,
   and `n`, Enter or Esc says no. The question then turns into one line with

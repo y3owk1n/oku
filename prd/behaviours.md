@@ -34,9 +34,11 @@ order step in `prd/product.md`.
   prints each row as a block of label and value lines. A pipe gets the same
   text as before.
 - B228 [1] On a terminal `sync` and `update` print a row for each package as
-  it finishes, above the waits still running: a green check with the name,
-  version and note, a dim dot for a pin on another platform, a red minus for a
-  package that left. In a pipe the summary table at the end is unchanged.
+  it is ready, above the waits still running. Its mark says what changes: a
+  green plus for a new package, an arrow for a new version, a tilde for the
+  same version changed, a dim dot for a pin on another platform and a red
+  minus for a package that left. Only the closing line has a check, so a run
+  that fails shows none. In a pipe the summary table at the end is unchanged.
 - B229 [1] Once the user answers a build approval, the prompt goes and one
   line stays: a check with `approved <name> <version>`, or an x with
   `rejected <name> <version>`.
