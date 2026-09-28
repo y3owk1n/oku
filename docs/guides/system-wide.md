@@ -89,9 +89,9 @@ Every other command leaves system scope as it is and tells you what it left:
 
 ```
 $ oku remove postgres
-left unchanged, because system scope needs administrator rights:
+! left unchanged, because system scope needs administrator rights:
   remove service  /etc/systemd/system/oku-postgres.service
-run "oku sync --system" to apply them
+run oku sync --system to apply them
 removed postgres
 ```
 

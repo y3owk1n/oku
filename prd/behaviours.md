@@ -77,6 +77,12 @@ order step in `prd/product.md`.
 - B237 [1] On a terminal each `command` in a hint, a note, an error or a
   `doctor` line is in colour without its backticks, and the lines of an
   error after the first are not dimmed. A pipe keeps the backticks.
+- B438 [1] On a terminal a note starts with a yellow `!`. Notes say that oku
+  undid a change that did not finish, that it skipped services, settings or a
+  source, that the programs `oku add` installed are not on `PATH`, that a
+  release is too new for `self update`, and that the key from `key generate`
+  has no password. The wait for another oku process is a wait line, which goes
+  away once the command goes on. A pipe gets the text alone.
 - B238 [1] On a terminal `sync` prints one note that names the packages
   whose manifests oku inferred from the same kind of source. A note about a
   download with no published checksum shows the first 12 characters of its

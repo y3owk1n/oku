@@ -187,7 +187,7 @@ func newSearchCmd(opts Options) *cobra.Command {
 
 				files, err := fetcher.ListManifests(cmd.Context(), r)
 				if err != nil {
-					fmt.Fprintf(cmd.ErrOrStderr(), "skipped source %s: %v\n", alias, err)
+					warn(cmd.ErrOrStderr(), "skipped source %s: %v", alias, err)
 
 					continue
 				}

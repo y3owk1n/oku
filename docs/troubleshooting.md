@@ -21,7 +21,7 @@ The shell cannot find the programs oku installed until the profile's `bin` is
 on `PATH`. `oku add` says so when it is missing:
 
 ```
-to run it, add this line to ~/.zshrc, then open a new terminal:
+! to run it, add this line to ~/.zshrc, then open a new terminal:
   [ -x "$HOME/.local/bin/oku" ] && eval "$("$HOME/.local/bin/oku" hook zsh)"
 ```
 
@@ -431,7 +431,8 @@ waiting for oku process 4312 to finish
 ```
 
 Only one oku changes the machine at a time. The command goes on when the other
-one ends. Commands that only read, such as `list`, `generations` and `doctor`,
+one ends. On a terminal the line shows how long it has waited, and goes away
+once the command goes on. Commands that only read, such as `list`, `generations` and `doctor`,
 never wait. A killed oku leaves no stale lock, because the OS releases it.
 
 ## A disk image is mounted

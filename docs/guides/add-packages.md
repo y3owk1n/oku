@@ -41,7 +41,7 @@ When the programs do not run by name yet, `oku add` prints the line your shell
 needs:
 
 ```
-to run it, add this line to ~/.zshrc, then open a new terminal:
+! to run it, add this line to ~/.zshrc, then open a new terminal:
   [ -x "$HOME/.local/bin/oku" ] && eval "$("$HOME/.local/bin/oku" hook zsh)"
 ```
 
