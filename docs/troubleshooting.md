@@ -168,6 +168,7 @@ with `--bin`. See [Fix a wrong pick](guides/add-packages.md#fix-a-wrong-pick-wit
 | `the aqua registry is at <tag>, whose format this oku does not read` | The registry moved to a new major. Update oku. |
 | `no bucket of main or extras has it` | Name the bucket, as in `scoop:versions/<name>`. |
 | `<ref> has no manifest and no release to infer one from` | The repo has neither. Write a manifest, or point at one elsewhere. |
+| `there is no repo at <url>` | The name is wrong, or the repo is private. Check the name, or set the token of its host, see [tokens per host](reference/refs.md#tokens-per-host). |
 
 ## oku cannot find the package or the version
 

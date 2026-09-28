@@ -126,8 +126,19 @@ func (f *Fetcher) fetchForge(
 	}
 
 	if commit == "" {
-		if commit, err = host.Head(ctx, repo); err != nil {
-			return Fetched{}, fmt.Errorf("resolve %s: %w", r, notFound(err))
+		// A repo that is not there has no release either, so oku says so and
+		// does not go on to infer a manifest.
+		commit, err = host.Head(ctx, repo)
+
+		switch {
+		case errors.Is(err, forge.ErrNotFound):
+			return Fetched{}, fmt.Errorf(
+				"%s: there is no repo at %s\n"+
+					"check the name, and for a private repo set the token of its host, such as GITHUB_TOKEN",
+				r, host.Home(repo),
+			)
+		case err != nil:
+			return Fetched{}, fmt.Errorf("resolve %s: %w", r, err)
 		}
 	}
 

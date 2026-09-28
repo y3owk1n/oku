@@ -117,6 +117,11 @@ func NewRootCmd(opts Options) *cobra.Command {
 		jsonFlag, false, "print data as JSON, on the commands that print data",
 	)
 
+	// An unknown flag points at the help of the command.
+	root.SetFlagErrorFunc(func(cmd *cobra.Command, err error) error {
+		return fmt.Errorf("%w\nsee `%s --help`", err, cmd.CommandPath())
+	})
+
 	root.AddCommand(
 		newAddCmd(opts),
 		newRemoveCmd(opts),

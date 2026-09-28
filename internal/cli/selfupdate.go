@@ -236,13 +236,13 @@ func runSelfUpdate(cmd *cobra.Command, opts Options, check, nightly, release boo
 	if current {
 		switch {
 		case nightly:
-			fmt.Fprintf(out, "oku %s is the newest nightly build\n", newest)
+			finished(out, "oku %s is the newest nightly build", newest)
 		case to != "":
-			fmt.Fprintf(out, "oku %s is release %s already\n", newest, to)
+			finished(out, "oku %s is release %s already", newest, to)
 		case held:
-			fmt.Fprintf(out, "oku %s is the newest release that is old enough\n", newest)
+			finished(out, "oku %s is the newest release that is old enough", newest)
 		default:
-			fmt.Fprintf(out, "oku %s is the newest release\n", newest)
+			finished(out, "oku %s is the newest release", newest)
 		}
 
 		return nil
@@ -250,6 +250,19 @@ func runSelfUpdate(cmd *cobra.Command, opts Options, check, nightly, release boo
 
 	if check {
 		fmt.Fprintf(out, "oku %s is available, this is %s\n", newest, opts.Version)
+		// The hint repeats the flags that chose this version.
+		run := "oku self update"
+
+		switch {
+		case nightly:
+			run += " --nightly"
+		case release:
+			run += " --release"
+		case to != "":
+			run += " --to " + to
+		}
+
+		hint(out, "run `"+run+"` to take it")
 
 		return nil
 	}
@@ -305,7 +318,7 @@ func runSelfUpdate(cmd *cobra.Command, opts Options, check, nightly, release boo
 		return fmt.Errorf("replace %s: %w", opts.Executable, err)
 	}
 
-	fmt.Fprintf(out, "updated oku from %s to %s\n", opts.Version, newest)
+	finished(out, "updated oku from %s to %s", opts.Version, newest)
 	fmt.Fprintf(out, "what changed: https://github.com/%s/releases/tag/%s\n", repo, found.Tag)
 
 	return nil
