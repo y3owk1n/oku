@@ -62,7 +62,10 @@ this machine to find the executable, so run it where a release asset exists.`,
 				return err
 			}
 
-			var text string
+			var (
+				text     string
+				inferred infer.Inferred
+			)
 
 			if write := e.inferrerOf(r.Kind); write != nil {
 				all, listErr := e.mergedList(cmd, opts)
@@ -75,8 +78,6 @@ this machine to find the executable, so run it where a release asset exists.`,
 			} else {
 				// A published manifest serves every platform, so init opens an
 				// asset for each, where add opens them for the lock's.
-				var inferred infer.Inferred
-
 				inferred, err = e.inferrer(opts).Manifest(
 					cmd.Context(), r.Scheme, r.Location, platform.Host(),
 					infer.Options{Platforms: platform.All()},
@@ -86,6 +87,13 @@ this machine to find the executable, so run it where a release asset exists.`,
 
 			if err != nil {
 				return err
+			}
+
+			if len(inferred.Others) > 0 {
+				warn(
+					cmd.ErrOrStderr(), "these assets fit %s too: %s\nedit the artifact's url to use one",
+					infer.Machine(platform.Host()), strings.Join(inferred.Others, ", "),
+				)
 			}
 
 			if output == "-" {

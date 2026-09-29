@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/y3owk1n/oku/internal/infer"
+	"github.com/y3owk1n/oku/internal/lock"
 	"github.com/y3owk1n/oku/internal/platform"
 )
 
@@ -118,8 +120,8 @@ func TestB198InferencePrefersTheSmallerAssetAndNoneNamedAsAnApp(t *testing.T) {
 		t.Fatalf("the %s artifact should be the smaller asset:\n%s", arch, out)
 	}
 
-	if !strings.Contains(out, "fit "+platform.Host().String()+" too: "+name+", "+sevenZip+", "+appName) {
-		t.Fatalf("the manifest should list the larger asset, the 7z and the app:\n%s", out)
+	if !strings.Contains(out, "fit "+infer.Machine(platform.Host())+" too: "+name+", "+sevenZip+", "+appName) {
+		t.Fatalf("init should list the larger asset, the 7z and the app:\n%s", out)
 	}
 }
 
@@ -144,8 +146,33 @@ func TestB349InferencePrefersTheAssetNamedAfterTheRepoOverAnotherProgram(t *test
 		t.Fatalf("the artifact should be the asset named after the repo:\n%s", out)
 	}
 
-	if !strings.Contains(out, "fit "+platform.Host().String()+" too: "+serverName) {
-		t.Fatalf("the manifest should list the other program's asset:\n%s", out)
+	if !strings.Contains(out, "fit "+infer.Machine(platform.Host())+" too: "+serverName) {
+		t.Fatalf("init should list the other program's asset:\n%s", out)
+	}
+}
+
+func TestB466AnInferredManifestIsTheSameTextOnEveryHost(t *testing.T) {
+	m := newMachine(t)
+	archive, _ := m.archive(t, "release", map[string]string{"tool": script})
+
+	// A second asset fits the host. Only inference on the host finds it.
+	other := strings.TrimSuffix(hostAssetName(), ".tar.gz") + ".7z"
+
+	inferServer(t, &m, map[string]string{hostAssetName(): archive, other: archive})
+
+	_, err := m.run(t, "", "add", "github:owner/tool")
+	must(t, err)
+
+	locked, err := lock.Read(filepath.Join(m.config, "oku.lock"))
+	must(t, err)
+
+	pkg, ok := locked.Find("tool")
+	if !ok {
+		t.Fatal("the lock has no tool")
+	}
+
+	if strings.Contains(pkg.Manifest, other) || strings.Contains(pkg.Manifest, platform.Host().String()) {
+		t.Fatalf("the locked manifest should not depend on the host that inferred it:\n%s", pkg.Manifest)
 	}
 }
 

@@ -1095,7 +1095,9 @@ registry package.
 
 It prints `wrote oku.pkg.toml`. An existing file fails with `oku.pkg.toml
 already exists, pass --force to replace it`. Inference opens the asset for the
-machine it runs on, so run it on a platform the project releases for.
+machine it runs on, so run it on a platform the project releases for. When
+other assets fit that machine as well, it lists them on stderr. Edit the
+artifact's `url` to use one of them.
 
 ### oku manifest lint
 
