@@ -353,6 +353,62 @@ func TestB283EachArtifactFollowsItsOwnVersion(t *testing.T) {
 	}
 }
 
+func TestB460ThePackagesTagInTheLockIsTheSameOnEveryMachine(t *testing.T) {
+	m := newMachine(t)
+
+	other := platform.All()[0]
+	if other == platform.Host() {
+		other = platform.All()[1]
+	}
+
+	// The host follows GitHub, where the tag is v1.0.0, and the other platform a
+	// redirect, where the tag is the version, as Ghostty's AppImage and its
+	// Sparkle feed do.
+	releases := newReleaseServer(t, "v1.0.0")
+	m.opts.GitHubAPI = releases.URL + "/api"
+	m.archive(t, "tool-v1.0.0", map[string]string{"tool": "#!/bin/sh\necho 1.0.0\n"})
+
+	s := m.vendorServer(t, "2.0.0")
+	s.set("other", "2.0.0")
+
+	host := platform.Host()
+	ref := filepath.Join(m.fixtures, "tool.toml")
+	must(t, os.WriteFile(ref, fmt.Appendf(nil, `[package]
+name = "tool"
+
+[[artifact]]
+match = { os = %q, arch = %q, libc = %q }
+version = { from = "github-releases", repo = "owner/tool", strip_prefix = "v" }
+url = "file://%s/tool-{{tag}}.tar.gz"
+bin = ["tool"]
+
+[[artifact]]
+match = { os = %q, arch = %q }
+version = { from = "redirect", repo = "%s/latest/other", regex = '/dl/([0-9.]+)/' }
+url = "%s/dl/{{version}}/tool.tar.gz"
+bin = ["tool"]
+`, host.OS, host.Arch, host.Libc, m.fixtures, other.OS, other.Arch, s.URL, s.URL), 0o644))
+
+	must(t, os.MkdirAll(m.config, 0o755))
+	must(t, os.WriteFile(filepath.Join(m.config, "oku.toml"), fmt.Appendf(nil,
+		"[lock]\nplatforms = [%q]\n\n[packages]\ntool = %q\n", other.String(), ref), 0o644))
+
+	if out, err := m.run(t, "", "sync", "--yes"); err != nil {
+		t.Fatalf("sync: %v\n%s", err, out)
+	}
+
+	locked, err := lock.Read(filepath.Join(m.config, "oku.lock"))
+	must(t, err)
+
+	pkg, _ := locked.Find("tool")
+	first := pkg.Platforms[min(host.String(), other.String())]
+
+	if pkg.Version != first.Version || pkg.Tag != first.Tag {
+		t.Fatalf("oku.lock gives the package %s tag %q, want the first platform's %s tag %q",
+			pkg.Version, pkg.Tag, first.Version, first.Tag)
+	}
+}
+
 func TestB284LintChecksAVersionInEachArtifact(t *testing.T) {
 	m := newMachine(t)
 	path := filepath.Join(m.fixtures, "tool.toml")

@@ -1027,17 +1027,28 @@ func keptPlatforms(
 // artifact finds its own version, that is the version of the first platform in
 // order, so every machine writes the same one.
 func lockedVersion(m *manifest.Manifest, platforms map[string]lock.Platform) string {
-	if !m.PerArtifact() {
-		return m.Version.Value
-	}
-
-	for _, key := range slices.Sorted(maps.Keys(platforms)) {
-		if v := platforms[key].Version; v != "" {
-			return v
-		}
+	if at, ok := summaryPlatform(m, platforms); ok {
+		return at.Version
 	}
 
 	return m.Version.Value
+}
+
+// summaryPlatform returns the platform whose version and tag stand for a
+// manifest whose artifacts find their own versions: the first in order that
+// has a version, so every machine writes the same lock.
+func summaryPlatform(m *manifest.Manifest, platforms map[string]lock.Platform) (lock.Platform, bool) {
+	if !m.PerArtifact() {
+		return lock.Platform{}, false
+	}
+
+	for _, key := range slices.Sorted(maps.Keys(platforms)) {
+		if platforms[key].Version != "" {
+			return platforms[key], true
+		}
+	}
+
+	return lock.Platform{}, false
 }
 
 // artifactVersions finds the version of each platform that req installs or
@@ -1136,7 +1147,7 @@ func lockEntry(
 		ManifestSHA256: m.SHA256,
 		Version:        lockedVersion(m, platforms),
 		SigningKey:     m.Package.SigningKey,
-		Tag:            tagFor(m),
+		Tag:            tagFor(m, platforms),
 		TagCommit:      m.TagCommit,
 		Inferred:       inferred != "" || req.previous.Inferred && req.keepVersion,
 		Manifest:       inferredText(inferred, req),
@@ -1980,7 +1991,11 @@ func (e env) reportFirstUse(w io.Writer, got installed) {
 }
 
 // tagFor returns the tag to lock. A tag equal to the version is left out.
-func tagFor(m *manifest.Manifest) string {
+func tagFor(m *manifest.Manifest, platforms map[string]lock.Platform) string {
+	if at, ok := summaryPlatform(m, platforms); ok {
+		return at.Tag
+	}
+
 	if m.Tag == m.Version.Value {
 		return ""
 	}

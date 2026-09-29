@@ -64,7 +64,7 @@ One `[[package]]` per package of the list, sorted by name.
 | `manifest_sha256` | Digest of the manifest file. |
 | `version` | The version installed. When each artifact finds its own version, this is the version of the platform entry whose name sorts first, so every machine writes the same value. |
 | `signing_key` | The manifest's minisign key, when it has one. |
-| `tag` | The upstream tag of that version, when it differs, such as `v10.2.0`. |
+| `tag` | The upstream tag of that version, when it differs, such as `v10.2.0`. When each artifact finds its own version, it is the tag of the same platform entry. |
 | `tag_commit` | The full commit a moving tag pointed at for that version. |
 | `inferred` | `true` for a package whose manifest oku inferred. |
 | `manifest` | The full text of the inferred manifest. Other machines install from this text, and only `oku update` infers again. |

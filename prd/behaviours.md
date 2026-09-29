@@ -469,6 +469,9 @@ order step in `prd/product.md`.
   platform entry of `oku.lock` keeps that tag, and `sync` on another machine
   downloads from it. oku checks a release file against the digest
   the host reports for it, and `manifest lint` does not warn about it.
+- B460 [3] When each artifact has a `version` table, the package's `version`
+  and `tag` in `oku.lock` both come from the platform entry whose name sorts
+  first, so a sync on any machine writes the same lock.
 - B106 [3] With `[version] tag`, `add` installs the release of that tag, also
   when it is a prerelease, as version `<date>-<commit>`, the day and the first
   seven characters of the commit the tag points at. `update` moves the
