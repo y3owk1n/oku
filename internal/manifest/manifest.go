@@ -91,6 +91,9 @@ type Version struct {
 	// Tag names one tag that upstream moves, such as "nightly". oku follows that
 	// release instead of listing releases.
 	Tag string `toml:"tag"`
+	// Latest makes the release that the forge marks as latest the newest, so oku
+	// passes over a higher version of an older stream.
+	Latest bool `toml:"latest"`
 	// Branch names the branch that FromGitBranch follows, such as "main".
 	Branch string `toml:"branch"`
 	// Regex finds the version for FromRedirect and FromPage. Its groups, joined
@@ -549,6 +552,18 @@ func (m *Manifest) validate() error {
 		))
 	case m.Version.StripPrefix != "":
 		errs = append(errs, errors.New("set version.tag or version.strip_prefix, not both"))
+	}
+
+	switch {
+	case !m.Version.Latest:
+	case !slices.Contains(
+		[]string{FromGitHubReleases, FromGiteaReleases, FromGitLabReleases}, m.Version.From,
+	):
+		errs = append(errs, errors.New(
+			`version.latest needs version.from = "github-releases", "gitea-releases" or "gitlab-releases"`,
+		))
+	case m.Version.Tag != "":
+		errs = append(errs, errors.New("set version.tag or version.latest, not both"))
 	}
 
 	for i := range m.Artifacts {
