@@ -105,27 +105,17 @@ func linkSource(f listedFile, pkgs []profile.Package) (string, error) {
 	variable, inPackage := strings.CutPrefix(source, pkgPrefix)
 
 	if name, rest, closed := strings.Cut(variable, "}}"); inPackage && closed {
-		for _, pkg := range pkgs {
-			if pkg.Name != name {
-				continue
-			}
-
-			// An artifact's download is unpacked under "pkg". A build puts its files
-			// at the top of the store path.
-			files := filepath.Join(pkg.StorePath, "pkg")
-			if _, err := os.Stat(files); err != nil {
-				files = pkg.StorePath
-			}
-
-			rel := strings.TrimLeft(filepath.FromSlash(rest), `/\`)
-			if !filepath.IsLocal(rel) {
-				return "", fmt.Errorf("%s leads outside the package %s", source, name)
-			}
-
-			return filepath.Join(files, rel), nil
+		files, err := packageFiles(name, pkgs)
+		if err != nil {
+			return "", err
 		}
 
-		return "", fmt.Errorf("%s is not a package of the list on this machine", name)
+		rel := strings.TrimLeft(filepath.FromSlash(rest), `/\`)
+		if !filepath.IsLocal(rel) {
+			return "", fmt.Errorf("%s leads outside the package %s", source, name)
+		}
+
+		return filepath.Join(files, rel), nil
 	}
 
 	if !filepath.IsAbs(source) {
@@ -135,6 +125,33 @@ func linkSource(f listedFile, pkgs []profile.Package) (string, error) {
 	return source, nil
 }
 
+// reservedVar reports whether a name of [vars] starts the way a package or a
+// secret does in a template, which would hide it.
+func reservedVar(name string) bool {
+	return strings.HasPrefix(name, "pkg.") || strings.HasPrefix(name, secretPrefix)
+}
+
+// packageFiles returns the directory that holds the files of the package name,
+// which {{pkg.<name>}} stands for.
+func packageFiles(name string, pkgs []profile.Package) (string, error) {
+	for _, pkg := range pkgs {
+		if pkg.Name != name {
+			continue
+		}
+
+		// An artifact's download is unpacked under "pkg". A build puts its files
+		// at the top of the store path.
+		files := filepath.Join(pkg.StorePath, "pkg")
+		if _, err := os.Stat(files); err != nil {
+			files = pkg.StorePath
+		}
+
+		return files, nil
+	}
+
+	return "", fmt.Errorf("%s is not a package of the list on this machine", name)
+}
+
 // content returns what a generation holds for a text, a render or a secret
 // entry: the bytes with the variables filled in, and the secrets they use. A
 // secret stays a placeholder, because a generation never holds its value.
@@ -142,6 +159,7 @@ func content(
 	f listedFile,
 	vars map[string]string,
 	secrets map[string]listedSecret,
+	pkgs []profile.Package,
 ) (string, []profile.SecretRef, error) {
 	if f.file.Secret != "" {
 		ref, err := secretRef(inline, listedSecret{
@@ -173,6 +191,10 @@ func content(
 	var refs []profile.SecretRef
 
 	text, err := render.Fill(text, origin, func(name string) (string, error) {
+		if pkgName, isPackage := strings.CutPrefix(name, "pkg."); isPackage {
+			return packageFiles(pkgName, pkgs)
+		}
+
 		secretName, isSecret := strings.CutPrefix(name, secretPrefix)
 		if !isSecret {
 			value, set := vars[name]
@@ -240,6 +262,10 @@ func (e env) resolveFiles(
 			return nil, fmt.Errorf("vars.%s has the name of a location, pick another name", name)
 		}
 
+		if reservedVar(name) {
+			return nil, fmt.Errorf("vars.%s starts like {{pkg.<name>}} or {{secret.<name>}}, pick another name", name)
+		}
+
 		vars[name] = value
 	}
 
@@ -278,11 +304,18 @@ func (e env) resolveFiles(
 						)
 					}
 
+					if reservedVar(name) {
+						return nil, fmt.Errorf(
+							"files.%q: vars.%s starts like {{pkg.<name>}} or {{secret.<name>}}, pick another name",
+							f.file.Target, name,
+						)
+					}
+
 					entryVars[name] = value
 				}
 			}
 
-			text, refs, err := content(f, entryVars, secrets)
+			text, refs, err := content(f, entryVars, secrets, pkgs)
 			if err != nil {
 				return nil, err
 			}

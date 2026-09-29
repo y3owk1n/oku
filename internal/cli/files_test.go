@@ -188,6 +188,68 @@ func TestB140ALinkIntoAPackageFollowsItsVersion(t *testing.T) {
 	}
 }
 
+func TestB457ATemplateNamesTheFilesOfAPackageAndFollowsItsVersion(t *testing.T) {
+	m := newMachine(t)
+	server := newReleaseServer(t, "v1.0.0")
+	m.opts.GitHubAPI = server.URL + "/api"
+
+	_, err := m.run(t, "", "add", m.discoveredManifest(t, "1.0.0", "1.1.0"))
+	must(t, err)
+
+	listed, err := os.ReadFile(filepath.Join(m.config, "oku.toml"))
+	must(t, err)
+
+	must(t, os.WriteFile(filepath.Join(m.config, "tool.desktop.tmpl"),
+		[]byte("[Desktop Entry]\nExec={{pkg.tool}}/tool\n"), 0o644))
+
+	m.writeFilesList(t, string(listed)+"\n[files]\n"+
+		"\"{{home}}/tool.desktop\" = { render = \"./tool.desktop.tmpl\" }\n"+
+		"\"{{home}}/tool.path\" = { text = \"{{pkg.tool}}\" }\n")
+
+	_, err = m.run(t, "", "sync")
+	must(t, err)
+
+	exec := func() string {
+		body, err := os.ReadFile(home("tool.desktop"))
+		must(t, err)
+
+		path := strings.TrimSpace(strings.TrimPrefix(string(body), "[Desktop Entry]\nExec="))
+		script, err := os.ReadFile(path)
+		must(t, err)
+
+		return string(script)
+	}
+
+	if !strings.Contains(exec(), "1.0.0") {
+		t.Fatalf("the template does not name the file of tool 1.0.0")
+	}
+
+	if body, _ := os.ReadFile(home("tool.path")); !exists(filepath.Join(string(body), "tool")) {
+		t.Fatalf("the text does not name the files of tool, got %q", body)
+	}
+
+	server.tags = append(server.tags, "v1.1.0")
+
+	_, err = m.run(t, "", "update")
+	must(t, err)
+
+	if !strings.Contains(exec(), "1.1.0") {
+		t.Fatalf("after update the template does not name the file of tool 1.1.0")
+	}
+}
+
+func TestB458AVarThatStartsLikeAPackageOrASecretIsAnError(t *testing.T) {
+	m := newMachine(t)
+
+	for _, table := range []string{"[vars.pkg]\ntool = \"x\"\n", "[vars.secret]\ntoken = \"x\"\n"} {
+		m.writeFilesList(t, table+"[files]\n\"{{home}}/a\" = { text = \"a\" }\n")
+
+		if _, err := m.run(t, "", "sync"); err == nil || !strings.Contains(err.Error(), "pick another name") {
+			t.Fatalf("%s: want an error that names the var, got %v", table, err)
+		}
+	}
+}
+
 func TestB142AProjectListWithFilesIsAnError(t *testing.T) {
 	m := newMachine(t)
 

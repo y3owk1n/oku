@@ -1363,6 +1363,11 @@ order step in `prd/product.md`.
 - B147 [14] `[vars]` of an include are overridden by a later include and by
   the user's own list.
 - B148 [14] The same template and variables give the same bytes on every OS.
+- B457 [14] A `text` or a template may name `{{pkg.<name>}}`, the files of a
+  package of the list, and `oku update` of that package writes the file again
+  with the new version's path.
+- B458 [14] A name of `[vars]` that starts with `pkg.` or `secret.` is an
+  error.
 
 - B224 [13] `add`, `sync`, `update` and `rollback` print one line for each
   file, secret, setting, app, font or service the change wrote, changed,
