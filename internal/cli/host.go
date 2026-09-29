@@ -40,13 +40,19 @@ func missingLine(m host.Missing, by []string) string {
 
 	line := m.Name + " is missing"
 
-	switch len(by) {
-	case 0:
-	case 1:
+	// With many packages the line names the first ones and counts the rest.
+	const named = 3
+
+	switch {
+	case len(by) == 0:
+	case len(by) == 1:
 		line = fmt.Sprintf("%s, which %s needs, is missing", m.Name, by[0])
-	default:
+	case len(by) <= named:
 		line = fmt.Sprintf("%s, which %s and %s need, is missing",
 			m.Name, strings.Join(by[:len(by)-1], ", "), by[len(by)-1])
+	default:
+		line = fmt.Sprintf("%s, which %s and %s need, is missing",
+			m.Name, strings.Join(by[:named], ", "), count(len(by)-named, "other package"))
 	}
 
 	switch {

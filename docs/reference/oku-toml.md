@@ -246,7 +246,7 @@ each entry and never installs, locks or rolls it back.
 |---|---|
 | `command` | A program of that name is on `PATH`. |
 | `path` | A file exists at that path. |
-| `apt`, `dnf`, `pacman`, `apk`, `zypper` | The distribution's package manager has that package installed, with `dpkg-query`, `rpm -q`, `pacman -Q` or `apk info -e`. oku picks the manager from `/etc/os-release` and uses only the key for it. |
+| `apt`, `dnf`, `pacman`, `apk`, `zypper` | The distribution's package manager has that package installed, with `dpkg-query`, `rpm -q --whatprovides`, `pacman -T` or `apk info -e`. With dnf, zypper and pacman a name that an installed package provides counts, such as `zlib-devel`, which `zlib-ng-compat-devel` provides on Fedora. oku picks the manager from `/etc/os-release` and uses only the key for it. |
 | `install` | Nothing. The text oku prints to say how to get it. |
 | `when` | Limits the entry to some machines, as for a [package](#when). |
 
