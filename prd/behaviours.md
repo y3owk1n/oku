@@ -1071,6 +1071,8 @@ order step in `prd/product.md`.
   launchd `UserName`, a systemd `User=`, or an S4U task on Windows.
   `run_as = "root"` on the entry runs it as root or SYSTEM, and `sync --system`
   says so before it asks. Any other `run_as` is an error.
+- B459 [8] Every edit oku makes to a list entry keeps its `run_as`. `oku add`
+  of a listed package keeps it while the entry stays in system scope.
 - B417 [8] A systemd unit that oku writes holds each argument and variable on
   its own line: a control character becomes a `\xNN` escape, and `$` in an
   argument becomes `$$`.
