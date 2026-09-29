@@ -1431,6 +1431,10 @@ order step in `prd/product.md`.
 - B450 [5] A build that fails ends its error with each `[host]` entry of the
   package that the machine lacks.
 - B451 [4] `oku manifest lint` reports a `[host]` entry oku cannot read.
+- B452 [5] A missing `[host]` entry that more than three packages need names
+  the first three and counts the others.
+- B453 [2] With dnf, zypper and pacman, a `[host]` package counts as installed
+  when an installed package provides its name.
 
 ## Uninstall
 

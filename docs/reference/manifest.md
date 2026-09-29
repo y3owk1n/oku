@@ -891,8 +891,9 @@ system, and system services.
 
 - `oku add`, `oku sync` and `oku doctor` check the entries of each installed
   package and of its deps, and name the package in each missing one:
-  `xcode-clt, which tmux needs, is missing`. They install nothing for it and
-  finish.
+  `xcode-clt, which tmux needs, is missing`. With more than three packages the
+  line names the first three and counts the rest. They install nothing for it
+  and finish.
 - When a build fails, its error ends with each entry of the package that the
   machine lacks, so the cause shows next to the compiler's message.
 - `oku manifest lint` reports an entry oku cannot read.

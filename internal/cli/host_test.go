@@ -212,3 +212,34 @@ bin = ["tool"]
 		t.Fatalf("lint does not report the [host] entry: %v\n%s", err, out)
 	}
 }
+
+func TestB452ARequirementOfManyPackagesNamesTheFirstAndCountsTheRest(t *testing.T) {
+	m := newMachine(t)
+	m.opts.Host = &host.System{}
+
+	var entries strings.Builder
+
+	for _, name := range []string{"pa", "pb", "pc", "pd", "pe"} {
+		archive, sum := m.archive(t, name, map[string]string{name: script})
+		must(t, os.WriteFile(filepath.Join(m.fixtures, name+".toml"), fmt.Appendf(nil, `[package]
+name = %q
+[version]
+value = "1.0.0"
+[host]
+sdk = { path = "/oku/no/such/sdk" }
+[[artifact]]
+url = "file://%s"
+sha256 = %q
+bin = [%q]
+`, name, archive, sum, name), 0o644))
+		fmt.Fprintf(&entries, "%s = %q\n", name, filepath.Join(m.fixtures, name+".toml"))
+	}
+
+	must(t, os.MkdirAll(m.config, 0o755))
+	must(t, os.WriteFile(filepath.Join(m.config, "oku.toml"), []byte("[packages]\n"+entries.String()), 0o644))
+
+	out, err := m.run(t, "", "sync")
+	if err != nil || !strings.Contains(out, "sdk, which pa, pb, pc and 2 other packages need, is missing") {
+		t.Fatalf("sync does not name the first packages and count the rest: %v\n%s", err, out)
+	}
+}

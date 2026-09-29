@@ -134,13 +134,13 @@ func Detect() System {
 		case slices.Contains([]string{"debian", "ubuntu"}, id):
 			return System{Manager: "apt", Installed: query("dpkg-query", "-W", "-f=${Status}")}
 		case slices.Contains([]string{"fedora", "rhel", "centos"}, id):
-			return System{Manager: "dnf", Installed: query("rpm", "-q")}
+			return System{Manager: "dnf", Installed: query("rpm", "-q", "--whatprovides")}
 		case id == "arch":
-			return System{Manager: "pacman", Installed: query("pacman", "-Q")}
+			return System{Manager: "pacman", Installed: query("pacman", "-T")}
 		case id == "alpine":
 			return System{Manager: "apk", Installed: query("apk", "info", "-e")}
 		case strings.HasPrefix(id, "opensuse") || id == "suse":
-			return System{Manager: "zypper", Installed: query("rpm", "-q")}
+			return System{Manager: "zypper", Installed: query("rpm", "-q", "--whatprovides")}
 		}
 	}
 
@@ -149,7 +149,8 @@ func Detect() System {
 
 // query runs a program of the package manager with the package's name last. A
 // package is installed when it exits with 0, and for dpkg-query when its status
-// also says so.
+// also says so. rpm and pacman also accept a name that another package
+// provides, such as zlib-devel on Fedora, which zlib-ng-compat-devel provides.
 func query(program string, args ...string) func(string) (bool, error) {
 	return func(pkg string) (bool, error) {
 		out, err := exec.Command(program, append(args, pkg)...).Output()
