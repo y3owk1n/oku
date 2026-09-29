@@ -68,8 +68,11 @@ later of that date and the time GitLab made the release. A Sparkle feed's
 `pubDate` is what its publisher writes, and oku cannot check it.
 
 `git-tags`, `page` and `redirect` give no time, and neither does a Sparkle item
-without a `pubDate`. `[lock]` `unknown_release_age` in `oku.toml` says what oku
-does with a new version from such a source:
+without a `pubDate`. When each artifact finds its own version, as in a
+translated cask, oku asks for each platform's new version, and names a platform
+other than this machine's, as in `tool 2.0.0 for linux-arm64`. `[lock]`
+`unknown_release_age` in `oku.toml` says what oku does with a new version from
+such a source:
 
 | Value | What happens |
 |---|---|

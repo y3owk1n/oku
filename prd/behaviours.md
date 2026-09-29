@@ -472,6 +472,10 @@ order step in `prd/product.md`.
 - B460 [3] When each artifact has a `version` table, the package's `version`
   and `tag` in `oku.lock` both come from the platform entry whose name sorts
   first, so a sync on any machine writes the same lock.
+- B461 [3] When each artifact has a `version` table, a new version whose
+  source gives no release time goes through `unknown_release_age` for each
+  platform that `add`, `update` or `sync` pins. oku names a platform other
+  than the host in the question and the note.
 - B106 [3] With `[version] tag`, `add` installs the release of that tag, also
   when it is a prerelease, as version `<date>-<commit>`, the day and the first
   seven characters of the commit the tag points at. `update` moves the

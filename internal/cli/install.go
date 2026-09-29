@@ -71,9 +71,9 @@ type installed struct {
 	// linkNotes warns for each store package that a build loads without naming
 	// it in runtime.deps, for the deps too.
 	linkNotes []string
-	// ageUnknown reports a version that oku picked while its source gives no
-	// release time, so the minimum release age could not check it.
-	ageUnknown bool
+	// ageUnknown lists the versions that oku picked while their source gives no
+	// release time, so the minimum release age could not check them.
+	ageUnknown []string
 	// notTaken is the version oku did not take for that reason, keeping the
 	// locked one, or empty.
 	notTaken string
@@ -468,10 +468,16 @@ func (e env) installFrom(
 ) (got installed, err error) {
 	r, previous := req.ref, req.previous
 
-	m, release, keep, err := e.pickRelease(ctx, opts, req, fetched)
+	m, release, keep, unchecked, err := e.pickRelease(ctx, opts, req, fetched)
 	if err != nil {
 		return installed{}, err
 	}
+
+	defer func() {
+		if err == nil {
+			got.ageUnknown = unchecked
+		}
+	}()
 
 	// A version named exactly skips the age, as it does in resolve.
 	exact := r.Version != "" && release.Version == r.Version
@@ -507,7 +513,7 @@ func (e env) installFrom(
 		case err != nil:
 			return installed{}, err
 		case note:
-			defer func() { got.ageUnknown = err == nil }()
+			unchecked = append(unchecked, release.Version)
 		}
 	}
 	ctx = status.Scope(ctx, m.Package.Name+" "+m.Version.Value)
@@ -835,22 +841,22 @@ func (e env) pickRelease(
 	opts Options,
 	req request,
 	fetched ref.Fetched,
-) (m *manifest.Manifest, release resolve.Release, keep bool, err error) {
+) (m *manifest.Manifest, release resolve.Release, keep bool, unchecked []string, err error) {
 	r, previous := req.ref, req.previous
 
 	m, err = manifest.Parse(fetched.Data, r.String())
 	if err != nil {
-		return nil, resolve.Release{}, false, err
+		return nil, resolve.Release{}, false, nil, err
 	}
 
 	if !opts.FileDownloads {
 		if err := localURLs(r, m); err != nil {
-			return nil, resolve.Release{}, false, err
+			return nil, resolve.Release{}, false, nil, err
 		}
 	}
 
 	if req.wantManifest != "" && req.wantManifest != m.SHA256 {
-		return nil, resolve.Release{}, false, errManifestChanged
+		return nil, resolve.Release{}, false, nil, errManifestChanged
 	}
 
 	if pinned := previous.SigningKey; pinned != "" && pinned != m.Package.SigningKey &&
@@ -860,7 +866,7 @@ func (e env) pickRelease(
 			now = "the signing key " + m.Package.SigningKey
 		}
 
-		return nil, resolve.Release{}, false, fmt.Errorf(
+		return nil, resolve.Release{}, false, nil, fmt.Errorf(
 			"%s: oku.lock pinned the signing key %s, and the manifest now has %s\n"+
 				"if the developer announced this change, run the command again with --accept-key",
 			m.Package.Name, pinned, now,
@@ -875,14 +881,14 @@ func (e env) pickRelease(
 	}
 
 	if m.PerArtifact() && (r.Version != "" || req.constraint != "") {
-		return nil, resolve.Release{}, false, fmt.Errorf(
+		return nil, resolve.Release{}, false, nil, fmt.Errorf(
 			"%s: each artifact finds its own version, so you cannot pick one", r,
 		)
 	}
 
 	allowed, err := resolve.Matches(previous.Version, r.Version)
 	if err != nil {
-		return nil, resolve.Release{}, false, fmt.Errorf("%s: %w", r, err)
+		return nil, resolve.Release{}, false, nil, fmt.Errorf("%s: %w", r, err)
 	}
 
 	keep = req.keepVersion && previous.Version != "" && allowed
@@ -892,7 +898,7 @@ func (e env) pickRelease(
 
 	switch {
 	case m.PerArtifact():
-		release, err = e.artifactVersions(ctx, opts, req, m, keep)
+		release, unchecked, err = e.artifactVersions(ctx, opts, req, m, keep)
 	case keep:
 	case r.Version == "" && req.constraint != "":
 		release, waiting, err = e.resolverAged(opts, req.releaseAge).
@@ -913,7 +919,7 @@ func (e env) pickRelease(
 	}
 
 	if err != nil {
-		return nil, resolve.Release{}, false, fmt.Errorf("%s: %w", r, err)
+		return nil, resolve.Release{}, false, nil, fmt.Errorf("%s: %w", r, err)
 	}
 
 	if release.Tag == "" {
@@ -921,12 +927,12 @@ func (e env) pickRelease(
 	}
 
 	if err := manifest.CheckVersion(release.Version); err != nil {
-		return nil, resolve.Release{}, false, fmt.Errorf("%s: %w", r, err)
+		return nil, resolve.Release{}, false, nil, fmt.Errorf("%s: %w", r, err)
 	}
 
 	m.Version.Value, m.Tag, m.TagCommit = release.Version, release.Tag, release.Commit
 
-	return m, release, keep, nil
+	return m, release, keep, unchecked, nil
 }
 
 // hostStrategy returns the artifact of m for host, and whether oku builds m
@@ -1061,7 +1067,7 @@ func (e env) artifactVersions(
 	req request,
 	m *manifest.Manifest,
 	keep bool,
-) (resolve.Release, error) {
+) (resolve.Release, []string, error) {
 	targets := []platform.Platform{req.target()}
 
 	// lockOthers pins other platforms only then.
@@ -1075,6 +1081,8 @@ func (e env) artifactVersions(
 	// The digests that hosts report for every platform's release, so oku checks
 	// each platform's download against its own.
 	digests := map[string]string{}
+
+	var unchecked []string
 
 	for _, p := range targets {
 		i := slices.IndexFunc(m.Artifacts, func(a manifest.Artifact) bool { return a.Match.Matches(p) })
@@ -1106,14 +1114,33 @@ func (e env) artifactVersions(
 			}
 
 			if err != nil {
-				return resolve.Release{}, fmt.Errorf("%s for %s: %w", m.Package.Name, p, err)
+				return resolve.Release{}, nil, fmt.Errorf("%s for %s: %w", m.Package.Name, p, err)
 			}
 
 			found[fmt.Sprintf("%#v", source)] = release
+
+			// A source with no release time asks, as the package's own version
+			// does, for each platform's new version.
+			if req.checkAge != nil && req.releaseAge > 0 && release.Published.IsZero() &&
+				ageKnowable(source) && release.Version != req.previous.Platforms[p.String()].Version {
+				shown := release.Version
+				if p != req.target() {
+					shown += " for " + p.String()
+				}
+
+				note, err := req.checkAge(m.Package.Name, shown, "")
+				if err != nil {
+					return resolve.Release{}, nil, err
+				}
+
+				if note {
+					unchecked = append(unchecked, shown)
+				}
+			}
 		}
 
 		if err := manifest.CheckVersion(release.Version); err != nil {
-			return resolve.Release{}, fmt.Errorf("%s for %s: %w", m.Package.Name, p, err)
+			return resolve.Release{}, nil, fmt.Errorf("%s for %s: %w", m.Package.Name, p, err)
 		}
 
 		m.Versions[p.String()] = release.Version
@@ -1128,7 +1155,7 @@ func (e env) artifactVersions(
 
 	return resolve.Release{
 		Version: version, Tag: cmp.Or(m.Tags[req.target().String()], version), Digests: digests,
-	}, nil
+	}, unchecked, nil
 }
 
 // lockEntry returns the lock entry of m.
@@ -1955,9 +1982,9 @@ func reportAge(w io.Writer, got installed) {
 			got.lock.Name, got.lock.Version, got.notTaken)
 	}
 
-	if got.ageUnknown {
+	for _, version := range got.ageUnknown {
 		warn(w, "%s %s: its source gives no release time, so the minimum release age did not check it",
-			got.lock.Name, got.lock.Version)
+			got.lock.Name, version)
 	}
 }
 
