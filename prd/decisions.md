@@ -1801,3 +1801,14 @@ oku maps no package names between distributions, since `libgl1` and
 check it did not make. The requirements that match the machine go into the generation, so
 `oku doctor` checks them without reading the list.
 
+## D109. A manifest names what its package needs of the host
+
+A manifest may have `[host]`, with the keys of the list's. oku checks the
+entries of each installed package and of its deps, and names the package, not
+the dep, in a missing one. The user asked for the package, and `oku remove`
+of the package drops them. A failed build appends the missing entries to
+its error. Why: a build on macOS already relies on the command line tools, and
+a missing one showed up only as a compiler error in the middle of a build. The
+author knows what the package needs, so the manifest says it once for every
+user, as with deps.
+
