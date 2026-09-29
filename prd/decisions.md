@@ -1767,3 +1767,18 @@ session, and `run` was the empty cell. A second command for the same cell would
 leave two commands with no rule for picking one. `run` starts the program in the
 store itself, as the command of a macOS bundle already does. That keeps the
 environment, the exit code and the signals, which `open` drops.
+
+## D107. oku removes an app only once its system extension is off
+
+oku does not delete an app in system scope while macOS has a system extension
+or driver of that app turned on. It stops before the first change and asks the
+user to turn the extension off from the app. Why: macOS runs the extension from
+its own copy and keeps running it after the app is gone. Only the app itself
+or MDM can turn it off, and `systemextensionsctl uninstall` needs SIP off.
+A test with Tailscale on macOS 27 on 2026-09-29 showed this. A plain delete, a
+Finder delete from a script and a drag to the Trash all left it on, and
+`tailscale configure sysext deactivate` turned it off. oku reads the state from
+`systemextensionsctl list`, so it removes an app that never turned its
+extension on as before. oku runs no command of the app to turn it off, in line with D16.
+An update is not stopped, because the new app replaces its extension when it
+starts.

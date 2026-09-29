@@ -180,6 +180,10 @@ func (e env) planExposed(
 
 	if pending := pendingSystem(ledger.Items, wanted); len(pending) > 0 {
 		if system {
+			if err := checkExtensions(opts, ledger.Leaving(wanted)); err != nil {
+				return exposePlan{}, err
+			}
+
 			fmt.Fprintln(notice, "this changes, with administrator rights:")
 		} else {
 			warn(notice, "left unchanged, because system scope needs administrator rights:")
@@ -351,6 +355,48 @@ func keepSystem(have, wanted []expose.Item) []expose.Item {
 	}
 
 	return kept
+}
+
+// checkExtensions refuses to remove an app in system scope while macOS runs a
+// system extension of it, because deleting the app leaves the extension on.
+func checkExtensions(opts Options, leaving []expose.Item) error {
+	type carried struct{ app, id string }
+
+	var extensions []carried
+
+	for _, item := range leaving {
+		if item.Kind == "app" && item.System {
+			for _, id := range expose.SystemExtensions(item.Target) {
+				extensions = append(extensions, carried{item.Target, id})
+			}
+		}
+	}
+
+	if len(extensions) == 0 {
+		return nil
+	}
+
+	active := opts.ActiveExtensions
+	if active == nil {
+		active = expose.ActiveExtensions
+	}
+
+	on, err := active()
+	if err != nil {
+		return err
+	}
+
+	for _, ext := range extensions {
+		if slices.Contains(on, ext.id) {
+			return fmt.Errorf(
+				"%s has the system extension %s turned on, and it keeps running when oku deletes the app\n"+
+					"turn the extension off from the app, then run this again",
+				ext.app, ext.id,
+			)
+		}
+	}
+
+	return nil
 }
 
 // systemChange is what oku passes to itself when it runs as root.

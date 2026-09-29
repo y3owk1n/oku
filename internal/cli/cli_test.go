@@ -6388,6 +6388,66 @@ func TestB75SystemScopeItemsChangeOnlyWithTheFlagAndAfterAQuestion(t *testing.T)
 	}
 }
 
+func TestB444AnAppIsRemovedOnlyOnceItsSystemExtensionIsOff(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("system extensions are macOS only")
+	}
+
+	m := newMachine(t)
+	dirs, elevations := m.systemScope(t)
+	app := filepath.Join(dirs.Apps, "Tool.app")
+
+	on := true
+	m.opts.ActiveExtensions = func() ([]string, error) {
+		if on {
+			return []string{"dev.oku.tool.extension"}, nil
+		}
+
+		return nil, nil
+	}
+
+	withExtension := func(echo string) string {
+		return m.manifest(t, "tool", map[string]string{
+			"Tool.app/Contents/MacOS/tool": "#!/bin/sh\necho " + echo + "\n",
+			"Tool.app/Contents/Library/SystemExtensions/dev.oku.tool.extension.systemextension/Contents/Info.plist": `<?xml version="1.0" encoding="UTF-8"?>
+<plist version="1.0"><dict><key>CFBundleIdentifier</key><string>dev.oku.tool.extension</string></dict></plist>`,
+		}, "bin = [\"Tool.app/Contents/MacOS/tool\"]\napp = [\"Tool.app\"]\n")
+	}
+
+	ref := withExtension("one")
+	if out, err := m.run(t, "y\n", "add", ref, "--system"); err != nil {
+		t.Fatalf("add: %v\n%s", err, out)
+	}
+
+	// A new version replaces the app, and its extension with it on launch.
+	withExtension("two")
+
+	if out, err := m.run(t, "y\n", "update", "--system"); err != nil || m.toolOutput(t) != "two" {
+		t.Fatalf("update of an app with a system extension: %v\n%s", err, out)
+	}
+
+	_, err := m.run(t, "", "remove", "tool")
+	must(t, err)
+
+	before := *elevations
+
+	out, err := m.run(t, "y\n", "sync", "--system")
+	if err == nil || !strings.Contains(err.Error(), "dev.oku.tool.extension") {
+		t.Fatalf("sync removed an app whose system extension is on: %v\n%s", err, out)
+	}
+
+	if !exists(app) || *elevations != before || strings.Contains(out, "continue?") {
+		t.Fatalf("the refusal changed something or came after the question:\n%s", out)
+	}
+
+	// The user turns the extension off from the app.
+	on = false
+
+	if out, err := m.run(t, "y\n", "sync", "--system"); err != nil || exists(app) {
+		t.Fatalf("sync once the extension is off: %v\n%s", err, out)
+	}
+}
+
 func TestB75SystemServiceNeedsTheFlagToStart(t *testing.T) {
 	m := newMachine(t)
 	_, elevations := m.systemScope(t)
