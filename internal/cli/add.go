@@ -304,10 +304,16 @@ func runAdd(
 	}
 
 	c.commit = func() error {
-		// No flag of add writes the entry's minimum release age, so it stays.
+		// No flag of add writes the entry's minimum release age or run_as, so they
+		// stay. run_as means something in system scope only.
 		own, err := list.Read(e.listPath())
 		if err != nil {
 			return err
+		}
+
+		runAs := ""
+		if system {
+			runAs = own.Packages[got.lock.Name].RunAs
 		}
 
 		err = list.Set(
@@ -318,6 +324,7 @@ func runAdd(
 				Version:       r.Version,
 				Service:       enable,
 				System:        system,
+				RunAs:         runAs,
 				When:          entryWhen,
 				Asset:         got.lock.Asset,
 				Bins:          got.lock.Bins,

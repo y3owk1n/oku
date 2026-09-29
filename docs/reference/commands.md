@@ -90,7 +90,8 @@ Rules:
 - Several refs install one after another, one generation each. A failure
   stops the command, and the packages added before it stay.
 - `--asset` and `--bin` describe one download, so they take one ref.
-- Adding a package that is already installed replaces it.
+- Adding a package that is already installed replaces it. Its entry keeps
+  `min_release_age`, and `run_as` while the entry stays in system scope.
 - Without `@version`, oku installs the newest version. `@version`, a range or
   a prefix picks one, see [Pin a version](refs.md#pin-a-version). oku writes
   it to `oku.toml` as `{ ref = "...", version = "..." }`.
