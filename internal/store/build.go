@@ -845,9 +845,9 @@ func buildLaunchers(steps []manifest.Step, p platform.Platform, src, prefix stri
 		}
 
 		got, err := launchers(step.Install.App, src, func(rel string) (string, error) {
-			name := path.Base(rel)
-			if _, err := os.Lstat(filepath.Join(prefix, "bin", name)); err != nil {
-				return "", fmt.Errorf("it runs %s, which no install step puts in bin", name)
+			name, ok := binProgram(filepath.Join(prefix, "bin"), path.Base(rel))
+			if !ok {
+				return "", fmt.Errorf("it runs %s, which no install step puts in bin", path.Base(rel))
 			}
 
 			return "bin/" + name, nil

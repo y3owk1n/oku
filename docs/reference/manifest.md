@@ -781,6 +781,7 @@ app = ["bin/foo.exe"]
 | A bundle, `Foo.app` | On macOS oku copies it to the Applications folder. |
 | A desktop entry, `*.desktop` | On Linux oku writes a desktop entry with its `Name`. Its `Exec` runs a file of the package or a program of `bin`. Its `Icon` is a file of the package or the name of an icon theme's file in it. oku takes an `.svg` first, then the largest image. |
 | Any other file | oku writes a launcher that runs it, named after the file. |
+| The name of a program of `bin` | oku writes a launcher that runs that program. A [`bin` table](#run-a-program-through-an-interpreter) with `run` and `args` gives the launcher its arguments. |
 
 A table sets what the file does not say:
 
@@ -790,7 +791,7 @@ app = [{ path = "bin/foo.exe", name = "Foo", icon = "share/foo.png" }]
 
 | Key | Required | Meaning |
 |---|---|---|
-| `path` | yes | The path inside the download. |
+| `path` | yes | The path inside the download, or the name of a program of `bin`. |
 | `name` | no | The launcher's name, in place of the desktop entry's `Name` or the file's name. |
 | `icon` | no | A path inside the download. Windows ignores it, because a shortcut shows the icon of its program. |
 
@@ -801,6 +802,15 @@ On macOS a `bin` entry inside a bundle of `app`, such as
 Accessibility to that copy, so the command gets the app's permissions. Without
 that copy, as in a [project](../guides/projects.md), the command runs the
 store's copy.
+
+A program that needs arguments to run from the menu gets them from `bin`:
+
+```toml
+[[artifact]]
+match = { os = "linux" }
+bin = [{ name = "throne", run = "{{pkg}}/Throne/Throne", args = ["-appdata"] }]
+app = [{ path = "throne", name = "Throne", icon = "Throne/Throne.png" }]
+```
 
 A bundle names itself, so it takes no `name` or `icon`. The top-level
 `[[app]]` table of earlier versions is gone, and a manifest that has one fails

@@ -649,6 +649,9 @@ order step in `prd/product.md`.
   On Linux oku writes a desktop entry for each desktop entry or program, with
   its name, the program it runs and its icon, and on Windows a Start Menu
   shortcut. A table sets the name and icon the file does not say.
+- B454 [8] An `app` path that names a program of `bin` and no file of the
+  download gives a launcher that runs that program, with the arguments of its
+  `bin` table. On Windows the program is `<name>.exe`.
 - B355 [4] A manifest with a top-level `[[app]]` fails, and the error names
   the artifact's `app`.
 - B356 [4] When a repo's name adds a suffix to the name of the host's asset, as

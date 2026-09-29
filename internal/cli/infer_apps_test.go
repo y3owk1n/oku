@@ -151,6 +151,29 @@ func TestB354AnArtifactsAppNamesAProgramForALauncher(t *testing.T) {
 	}
 }
 
+func TestB454AnAppThatNamesAProgramOfBinRunsItsWrapper(t *testing.T) {
+	m := newMachine(t)
+	ref := m.manifest(t, "foo", map[string]string{"bin/foo": script, "foo.png": "icon"},
+		`bin = [{ name = "foo", run = "{{pkg}}/bin/foo", args = ["--flag"] }]`+"\n"+
+			`app = [{ path = "foo", name = "Foo Tool", icon = "foo.png" }]`)
+
+	// On Windows the wrapper is foo.exe, which the launcher finds too.
+	if out, err := m.run(t, "", "add", ref); err != nil {
+		t.Fatalf("add: %v\n%s", err, out)
+	}
+
+	if runtime.GOOS != "linux" {
+		return
+	}
+
+	entry, err := os.ReadFile(filepath.Join(filepath.Dir(m.data), "applications", "oku-foo-tool.desktop"))
+	must(t, err)
+
+	if !strings.Contains(string(entry), "/bin/foo\n") || strings.Contains(string(entry), "/pkg/bin/foo") {
+		t.Fatalf("the desktop entry does not run the wrapper of bin:\n%s", entry)
+	}
+}
+
 func TestB355AManifestWithATopLevelAppIsRefused(t *testing.T) {
 	m := newMachine(t)
 	ref := m.manifest(t, "foo", map[string]string{"bin/foo": script},
