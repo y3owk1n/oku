@@ -1,5 +1,34 @@
 # Changelog
 
+## [0.12.0](https://github.com/y3owk1n/oku/compare/v0.11.0...v0.12.0) (2026-09-29)
+
+
+### Features
+
+* **files:** let a text or a template name the files of a package ([#339](https://github.com/y3owk1n/oku/issues/339)) ([0119ffe](https://github.com/y3owk1n/oku/commit/0119ffee2eb9da8cbbf86a2ee768b929d15249dc))
+* **host:** check what the machine must have that oku does not install ([#333](https://github.com/y3owk1n/oku/issues/333)) ([d3b4d7e](https://github.com/y3owk1n/oku/commit/d3b4d7edc22040bdc9929a0d3e0d5d263e8f7665))
+* **manifest:** let a package name what it needs of the host ([#334](https://github.com/y3owk1n/oku/issues/334)) ([2da6e3a](https://github.com/y3owk1n/oku/commit/2da6e3af87f6a4bb7bf84d1bb7d7af4b88c9fdeb))
+* **version:** follow the release the forge marks as latest ([#338](https://github.com/y3owk1n/oku/issues/338)) ([3ae3b4b](https://github.com/y3owk1n/oku/commit/3ae3b4b655c8be3d0bc5215ebda37f5a05dd433e))
+
+
+### Bug Fixes
+
+* **cli:** keep empty JSON lists as [], and let why --json fail for an unknown name ([#345](https://github.com/y3owk1n/oku/issues/345)) ([8e89dcd](https://github.com/y3owk1n/oku/commit/8e89dcd619eff49577add34e29445cd1fc285b3d))
+* **expose:** refuse to remove an app while its system extension is on ([#332](https://github.com/y3owk1n/oku/issues/332)) ([1b73693](https://github.com/y3owk1n/oku/commit/1b736936f8cde7b31ffd69ffb7bf1deb1fb1bba2))
+* **host:** count a package that another provides, and shorten long lines ([#336](https://github.com/y3owk1n/oku/issues/336)) ([960f276](https://github.com/y3owk1n/oku/commit/960f276a32da22b747035b3bca01a096166d88b1))
+* **infer:** write the same inferred manifest on every host ([#346](https://github.com/y3owk1n/oku/issues/346)) ([a23083b](https://github.com/y3owk1n/oku/commit/a23083b12c8f2a0d7584add1436c8edf2b70a69a))
+* **install:** ask for each platform's version that has no release time ([#343](https://github.com/y3owk1n/oku/issues/343)) ([e3185ab](https://github.com/y3owk1n/oku/commit/e3185ab126dc74e977daf9463bb0be0e7e71588a))
+* **list:** keep run_as when oku rewrites an entry ([#341](https://github.com/y3owk1n/oku/issues/341)) ([d76b3bb](https://github.com/y3owk1n/oku/commit/d76b3bb7eea75b4579a4f1e511696a648db5fea8))
+* **lock:** write the same tag on every machine for per-artifact versions ([#342](https://github.com/y3owk1n/oku/issues/342)) ([dea6e63](https://github.com/y3owk1n/oku/commit/dea6e6390027498dc5c2d6e0dcbe46f756bd2f57))
+* **manifest:** refuse a platform value that matches nothing, and check latest and shell by the build's when ([#344](https://github.com/y3owk1n/oku/issues/344)) ([6750d92](https://github.com/y3owk1n/oku/commit/6750d92f78cf66d2112e508b84e7db71e4f3e843))
+* **store:** let an app run a program of bin on every OS ([#337](https://github.com/y3owk1n/oku/issues/337)) ([cafb337](https://github.com/y3owk1n/oku/commit/cafb337f4c47cff040e73a7d3e0772abd76e1d40))
+* **store:** unpack a pkg that installs a bundle under the bundle's name ([#330](https://github.com/y3owk1n/oku/issues/330)) ([e94443a](https://github.com/y3owk1n/oku/commit/e94443aff40d35b11c68a9fec3941397c1645ff4))
+
+
+### Documentation
+
+* update ([#340](https://github.com/y3owk1n/oku/issues/340)) ([39f714b](https://github.com/y3owk1n/oku/commit/39f714bed69c07d1d14d0b1713c82a2a72812777))
+
 ## [0.11.0](https://github.com/y3owk1n/oku/compare/v0.10.0...v0.11.0) (2026-09-28)
 
 
