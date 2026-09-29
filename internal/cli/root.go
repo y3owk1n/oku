@@ -18,6 +18,7 @@ import (
 	"github.com/y3owk1n/oku/internal/dirs"
 	"github.com/y3owk1n/oku/internal/expose"
 	"github.com/y3owk1n/oku/internal/forge"
+	"github.com/y3owk1n/oku/internal/host"
 	"github.com/y3owk1n/oku/internal/infer"
 	"github.com/y3owk1n/oku/internal/list"
 	"github.com/y3owk1n/oku/internal/lock"
@@ -62,6 +63,9 @@ type Options struct {
 	SystemRoot string
 	// SystemDirs replaces the directories for apps and fonts in system scope.
 	SystemDirs *expose.Dirs
+	// Host replaces how oku checks the requirements of [host] on this machine.
+	// Tests set it.
+	Host *host.System
 	// ActiveExtensions replaces the list of macOS system extensions that are on.
 	// Tests set it.
 	ActiveExtensions func() ([]string, error)

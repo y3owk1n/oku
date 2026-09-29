@@ -510,15 +510,18 @@ func reconcile(
 		return err
 	}
 
+	reqs := hostHere(all.host)
+
 	// A list with nothing in it, not even a pin for another platform, writes
 	// no first generation.
-	if len(jobs) == 0 && len(files) == 0 && len(wantedSettings) == 0 && e.profile().Current() == 0 {
+	if len(jobs) == 0 && len(files) == 0 && len(wantedSettings) == 0 && len(reqs) == 0 &&
+		e.profile().Current() == 0 {
 		fmt.Fprintln(out, style.Done("nothing to sync, "+e.listPath()+" lists no packages, files or settings"))
 
 		return nil
 	}
 
-	staged, err := e.profile().Replace(pkgs, files, wantedSettings, lockData)
+	staged, err := e.profile().Replace(pkgs, files, wantedSettings, reqs, lockData)
 	if err != nil {
 		return err
 	}
@@ -550,6 +553,10 @@ func reconcile(
 
 	for _, j := range narrowed {
 		reportNarrowed(cmd.ErrOrStderr(), j.got, e.listPath())
+	}
+
+	if err := tellMissing(cmd.ErrOrStderr(), opts, reqs); err != nil {
+		return err
 	}
 
 	if dryRun {

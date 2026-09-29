@@ -1346,6 +1346,7 @@ oku: doctor found 1 problem
 | Profiles | A package's store path is missing, or a link in a profile's `bin` points at nothing. `oku sync` installs a missing package again. |
 | Secrets | The list has secrets and the age key file is missing, or a secret is a sops file and `sops` is neither in the list nor on `PATH`. |
 | Unfinished change | A change stopped halfway and oku has not put the machine back. `oku sync` does that first. |
+| Host requirements | The machine lacks an entry of [`[host]`](oku-toml.md#host) in the active generation. An entry oku cannot check here is a `note`. |
 
 ### oku self update
 

@@ -235,6 +235,29 @@ Settings tables need no `when`. oku skips `[defaults]` off macOS,
 `[registry]` off Windows and `[dconf]` off Linux, see
 [OS settings](os-settings.md).
 
+## Name what the machine must have
+
+Some things oku does not install: the Xcode command line tools on a Mac, a
+graphics library of your Linux distribution, a Docker engine. Name them in
+[`[host]`](../reference/oku-toml.md#host), so a new machine tells you what is
+missing:
+
+```toml
+[host]
+xcode-clt = { path = "/Library/Developer/CommandLineTools/usr/bin/clang", install = "xcode-select --install", when = { os = "darwin" } }
+libgl = { apt = "libgl1", dnf = "mesa-libGL", when = { os = "linux" } }
+```
+
+`oku sync` installs everything else, then prints each missing entry and how to
+get it:
+
+```
+! libgl is missing
+  get it with `sudo apt-get install libgl1`
+```
+
+Run the command, and `oku doctor` confirms it.
+
 ## Pin every platform in one lock
 
 A package's version, manifest and deps are the same on every platform. Only

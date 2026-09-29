@@ -19,6 +19,7 @@ import (
 
 	"github.com/pelletier/go-toml/v2"
 
+	"github.com/y3owk1n/oku/internal/host"
 	"github.com/y3owk1n/oku/internal/trash"
 )
 
@@ -104,6 +105,8 @@ type state struct {
 	Packages []Package `toml:"package"`
 	Files    []File    `toml:"file,omitempty"`
 	Settings []Setting `toml:"setting,omitempty"`
+	// Host holds the requirements of [host] that match this machine.
+	Host []host.Requirement `toml:"host,omitempty"`
 	// From is the generation that was active when this one was staged, and 0
 	// for the first one or one written before oku recorded it.
 	From int `toml:"from,omitempty"`
@@ -269,6 +272,23 @@ func (p *Profile) SettingsOf(n int) ([]Setting, error) {
 	return s.Settings, err
 }
 
+// HostOf lists the requirements of [host] that generation n holds.
+func (p *Profile) HostOf(n int) ([]host.Requirement, error) {
+	if n == 0 {
+		return nil, nil
+	}
+
+	s, err := p.stateIn(genPrefix + strconv.Itoa(n))
+
+	return s.Host, err
+}
+
+// sameRequirement reports whether a and b check the same things.
+func sameRequirement(a, b host.Requirement) bool {
+	return a.Name == b.Name && a.Command == b.Command && a.Path == b.Path &&
+		a.Install == b.Install && maps.Equal(a.Packages, b.Packages)
+}
+
 // FilesOf lists the files of generation n, without their text.
 func (p *Profile) FilesOf(n int) ([]File, error) {
 	if n == 0 {
@@ -350,9 +370,14 @@ func (p *Profile) Add(pkg Package, lockData []byte) (int, error) {
 		return 0, err
 	}
 
+	reqs, err := p.HostOf(p.Current())
+	if err != nil {
+		return 0, err
+	}
+
 	pkgs = slices.DeleteFunc(pkgs, func(have Package) bool { return have.Name == pkg.Name })
 
-	return p.stage(append(pkgs, pkg), files, settings, lockData)
+	return p.stage(append(pkgs, pkg), files, settings, reqs, lockData)
 }
 
 // Has reports whether the active generation holds name.
@@ -391,7 +416,12 @@ func (p *Profile) Remove(names []string, lockData []byte) (int, error) {
 		return 0, err
 	}
 
-	return p.stage(kept, files, settings, lockData)
+	reqs, err := p.HostOf(p.Current())
+	if err != nil {
+		return 0, err
+	}
+
+	return p.stage(kept, files, settings, reqs, lockData)
 }
 
 // Replace stages a new generation holding exactly pkgs, files and settings. It
@@ -400,6 +430,7 @@ func (p *Profile) Replace(
 	pkgs []Package,
 	files []File,
 	settings []Setting,
+	reqs []host.Requirement,
 	lockData []byte,
 ) (int, error) {
 	have, err := p.Packages()
@@ -413,6 +444,11 @@ func (p *Profile) Replace(
 	}
 
 	haveSettings, err := p.SettingsOf(p.Current())
+	if err != nil {
+		return 0, err
+	}
+
+	haveHost, err := p.HostOf(p.Current())
 	if err != nil {
 		return 0, err
 	}
@@ -434,12 +470,12 @@ func (p *Profile) Replace(
 	}
 
 	if slices.EqualFunc(have, pkgs, same) && slices.EqualFunc(haveFiles, files, sameFile) &&
-		slices.Equal(haveSettings, settings) &&
+		slices.Equal(haveSettings, settings) && slices.EqualFunc(haveHost, reqs, sameRequirement) &&
 		bytes.Equal(lockData, p.LockSnapshotOfCurrent()) {
 		return 0, nil
 	}
 
-	return p.stage(pkgs, files, settings, lockData)
+	return p.stage(pkgs, files, settings, reqs, lockData)
 }
 
 // stage builds the next generation from pkgs and leaves "current" unchanged. A
@@ -448,6 +484,7 @@ func (p *Profile) stage(
 	pkgs []Package,
 	files []File,
 	settings []Setting,
+	reqs []host.Requirement,
 	lockData []byte,
 ) (int, error) {
 	slices.SortFunc(pkgs, func(a, b Package) int { return strings.Compare(a.Name, b.Name) })
@@ -468,7 +505,7 @@ func (p *Profile) stage(
 
 	err = p.linkPackages(gen, pkgs)
 	if err == nil {
-		err = build(gen, p.Current(), pkgs, files, settings, lockData)
+		err = build(gen, p.Current(), pkgs, files, settings, reqs, lockData)
 	}
 
 	if err != nil {
@@ -740,6 +777,7 @@ func build(
 	pkgs []Package,
 	files []File,
 	settings []Setting,
+	reqs []host.Requirement,
 	lockData []byte,
 ) error {
 	prev := ""
@@ -785,7 +823,7 @@ func build(
 		state{
 			Created:  time.Now().UTC().Truncate(time.Second),
 			From:     from,
-			Packages: pkgs, Files: files, Settings: settings,
+			Packages: pkgs, Files: files, Settings: settings, Host: reqs,
 		},
 	)
 	if err != nil {
