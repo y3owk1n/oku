@@ -6555,6 +6555,38 @@ func TestB427ASystemServiceRunsAsTheUserUnlessTheListSaysRoot(t *testing.T) {
 	}
 }
 
+func TestB459AddingAPackageAgainKeepsItsRunAs(t *testing.T) {
+	m := newMachine(t)
+	m.systemScope(t)
+
+	ref := m.serviceManifest(t)
+	_, err := m.run(t, "y\n", "add", ref, "--system", "--service")
+	must(t, err)
+
+	listPath := filepath.Join(m.config, "oku.toml")
+	listed, err := os.ReadFile(listPath)
+	must(t, err)
+	must(t, os.WriteFile(listPath,
+		[]byte(strings.Replace(string(listed), "system = true", `system = true, run_as = "root"`, 1)), 0o644))
+
+	// run_as has no flag, so adding the package again in system scope keeps it.
+	if out, err := m.run(t, "y\n", "add", ref, "--system", "--service"); err != nil {
+		t.Fatalf("add again: %v\n%s", err, out)
+	}
+
+	if got, _ := os.ReadFile(listPath); !strings.Contains(string(got), `run_as = "root"`) {
+		t.Fatalf("add dropped run_as:\n%s", got)
+	}
+
+	// Out of system scope run_as means nothing, and it goes with system = true.
+	_, err = m.run(t, "y\n", "add", ref, "--service")
+	must(t, err)
+
+	if got, _ := os.ReadFile(listPath); strings.Contains(string(got), "run_as") {
+		t.Fatalf("run_as stayed on an entry outside system scope:\n%s", got)
+	}
+}
+
 func TestB98UninstallLeavesSystemItemsWhenElevationIsDeclined(t *testing.T) {
 	m := newMachine(t)
 	dirs, _ := m.systemScope(t)

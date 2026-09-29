@@ -586,8 +586,8 @@ func Delete(path, name string) error {
 func Line(name string, entry Entry) string {
 	value := fmt.Sprintf("%q", entry.Ref)
 
-	if entry.Version != "" || entry.Service || entry.System || len(entry.When) > 0 ||
-		entry.Asset != "" || len(entry.Bins) > 0 || entry.MinReleaseAge != "" {
+	if entry.Version != "" || entry.Service || entry.System || entry.RunAs != "" ||
+		len(entry.When) > 0 || entry.Asset != "" || len(entry.Bins) > 0 || entry.MinReleaseAge != "" {
 		fields := []string{fmt.Sprintf("ref = %q", entry.Ref)}
 
 		if entry.Version != "" {
@@ -613,6 +613,10 @@ func Line(name string, entry Entry) string {
 
 		if entry.System {
 			fields = append(fields, "system = true")
+		}
+
+		if entry.RunAs != "" {
+			fields = append(fields, fmt.Sprintf("run_as = %q", entry.RunAs))
 		}
 
 		if len(entry.When) > 0 {
