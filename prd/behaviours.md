@@ -67,6 +67,8 @@ order step in `prd/product.md`.
   `oku <command> has no --json output` before it does anything, and `oku add`
   takes it only with `--plan`. `manifest lint --json` prints a list of
   `file`, `errors` and `warnings`, and still exits with 1 on an error.
+- B465 [1] A list in `--json` output is `[]` when it is empty, never `null`,
+  and `why --json` of a name nothing uses fails as the text form does.
 - B441 [1] On a terminal `manifest lint` starts an error with a red cross, a
   warning with a yellow `!` and a file with no errors with a check, and
   `manifest test` marks each step and its closing line. A pipe keeps the
