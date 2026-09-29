@@ -10,8 +10,9 @@ settings. `oku.lock` pins every download by sha256, and one
 `oku rollback` undoes packages, files and settings together.
 
 oku has no package catalogue of its own. A package is a manifest in the
-author's repo, a URL, a local file, a repo with no manifest at all, or a
-package of npm, PyPI, Go or crates.io. See [Add packages](add-packages.md).
+author's repo, a URL, a local file, a repo with no manifest at all, a package
+of npm, PyPI, Go or crates.io, or a Homebrew cask, Scoop, winget or aqua recipe
+that oku translates. See [Add packages](add-packages.md).
 
 ## Homebrew and a Brewfile
 
@@ -30,7 +31,7 @@ becomes:
 [packages]
 ripgrep = "github:BurntSushi/ripgrep"
 fd = "github:sharkdp/fd"
-rectangle = { ref = "github:rxhanson/Rectangle", when = { os = "darwin" } }
+rectangle = { ref = "cask:rectangle", when = { os = "darwin" } }
 ```
 
 | Homebrew | oku |
@@ -142,7 +143,9 @@ What oku does not do:
 - oku has no tasks. A project's `[env]` sets variables, see
   [Set the project's variables](projects.md#set-the-projects-variables).
 - oku installs no OS packages through apt, brew or winget. It unpacks `.deb`,
-  `.rpm`, `.pkg` and `.msi` files itself and never runs their scripts.
+  `.rpm`, `.pkg` and `.msi` files itself and never runs their scripts. Name
+  them in [`[host]`](../reference/oku-toml.md#host), and `oku sync` and
+  `oku doctor` say which are missing and the command that installs them.
 
 Where oku differs:
 

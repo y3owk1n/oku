@@ -8,8 +8,8 @@ status 1. The lines after the first say what to do. `add`, `remove`, `sync`,
 a failure your machine is as it was before the command.
 
 Start with `oku doctor`. It checks the store, `PATH`, the shell hook, the
-build sandbox, the profiles, your secrets setup and any unfinished change, and
-names the fix for each problem:
+build sandbox, the profiles, your secrets setup, what `[host]` names and any
+unfinished change, and names the fix for each problem:
 
 ```sh
 oku doctor
@@ -150,8 +150,8 @@ with `--bin`. See [Fix a wrong pick](guides/add-packages.md#fix-a-wrong-pick-wit
 | `it chose the asset <file> for this machine` | The install failed. The next lines list the other files that fit, and the `oku add --asset` command that picks one. `--verbose` adds the manifest oku inferred. |
 | `--asset "<glob>" names 0 assets for <platform>, want one of: ...` | The glob matches no file that fits your machine. Pick a name from the list. |
 | `--asset and --bin apply when oku infers a manifest, and <ref> has one` | The ref has a manifest, so these flags do nothing. Drop them. |
-| `--asset and --bin do not apply, <ref> names its programs` | An `npm:`, `pypi:`, `go:` or `cargo:` ref. The registry names the download. |
-| `--asset and --bin do not apply, <ref> names its downloads and programs` | A `cask:` or `scoop:` ref. The recipe names the download. |
+| `--asset and --bin do not apply, <ref> ...` | An `npm:`, `pypi:`, `go:` or `cargo:` ref. The registry names the download. |
+| `--asset and --bin do not apply, <ref> names its downloads and programs` | A `cask:`, `scoop:`, `aqua:` or `winget:` ref. The recipe names the download. |
 | `the cask runs an installer that makes its files`, `the manifest runs an installer` | An installer makes the files, and oku runs none. Write a manifest for the app. |
 | `the cask uses the <kind> stanza, which oku does not place` | The cask installs something oku has no place for, such as a preference pane. |
 | `the cask installs a kernel extension` | A kernel extension works only where macOS loads it, which oku does not do. |
@@ -296,7 +296,7 @@ line it gives. See [One list for several OSes](guides/new-machine.md).
 ## A build needs approval
 
 ```
-oku: just needs approval to run them, and this is not a terminal
+oku: just 1.40.0 needs approval to run them, and this is not a terminal
 pass --yes to approve
 ```
 
@@ -304,6 +304,59 @@ A build runs commands on your machine, so oku asks first. In a script there is
 nobody to ask. Read the commands it printed above the error, then run it again
 with `--yes`. Answering no to the question gives
 `not approved, nothing was built`.
+
+## A version is too new
+
+oku takes only a release that is at least as old as the
+[minimum release age](reference/security.md#minimum-release-age), one day by
+default. When every version that fits is newer, it stops:
+
+```
+oku: newer than the minimum release age: every version of BurntSushi/ripgrep that fits came out less than 1d ago, and the first to pass is 14.1.1, from 2026-09-30 10:12
+run the command with --min-release-age 0 to take the newest now
+```
+
+Wait until that time, or run the command again with `--min-release-age 0`.
+
+Some sources give no release time, such as `git-tags`, so oku cannot check the
+age. At a terminal it asks before it takes such a version. In a script it stops:
+
+```
+oku: lua 5.4.7: its source gives no release time, so oku asks before it takes it, and this is not a terminal: not taken
+run the command with --accept-unknown-age, or set [lock] unknown_release_age = "allow"
+```
+
+With `unknown_release_age = "refuse"` it stops at a terminal too:
+
+```
+oku: lua 5.4.7: its source gives no release time, and [lock] unknown_release_age refuses such a version: not taken
+run the command with --accept-unknown-age, or set min_release_age = "0" on lua
+```
+
+Run the command with `--accept-unknown-age`, or set `unknown_release_age` in
+[`[lock]`](reference/oku-toml.md#lock).
+
+## Something the machine needs is missing
+
+A package can name what it needs of the machine in `[host]`, such as Xcode
+tools or a distro library. oku never installs these. The sync finished, and it
+warns about each one that is missing:
+
+```
+! libgl, which glfw needs, is missing
+  get it with `sudo apt-get install libgl1`
+```
+
+The second line is the command that installs it, or the text the entry gives
+instead. Run it, then `oku doctor` to check again. A failed build also ends its
+error with these lines. When an entry names a package only for another package
+manager, oku says so and cannot check it:
+
+```
+! libgl names a package only for apt, so oku cannot check it on this machine
+```
+
+See [Name what the machine must have](guides/new-machine.md#name-what-the-machine-must-have).
 
 ## A build fails
 

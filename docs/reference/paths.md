@@ -63,7 +63,7 @@ export XDG_CACHE_HOME=/tmp/oku-try/cache
   logs/                        output of services (macOS, Windows)
   shims/                       the copy of oku.exe that shims link to (Windows)
   trust/
-    approvals.toml             manifests you allowed to run build commands
+    approvals.toml             manifests you allowed to run build commands or set [env]
     allow.toml                 projects the shell hook may apply
 
 <cache>/oku/
@@ -152,7 +152,7 @@ With `system = true` they go to the machine-wide places:
 |---|---|---|---|
 | Apps | `/Applications/` | `/usr/local/share/applications/oku-<name>.desktop` | `%ProgramData%\Microsoft\Windows\Start Menu\Programs\oku-<name>.lnk` |
 | Fonts | `/Library/Fonts/` | `/usr/local/share/fonts/oku/` | `%SystemRoot%\Fonts\`, and a value under `HKLM\Software\Microsoft\Windows NT\CurrentVersion\Fonts` |
-| Enabled services | `/Library/LaunchDaemons/dev.oku.<name>.plist` | `/etc/systemd/system/oku-<name>.service` | a scheduled task `oku-<name>` as `SYSTEM` |
+| Enabled services | `/Library/LaunchDaemons/dev.oku.<name>.plist` | `/etc/systemd/system/oku-<name>.service` | a scheduled task `oku-<name>` that runs as you, or as `SYSTEM` with `run_as = "root"` |
 | Other service files | `/Library/Application Support/oku/services/`, `/Library/Logs/oku/<name>.log` | the system journal | `%ProgramData%\oku\services\`, `%ProgramData%\oku\logs\` |
 | Shared store root | `/opt/oku` | `/opt/oku` | `%ProgramData%\oku` |
 
@@ -200,6 +200,7 @@ oku sets these for others:
 | `OKU_SHELL` | The shell of `oku shell`, to the refs it holds. |
 | `OKU_PREFIX`, `OKU_SRC`, `OKU_JOBS` | A build's steps, see the [manifest reference](manifest.md). |
 | `GIT_TERMINAL_PROMPT=0` | Every `git` oku runs. |
+| `GIT_SSH_COMMAND` | Every `git` oku runs, as your ssh command with `-o BatchMode=yes`, unless `GIT_SSH` is set or the command is not OpenSSH. |
 | `OKU_PROJECT` | Your shell, by the hook, while a project applies, and the command of `oku exec` in a project. It holds the project's directory, for a prompt to show. |
 | `OKU_HOOK_SAVED`, `OKU_HOOK_ADDED`, `OKU_HOOK_HINT` | Your shell, by the hook, to undo what it applied. The hook removes `OKU_HOOK_PATH` and `OKU_HOOK_KEYS`, the state of an older oku. |
 
@@ -245,7 +246,7 @@ anything, each of these commands takes a lock on `busy`:
 - `allow` and `deny`
 - `source add`, `source remove`, `cache add`, `cache remove`, `cache push`,
   `key generate`, `key trust` and `key revoke`
-- `self uninstall`, and `shell` while it installs
+- `self uninstall`, and `shell` and `run` while they install
 
 A second command from that list waits for the first, and says which process it
 waits for:

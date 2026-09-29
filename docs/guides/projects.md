@@ -27,7 +27,8 @@ oku wrote `oku.toml` and `oku.lock` in `~/work/api`. Commit both. The first
 line, on stderr, names the project oku is using.
 
 A project list takes `[packages]`, `include`, `when`, version pins,
-`[runtimes]`, `[lock]` and `[env]`. A relative ref starts at the project directory. The
+`[runtimes]`, `[lock]`, `[env]` and `[host]`, so a teammate learns what the
+repo needs from the OS. A relative ref starts at the project directory. The
 keys are in [the oku.toml reference](../reference/oku-toml.md).
 
 ## Know which list a command uses
@@ -36,9 +37,9 @@ oku looks for `oku.toml` in the directory you run it in, then in each parent,
 and uses the nearest one. With none, it uses your global list. Your config
 directory holds the global list and never counts as a project.
 
-`add`, `remove`, `list`, `sync`, `update`, `info`, `why`, `generations` and
-`rollback` act on the project. Pass `--global`, or `-g`, to use the global list
-from inside a project:
+`add`, `remove`, `list`, `sync`, `update`, `outdated`, `info`, `which`, `why`,
+`exec`, `generations` and `rollback` act on the project. Pass `--global`, or
+`-g`, to use the global list from inside a project:
 
 ```
 $ oku list
@@ -304,7 +305,7 @@ A teammate clones the repo and syncs:
 $ git clone git@github.com:you/api && cd api
 $ oku sync
 project /home/you/api
-profile now holds 3 packages
+profile now holds 3 packages, generation 1, 3s
 ```
 
 `sync` installs what `oku.lock` pins. oku asks for approval on each machine
@@ -342,6 +343,7 @@ see [Use oku in CI](ci.md).
   `--global`.
 - The profile name comes from a hash of the project's path. When you move the
   directory, run `oku sync` there and the project gets a new profile. `oku gc`
-  removes what the old one used once its generations are gone.
+  removes the profile of a project whose folder or `oku.toml` is gone, so it
+  removes the old one.
 - `oku self uninstall` removes every profile, project profiles too. It never
   touches a project's `oku.toml` or `oku.lock`.

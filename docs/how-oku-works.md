@@ -30,8 +30,8 @@ oku does this:
 1. It reads `oku.toml`, any lists it includes, and the parts that apply to
    this OS.
 2. For each package it finds a manifest, which says where the downloads are.
-   It uses the version that `oku.lock` pins, or picks one when there is no pin
-   yet.
+   It uses the version that `oku.lock` pins, or picks the newest that fits
+   and is at least a day old, the minimum release age.
 3. It downloads, checks each download against its sha256, and unpacks it into
    the store. It skips a package it already has.
 4. It checks everything else it will touch, such as the files it will write in
@@ -105,8 +105,8 @@ has, and how to build it from source if needed. A project can publish one as
 
 A manifest oku writes for you when a repo has none. oku reads the newest
 release, matches the files to operating systems and CPUs, finds the published
-checksums, and looks inside the download for the programs. For a `cask:` or
-`scoop:` ref, oku translates the recipe of Homebrew or Scoop instead.
+checksums, and looks inside the download for the programs. For a `cask:`,
+`scoop:`, `winget:` or `aqua:` ref, oku translates that tool's recipe instead.
 `--verbose` prints the manifest it wrote.
 
 ### store

@@ -28,7 +28,7 @@ $ oku add github:you/recipes#postgres --system --service
 this changes, with administrator rights:
   write  service  /etc/systemd/system/oku-postgres.service
 ✓ continue? yes
-service postgres is running and starts at boot
+service postgres is running as you and starts at boot
 added postgres 16.3
 ```
 
@@ -187,8 +187,8 @@ macOS to turn the extension on, and you approve it once in System Settings.
 
 macOS keeps running an extension that is on after its app is deleted. Only the
 app can turn its extension off. So while the extension is on, oku does not
-remove the app. A sync, a rollback or `oku self uninstall` stops before it
-changes anything:
+remove the app. `oku sync --system` or `oku self uninstall` stops before it
+changes anything. A rollback leaves system scope to the next `sync --system`:
 
 ```
 oku: /Applications/Tailscale.app has the system extension io.tailscale.ipn.macsys.network-extension turned on, and it keeps running when oku deletes the app

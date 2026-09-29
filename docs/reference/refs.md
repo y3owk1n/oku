@@ -9,7 +9,7 @@ refs to lists.
 | Ref | Reads |
 |---|---|
 | `./ripgrep.toml`, `/abs/ripgrep.toml` | A local file. oku stores a file inside the list's directory as `./path`, and any other file as its absolute path. |
-| `https://host/ripgrep.toml` | A URL of a manifest. `http://` works too. |
+| `https://host/ripgrep.toml` | A URL of a manifest. Plain `http://` works only on this machine, such as `http://127.0.0.1`. |
 | `https://host/tool-1.2.3-linux-amd64.tar.gz` | A URL of the download itself. oku [infers a manifest](manifest.md) for this machine from it. |
 | `github:owner/repo` | `oku.pkg.toml` at the root of the repo's default branch. Without one, oku infers a manifest from the newest release. |
 | `github:owner/repo#name` | `name.toml` at the root, else `packages/name.toml`. |
@@ -19,8 +19,8 @@ refs to lists.
 | `gitea:host/owner/repo` | The same on any Gitea or Forgejo server. The host is required. |
 | `gitlab:group/project` | The same on gitlab.com. A project may be in subgroups, as in `gitlab:group/sub/project`. |
 | `gitlab:host/group/project` | The same on a GitLab server of your own. |
-| `git+https://host/repo` | `oku.pkg.toml` at the root of any git repo. `git+ssh://`, `git+http://` and `git+file://` work too. |
-| `git+https://host/repo#name` | `name.toml` at the root, else `packages/name.toml`. A fragment with no `/` and no `.` is a name. |
+| `git+https://host/repo` | `oku.pkg.toml` at the root of any git repo. `git+ssh://` and `git+file://` work too, and `git+http://` only on this machine. |
+| `git+https://host/repo#name` | `name.toml` at the root, else `packages/name.toml`. |
 | `git+https://host/repo#dir/name.toml` | That file in the repo. |
 | `npm:name`, `npm:@scope/name` | A package in the npm registry. |
 | `pypi:name` | A package in the Python Package Index. |
@@ -95,7 +95,10 @@ oku add github:BurntSushi/ripgrep@14.1.1
   exact version stays where it is.
 - When you change the version in `oku.toml` so that it no longer allows the
   locked one, `oku sync` picks the newest version it allows.
-- Without a version, `oku add` and `oku update` take the newest.
+- Without a version, `oku add` and `oku update` take the newest version older
+  than the [minimum release age](security.md#minimum-release-age). With
+  `latest = true` in the manifest's `[version]`, that is the release the forge
+  marks as latest. A version or a range you write picks from every release.
 - A list ref takes no `@version`.
 
 ## Sources and aliases
@@ -137,7 +140,7 @@ The commands are in [oku source](commands.md#oku-source) and
 | `github:host/...` | no | Reads everything from `https://host/api/v3`, the manifest included. |
 | `codeberg:`, `gitea:` | no | Asks `https://host/api/v1` for the newest commit, then reads the manifest at that commit. Gitea and Forgejo serve the same API. |
 | `gitlab:` | no | Reads `https://gitlab.com/api/v4`, or `https://host/api/v4` when the ref starts with a host. |
-| `git+` | yes | Fetches one commit at depth 1 into the cache directory and reads the file there. git runs with `GIT_TERMINAL_PROMPT=0`, so a repo that needs credentials fails in place of waiting for input. |
+| `git+` | yes | Fetches one commit at depth 1 into the cache directory and reads the file there. git runs with `GIT_TERMINAL_PROMPT=0` and ssh in BatchMode. A repo that needs credentials, an unknown ssh host or a locked key fails with the message of git or ssh in place of waiting for input. |
 | file, URL | no | Reads the bytes. There is no commit, so `oku.lock` pins the manifest's sha256 and `oku sync` stops when the content changed. |
 
 The commit goes into `oku.lock`, and `oku sync` reads that same commit again.

@@ -49,8 +49,9 @@ can edit:
 ```
 $ oku manifest init --from sharkdp/fd
 downloading https://github.com/sharkdp/fd/releases/download/v10.5.0/fd-v10.5.0-x86_64-unknown-linux-gnu.tar.gz
+downloading https://github.com/sharkdp/fd/releases/download/v10.5.0/fd-v10.5.0-x86_64-apple-darwin.tar.gz
 downloading https://github.com/sharkdp/fd/releases/download/v10.5.0/fd-v10.5.0-x86_64-pc-windows-gnu.zip
-✓ wrote oku.pkg.toml
+wrote oku.pkg.toml
 ```
 
 It opens one asset per archive format to see the layout, and writes an artifact
@@ -352,6 +353,17 @@ oku: oku.pkg.toml discovers its versions from github-releases, so there is nothi
   users notice a manifest that someone else publishes.
 - [Services](../reference/manifest.md#service), [apps and fonts](../reference/manifest.md#apps-and-fonts),
   and [`[env]`](../reference/manifest.md#env) for what else a package can ship.
+  On Linux and Windows an `app` may name a program of `bin`, and oku writes a
+  launcher that runs it.
+- [`[host]`](../reference/manifest.md#host): `needs` names tools on `PATH`. For
+  what a user must get from the OS, such as the Xcode command line tools or a
+  distribution library, add a `[host]` table. `oku add`, `oku sync` and
+  `oku doctor` then tell the user what is missing and how to get it, and a
+  failed build ends with it.
+- [`latest = true`](../reference/manifest.md#version): when a higher version is
+  not the one users should get, such as one an older release stream left
+  behind, add `latest = true` to `[version]`. oku then takes the release the
+  forge marks as latest.
 - [`oku manifest` commands](../reference/commands.md#oku-manifest-init): every
   flag of `init`, `lint`, `test`, `bump` and `hash`.
 - [Refs](../reference/refs.md#sources-and-aliases): let users search a repo of many
