@@ -409,6 +409,47 @@ bin = ["tool"]
 	}
 }
 
+func TestB461EachArtifactsVersionWithNoReleaseTimeIsAskedFor(t *testing.T) {
+	m := newMachine(t)
+	m.opts.UnknownReleaseAge = "warn"
+
+	other := platform.All()[0]
+	if other == platform.Host() {
+		other = platform.All()[1]
+	}
+
+	// A redirect gives no release time, for the host and for the other platform.
+	s := m.vendorServer(t, "1.0.0", "2.0.0")
+	s.set("host", "1.0.0")
+	s.set("other", "2.0.0")
+	ref := m.perPlatformManifest(t, s, other)
+
+	must(t, os.MkdirAll(m.config, 0o755))
+	must(t, os.WriteFile(filepath.Join(m.config, "oku.toml"), fmt.Appendf(nil,
+		"[lock]\nplatforms = [%q]\n\n[packages]\ntool = %q\n", other.String(), ref), 0o644))
+
+	out, err := m.run(t, "", "sync", "--yes")
+	if err == nil || !strings.Contains(err.Error(), "its source gives no release time") {
+		t.Fatalf("sync took a version it could not check without asking: %v\n%s", err, out)
+	}
+
+	out, err = m.run(t, "", "sync", "--yes", "--accept-unknown-age")
+	if err != nil {
+		t.Fatalf("sync --accept-unknown-age: %v\n%s", err, out)
+	}
+
+	for _, version := range []string{"1.0.0", "2.0.0 for " + other.String()} {
+		if !strings.Contains(out, "tool "+version+": its source gives no release time") {
+			t.Fatalf("sync does not say it could not check %s:\n%s", version, out)
+		}
+	}
+
+	// The locked versions are not new, so a second sync asks nothing.
+	if out, err := m.run(t, "", "sync", "--yes"); err != nil {
+		t.Fatalf("a second sync asked again: %v\n%s", err, out)
+	}
+}
+
 func TestB284LintChecksAVersionInEachArtifact(t *testing.T) {
 	m := newMachine(t)
 	path := filepath.Join(m.fixtures, "tool.toml")

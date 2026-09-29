@@ -217,7 +217,7 @@ func (e env) planFrom(
 		req.lockOnly = req.lockOnly || !m.Supports(host)
 	}
 
-	m, release, _, err := e.pickRelease(ctx, opts, req, fetched)
+	m, release, _, _, err := e.pickRelease(ctx, opts, req, fetched)
 	if err != nil {
 		return planned{}, err
 	}
