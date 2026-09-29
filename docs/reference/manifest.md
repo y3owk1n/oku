@@ -1530,8 +1530,10 @@ When one platform has an asset named after the repo, a platform that has only
 another program's asset gets no artifact. An installer such as a `.deb` is
 named after the distro's package, so its name does not count.
 
-When other assets fit your machine as well, in any format, a comment in the
-manifest lists them.
+When other assets fit your machine as well, in any format, `oku manifest init`
+lists them on stderr and `oku add --plan` lists them under `also fits`. The
+manifest does not name them, so its text is the same on every machine. An
+`oku update` on another machine does not change it in `oku.lock`.
 
 | For | Words it looks for in an asset name |
 |---|---|

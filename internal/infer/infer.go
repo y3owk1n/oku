@@ -302,11 +302,7 @@ func (inf *Inferrer) Manifest(
 		fmt.Fprintf(&b, "strip_prefix = %q\n", prefix)
 	}
 
-	hostDone = false
-
 	for _, c := range chosen {
-		isHost := c.Matches(host) && !hostDone
-
 		kind := ending(c.asset)
 
 		l, known := layouts[kind+" "+c.OS]
@@ -321,18 +317,6 @@ func (inf *Inferrer) Manifest(
 		}
 
 		b.WriteString("\n")
-
-		if isHost {
-			hostDone = true
-
-			if len(c.others) > 0 {
-				fmt.Fprintf(
-					&b, "# These assets fit %s too: %s\n# Choose one with --asset.\n",
-					host, oneLine(strings.Join(c.others, ", ")),
-				)
-			}
-		}
-
 		fmt.Fprintf(&b, "[[artifact]]\nmatch = %s\n", selectorTOML(c.Selector))
 		fmt.Fprintf(&b, "url = %q\n", template(urls[c.asset], rel.Tag, version))
 
@@ -1283,7 +1267,7 @@ func Machine(p platform.Platform) string {
 }
 
 // oneLine turns every control character of s into a space. The comments of a
-// manifest oku writes quote names from a recipe or a release, and a newline in
+// manifest oku translates quote names from the recipe, and a newline in
 // one would start a line of TOML.
 func oneLine(s string) string {
 	return strings.Map(func(r rune) rune {
