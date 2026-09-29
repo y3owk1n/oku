@@ -92,7 +92,7 @@ curl -fsSL https://raw.githubusercontent.com/y3owk1n/oku/main/install.sh | sh
 irm https://raw.githubusercontent.com/y3owk1n/oku/main/install.ps1 | iex
 ```
 
-The script puts one static binary in `~/.local/bin`, or `%LOCALAPPDATA%\oku\bin`, after checking its sha256. It edits none of your files and ends by printing the one line your shell needs. `oku self update` replaces the binary later, after checking its [minisign](https://jedisct1.github.io/minisign/) signature.
+The script puts one static binary in `~/.local/bin`, or `%LOCALAPPDATA%\oku\bin`, after checking its sha256, and its minisign signature when `minisign` is installed. It edits none of your files and ends by printing the one line your shell needs. `oku self update` replaces the binary later, after checking its [minisign](https://jedisct1.github.io/minisign/) signature.
 
 <details>
 <summary>From source</summary>
@@ -138,6 +138,7 @@ oku doctor                     # checks PATH, the shell line, the sandbox and th
 | Run a daemon at login | `service = true` | [Services](docs/guides/services.md) |
 | Give a repo its own tools and environment variables, restored when you leave | an `oku.toml` with `[env]` in the repo and `oku allow` | [Projects](docs/guides/projects.md) |
 | Use the same tools in CI | `uses: y3owk1n/oku@main` | [CI](docs/guides/ci.md) |
+| Say what a machine needs that oku does not install, such as Xcode tools or a distro library | `[host]` | [New machine](docs/guides/new-machine.md#name-what-the-machine-must-have) |
 | Undo a change | `oku rollback` | [Undo and clean up](docs/guides/undo-and-clean-up.md) |
 
 Every change is a generation that covers packages, files and settings together. `oku generations` lists them, and `oku rollback` switches back without downloading anything.

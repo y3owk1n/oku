@@ -29,7 +29,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: y3owk1n/oku@v0.6.1
+      - uses: y3owk1n/oku@v0.11.0
         env:
           GITHUB_TOKEN: ${{ github.token }}
       - run: golangci-lint run
@@ -56,7 +56,7 @@ GitHub rate limits anonymous API calls from a shared runner.
 
 | Input | Default | What it does |
 |---|---|---|
-| `version` | `""` | The oku release to install, such as `v0.6.0` or `nightly`. Empty installs the release of the action's own tag, as in `y3owk1n/oku@v0.6.1`, and the newest release otherwise. The action uses an oku already on `PATH` as it is. |
+| `version` | `""` | The oku release to install, such as `v0.11.0` or `nightly`. Empty installs the release of the action's own tag, as in `y3owk1n/oku@v0.11.0`, and the newest release otherwise. The action uses an oku already on `PATH` as it is. |
 | `path` | `.` | The directory that holds the `oku.toml` to sync. Its lock must pin the runner's platform. |
 | `args` | `--locked` | What `oku sync` gets besides `--yes`. The action splits it on spaces and runs none of it as a shell command. |
 | `cache` | `"true"` | Keep the store and the downloads between runs, keyed by `oku.lock`. `"false"` turns it off. |
@@ -71,7 +71,7 @@ GitHub rate limits anonymous API calls from a shared runner.
 
 ## Pin the oku version
 
-Use the action by a release tag, such as `y3owk1n/oku@v0.6.1`. With no
+Use the action by a release tag, such as `y3owk1n/oku@v0.11.0`. With no
 `version`, the action then installs that same release, so the tag pins oku
 too, and a bot that bumps the tag moves both. `@main` installs the newest
 release.
@@ -111,7 +111,7 @@ platform has built it and you have committed the lock.
 
 `--yes` approves the build steps of packages that build from source. Without a
 terminal oku cannot ask, and stops with
-`<name> needs approval to run them, and this is not a terminal`.
+`<name> <version> needs approval to run them, and this is not a terminal`.
 
 ## Run oku in another CI
 
@@ -156,6 +156,11 @@ $ oku outdated --json
 | `version` | The version `oku.lock` pins. |
 | `newest` | The newest version the package's `version` in `oku.toml` allows. `oku update <name>` takes it. |
 | `latest` | The newest release. It differs from `newest` when `oku.toml` pins a version or a range that leaves it out, as above. |
+| `waiting` | A newer version that the [minimum release age](../reference/security.md#minimum-release-age) holds back. Absent when none waits. |
+| `waits_until` | The time `waiting` passes the minimum release age. |
+
+`oku update <name>` takes a waiting version only after that time, or with
+`--min-release-age 0`.
 
 A package shows up when either is newer than the lock. With nothing to update
 it prints `[]`. oku downloads no package and changes nothing. When a version

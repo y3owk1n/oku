@@ -40,7 +40,7 @@ sha256 = '...'
 
 ## Include entries
 
-One `[[include]]` per included list that comes from a repo or a URL.
+One `[[include]]` per included list.
 
 | Key | Meaning |
 |---|---|
@@ -48,8 +48,9 @@ One `[[include]]` per included list that comes from a repo or a URL.
 | `commit` | The commit the list was read at. Only for forge and `git+` refs. |
 | `sha256` | Digest of the list's content. |
 
-A list that is a file on this machine is yours, like `oku.toml`. oku does not
-pin it, so you edit it and run `oku sync`.
+A list that is a file on this machine is yours, like `oku.toml`. Its entry holds
+the ref and an empty `sha256`, so oku does not pin its content, and you edit it
+and run `oku sync`.
 
 ## Package entries
 

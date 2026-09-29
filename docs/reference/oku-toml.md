@@ -47,11 +47,12 @@ autohide = true
 | `[vars]` | table | [\[vars\]](#vars) |
 | `[files]` | table | [\[files\]](#files) |
 | `[secrets]` | table | [\[secrets\]](#secrets) |
+| `[host]` | table | [\[host\]](#host) |
 | `[defaults]`, `[defaults-currenthost]`, `[registry]`, `[dconf]` | tables | [Settings tables](#settings-tables) |
 
 oku ignores a key it does not know at the top of the file and inside a
-`[packages]` table. `when`, `[lock]`, `[runtimes]`, `[env]`, `[files]` and
-`[secrets]` reject a key they do not know.
+`[packages]` table. `when`, `[lock]`, `[runtimes]`, `[env]`, `[host]`, `[files]`
+and `[secrets]` reject a key they do not know.
 
 ### How oku edits the file
 
@@ -161,7 +162,7 @@ include = [
 Rules:
 
 - Includes merge in order, so a later include overrides an earlier one. Your
-  own `[packages]`, `[vars]`, `[runtimes]` and settings override every include.
+  own list overrides every include, table by table and entry by entry.
 - An included list may include others, up to 8 levels deep. A list included
   twice, or one that includes itself, is an error.
 - oku never edits an included list, and `oku remove` refuses a package that
@@ -267,11 +268,12 @@ libgl = { apt = "libgl1", dnf = "mesa-libGL", when = { os = "linux" } }
   with the package manager's command or your `install` text. An entry that
   names packages only for other managers says that oku cannot check it here.
 - `oku doctor` checks the entries of the active generation again, and counts
-  each missing one as a problem.
+  each missing one as a problem. An entry oku cannot check here is a note.
 - An included list may set `[host]`, and a later list overrides an entry of
   the same name.
 - A manifest may have a [`[host]`](manifest.md#host) of its own. oku checks it
-  with the list's, and names the package in each missing entry.
+  with the list's, and names the packages that need each missing entry, up to
+  three and a count of the rest.
 
 ### [env]
 

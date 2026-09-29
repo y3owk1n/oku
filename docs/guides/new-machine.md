@@ -177,6 +177,8 @@ Each item is a [ref](../how-oku-works.md#ref) to a list:
 - A package in your own `[packages]` overrides the same name from any include.
 - An included list may include others, up to 8 levels deep. A list included
   twice, or one that includes itself, is an error.
+- An included list may not hold `[env]`. Only the list that includes it sets
+  variables.
 - In a list from a repo or a URL, a relative path names a file in the same
   repo at the same commit, or the URL beside the list. An absolute path is an
   error, because it names a file on the author's machine, and so is a path
@@ -252,8 +254,8 @@ libgl = { apt = "libgl1", dnf = "mesa-libGL", when = { os = "linux" } }
 get it:
 
 ```
-! libgl is missing
-  get it with `sudo apt-get install libgl1`
+libgl is missing
+get it with `sudo apt-get install libgl1`
 ```
 
 Run the command, and `oku doctor` confirms it.
@@ -336,8 +338,8 @@ If you do not want a clone on the new machine, point `oku sync` at the repo:
 
 ```
 $ oku sync github:you/machines
-✓ adopted github:you/machines with 23 locked packages
-profile now holds 23 packages
+adopted github:you/machines with 23 locked packages
+profile now holds 23 packages, generation 1, 12s
 ```
 
 oku reads the list and the lock beside it at the same commit, then writes a

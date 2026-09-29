@@ -180,9 +180,11 @@ file whose entry leaves the list, and `oku self uninstall` deletes all of them.
 A new machine needs your age key before its first sync. Copy `keys.txt` to
 `~/.config/sops/age/keys.txt` yourself, then run `oku sync`. oku decrypts age
 files with no other program, and installs sops from your list before it needs
-it.
+it. Step 3 of [Set up a new machine](new-machine.md#set-up-a-new-machine)
+is where the key goes.
 
-`oku doctor` reports a list with secrets on a machine where the key is missing:
+Once a generation holds secrets, `oku doctor` reports a machine where the key
+is missing:
 
 ```
 problem  the list has secrets, and the age identities are not at /home/you/.config/sops/age/keys.txt
@@ -190,6 +192,8 @@ copy your key file there, or set SOPS_AGE_KEY_FILE
 ```
 
 It also reports a sops file when `sops` is neither in the list nor on `PATH`.
+Before the first sync the machine has no generation, so `oku doctor` has no
+secrets to check.
 
 ## When a secret cannot be decrypted
 

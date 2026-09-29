@@ -41,7 +41,7 @@ When the programs do not run by name yet, `oku add` prints the line your shell
 needs:
 
 ```
-! to run it, add this line to ~/.zshrc, then open a new terminal:
+to run it, add this line to ~/.zshrc, then open a new terminal:
   [ -x "$HOME/.local/bin/oku" ] && eval "$("$HOME/.local/bin/oku" hook zsh)"
 ```
 
@@ -61,7 +61,9 @@ Adding a package that is already installed replaces it.
 Three flags change how a package installs. `--service` runs its daemon now and
 at every login, see [Services](services.md). `--system` puts its apps, fonts
 and services where every user sees them, see [System-wide](system-wide.md).
-`--from-source` builds it even when a download fits. The
+`--from-source` builds it even when a download fits. `--min-release-age` and
+`--accept-unknown-age` change which version it takes, see
+[Pick a version](#pick-a-version). The
 [command reference](../reference/commands.md#oku-add) lists them all.
 
 ## Look before you add
@@ -270,8 +272,14 @@ How each part of a recipe translates is in the
 
 ## Pick a version
 
-Without a version, `oku add` takes the newest. Add `@` and a version to pick
-one:
+Without a version, `oku add` takes the newest version that came out at least a
+day ago. A newer one waits, so that a release from a stolen account is gone
+before you install it. `--min-release-age 0` takes the newest now, and
+`[lock] min_release_age` in `oku.toml` changes the age. A version you name
+exactly skips the wait. See
+[Minimum release age](../reference/security.md#minimum-release-age).
+
+Add `@` and a version to pick one:
 
 ```
 $ oku add github:BurntSushi/ripgrep@14.1.1
@@ -386,7 +394,9 @@ The columns are the name, the locked version, the newest version that the
 `version` in `oku.toml` allows, the latest release, and the ref. On a terminal
 they have headers. Here `version = "14.1.1"` holds ripgrep at 14.1.1, so the
 newest allowed is 14.1.1 while the latest is 15.2.0. A package shows up when
-either one is newer than the lock. `--json` prints the same rows for a script,
+either one is newer than the lock. When a newer version is younger than the
+minimum release age, a `waiting` column names it and when `oku update` takes
+it. `--json` prints the same rows for a script,
 see [CI](ci.md).
 
 ## Update packages
@@ -405,7 +415,7 @@ pinned.
 
 A package moves to the newest version its `version` in `oku.toml` allows. An
 exact version stays where it is, `^1.4` moves to the newest 1.x, and no
-version moves to the newest release. To take a release beyond the constraint,
+version moves to the newest release that is old enough. To take a release beyond the constraint,
 change the `version` in `oku.toml` first. When you change it so that it no
 longer allows the locked version, `oku sync` picks the newest version it
 allows without an update.

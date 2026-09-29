@@ -129,6 +129,9 @@ The rules of a template:
   unchanged when you name your variables the way it does, such as
   `base00-hex`.
 - `{{home}}`, `{{config}}` and `{{data}}` are variables too.
+- `{{pkg.<name>}}` is the directory of a package of the list, and
+  `{{secret.<name>}}` a named secret.
+- A name of `[vars]` may not start with `pkg.` or `secret.`.
 - Write `\{{` for the two braces themselves, for a config that has its own
   `{{...}}` syntax.
 - There are no conditionals and no loops.
@@ -252,11 +255,13 @@ my-skills = "./packages/my-skills.toml"
 "{{home}}/.claude/skills/deslop" = { link = "{{pkg.my-skills}}/skills/deslop" }
 ```
 
-- `{{pkg.<name>}}` works at the start of a `link` source, for any package of
-  the list, with or without `data = true`. It names the directory that holds
-  the package's files in the [store](../how-oku-works.md#store).
-- After `oku update` the link points into the new version, and
-  `oku rollback` brings back the files of the version before.
+- `{{pkg.<name>}}` works at the start of a `link` source, and anywhere in a
+  `text` or a template, for any package of the list, with or without
+  `data = true`. It names the directory that holds the package's files in the
+  [store](../how-oku-works.md#store).
+- After `oku update` a link points into the new version, and oku writes a
+  file that uses it again. `oku rollback` brings back the files of the
+  version before.
 - The lock pins the package like any other.
 - A package that is not in the list on this machine, for example because its
   `when` does not match, is an error.

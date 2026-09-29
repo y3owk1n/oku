@@ -20,8 +20,9 @@ On Windows, in PowerShell:
 irm https://raw.githubusercontent.com/y3owk1n/oku/main/install.ps1 | iex
 ```
 
-The script downloads oku for your OS and CPU, checks its sha256, and puts it
-in `~/.local/bin`, or `%LOCALAPPDATA%\oku\bin` on Windows. It changes none of
+The script downloads oku for your OS and CPU, checks its sha256, and checks
+its minisign signature when `minisign` is installed. It puts it in
+`~/.local/bin`, or `%LOCALAPPDATA%\oku\bin` on Windows. It changes none of
 your files. At the end it prints one line for your shell, which you add in the
 next step.
 
@@ -59,11 +60,12 @@ central catalogue, so you point oku at the project. ripgrep lives on GitHub:
 
 ```
 $ oku add github:BurntSushi/ripgrep@14.1.1
-github:BurntSushi/ripgrep has no manifest, so oku inferred one from its newest release, --verbose prints it
+! github:BurntSushi/ripgrep has no manifest, so oku inferred one from its newest release, --verbose prints it
 added ripgrep 14.1.1
 ```
 
-`@14.1.1` asks for that version. Without it, oku takes the newest release.
+`@14.1.1` asks for that version. Without it, oku takes the newest release that
+is at least a day old.
 
 The ripgrep repo has no manifest, so oku read the release itself.
 It picked the download for your OS and CPU, checked it against the checksum

@@ -13,7 +13,10 @@ the editor tools. With oku installed, get them from the lock:
 git clone https://github.com/y3owk1n/oku
 cd oku
 oku sync
+oku allow
 ```
+
+`oku allow` lets the shell hook put the project's tools on `PATH`.
 
 Then build:
 
@@ -197,9 +200,9 @@ minisign -G -W -p oku-release.pub -s oku-release.key
 gh secret set MINISIGN_SECRET_KEY --repo y3owk1n/oku < oku-release.key
 ```
 
-The public half is `releaseKey` in `internal/cli/selfupdate.go` and
-`release_key` in `install.sh`. Keep the secret half outside the repo. A new key
-means a new value in both places, and every oku that is already installed keeps
+The public half is `releaseKey` in `internal/cli/selfupdate.go`,
+`release_key` in `install.sh` and `$releaseKey` in `install.ps1`. Keep the
+secret half outside the repo. A new key means a new value in all three places, and every oku that is already installed keeps
 trusting the old key until it is reinstalled.
 
 ### Rotate the release-please token
@@ -232,8 +235,9 @@ the new key:
    minisign -G -W -p oku-release-new.pub -s oku-release-new.key
    ```
 
-2. Put the new public key into `releaseKey` in `internal/cli/selfupdate.go`
-   and into `release_key` in `install.sh`, and merge that.
+2. Put the new public key into `releaseKey` in `internal/cli/selfupdate.go`,
+   `release_key` in `install.sh` and `$releaseKey` in `install.ps1`, and merge
+   that.
 3. Merge the release pull request. The old key still signs this release, call
    it N, so every installed oku accepts it. Its binary trusts the new key.
 4. Only after N is published, switch the secret:
@@ -250,8 +254,8 @@ release exists. It fails with `is not signed by <old key>` and a line that says
 to run the install script again, which puts the newest binary in place. Say so
 in the notes of the first release after N.
 
-`install.sh` on `main` holds the new key from step 2 on. Between step 2 and
-step 4 it therefore rejects the signature of release N for anyone who has
+`install.sh` and `install.ps1` on `main` hold the new key from step 2 on.
+Between step 2 and step 4 they therefore reject the signature of release N for anyone who has
 `minisign` installed. Do steps 2 to 4 right after each other.
 
 #### After a leak
@@ -260,8 +264,8 @@ When the secret key may have leaked, a signature by the old key proves
 nothing, so skip the handover release:
 
 1. Make a new key and switch the secret right away, as in steps 1 and 4 above.
-2. Put the new public key into `selfupdate.go` and `install.sh`, merge, and
-   release.
+2. Put the new public key into `selfupdate.go`, `install.sh` and
+   `install.ps1`, merge, and release.
 3. Tell users to run the install script again. `oku self update` refuses that
    release on every installed oku, which is the intended result, because those
    binaries still trust the leaked key.

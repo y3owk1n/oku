@@ -294,6 +294,8 @@ list's sha256.
 
 - The hook never installs, never uses the network, and never runs anything
   from a manifest.
+- `oku exec` inside a project you have not allowed refuses to run and names
+  `oku allow`.
 - A package's `[env]` cannot set `PATH`, `LD_PRELOAD` or similar variables.
   A list's `[env]` can only put entries in front of `PATH`, and cannot set the
   others.

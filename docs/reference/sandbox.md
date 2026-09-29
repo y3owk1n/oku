@@ -36,10 +36,10 @@ On every platform, a build command:
   temporary directory, and the variables the
   [build environment](manifest.md#the-build-environment) lists. `GITHUB_TOKEN`
   and other secrets in your shell never reach it.
-- stops with all of its child processes when you press Ctrl-C. oku then fails
-  the command and leaves the machine as it was.
 
-On Linux and macOS it also runs in a session of its own, without the terminal
+On Linux and macOS it also stops with all of its child processes when you
+press Ctrl-C, and oku then fails the command and leaves the machine as it was.
+It runs in a session of its own, without the terminal
 oku runs in. It cannot read what you type, write to your screen, or push a
 command into your shell to run after oku exits. This holds on a Linux host
 without the sandbox too.

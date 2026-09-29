@@ -180,6 +180,9 @@ $ oku gc --keep 2
   newest of them, which was active 30 days ago. So you can always roll back to
   how things were then. It takes days (`d`) or weeks (`w`). With `--keep` too,
   a generation stays when either flag keeps it.
+- gc removes the profile of a project whose folder or `oku.toml` is gone,
+  with its generations, and says so. It also forgets the project's
+  `oku allow`. A project on a volume that is not mounted stays.
 - Then gc deletes each store path that no remaining generation uses. A
   [dep](../how-oku-works.md#runtime-dep) counts as used while a package that
   needs it is.
@@ -214,8 +217,11 @@ $ oku gc --keep 1 --cache
 
 A package whose download gc deleted still runs, because its store path holds the
 unpacked content. oku downloads the file again when it has to unpack or build it
-once more, since `oku.lock` pins its digest. `--older-than` sets how long a
-download stays, so `oku gc --cache --older-than 2w` keeps two weeks of them.
+once more, since `oku.lock` pins its digest. `--cache-older-than` sets how
+long a download and an API answer stay, and turns on `--cache`.
+`oku gc --cache-older-than 2w` keeps two weeks of them and deletes no
+generation. `--older-than` also sets that age when `--cache-older-than` is not
+given, but it deletes old generations too.
 A deleted API answer costs one request the next time a lookup needs it. Deleting
 the whole cache is also safe, and oku downloads again when it needs a file.
 [Paths](../reference/paths.md) lists every directory.

@@ -17,9 +17,11 @@ A repo or directory that holds many manifests is a collection. Users give it a
 short name with `oku source add` and search it, see
 [Refs](refs.md#sources-and-aliases). `oku search` matches each manifest's `description`.
 
-`oku add` ignores a key it does not know, so an older oku still installs a
-manifest written for a newer one. `oku manifest lint` knows the whole schema and
-reports an unknown key as an error.
+`oku add` ignores a table or key it does not know, so an older oku still
+installs a manifest written for a newer one. A key it does not know inside a
+`bin` or `app` entry, a dep table or a `[host]` entry is an error, because oku
+reads those entries itself. `oku manifest lint` knows the whole schema and
+reports every unknown key as an error.
 
 ## Example
 
@@ -49,7 +51,7 @@ completions = { fish = "complete/rg.fish", zsh = "complete/_rg" }
 | Table | Required | Holds |
 |---|---|---|
 | [`[package]`](#package) | yes | The name and the facts `oku search` shows. |
-| [`[version]`](#version) | yes | One fixed version, or where oku discovers versions. |
+| [`[version]`](#version) | yes, unless every artifact has its own `version` | One fixed version, or where oku discovers versions. |
 | [`[[artifact]]`](#artifact) | no | A prebuilt download for the machines its `match` fits. |
 | [`[build]`](#build) | no | How to build the package from source. |
 | [`[runtime]`](#runtime) | no | Other packages the installed package needs. |
@@ -116,8 +118,9 @@ repo = "sharkdp/fd"
 strip_prefix = "v"
 ```
 
-`oku add` installs the newest version, and `oku add <ref>@1.2.0` installs that
-one. The user's [lock](../how-oku-works.md#lock) records the version and its
+`oku add` installs the newest version that passes the user's
+[minimum release age](security.md#minimum-release-age), and
+`oku add <ref>@1.2.0` installs that one. The user's [lock](../how-oku-works.md#lock) records the version and its
 tag, and `oku sync` installs the locked version without asking upstream again.
 Version pins and ranges are in [Refs](refs.md#pin-a-version).
 
@@ -157,6 +160,10 @@ Version pins and ranges are in [Refs](refs.md#pin-a-version).
   repo = "throneproj/Throne"
   latest = true
   ```
+
+- `git-tags`, `redirect`, `page` and a Sparkle item without a `pubDate` give no
+  release time, so by default oku asks the user before it takes a new version
+  from them. See [Minimum release age](security.md#minimum-release-age).
 
 ### Follow a moving tag
 
@@ -349,7 +356,7 @@ app = ["IINA.app"]
 Some vendors keep each platform at its own version, or publish each platform
 in its own place. Discord's macOS download is `0.0.413` while its Linux one is
 `1.0.159`. Give each artifact a `version` table instead of `[version]`, with
-the same `from`, `repo`, `regex` and `strip_prefix`:
+the same `from`, `repo`, `regex`, `json`, `join` and `strip_prefix`:
 
 ```toml
 [package]
@@ -411,7 +418,7 @@ machine, so put specific entries before general ones.
 | Key | Required | Meaning |
 |---|---|---|
 | `match` | no | `{ os, arch, libc }`, see [Match and when](#match-and-when). A missing key matches anything, and a missing `match` matches every machine. |
-| `url` | yes | Where the download is. `https://`, `http://` or `file://`, the last only in a manifest on this machine. On Windows `file:///C:/tools/x.zip` names a drive and `file://server/share/x.zip` a share. Expands [template variables](#template-variables). |
+| `url` | yes | Where the download is. `https://`, `http://` or `file://`. An `http://` URL needs `sha256` or a `signing_key`, and `oku manifest lint` fails without one. `file://` works only in a manifest on this machine or in a `git+file://` repo. On Windows `file:///C:/tools/x.zip` names a drive and `file://server/share/x.zip` a share. Expands [template variables](#template-variables). |
 | `sha256` | no | The download's digest, 64 lowercase hex characters. Not with `sha256_url`. |
 | `sha256_url` | no | The URL of a checksum file, see [Checksums](#checksums). Not with `sha256`. |
 | `version` | no | Where this artifact's own version comes from, see [A version for each platform](#a-version-for-each-platform). |
@@ -448,7 +455,7 @@ oku recognises a download by its content, not by its file name.
 
 | Format | Notes |
 |---|---|
-| tar, tar.gz, tar.bz2, tar.xz, tar.zst | An xz file may use a BCJ filter for x86, ARM, ARM-Thumb, PowerPC, IA-64 or SPARC, or the Delta filter. ARM64 and RISC-V BCJ are not read. |
+| tar, tar.gz, tar.bz2, tar.xz, tar.zst | An xz file may use a BCJ filter for x86, ARM, ARM-Thumb, PowerPC, IA-64 or SPARC, or the Delta filter. ARM64 and RISC-V BCJ are not read. oku refuses an archive that unpacks to more than 32 GiB, and an xz file whose dictionary is over 128 MiB. |
 | zip | |
 | 7z | An archive made on Windows has no unix file modes. Its programs still run, because oku marks every `bin` as executable. |
 | `.deb` | oku unpacks only the data archive. Its files are at `usr/bin/...`. |
@@ -553,6 +560,9 @@ minisign -S -m foo-1.2.0-linux.tar.gz # writes foo-1.2.0-linux.tar.gz.minisig
   `.minisig` appended and refuses the artifact when the signature is missing or
   not from `signing_key`.
 - oku accepts the current and the legacy (`-l`) kind of signature.
+- The signed comment must name the file as `file:<name>`, which `minisign -S`
+  writes, or hold the version, as in `tool 1.2.3`. A signature of another file
+  or version fails, so upload each file under the name you signed it with.
 - With a signing key, an artifact without `sha256` is no longer trust on first
   use, and `oku manifest lint` does not warn about it.
 - The user's `oku.lock` pins the key at the first install. After that, oku
@@ -790,8 +800,8 @@ app = ["bin/foo.exe"]
 |---|---|
 | A bundle, `Foo.app` | On macOS oku copies it to the Applications folder. |
 | A desktop entry, `*.desktop` | On Linux oku writes a desktop entry with its `Name`. Its `Exec` runs a file of the package or a program of `bin`. Its `Icon` is a file of the package or the name of an icon theme's file in it. oku takes an `.svg` first, then the largest image. |
-| Any other file | oku writes a launcher that runs it, named after the file. |
-| The name of a program of `bin` | oku writes a launcher that runs that program. A [`bin` table](#run-a-program-through-an-interpreter) with `run` and `args` gives the launcher its arguments. |
+| Any other file | On Linux and Windows oku writes a launcher that runs it, named after the file. macOS gets nothing from it. |
+| The name of a program of `bin` | On Linux and Windows oku writes a launcher that runs that program, and macOS gets nothing from it. A [`bin` table](#run-a-program-through-an-interpreter) with `run` and `args` gives the launcher its arguments. |
 
 A table sets what the file does not say:
 
@@ -916,7 +926,8 @@ system, and system services.
   and finish.
 - When a build fails, its error ends with each entry of the package that the
   machine lacks, so the cause shows next to the compiler's message.
-- `oku manifest lint` reports an entry oku cannot read.
+- An entry oku cannot read makes the manifest invalid, so `oku add` and
+  `oku manifest lint` both report it.
 
 ## [build]
 
@@ -950,7 +961,7 @@ install = { bin = ["tree"], man = ["doc/tree.1"] }
 | `{ git, tag }` | Clones that tag at depth 1. Needs `git`. |
 | `{ url, sha256, strip }` | Downloads and unpacks an archive, checked against `sha256`. |
 | `{ url, sha256_url, strip }` | The same, checked against a checksum file that upstream publishes. |
-| `{ url, strip }` | With `github-releases`, oku checks a file of the repo's release against the sha256 GitHub reports for it. With `crates`, it checks the `.crate` file against the sha256 crates.io publishes. Otherwise it trusts the first download and pins its sha256 in `oku.lock`, and `oku manifest lint` warns. |
+| `{ url, strip }` | With `github-releases`, oku checks a file of the repo's release against the sha256 GitHub reports for it. With `crates`, it checks the `.crate` file against the sha256 crates.io publishes. Otherwise it trusts the first download and pins its sha256 in `oku.lock`, and `oku manifest lint` warns. An `http://` source needs `sha256`. |
 
 A platform that has neither an artifact nor a build gets no package, see
 [New machine](../guides/new-machine.md).
@@ -1407,7 +1418,9 @@ platforms, named as `oku.lock` names them: `darwin-amd64`, `darwin-arm64`,
 ## Template variables
 
 `{{name}}` in a value expands to the variable's value. An unknown variable is an
-error, and `oku manifest lint` reports it.
+error when oku expands the value. `oku manifest lint` reports one in an
+artifact's `url` and `sha256_url`, a `bin` table, `completions.generate`, a
+`run` step and `build.source.sha256_url`.
 
 | Variable | Value |
 |---|---|
@@ -1619,7 +1632,8 @@ Limits of inference:
   the right one to `--bin`.
 - It names the package after the repo, so `github:cli/cli` installs a package
   called `cli` whose program is `gh`. Commit a manifest to choose the name.
-- It writes `bin` and `man` only. Completions need a manifest.
+- It writes no completions, and no `lib`, `include`, `share` or `font`. Commit
+  a manifest for those.
 
 ### Registry packages
 
@@ -1815,6 +1829,11 @@ read the user's home directory, and can only write to the source directory, its
 temporary `HOME` and `TMPDIR`, and `{{prefix}}`. The store and the directories
 of the `needs` tools stay readable. See [The build sandbox](sandbox.md) for the
 full list per platform, and for hosts without a sandbox.
+
+oku does `fetch`, `extract`, `patch`, `install` and `copy` itself, outside the
+sandbox. They fail on a symlink that a `run` step left leading outside the
+source directory or `{{prefix}}`, so they never read or write outside the
+build. See [The build sandbox](sandbox.md).
 
 A build must therefore get everything it downloads through `source`, a `fetch`
 step, or a [`vendor` step](#vendoring). oku checks all three against a digest.

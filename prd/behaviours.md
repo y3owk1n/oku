@@ -1096,10 +1096,10 @@ order step in `prd/product.md`.
   `/Applications/Tool.app`, and its payload holds only the bundle's
   `Contents`, oku unpacks the payload into a folder of the bundle's name. A
   cask that installs such a package then translates with its app.
-- B444 [8] When a sync, a rollback or `self uninstall` would remove an app in
+- B444 [8] When `sync --system` or `self uninstall` would remove an app in
   system scope while macOS has a system extension or driver of that app turned
   on, oku stops before any change and says to turn the extension off from the
-  app. Once it is off the command goes through. An update that replaces the
+  app. A rollback leaves system scope to the next `sync --system`, as B75 says. Once it is off the command goes through. An update that replaces the
   app is not stopped.
 - B287 [8] A disk image that a killed oku process left mounted does not stop
   the next install of it. That install detaches it and unpacks the image, and

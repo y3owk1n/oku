@@ -5,7 +5,7 @@ behind the commands, see the [guides](../README.md).
 
 | Group | Commands |
 |---|---|
-| [Packages](#packages) | [`add`](#oku-add), [`remove`](#oku-remove), [`update`](#oku-update), [`outdated`](#oku-outdated), [`list`](#oku-list), [`info`](#oku-info), [`why`](#oku-why), [`which`](#oku-which), [`shell`](#oku-shell) |
+| [Packages](#packages) | [`add`](#oku-add), [`remove`](#oku-remove), [`update`](#oku-update), [`outdated`](#oku-outdated), [`list`](#oku-list), [`info`](#oku-info), [`why`](#oku-why), [`which`](#oku-which), [`shell`](#oku-shell), [`run`](#oku-run) |
 | [The machine](#the-machine) | [`sync`](#oku-sync), [`service`](#oku-service), [`setup`](#oku-setup) |
 | [History](#history) | [`generations`](#oku-generations), [`rollback`](#oku-rollback), [`gc`](#oku-gc), [`du`](#oku-du) |
 | [Projects](#projects) | [`allow`, `deny`](#oku-allow-oku-deny), [`hook`](#oku-hook), [`env`](#oku-env), [`exec`](#oku-exec) |
@@ -63,7 +63,7 @@ Installs the package that a [ref](refs.md) points at, and writes it to
 | `--from-source` | Builds from source even when a prebuilt download fits. `oku.lock` records the choice, so `oku sync` builds too. |
 | `--asset <glob>` | For a repo with no manifest, the release asset to use. A glob that names one asset takes it for this machine. One that names more takes the best of them on every platform. Other platforms take the asset of the same program. |
 | `--bin <name>` | For a repo with no manifest, or a URL of the download itself, the file name of a program inside it. Give it once per program. oku records `--asset` and `--bin` in `oku.toml` and `oku.lock`, and `oku update` infers the next version with them. |
-| `--yes`, `-y` | Approves the manifest's build commands, or the command that generates an artifact's completions, without asking. See [approvals](security.md#approve-build-commands). |
+| `--yes`, `-y` | Approves the manifest's build commands, the command that generates an artifact's completions, and the variables its `[env]` sets, without asking. See [approvals](security.md#approve-build-commands). |
 | `--accept-key` | Accepts a manifest whose `signing_key` differs from the one in `oku.lock`. See [signing keys](security.md#signing-keys-of-a-manifest). |
 | `--min-release-age AGE` | Takes only a version that came out at least AGE ago, such as `3d`, in place of the list's. `0` takes the newest. See [Minimum release age](security.md#minimum-release-age). |
 | `--accept-unknown-age` | Takes a version whose source gives no release time without asking, whatever `[lock]` `unknown_release_age` says. See [Minimum release age](security.md#minimum-release-age). |
@@ -113,6 +113,9 @@ On stderr oku also prints, when they apply:
   when that directory is not on `PATH`
 - a line that says oku trusted a download because the manifest publishes no
   checksum, see [trust on first use](security.md#trust-on-first-use)
+- a `!` note for each [`[host]`](oku-toml.md#host) entry of the package and
+  its deps that the machine lacks, with the package manager's command or the entry's
+  `install` text. oku installs nothing for it, and `add` still succeeds
 
 A failed `add` leaves the previous generation active, and the list, the lock
 and every app, font and service unchanged. The messages it can stop with are
@@ -205,7 +208,7 @@ With no names it updates every package of the list.
 |---|---|
 | `--dry-run` | Checks everything and prints what would change. It changes only the store and the cache. See [A dry run](#a-dry-run). |
 | `--system` | Also applies system-scope apps, fonts and services, which needs administrator rights. |
-| `--yes`, `-y` | Approves build commands without asking. |
+| `--yes`, `-y` | Approves a manifest's commands and `[env]` without asking. |
 | `--accept-key` | Accepts a changed `signing_key`. |
 | `--min-release-age AGE` | As in `oku add`. `0` takes a version that waits now. |
 | `--accept-unknown-age` | As in `oku add`. |
@@ -486,7 +489,7 @@ tables.
 | `--locked` | Fails when `oku.lock` would change. For CI. |
 | `--rebuild <name>` | Builds the package again even though the store holds its build. Repeat the flag, or separate names with commas. |
 | `--system` | Also applies system-scope apps, fonts and services, which needs administrator rights. |
-| `--yes`, `-y` | Approves build commands without asking. |
+| `--yes`, `-y` | Approves a manifest's commands and `[env]` without asking. |
 | `--accept-key` | Accepts a changed `signing_key`. |
 | `--min-release-age AGE` | As in `oku add`, for the packages that sync picks a version for. |
 | `--accept-unknown-age` | As in `oku add`. |
@@ -504,8 +507,15 @@ What it does:
 - Skips a package whose `when` does not match this machine, and pins it for
   the platforms of [`[lock]`](oku-toml.md#lock) that the lock lacks.
 - Reads an included list at the commit in the lock.
+- Checks each [`[host]`](oku-toml.md#host) entry of the list and of the
+  installed packages whose `when` matches. It installs nothing for them and
+  finishes the sync, then prints a `!` note for each missing entry with the
+  package manager's command or the entry's `install` text.
 - Changes files in system scope only with `--system`, after it lists them and
   you agree. Without the flag it lists them and leaves them.
+- With `--system`, refuses to remove a system-scope app while its macOS
+  system extension is on, since the extension keeps running once the app is
+  gone. An update that replaces the app goes ahead.
 
 It stops before it downloads anything when a manifest or an included list no
 longer has the hash in the lock:
@@ -518,7 +528,7 @@ run `oku update ripgrep` to accept it
 When several packages drifted, the error lists each and ends with one
 `oku update` that names them all. An `oku update` of some names that finds
 another package drifted writes nothing, and its error names the packages you
-gave too. After a terminal showed a checked row for a package, a failed `sync`
+gave too. After a terminal showed a row for a package, a failed `sync`
 or `update` ends with `nothing was installed, and the next run reuses the
 downloads above`.
 
@@ -628,7 +638,7 @@ See [New machine](../guides/new-machine.md) for when to use it.
 ```
 $ oku sync github:you/machines
 ✓ adopted github:you/machines with 23 locked packages
-profile now holds 23 packages
+profile now holds 23 packages, generation 1, 41s
 ```
 
 - Without a lock beside the list, oku prints a notice and resolves every
@@ -720,7 +730,7 @@ oku generations
 ```
 
 Lists the profile's [generations](../how-oku-works.md#generation), oldest
-first, with `*` on the active one.
+first. oku marks the active one `*`, or `●` on a terminal.
 
 ```
   1  2026-09-20 14:02  1 package                        + ripgrep 14.1.1
@@ -815,7 +825,8 @@ $ oku gc --keep 2
   little. With nothing to delete it prints `nothing to delete, every store
   path is used by a generation`. When `--keep` deleted generations and no
   store path became unused, it prints `every store path is still used by a
-  generation`.
+  generation`. With `--cache` either message ends with `, and every cached
+  download belongs to one`.
 - It removes the profile of a project that is gone, whose folder no longer
   exists or no longer holds an `oku.toml`. That frees the packages only that
   project used, and it forgets the project's `oku allow`.
@@ -878,7 +889,7 @@ $ oku gc --keep 1 --cache
 - removed generation 1
 - removed ripgrep-14.0.3-4c8fe21b8d1d13c4 (4.6 MiB)
 - removed 38 files from the download cache (1.9 GiB)
-removed 12 answers from the API cache (3.1 MiB)
+- removed 12 answers from the API cache (3.1 MiB)
 ✓ freed 1.9 GiB from 1 store path, 38 cached files and 12 kept answers
 ```
 - It refuses to run while an unfinished change waits to be put back.
@@ -1077,7 +1088,7 @@ registry package.
 
 | Flag | Effect |
 |---|---|
-| `--from` | Required. `owner/repo` on GitHub, or a ref such as `codeberg:owner/repo`, `gitlab:group/project`, `npm:@scope/name`, `pypi:name`, `go:host/path` or `cargo:name`. It takes no `#name` and no `@version`. |
+| `--from` | Required. `owner/repo` on GitHub, or a ref such as `codeberg:owner/repo`, `gitlab:group/project`, `npm:@scope/name`, `pypi:name`, `go:host/path`, `cargo:name`, or a recipe ref such as `cask:name`, `scoop:name`, `aqua:owner/repo` or `winget:Id`. It takes no `#name` and no `@version`. |
 | `-o`, `--output` | The file to write. Default `oku.pkg.toml`. `-` prints to stdout. |
 | `--force` | Replaces the output file when it exists. |
 
@@ -1116,6 +1127,8 @@ the whole schema.
 | error | A `run` step that can run on Windows and sets no `shell`. A step can run on Windows unless its `when` names another `os`. |
 | error | A `fetch` step without `sha256`. |
 | error | A `bin` table with both `path` and `run`. |
+| error | An artifact at an `http://` URL without `sha256` or `signing_key`, or a build source at one without `sha256`. |
+| error | A `[host]` entry oku cannot read. |
 | warning | An artifact with neither `sha256` nor `sha256_url`. |
 | warning | An empty `description`. |
 
@@ -1130,10 +1143,12 @@ machine. Without a file it tests `oku.pkg.toml`.
 
 | Flag | Effect |
 |---|---|
-| `--yes`, `-y` | Approves the build commands without asking. |
-| `--verbose`, `-v` | Shows the output of build commands as they run. |
+| `--yes`, `-y` | Approves a manifest's commands and `[env]` without asking. |
+| `--verbose`, `-v` | Shows the output of build commands as they run, and a manifest that oku inferred. |
 | `--keep` | Keeps the throwaway store and prints the package's path. |
 | `--accept-key` | Accepts a signing key that differs from the one in `oku.lock`. |
+| `--min-release-age AGE` | As in `oku add`. |
+| `--accept-unknown-age` | As in `oku add`. |
 
 ```
 $ oku manifest test
@@ -1167,7 +1182,7 @@ Without a file it bumps `oku.pkg.toml`.
 |---|---|
 | `--to` | The version to move to. Default the newest release. |
 | `--repo` | The repo to read releases from: `owner/repo` on GitHub, or a ref such as `gitlab:group/project`, `codeberg:owner/repo`, `gitea:host/owner/repo` or `github:host/owner/repo`. `npm:@scope/name` reads the npm registry. Default the repo in the first release URL on github.com, codeberg.org, gitlab.com or registry.npmjs.org. A URL on any other host needs `--repo`. |
-| `--strip-prefix` | Text before the version in a tag. Default `v` when a URL holds `/releases/download/v`, else nothing. |
+| `--strip-prefix` | Text before the version in a tag. Default `v` when a URL holds `/releases/download/v` or `/-/releases/v`, else nothing. |
 
 ```
 $ oku manifest bump
@@ -1379,7 +1394,8 @@ what changed: https://github.com/y3owk1n/oku/releases/tag/v0.5.0
   that is old enough and newer than the one that runs, and otherwise prints
   `oku <version> is the newest release that is old enough`. `--to` and
   `--nightly` skip the age.
-- `--check` prints `oku <newest> is available, this is <running>`.
+- `--check` prints `oku <newest> is available, this is <running>`, and the
+  `oku self update` command, with the same flags, that takes it.
 - At the newest release it prints `oku <version> is the newest release`.
 - On a nightly build, `oku self update` without a flag refuses, because the
   newest release is older than the build. `--release` goes back.
@@ -1415,6 +1431,9 @@ It removes:
 - `oku.toml`, `oku.lock`, `config.toml` and `signing.key` in the config
   directory
 - the `oku` binary
+
+It refuses, before it removes anything, while a system-scope app has its macOS
+system extension on. Turn the extension off from the app first.
 
 On Windows a program that oku installed may still run. Its files move to an
 `oku-uninstalled` folder beside the data directory or the shared store root,
@@ -1515,11 +1534,12 @@ message, see [Troubleshooting](../troubleshooting.md).
 | `--asset and --bin apply when oku infers a manifest` | The ref has a manifest. |
 | `<name> has no [build], so it cannot be built from source` | `--from-source` on a manifest with artifacts only. |
 | `the build needs "<tool>", which is not on PATH` | Install that tool yourself. oku does not install `needs`. |
-| `<name> needs approval to run them, and this is not a terminal` | The manifest runs build commands and stdin is not a terminal. Pass `--yes` after reading them. |
+| `<name> <version> needs approval to <what>, and this is not a terminal` | The manifest runs commands or sets `[env]` variables, and stdin is not a terminal. `<what>` is `run them`, `run it`, `set its variables`, or one of the first two with `and set its variables`. The next line says `pass --yes to approve`. Pass `--yes` after reading them. |
 | `dep <ref>: no version satisfies ">=9"` | A dep's version constraint matches nothing upstream. The versions found follow. |
 | `dependency cycle: a -> b -> a` | Two manifests depend on each other. |
 | `the vendored packages changed: oku.lock pinned ...` | A build's vendor steps downloaded something other than the lock pinned. oku installed nothing. `oku update <name>` accepts it. |
 | `build.step[N] (run) failed` | A build step failed. The last 40 lines of its output follow. |
+| `<entry> is missing` | Ends a failed build, once for each [`[host]`](oku-toml.md#host) entry of the package that the machine lacks, with the package manager's command or the entry's `install` text. |
 | `checksum mismatch for <url>` | The download differs from the expected sha256. oku installed nothing. |
 | `<alias> is not a source and <arg> is not a file` | The argument looks like `alias/name`, but no such source exists. |
 | `<path> already exists and oku did not put it there` | A package's app or font, or a `[files]` entry, would overwrite a file of yours. Move it away. |
@@ -1529,8 +1549,8 @@ message, see [Troubleshooting](../troubleshooting.md).
 | `<name>: the manifest changed since oku.lock was written` | A file or URL manifest has other bytes than the lock pinned. `oku update <name>` accepts it. |
 | `<name>: checksum changed: upstream publishes sha256 <new>, oku.lock pinned <old>` | The checksum file now holds another digest. `oku update <name>` accepts it. |
 | `<name>: oku.lock pinned the signing key ..., and the manifest now has the signing key ...` | The manifest's `signing_key` changed. `--accept-key` accepts it. |
+| `<app> has the system extension <id> turned on, and it keeps running when oku deletes the app` | `sync --system` or `self uninstall` would remove a system-scope app while macOS runs its extension. The next line says `turn the extension off from the app, then run this again`. |
 | `<name> has no artifact or build for <platform>, so sync did not install it` | A package of the list has nothing for that platform. The next lines give the `when` to write. |
-| `waiting for oku process <pid> to finish` | Not an error. Another oku changes the machine, see [one change at a time](paths.md#one-change-at-a-time). |
 
 ## Output
 
@@ -1541,13 +1561,19 @@ These rules apply to every command.
   cloning, asking a cache, or running a build step. On a terminal that is one
   line per package that is installing. A download shows how far it got, such
   as `1.4 MiB of 2.0 MiB, 70%`, with the time so far. After eight lines the
-  last one counts the rest, and the lines go away when the waits end.
+  last one counts the rest, and the lines go away when the waits end. While
+  another oku changes the machine, a wait line says `waiting for oku process
+  <pid> to finish`, and it goes away once the command goes on, see
+  [one change at a time](paths.md#one-change-at-a-time).
 - **Terminal.** On a terminal oku uses colour, glyphs, column headers and `~`
   for your home directory. A finished line starts with a green `✓`, a removal
   with a red `-`, a dry-run change with a yellow `~`, and a pin for another
-  platform with a dim `·`. While `sync` or `update` runs, each package that is
-  ready gets a row whose mark says what changes: a green `+` for a new
-  package, a `↑` for a new version and a `~` for the same version changed.
+  platform with a dim `·`. A note starts with a yellow `!`, and a problem of
+  `doctor` or an error of `manifest lint` with a red `✗`. While `sync` or
+  `update` runs, each package that is ready gets a row whose mark says what
+  changes: a green `+` for a new package, a `↑` for a new version, a `~` for
+  the same version changed, a red `-` for a package that left, and a dim `·`
+  for a pin on another platform.
   Only the last line has a `✓`, so a run that fails shows none. The last line
   of a change says what it did, such as `✓ done in 3s` or `✓ freed 1.2 GiB
   from 14 store paths`. A command to type in a hint shows in colour, without
