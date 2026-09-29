@@ -290,7 +290,7 @@ func runAdd(
 	// generation stays.
 	c := change{to: prof.Current(), system: system}
 	if !got.lockOnly {
-		if c.to, err = prof.Add(got.profile, lockData); err != nil {
+		if c.to, err = prof.Add(got.profile, hostOf(got.profile.Name, got), lockData); err != nil {
 			return false, err
 		}
 
@@ -332,6 +332,10 @@ func runAdd(
 	}
 
 	if err := e.apply(cmd, opts, c); err != nil {
+		return false, err
+	}
+
+	if err := tellMissing(cmd.ErrOrStderr(), opts, hostOf(got.profile.Name, got)); err != nil {
 		return false, err
 	}
 

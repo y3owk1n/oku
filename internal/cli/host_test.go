@@ -102,3 +102,113 @@ func TestB446AHostEntryOkuCannotReadIsAnError(t *testing.T) {
 		}
 	}
 }
+
+func TestB449APackageNamesWhatTheHostMustHaveForItAndItsDeps(t *testing.T) {
+	m := newMachine(t)
+	m.opts.Host = &host.System{}
+
+	archive, sum := m.archive(t, "lib", map[string]string{"lib.txt": "lib"})
+	must(t, os.WriteFile(filepath.Join(m.fixtures, "lib.toml"), fmt.Appendf(nil, `[package]
+name = "lib"
+[version]
+value = "1.0.0"
+[host]
+sdk = { path = "/oku/no/such/sdk", install = "install the SDK" }
+[[artifact]]
+url = "file://%s"
+sha256 = %q
+data = true
+`, archive, sum), 0o644))
+
+	archive, sum = m.archive(t, "tool", map[string]string{"tool": script})
+	ref := filepath.Join(m.fixtures, "tool.toml")
+	must(t, os.WriteFile(ref, fmt.Appendf(nil, `[package]
+name = "tool"
+[version]
+value = "1.0.0"
+[host]
+docker = { command = "oku-no-such-docker", install = "install docker" }
+[runtime]
+deps = ["./lib.toml"]
+[[artifact]]
+url = "file://%s"
+sha256 = %q
+bin = ["tool"]
+`, archive, sum), 0o644))
+
+	out, err := m.run(t, "", "add", ref)
+	if err != nil || m.toolOutput(t) != "hello from tool" {
+		t.Fatalf("add: %v\n%s", err, out)
+	}
+
+	// A dep's requirement is the package's, since the package needs the dep.
+	for _, line := range []string{
+		"docker, which tool needs, is missing\ninstall docker",
+		"sdk, which tool needs, is missing\ninstall the SDK",
+	} {
+		if !strings.Contains(out, line) {
+			t.Fatalf("add does not say %q:\n%s", line, out)
+		}
+	}
+
+	out, err = m.run(t, "", "sync")
+	if err != nil || !strings.Contains(out, "docker, which tool needs, is missing") {
+		t.Fatalf("sync does not warn about the package's requirement: %v\n%s", err, out)
+	}
+
+	if out, err = m.run(t, "", "doctor"); err == nil || !strings.Contains(out, "sdk, which tool needs, is missing") {
+		t.Fatalf("doctor does not report the package's requirement: %v\n%s", err, out)
+	}
+
+	// Removing the package removes what it needs.
+	_, err = m.run(t, "", "remove", "tool")
+	must(t, err)
+
+	if out, _ = m.run(t, "", "doctor"); strings.Contains(out, "is missing") {
+		t.Fatalf("doctor still reports the requirement of a removed package:\n%s", out)
+	}
+}
+
+func TestB450AFailedBuildNamesWhatTheHostLacks(t *testing.T) {
+	m := newMachine(t)
+	m.opts.Host = &host.System{}
+
+	ref := filepath.Join(m.fixtures, "tool.toml")
+	must(t, os.WriteFile(ref, []byte(`[package]
+name = "tool"
+[version]
+value = "1.0.0"
+[host]
+compiler = { command = "oku-no-such-cc", install = "install a C compiler" }
+[build]
+needs = ["sh"]
+[[build.step]]
+run = "oku-no-such-cc"
+shell = "sh"
+`), 0o644))
+
+	out, err := m.run(t, "", "add", ref, "--yes")
+	if err == nil || !strings.Contains(err.Error(), "compiler is missing\ninstall a C compiler") {
+		t.Fatalf("the failed build does not name the missing compiler: %v\n%s", err, out)
+	}
+}
+
+func TestB451LintReportsAHostEntryOkuCannotRead(t *testing.T) {
+	m := newMachine(t)
+	path := filepath.Join(m.fixtures, "tool.toml")
+	must(t, os.WriteFile(path, []byte(`[package]
+name = "tool"
+[version]
+value = "1.0.0"
+[host]
+compiler = { brew = "gcc" }
+[[artifact]]
+url = "https://example.com/tool.tar.gz"
+bin = ["tool"]
+`), 0o644))
+
+	out, err := m.run(t, "", "manifest", "lint", path)
+	if err == nil || !strings.Contains(out, "host.compiler.brew is not a key of [host]") {
+		t.Fatalf("lint does not report the [host] entry: %v\n%s", err, out)
+	}
+}

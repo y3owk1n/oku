@@ -53,6 +53,7 @@ completions = { fish = "complete/rg.fish", zsh = "complete/_rg" }
 | [`[[artifact]]`](#artifact) | no | A prebuilt download for the machines its `match` fits. |
 | [`[build]`](#build) | no | How to build the package from source. |
 | [`[runtime]`](#runtime) | no | Other packages the installed package needs. |
+| [`[host]`](#host) | no | What the machine must have that oku does not install. |
 | [`[env]`](#env) | no | Variables the user's shell exports while the package is installed. |
 | [`[[service]]`](#service) | no | A long-running program the OS service manager can run. |
 
@@ -870,6 +871,32 @@ oku does not link runtime deps into the user's profile, so their programs are
 not on the user's `PATH`. A program that oku writes with [`run`](#run-a-program-through-an-interpreter)
 gets each runtime dep's `bin` first on its own `PATH`.
 
+## [host]
+
+Names what the machine must already have for this package, which oku does not
+install. Examples are the Xcode command line tools for a build on macOS, or a
+graphics library of the Linux distribution. An entry takes the keys of
+[`[host]` in `oku.toml`](oku-toml.md#host): `command`, `path`, `apt`, `dnf`,
+`pacman`, `apk`, `zypper`, `install` and `when`.
+
+```toml
+[host]
+xcode-clt = { path = "/Library/Developer/CommandLineTools/usr/bin/clang", install = "xcode-select --install", when = { os = "darwin" } }
+cc = { apt = "build-essential", dnf = "gcc", pacman = "base-devel", when = { os = "linux" } }
+```
+
+Use a [dep](#build-dependencies) for anything oku can install. `[host]` is for
+what it cannot: the vendor's toolchain, libraries that must match the running
+system, and system services.
+
+- `oku add`, `oku sync` and `oku doctor` check the entries of each installed
+  package and of its deps, and name the package in each missing one:
+  `xcode-clt, which tmux needs, is missing`. They install nothing for it and
+  finish.
+- When a build fails, its error ends with each entry of the package that the
+  machine lacks, so the cause shows next to the compiler's message.
+- `oku manifest lint` reports an entry oku cannot read.
+
 ## [build]
 
 `[build]` says how to produce the package from source. oku builds when no
@@ -1272,7 +1299,8 @@ package = "golang.org/x/tools/gopls"
 ### When a build fails
 
 oku reports the step number, its kind, and the last 40 lines of its output,
-deletes the half-built package, and leaves the user's profile as it was.
+then each entry of [`[host]`](#host) that the machine lacks. It deletes the
+half-built package and leaves the user's profile as it was.
 `oku add -v` shows the output while the build runs.
 
 ### Approval

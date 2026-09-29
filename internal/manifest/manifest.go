@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"maps"
 	"reflect"
 	"regexp"
 	"slices"
@@ -21,6 +22,7 @@ import (
 
 	"github.com/y3owk1n/oku/internal/crates"
 	"github.com/y3owk1n/oku/internal/goproxy"
+	"github.com/y3owk1n/oku/internal/host"
 	"github.com/y3owk1n/oku/internal/platform"
 	"github.com/y3owk1n/oku/internal/pypi"
 )
@@ -40,6 +42,10 @@ type Manifest struct {
 	// Env holds variables the shell hook exports while the package is installed.
 	// Values expand {{prefix}} and {{version}}.
 	Env map[string]string `toml:"env"`
+	// RawHost is [host] as TOML gives it, and Host the requirements Parse reads
+	// from it: what the machine needs that oku does not install.
+	RawHost map[string]any     `toml:"host"`
+	Host    []host.Requirement `toml:"-"`
 
 	// SHA256 is the hex digest of the manifest data. The store hash includes it.
 	SHA256 string `toml:"-"`
@@ -593,6 +599,20 @@ func (m *Manifest) validate() error {
 		if a.Strip < 0 {
 			errs = append(errs, fmt.Errorf("artifact[%d]: strip must not be negative", i))
 		}
+	}
+
+	m.Host = nil
+
+	for _, name := range slices.Sorted(maps.Keys(m.RawHost)) {
+		r, err := host.Parse(name, m.RawHost[name])
+		if err != nil {
+			errs = append(errs, err)
+
+			continue
+		}
+
+		r.Package = m.Package.Name
+		m.Host = append(m.Host, r)
 	}
 
 	return errors.Join(errs...)
