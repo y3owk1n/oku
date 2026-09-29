@@ -443,7 +443,7 @@ oku recognises a download by its content, not by its file name.
 | `.deb` | oku unpacks only the data archive. Its files are at `usr/bin/...`. |
 | `.rpm` | oku unpacks only the file payload. Its files are at `usr/bin/...`. |
 | `.dmg` | macOS only. oku mounts the image read-only, copies it, and unmounts it. An image that holds a `.pkg` and no app at its top only carries the package, so oku expands each package into a folder of its name. Its files are then at `<package>.pkg/<component>.pkg/Payload/...`. |
-| `.pkg` | macOS only. Its files are at `<component>.pkg/Payload/...`. |
+| `.pkg` | macOS only. Its files are at `<component>.pkg/Payload/...`, or at `Payload/...` in a package of one component. A component whose install location names a bundle, such as `/Applications/Tailscale.app`, may hold only the bundle's `Contents`. oku puts that in a folder of the bundle's name, so its files are at `<component>.pkg/Payload/Tailscale.app/Contents/...`. |
 | `.msi` | Windows only. oku runs `msiexec /a`, the administrative install. It copies the files out and skips the install sequence, so it writes no registry entries, services or shortcuts. Its files are at paths such as `Program Files/<product>/...`. |
 | anything else | The executable itself. This covers a plain binary and an AppImage. |
 

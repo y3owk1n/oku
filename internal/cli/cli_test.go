@@ -8131,6 +8131,46 @@ func TestB301ADiskImageThatOnlyCarriesAPackageUnpacksThePackage(t *testing.T) {
 		"bin = [\"Tool.app/Contents/MacOS/tool\", { name = \"uninstall\", path = \"Install Tool.pkg\" }]"), "from app")
 }
 
+func TestB443APackageThatInstallsABundleUnpacksItUnderTheBundlesName(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("pkg is unpacked with macOS tools")
+	}
+
+	m := newMachine(t)
+
+	// The payload is the inside of the bundle, as Tailscale ships it.
+	payload := filepath.Join(m.fixtures, "payload")
+	must(t, os.MkdirAll(filepath.Join(payload, "Contents", "MacOS"), 0o755))
+	must(t, os.WriteFile(filepath.Join(payload, "Contents", "MacOS", "tool"),
+		[]byte("#!/bin/sh\necho from bundle\n"), 0o755))
+
+	flat := filepath.Join(m.fixtures, "flat.pkg")
+	if out, err := exec.Command("/usr/bin/pkgbuild", "--quiet", "--root", payload,
+		"--identifier", "test.oku.tool", "--version", "1", "--install-location", "/Applications/Tool.app", flat).
+		CombinedOutput(); err != nil {
+		t.Skipf("cannot build an installer package here: %v\n%s", err, out)
+	}
+
+	data, err := os.ReadFile(flat)
+	must(t, err)
+
+	m.installAndRun(t, m.fileManifest(t, "flat.pkg", data,
+		"bin = [\"Payload/Tool.app/Contents/MacOS/tool\"]"), "from bundle")
+
+	distribution := filepath.Join(m.fixtures, "distribution.pkg")
+	if out, err := exec.Command("/usr/bin/productbuild", "--quiet", "--package", flat, distribution).
+		CombinedOutput(); err != nil {
+		t.Skipf("cannot build a distribution package here: %v\n%s", err, out)
+	}
+
+	data, err = os.ReadFile(distribution)
+	must(t, err)
+
+	fresh := newMachine(t)
+	fresh.installAndRun(t, fresh.fileManifest(t, "distribution.pkg", data,
+		"bin = [\"flat.pkg/Payload/Tool.app/Contents/MacOS/tool\"]"), "from bundle")
+}
+
 func TestB340AnNPMPackageWhoseTreeHasInstallScriptsNamesThemAndAsks(t *testing.T) {
 	m := newMachine(t)
 	npmServerWith(t, &m, "", true, "1.1.0", "1.2.0")
