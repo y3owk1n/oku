@@ -1782,3 +1782,22 @@ Finder delete from a script and a drag to the Trash all left it on, and
 extension on as before. oku runs no command of the app to turn it off, in line with D16.
 An update is not stopped, because the new app replaces its extension when it
 starts.
+
+## D108. oku checks what the host must have and never installs it
+
+`[host]` in a list names what the machine needs that oku does not install: a
+program, a file, or a package of the distribution. `oku sync` and `oku doctor`
+check it, and a missing entry is a warning with the command that gets it, not
+a refusal. Why: D3 and the boundaries keep oku from driving apt, brew or
+winget, since their state cannot be locked or rolled back, and only Debian,
+Ubuntu and Arch keep old versions to lock against. A check keeps every oku
+guarantee, and says up front what a build or a program will miss. It is a
+warning and not a refusal, because nothing oku does becomes partial when the
+host lacks something, and a new machine still gets everything else in one
+sync.
+
+oku maps no package names between distributions, since `libgl1` and
+`mesa-libGL` are not one package, and with a wrong map oku would report a
+check it did not make. The requirements that match the machine go into the generation, so
+`oku doctor` checks them without reading the list.
+

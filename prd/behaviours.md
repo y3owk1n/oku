@@ -1411,6 +1411,21 @@ order step in `prd/product.md`.
   identity file, or without `sops` when a secret is a sops file.
 - B165 [16] A project list with `[secrets]` or a `secret` entry is an error.
 
+## Host requirements
+
+- B445 [2] `oku sync` checks each `[host]` entry whose `when` matches the
+  machine: a `command` on `PATH`, a `path` that exists, and the package that
+  the entry names for the distribution's package manager. It installs nothing
+  for them, finishes the sync, and prints each missing entry with the package
+  manager's command or the entry's `install` text.
+- B446 [2] A `[host]` entry with an unknown key, a value that is not a string,
+  or nothing to check is an error that names the entry.
+- B447 [11] `oku doctor` checks the `[host]` entries of the active generation
+  and counts each missing one as a problem.
+- B448 [2] An entry that names packages only for other package managers, and
+  no `command` or `path`, is reported as one oku cannot check on this machine.
+  `oku doctor` makes it a note, not a problem.
+
 ## Uninstall
 
 - B94 [1] `oku self uninstall` lists what it will remove, asks once, then

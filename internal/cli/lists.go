@@ -12,6 +12,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/y3owk1n/oku/internal/host"
 	"github.com/y3owk1n/oku/internal/list"
 	"github.com/y3owk1n/oku/internal/lock"
 	"github.com/y3owk1n/oku/internal/manifest"
@@ -65,6 +66,8 @@ type merger struct {
 	secrets map[string]listedSecret
 	// settings is keyed by backend, domain and key.
 	settings map[[3]string]list.Setting
+	// host is keyed by the name in [host].
+	host     map[string]host.Requirement
 	includes []lock.Include
 	seen     map[string]bool
 }
@@ -79,6 +82,8 @@ type merged struct {
 	secrets  map[string]listedSecret
 	// settings is sorted by backend, domain and key.
 	settings []list.Setting
+	// host is sorted by name.
+	host     []host.Requirement
 	includes []lock.Include
 	// own is the user's own list, without its includes.
 	own *list.List
@@ -131,6 +136,7 @@ func (e env) loadList(
 		runtimes: map[string]manifest.Dep{},
 		secrets:  map[string]listedSecret{},
 		settings: map[[3]string]list.Setting{},
+		host:     map[string]host.Requirement{},
 		seen:     map[string]bool{},
 	}
 
@@ -160,6 +166,9 @@ func (e env) loadList(
 	return merged{
 		packages: m.packages, files: files, vars: m.vars, runtimes: m.runtimes, secrets: m.secrets,
 		settings: settings, includes: m.includes, own: own,
+		host: slices.SortedFunc(maps.Values(m.host), func(a, b host.Requirement) int {
+			return cmp.Compare(a.Name, b.Name)
+		}),
 	}, nil
 }
 
@@ -338,6 +347,7 @@ func (m *merger) merge(
 	// A later list overrides a variable or a setting of an earlier one, like a
 	// package.
 	maps.Copy(m.vars, l.Vars)
+	maps.Copy(m.host, l.Host)
 
 	for name, d := range l.Runtimes {
 		r, err := parse(d.Ref)

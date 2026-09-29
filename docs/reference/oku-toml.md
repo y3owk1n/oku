@@ -236,6 +236,41 @@ go = { ref = "./packages/go.toml", version = "1.26" }
 How each registry uses its runtime is in
 [npm, PyPI, Go and cargo](../guides/npm-pypi-go-cargo.md).
 
+### [host]
+
+Names what the machine must already have that oku does not install, such as
+the Xcode command line tools or a package of the Linux distribution. oku checks
+each entry and never installs, locks or rolls it back.
+
+| Key | Checks |
+|---|---|
+| `command` | A program of that name is on `PATH`. |
+| `path` | A file exists at that path. |
+| `apt`, `dnf`, `pacman`, `apk`, `zypper` | The distribution's package manager has that package installed, with `dpkg-query`, `rpm -q`, `pacman -Q` or `apk info -e`. oku picks the manager from `/etc/os-release` and uses only the key for it. |
+| `install` | Nothing. The text oku prints to say how to get it. |
+| `when` | Limits the entry to some machines, as for a [package](#when). |
+
+```toml
+[host]
+xcode-clt = { path = "/Library/Developer/CommandLineTools/usr/bin/clang", install = "xcode-select --install", when = { os = "darwin" } }
+docker = { command = "docker", install = "https://docs.docker.com/engine/install/" }
+libgl = { apt = "libgl1", dnf = "mesa-libGL", when = { os = "linux" } }
+```
+
+- An entry needs a `command`, a `path` or a package, and must pass every check
+  it gives.
+- oku maps no package names between distributions. Give each one its own name.
+- On macOS `/usr/bin/cc`, `clang` and `xcrun` exist without the command line
+  tools, and running one opens an install dialog. Check a `path` inside
+  `/Library/Developer/CommandLineTools` instead of a `command`.
+- `oku sync` finishes without what is missing, then prints each missing entry
+  with the package manager's command or your `install` text. An entry that
+  names packages only for other managers says that oku cannot check it here.
+- `oku doctor` checks the entries of the active generation again, and counts
+  each missing one as a problem.
+- An included list may set `[host]`, and a later list overrides an entry of
+  the same name.
+
 ### [env]
 
 `[env]` holds environment variables. The shell hook sets them, and so do
@@ -522,7 +557,7 @@ happens after a write, such as the Dock restart, is in
 
 | Table | Global list | Included list, file or repo | Included list at a URL | Project list |
 |---|---|---|---|---|
-| `[packages]`, `include`, `[runtimes]` | yes | yes | yes | yes |
+| `[packages]`, `include`, `[runtimes]`, `[host]` | yes | yes | yes | yes |
 | `[env]` | yes | error | error | yes |
 | `[lock]` | yes | ignored | ignored | yes |
 | `[vars]`, settings tables | yes | yes | yes | error |

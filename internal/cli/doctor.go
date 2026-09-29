@@ -10,6 +10,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/y3owk1n/oku/internal/host"
 	"github.com/y3owk1n/oku/internal/profile"
 	"github.com/y3owk1n/oku/internal/sandbox"
 	"github.com/y3owk1n/oku/internal/secret"
@@ -71,6 +72,10 @@ func runDoctor(cmd *cobra.Command, opts Options) error {
 	checkPath(r, e)
 	checkPending(r, e)
 	checkSecrets(r, e)
+
+	if err := checkHost(r, opts, e); err != nil {
+		return err
+	}
 
 	if err := checkProfiles(r, e); err != nil {
 		return err
@@ -155,6 +160,45 @@ func checkSecrets(r *report, e env) {
 	default:
 		r.ok("the age identities for %d secrets are at %s", count, d.Identities)
 	}
+}
+
+// checkHost reports each requirement of [host] in the active generation that
+// the machine lacks, for the global list and the project's.
+func checkHost(r *report, opts Options, e env) error {
+	profiles := []*profile.Profile{e.globalProfile()}
+	if e.project != "" {
+		profiles = append(profiles, e.profile())
+	}
+
+	var reqs []host.Requirement
+
+	for _, prof := range profiles {
+		got, err := prof.HostOf(prof.Current())
+		if err != nil {
+			return err
+		}
+
+		reqs = append(reqs, got...)
+	}
+
+	missing, err := hostSystem(opts).Check(reqs)
+	if err != nil {
+		return err
+	}
+
+	for _, m := range missing {
+		if m.Unchecked {
+			r.note("%s", missingLine(m))
+		} else {
+			r.problem("%s", missingLine(m))
+		}
+	}
+
+	if len(reqs) > 0 && len(missing) == 0 {
+		r.ok("the machine has the %s that [host] names", count(len(reqs), "requirement"))
+	}
+
+	return nil
 }
 
 // checkPending reports a change that stopped halfway and that oku has not put

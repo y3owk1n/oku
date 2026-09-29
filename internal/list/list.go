@@ -16,6 +16,7 @@ import (
 
 	"github.com/pelletier/go-toml/v2"
 
+	"github.com/y3owk1n/oku/internal/host"
 	"github.com/y3owk1n/oku/internal/manifest"
 	"github.com/y3owk1n/oku/internal/platform"
 	"github.com/y3owk1n/oku/internal/settings"
@@ -124,6 +125,9 @@ type List struct {
 	// provides it, for the packages that run through one. A version constraint
 	// limits which versions of that package oku picks.
 	Runtimes map[string]manifest.Dep
+	// Host holds [host] by name: what the machine must have that oku does not
+	// install.
+	Host map[string]host.Requirement
 }
 
 // Read parses the list at path. A missing file is an empty list.
@@ -153,6 +157,7 @@ func Parse(data []byte, origin string) (*List, error) {
 		Lock     map[string]any `toml:"lock"`
 		Runtimes map[string]any `toml:"runtimes"`
 		Env      map[string]any `toml:"env"`
+		Host     map[string]any `toml:"host"`
 	}
 
 	if err := toml.Unmarshal(data, &raw); err != nil {
@@ -207,6 +212,19 @@ func Parse(data []byte, origin string) (*List, error) {
 		}
 
 		l.Secrets[name] = secret
+	}
+
+	for name, value := range raw.Host {
+		r, err := host.Parse(name, value)
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", origin, err)
+		}
+
+		if l.Host == nil {
+			l.Host = map[string]host.Requirement{}
+		}
+
+		l.Host[name] = r
 	}
 
 	for name, value := range raw.Packages {
