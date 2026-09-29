@@ -96,6 +96,18 @@ func launcher(
 	return l, nil
 }
 
+// binProgram returns the file in the bin directory dir that runs the program
+// name. On Windows a program of bin has .exe after its name.
+func binProgram(dir, name string) (string, bool) {
+	for _, file := range []string{name, name + ".exe"} {
+		if _, err := os.Lstat(filepath.Join(dir, file)); err == nil {
+			return file, true
+		}
+	}
+
+	return "", false
+}
+
 var iconSizeRe = regexp.MustCompile(`(\d+)x\d+`)
 
 // findIcon returns the file under root that the Icon of a desktop entry names,

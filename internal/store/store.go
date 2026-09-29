@@ -297,8 +297,8 @@ func (s *Store) Realize(
 			return "pkg/" + rel, nil
 		}
 
-		if _, err := os.Lstat(filepath.Join(tmp, "bin", path.Base(rel))); err == nil {
-			return "bin/" + path.Base(rel), nil
+		if name, ok := binProgram(filepath.Join(tmp, "bin"), path.Base(rel)); ok {
+			return "bin/" + name, nil
 		}
 
 		return "", fmt.Errorf("it runs %s, which the package does not hold", rel)
