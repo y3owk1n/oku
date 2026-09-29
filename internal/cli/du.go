@@ -515,7 +515,8 @@ func (e env) duPackages(cmd *cobra.Command, paths []storePath) error {
 				r.Profiles = append(r.Profiles, cmp.Or(names[name], name))
 			}
 
-			r.DepOf = slices.Sorted(maps.Keys(h.deps))
+			// An empty list stays [] in JSON, never null.
+			r.DepOf = append(r.DepOf, slices.Sorted(maps.Keys(h.deps))...)
 			r.Old = !h.active
 		}
 
