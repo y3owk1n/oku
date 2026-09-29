@@ -62,6 +62,9 @@ type Options struct {
 	SystemRoot string
 	// SystemDirs replaces the directories for apps and fonts in system scope.
 	SystemDirs *expose.Dirs
+	// ActiveExtensions replaces the list of macOS system extensions that are on.
+	// Tests set it.
+	ActiveExtensions func() ([]string, error)
 	// Elevate replaces how oku runs a command with administrator rights. Tests
 	// set it.
 	Elevate func(ctx context.Context, argv []string) error

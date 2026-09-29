@@ -449,6 +449,18 @@ alone, such as one you opened in Finder, so eject it and run the command again.
 When another oku process is copying the same image, run the command again once
 that process ends.
 
+## A system extension is turned on
+
+```
+oku: /Applications/Tailscale.app has the system extension io.tailscale.ipn.macsys.network-extension turned on, and it keeps running when oku deletes the app
+turn the extension off from the app, then run this again
+```
+
+Deleting an app does not turn its system extension off, and only the app can
+do that. Turn it off from the app, for Tailscale with
+`tailscale configure sysext deactivate`, and run the command again. See
+[Install for every user](guides/system-wide.md#remove-system-scope).
+
 ## npm or PyPI packages need a runtime
 
 Without `[runtimes] node`, an `npm:` program runs the `node` on your `PATH`,

@@ -181,6 +181,26 @@ On Windows the shared root is `%ProgramData%\oku`, see
 To take one package out of system scope, remove `system = true` or the package
 from `oku.toml` and run `oku sync --system`.
 
+An app with a macOS system extension, such as Tailscale, has to be in
+`/Applications`, so give it `system = true`. On its first launch the app asks
+macOS to turn the extension on, and you approve it once in System Settings.
+
+macOS keeps running an extension that is on after its app is deleted. Only the
+app can turn its extension off. So while the extension is on, oku does not
+remove the app. A sync, a rollback or `oku self uninstall` stops before it
+changes anything:
+
+```
+oku: /Applications/Tailscale.app has the system extension io.tailscale.ipn.macsys.network-extension turned on, and it keeps running when oku deletes the app
+turn the extension off from the app, then run this again
+```
+
+Turn the extension off from the app, then run the command again. For Tailscale
+that is `tailscale configure sysext deactivate`. `systemextensionsctl list`
+then shows the extension as `terminated waiting to uninstall on reboot`, and
+macOS removes it when you restart. An update to a new version replaces the app
+as usual, and the new app replaces its extension when it starts.
+
 `oku self uninstall` marks everything that needs administrator rights and asks
 about it in a second question:
 

@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"slices"
@@ -251,6 +252,77 @@ func (l *Ledger) Check(wanted []Item) error {
 	}
 
 	return nil
+}
+
+// Leaving lists the items that a sync to wanted removes, not counting those
+// that a wanted item replaces at the same target.
+func (l *Ledger) Leaving(wanted []Item) []Item {
+	var leaving []Item
+
+	for _, have := range l.Items {
+		if !slices.ContainsFunc(wanted, func(want Item) bool { return want.Target == have.Target }) {
+			leaving = append(leaving, have)
+		}
+	}
+
+	return leaving
+}
+
+// SystemExtensions returns the bundle identifiers of the macOS system
+// extensions and drivers that the app at path carries.
+func SystemExtensions(path string) []string {
+	dir := filepath.Join(path, "Contents", "Library", "SystemExtensions")
+	entries, _ := os.ReadDir(dir)
+
+	var ids []string
+
+	for _, entry := range entries {
+		var plist string
+
+		switch filepath.Ext(entry.Name()) {
+		case ".systemextension":
+			plist = filepath.Join(dir, entry.Name(), "Contents", "Info.plist")
+		case ".dext":
+			plist = filepath.Join(dir, entry.Name(), "Info.plist")
+		default:
+			continue
+		}
+
+		out, err := exec.Command("/usr/bin/plutil", "-extract", "CFBundleIdentifier", "raw", "-o", "-", plist).Output()
+		if id := strings.TrimSpace(string(out)); err == nil && id != "" {
+			ids = append(ids, id)
+		}
+	}
+
+	return ids
+}
+
+// ActiveExtensions returns the bundle identifiers of the system extensions that
+// macOS has activated. It returns none on other systems.
+func ActiveExtensions() ([]string, error) {
+	if runtime.GOOS != "darwin" {
+		return nil, nil
+	}
+
+	out, err := exec.Command("/usr/bin/systemextensionsctl", "list").Output()
+	if err != nil {
+		return nil, fmt.Errorf("list the system extensions: %w", err)
+	}
+
+	var ids []string
+
+	// A row is: enabled, active, team, "id (version)", name, "[state]".
+	for line := range strings.Lines(string(out)) {
+		fields := strings.Split(strings.TrimRight(line, "\r\n"), "\t")
+		if len(fields) < 6 || !strings.HasPrefix(fields[len(fields)-1], "[activated") {
+			continue
+		}
+
+		id, _, _ := strings.Cut(fields[3], " (")
+		ids = append(ids, id)
+	}
+
+	return ids, nil
 }
 
 // Edited lists the targets that oku copied and that no longer hold the bytes it
