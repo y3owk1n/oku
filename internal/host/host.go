@@ -28,6 +28,9 @@ var Managers = map[string]string{
 // Requirement is one entry of [host]: something the machine must have.
 type Requirement struct {
 	Name string `toml:"name"`
+	// Package names the package whose manifest has the requirement, or is empty
+	// for one of the list.
+	Package string `toml:"package,omitempty"`
 	// Command is a program that must be on PATH.
 	Command string `toml:"command,omitempty"`
 	// Path is a file that must exist.

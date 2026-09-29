@@ -1425,6 +1425,12 @@ order step in `prd/product.md`.
 - B448 [2] An entry that names packages only for other package managers, and
   no `command` or `path`, is reported as one oku cannot check on this machine.
   `oku doctor` makes it a note, not a problem.
+- B449 [5] A manifest's `[host]` entries, and those of its deps, belong to the
+  package. `oku add`, `oku sync` and `oku doctor` check them like the list's
+  and name the package in each missing one. `oku remove` drops them.
+- B450 [5] A build that fails ends its error with each `[host]` entry of the
+  package that the machine lacks.
+- B451 [4] `oku manifest lint` reports a `[host]` entry oku cannot read.
 
 ## Uninstall
 

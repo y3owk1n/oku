@@ -285,8 +285,8 @@ func (p *Profile) HostOf(n int) ([]host.Requirement, error) {
 
 // sameRequirement reports whether a and b check the same things.
 func sameRequirement(a, b host.Requirement) bool {
-	return a.Name == b.Name && a.Command == b.Command && a.Path == b.Path &&
-		a.Install == b.Install && maps.Equal(a.Packages, b.Packages)
+	return a.Name == b.Name && a.Package == b.Package && a.Command == b.Command &&
+		a.Path == b.Path && a.Install == b.Install && maps.Equal(a.Packages, b.Packages)
 }
 
 // FilesOf lists the files of generation n, without their text.
@@ -352,9 +352,10 @@ func (p *Profile) filesIn(gen string) ([]File, error) {
 }
 
 // Add stages a new generation that includes pkg, and returns its number. It
-// replaces a package of the same name. lockData is saved in the generation as
-// LockSnapshot. Activate makes a staged generation the active one.
-func (p *Profile) Add(pkg Package, lockData []byte) (int, error) {
+// replaces a package of the same name, and its [host] requirements with reqs.
+// lockData is saved in the generation as LockSnapshot. Activate makes a staged
+// generation the active one.
+func (p *Profile) Add(pkg Package, reqs []host.Requirement, lockData []byte) (int, error) {
 	pkgs, err := p.Packages()
 	if err != nil {
 		return 0, err
@@ -370,14 +371,15 @@ func (p *Profile) Add(pkg Package, lockData []byte) (int, error) {
 		return 0, err
 	}
 
-	reqs, err := p.HostOf(p.Current())
+	have, err := p.HostOf(p.Current())
 	if err != nil {
 		return 0, err
 	}
 
+	have = slices.DeleteFunc(have, func(r host.Requirement) bool { return r.Package == pkg.Name })
 	pkgs = slices.DeleteFunc(pkgs, func(have Package) bool { return have.Name == pkg.Name })
 
-	return p.stage(append(pkgs, pkg), files, settings, reqs, lockData)
+	return p.stage(append(pkgs, pkg), files, settings, append(have, reqs...), lockData)
 }
 
 // Has reports whether the active generation holds name.
@@ -420,6 +422,8 @@ func (p *Profile) Remove(names []string, lockData []byte) (int, error) {
 	if err != nil {
 		return 0, err
 	}
+
+	reqs = slices.DeleteFunc(reqs, func(r host.Requirement) bool { return slices.Contains(names, r.Package) })
 
 	return p.stage(kept, files, settings, reqs, lockData)
 }

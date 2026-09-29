@@ -270,6 +270,8 @@ libgl = { apt = "libgl1", dnf = "mesa-libGL", when = { os = "linux" } }
   each missing one as a problem.
 - An included list may set `[host]`, and a later list overrides an entry of
   the same name.
+- A manifest may have a [`[host]`](manifest.md#host) of its own. oku checks it
+  with the list's, and names the package in each missing entry.
 
 ### [env]
 

@@ -50,6 +50,7 @@ type schema struct {
 	Env      map[string]string `toml:"env"`
 	OldApps  []any             `toml:"app"`
 	Services []Service         `toml:"service"`
+	Host     map[string]any    `toml:"host"`
 }
 
 // VendorKinds are the values a vendor step accepts. The store holds how each

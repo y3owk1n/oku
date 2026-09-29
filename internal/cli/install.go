@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/y3owk1n/oku/internal/host"
 	"github.com/y3owk1n/oku/internal/infer"
 	"github.com/y3owk1n/oku/internal/lock"
 	"github.com/y3owk1n/oku/internal/manifest"
@@ -64,6 +65,9 @@ type installed struct {
 	// unnamedScripts are the packages of an npm step whose install scripts did
 	// not run, since its scripts does not name them.
 	unnamedScripts []string
+	// host holds the [host] requirements of the package and its deps that match
+	// the machine.
+	host []host.Requirement
 	// linkNotes warns for each store package that a build loads without naming
 	// it in runtime.deps, for the deps too.
 	linkNotes []string
@@ -645,6 +649,12 @@ func (e env) installFrom(
 			}
 		}
 
+		// A failed build names what the host lacks.
+		missing, err := hostSystem(opts).Check(hostHere(m.Host))
+		if err != nil {
+			return installed{}, err
+		}
+
 		realized, err = e.store().Build(ctx, m, host, store.BuildOptions{
 			Deps: deps.prefixes, Log: req.log, PinnedVendor: pinnedVendor, Progress: req.progress,
 			NPMRegistry: opts.NPMRegistry, PyPIIndex: opts.PyPIIndex, GoProxy: opts.GoProxy,
@@ -652,6 +662,10 @@ func (e env) installFrom(
 			RuntimeDeps: deps.prefixes[buildDeps:],
 		})
 		if err != nil {
+			for _, lack := range missing {
+				err = fmt.Errorf("%w\n%s", err, missingLine(lack, nil))
+			}
+
 			return installed{}, fmt.Errorf("%s: %w", m.Package.Name, err)
 		}
 
@@ -809,6 +823,7 @@ func (e env) installFrom(
 		substituted:    deps.substituted,
 		cacheNotes:     deps.cacheNotes,
 		linkNotes:      deps.linkNotes,
+		host:           append(hostHere(m.Host), deps.host...),
 	}, nil
 }
 
@@ -1986,6 +2001,7 @@ type depSet struct {
 	substituted []string
 	cacheNotes  []string
 	linkNotes   []string
+	host        []host.Requirement
 }
 
 // installDeps installs the deps of the package in parent, each through the same
@@ -2138,6 +2154,7 @@ func (e env) installDeps(
 		set.substituted = append(set.substituted, got.substituted...)
 		set.cacheNotes = append(set.cacheNotes, got.cacheNotes...)
 		set.linkNotes = append(set.linkNotes, got.linkNotes...)
+		set.host = append(set.host, got.host...)
 
 		for _, path := range got.closure {
 			if !slices.Contains(set.closure, path) {

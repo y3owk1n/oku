@@ -181,21 +181,21 @@ func checkHost(r *report, opts Options, e env) error {
 		reqs = append(reqs, got...)
 	}
 
-	missing, err := hostSystem(opts).Check(reqs)
+	lacking, unchecked, err := missingHost(opts, reqs)
 	if err != nil {
 		return err
 	}
 
-	for _, m := range missing {
-		if m.Unchecked {
-			r.note("%s", missingLine(m))
-		} else {
-			r.problem("%s", missingLine(m))
-		}
+	for _, line := range lacking {
+		r.problem("%s", line)
 	}
 
-	if len(reqs) > 0 && len(missing) == 0 {
-		r.ok("the machine has the %s that [host] names", count(len(reqs), "requirement"))
+	for _, line := range unchecked {
+		r.note("%s", line)
+	}
+
+	if len(reqs) > 0 && len(lacking)+len(unchecked) == 0 {
+		r.ok("the machine has what [host] names")
 	}
 
 	return nil

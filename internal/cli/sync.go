@@ -510,7 +510,7 @@ func reconcile(
 		return err
 	}
 
-	reqs := hostHere(all.host)
+	reqs := append(hostHere(all.host), jobsHost(jobs)...)
 
 	// A list with nothing in it, not even a pin for another platform, writes
 	// no first generation.
