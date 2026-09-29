@@ -416,6 +416,10 @@ base05 = "c2d6ba"
 - `{{ name }}` with spaces is the same as `{{name}}`.
 - The locations of [`[files]`](#files), such as `{{home}}`, are variables too,
   and so is `{{secret.<name>}}` for a [secret](#secrets).
+- `{{pkg.<name>}}` is the directory that holds the files of a package of the
+  list, as in a `link`. oku writes a file that uses it again when the package
+  changes version.
+- A name of `[vars]` may not start with `pkg.` or `secret.`.
 - A name that is not set stops the sync before it changes anything. The error
   gives the template and the line.
 - `\{{` writes the two braces themselves.
@@ -447,7 +451,7 @@ Each value is a table with exactly one of `link`, `text`, `render` and
 |---|---|---|
 | `link` | string | The path becomes a symlink to this file or directory. A relative source starts at the directory of the list. `{{pkg.<name>}}/...` links into a package of the list, and follows it to a new version after `oku update`. |
 | `text` | string | The path gets this content. oku keeps it in the generation, read-only, and the path links to it. |
-| `render` | string | Like `text`, with the content from a template file beside the list. See [\[vars\]](#vars). |
+| `render` | string | Like `text`, with the content from a template file beside the list. A `text` or a template may name `{{pkg.<name>}}`. See [\[vars\]](#vars). |
 | `secret` | string | The path gets a value decrypted from a sops or an age file. See [\[secrets\]](#secrets). |
 | `key` | string | With `secret` only. The path of one value in a sops file, with `/` between its parts, such as `ssh/id_ed25519`. Without it the whole decrypted file is the value. |
 | `mode` | string | The permission of a `text`, `render` or `secret` file, such as `"0600"`, or `"0755"` for a script, up to `"0777"`. Without it the file is read-only, and a secret is `0600`. An error on a `link`. |
