@@ -119,6 +119,9 @@ file beside the list there, see [relative paths](refs.md#relative-paths-in-a-rem
 
 - A missing key matches anything. Any other key is an error, and so is a
   value that is not a string.
+- A value that names no platform is an error, since it would match nothing.
+  `os = "macos"` fails and says to use `darwin`, and `arch = "x86_64"` says to
+  use `amd64`.
 - An array of tables matches a machine that any of them matches. An empty
   array is an error, because it matches nothing.
 

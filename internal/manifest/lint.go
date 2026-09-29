@@ -193,8 +193,10 @@ func Lint(data []byte) Report {
 		))
 	}
 
+	buildWhen, _ := platform.ParseWhen(full.Build.RawWhen)
+
 	for i, s := range full.Build.Steps {
-		report.Errors = append(report.Errors, lintStep(i, s)...)
+		report.Errors = append(report.Errors, lintStep(i, s, buildWhen)...)
 	}
 
 	if m.Build != nil {
@@ -223,16 +225,16 @@ func Lint(data []byte) Report {
 	return report
 }
 
-func lintStep(i int, s Step) []string {
+func lintStep(i int, s Step, buildWhen platform.When) []string {
 	var found []string
 
 	if s.Run != nil {
-		// A step whose when matches a Windows platform can run on Windows, where
-		// no default shell exists.
+		// A step whose when, and the build's, match a Windows platform can run on
+		// Windows, where no default shell exists.
 		when, _ := platform.ParseWhen(s.RawWhen)
 
 		onWindows := slices.ContainsFunc(when.Of(), func(p platform.Platform) bool {
-			return p.OS == "windows"
+			return p.OS == "windows" && buildWhen.Matches(p)
 		})
 		if onWindows && s.Shell == "" {
 			found = append(found, fmt.Sprintf(

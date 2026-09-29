@@ -356,7 +356,8 @@ app = ["IINA.app"]
 Some vendors keep each platform at its own version, or publish each platform
 in its own place. Discord's macOS download is `0.0.413` while its Linux one is
 `1.0.159`. Give each artifact a `version` table instead of `[version]`, with
-the same `from`, `repo`, `regex`, `json`, `join` and `strip_prefix`:
+the same `from`, `repo`, `regex`, `json`, `join` and `strip_prefix`, and
+`latest` with a release source:
 
 ```toml
 [package]
@@ -1006,7 +1007,7 @@ Any step may also set:
 | Key | Meaning |
 |---|---|
 | `when` | The step only runs on a matching machine, see [Match and when](#match-and-when). |
-| `shell` | For `run`, `sh`, `bash`, `pwsh` or `cmd`. Default `sh`, except on Windows, which has no default. On Windows without PowerShell 7, `pwsh` runs Windows PowerShell 5.1. `oku manifest lint` requires `shell` on every `run` step that can reach Windows, which is every step whose `when` does not name another `os`. |
+| `shell` | For `run`, `sh`, `bash`, `pwsh` or `cmd`. Default `sh`, except on Windows, which has no default. On Windows without PowerShell 7, `pwsh` runs Windows PowerShell 5.1. `oku manifest lint` requires `shell` on every `run` step that can reach Windows, which is every step whose `when` and the `[build]`'s `when` both match Windows. |
 | `env` | Extra variables for `run`, as a table. Values expand template variables. |
 | `network` | `true` gives a `run` step the network, see [The build sandbox](#the-build-sandbox). |
 
@@ -1403,8 +1404,11 @@ machines with the same keys:
 | `arch` | `amd64` or `arm64`, Go's names |
 | `libc` | `glibc` or `musl`. Linux only. oku reports `musl` when `/lib/ld-musl-*.so.1` exists. |
 
-A missing key matches anything. `match` is one table. `when` is one table or an
-array of tables, and then matches where any table matches:
+A missing key matches anything. A value that names no platform, such as
+`os = "macos"`, is an error that names the right one, here `darwin`. oku accepts
+any OS and architecture Go knows, beyond the ones it runs on. `match` is one
+table. `when` is one table or an array of tables, and then matches where any
+table matches:
 
 ```toml
 when = [{ os = "darwin" }, { os = "linux" }]

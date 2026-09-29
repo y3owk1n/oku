@@ -30,6 +30,49 @@ type Selector struct {
 	Libc string `toml:"libc"`
 }
 
+// The values Go knows for an OS and an architecture, from `go tool dist list`.
+var (
+	knownOS = []string{
+		"aix", "android", "darwin", "dragonfly", "freebsd", "illumos", "ios", "js", "linux",
+		"netbsd", "openbsd", "plan9", "solaris", "wasip1", "windows",
+	}
+	knownArch = []string{
+		"386", "amd64", "arm", "arm64", "loong64", "mips", "mips64", "mips64le", "mipsle",
+		"ppc64", "ppc64le", "riscv64", "s390x", "wasm",
+	}
+	// likely maps a name people write for a platform to Go's.
+	likely = map[string]string{
+		"macos": "darwin", "mac": "darwin", "osx": "darwin", "win": "windows",
+		"x86_64": "amd64", "x64": "amd64", "aarch64": "arm64", "gnu": "glibc",
+	}
+)
+
+// Check fails for a value that no platform has, such as os = "macos", which
+// would match nothing.
+func (s Selector) Check() error {
+	for _, field := range []struct {
+		key, value string
+		known      []string
+	}{
+		{"os", s.OS, knownOS},
+		{"arch", s.Arch, knownArch},
+		{"libc", s.Libc, []string{LibcGlibc, LibcMusl}},
+	} {
+		if field.value == "" || slices.Contains(field.known, field.value) {
+			continue
+		}
+
+		if name, ok := likely[field.value]; ok {
+			return fmt.Errorf("%s = %q matches no platform, use %q", field.key, field.value, name)
+		}
+
+		return fmt.Errorf("%s = %q matches no platform, use one of %s",
+			field.key, field.value, strings.Join(field.known, ", "))
+	}
+
+	return nil
+}
+
 // Host returns the platform oku is running on.
 func Host() Platform {
 	p := Platform{OS: runtime.GOOS, Arch: runtime.GOARCH}
@@ -162,6 +205,10 @@ func ParseWhen(value any) (When, error) {
 			}
 
 			*target = value
+		}
+
+		if err := sel.Check(); err != nil {
+			return nil, fmt.Errorf("when: %w", err)
 		}
 
 		w = append(w, sel)
