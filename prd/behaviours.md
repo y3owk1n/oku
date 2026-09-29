@@ -638,9 +638,9 @@ order step in `prd/product.md`.
   download against GitHub's digest.
 - B198 [4] With several assets that fit a platform equally, inference skips
   one whose name says `desktop`, `app`, `gui`, `installer` or `setup`,
-  and takes the smaller of the rest when the host reports sizes. A comment
-  lists every other asset that fits the host, in any format, and leaves out a
-  universal build beside one for the arch.
+  and takes the smaller of the rest when the host reports sizes. `manifest
+  init` lists on stderr every other asset that fits the host, in any format,
+  and leaves out a universal build beside one for the arch.
 - B349 [4] Among assets that fit a platform, inference takes one named after
   the repo, as `atuin-x86_64-apple-darwin.tar.gz`, before one of another
   program, as `atuin-server-x86_64-apple-darwin.tar.gz`, whatever their
@@ -654,6 +654,9 @@ order step in `prd/product.md`.
 - B433 [4] An asset that `--asset` picks and that holds no program of its own
   name, such as `tool-portable-*` holding `tool`, keeps the repo's name for the
   package.
+- B466 [4] An inferred manifest is the same text on every host. `update` on
+  another machine does not change its `manifest` or `manifest_sha256` in
+  `oku.lock`.
 - B351 [4] `sync` and `update` infer with the `asset` and `bin` of the
   package's entry in `oku.toml`, under the entry's name. When the entry's
   `asset` or `bin` changes, they infer again. For an entry without them, they
