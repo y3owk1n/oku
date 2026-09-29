@@ -609,6 +609,25 @@ func TestB439GCAndConfigCommandsMarkTheirLines(t *testing.T) {
 	}
 }
 
+func TestB465JSONHasNoNullAndWhyFailsForANameNothingUses(t *testing.T) {
+	m := newMachine(t)
+
+	ref := m.manifest(t, "tool", map[string]string{"tool": script}, `bin = ["tool"]`)
+	_, err := m.run(t, "", "add", ref)
+	must(t, err)
+
+	// tool is a dep of nothing, which is an empty list, not null.
+	out, err := m.run(t, "", "du", "--packages", "--json")
+	if err != nil || !strings.Contains(out, `"dep_of": []`) || strings.Contains(out, "null") {
+		t.Fatalf("du --packages --json should give an empty dep_of and no null: %v\n%s", err, out)
+	}
+
+	out, err = m.run(t, "", "why", "nothere", "--json")
+	if err == nil || !strings.Contains(err.Error(), "neither in your list") {
+		t.Fatalf("why --json of a name nothing uses should fail as the text does: %v\n%s", err, out)
+	}
+}
+
 func TestB440JSONIsRefusedWhereACommandHasNone(t *testing.T) {
 	m := newMachine(t)
 	ref := m.manifest(t, "tool", map[string]string{"tool": script}, `bin = ["tool"]`)

@@ -34,6 +34,13 @@ dep.`,
 
 			answer := whyReport(pkgs, args[0])
 
+			// A name nothing uses fails, with --json too.
+			if answer.InList == "" && len(answer.NeededBy) == 0 {
+				return fmt.Errorf(
+					"%s is neither in your list nor a dep of anything in it, see `oku list`", args[0],
+				)
+			}
+
 			if wantJSON(cmd) {
 				return printJSON(cmd, answer)
 			}
@@ -58,14 +65,6 @@ dep.`,
 					strings.Join(user.DepVersions, ", "),
 					user.Name,
 					user.Version,
-				)
-			}
-
-			found := answer.InList != "" || len(answer.NeededBy) > 0
-
-			if !found {
-				return fmt.Errorf(
-					"%s is neither in your list nor a dep of anything in it, see `oku list`", args[0],
 				)
 			}
 

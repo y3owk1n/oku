@@ -353,7 +353,7 @@ ripgrep 14.1.1 is in your list, from github:BurntSushi/ripgrep
 ```
 
 It names the installed packages that depend on it, directly or through
-another dep. It fails for a name that nothing installed uses.
+another dep. It fails for a name that nothing installed uses, with `--json` too.
 
 ### oku which
 
