@@ -476,6 +476,13 @@ order step in `prd/product.md`.
   source gives no release time goes through `unknown_release_age` for each
   platform that `add`, `update` or `sync` pins. oku names a platform other
   than the host in the question and the note.
+- B462 [4] `oku add --plan` expands `{{os}}`, `{{arch}}` and `{{libc}}` in a
+  build's source as the build does.
+- B463 [4] A `match` or a `when` value that names no platform, such as
+  `os = "macos"`, is an error that names the value to use.
+- B464 [4] `manifest lint` refuses `latest` in an artifact's `version` without
+  a release source, and asks for `shell` only on a `run` step that the step's
+  and the build's `when` both let run on Windows.
 - B106 [3] With `[version] tag`, `add` installs the release of that tag, also
   when it is a prerelease, as version `<date>-<commit>`, the day and the first
   seven characters of the commit the tag points at. `update` moves the

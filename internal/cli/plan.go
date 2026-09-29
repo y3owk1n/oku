@@ -276,7 +276,10 @@ func (e env) planFrom(
 		p.Needs = m.Build.Needs
 		p.Commands = len(m.Build.CommandSteps(host)) > 0
 
-		vars := map[string]string{"version": m.Version.Value, "tag": m.Tag}
+		// The same variables the build expands in its source.
+		vars := map[string]string{
+			"version": m.Version.Value, "tag": m.Tag, "os": host.OS, "arch": host.Arch, "libc": host.Libc,
+		}
 		src := m.Build.Source
 
 		switch {

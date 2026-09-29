@@ -614,6 +614,10 @@ func (m *Manifest) validate() error {
 		if a.Strip < 0 {
 			errs = append(errs, fmt.Errorf("artifact[%d]: strip must not be negative", i))
 		}
+
+		if err := a.Match.Check(); err != nil {
+			errs = append(errs, fmt.Errorf("artifact[%d].match: %w", i, err))
+		}
 	}
 
 	m.Host = nil
@@ -675,7 +679,15 @@ func perArtifactErrors(m *Manifest) []error {
 		case !slices.Contains(artifactSources, v.From):
 			errs = append(errs, fmt.Errorf("%s.from must be %s", key, oneOf(artifactSources)))
 		case v.Value != "" || v.Tag != "" || v.Branch != "":
-			errs = append(errs, fmt.Errorf("%s takes from, repo, regex, join and strip_prefix only", key))
+			errs = append(errs, fmt.Errorf(
+				"%s takes from, repo, regex, json, join, strip_prefix and latest only", key,
+			))
+		case v.Latest && !slices.Contains(
+			[]string{FromGitHubReleases, FromGiteaReleases, FromGitLabReleases}, v.From,
+		):
+			errs = append(errs, fmt.Errorf(
+				`%s.latest needs from = "github-releases", "gitea-releases" or "gitlab-releases"`, key,
+			))
 		case v.From == FromRedirect || v.From == FromPage || v.From == FromSparkle:
 			errs = append(errs, scrapeErrors(*v, key)...)
 		default:

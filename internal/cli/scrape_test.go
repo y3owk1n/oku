@@ -465,7 +465,7 @@ func TestB284LintChecksAVersionInEachArtifact(t *testing.T) {
 		artifact(good) + artifact(""):                                                                           "artifact[1]: version is required",
 		artifact(good) + "[build]\n[[build.step]]\nrun = \"true\"\n":                                            "[build] needs [version]",
 		artifact("version = { from = \"npm\", repo = \"x\" }\n"):                                                `"git-tags", "redirect", "page" or "sparkle"`,
-		artifact("version = { from = \"page\", repo = \"https://example.com\", regex = '(.)', tag = \"x\" }\n"): "from, repo, regex, join and strip_prefix only",
+		artifact("version = { from = \"page\", repo = \"https://example.com\", regex = '(.)', tag = \"x\" }\n"): "from, repo, regex, json, join, strip_prefix and latest only",
 		artifact("version = { from = \"github-releases\", repo = \"not a repo\" }\n"):                           `artifact[0].version.repo must be "owner/repo"`,
 		artifact("version = { from = \"github-releases\", repo = \"o/r\", regex = '(.)' }\n"):                   "artifact[0].version.regex and artifact[0].version.join need",
 		artifact("version = { from = \"page\", repo = \"https://example.com\" }\n"):                             "artifact[0].version.regex is required",

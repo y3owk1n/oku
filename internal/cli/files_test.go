@@ -515,7 +515,7 @@ func TestB192AnEntryOverridesVarsForItsOwnTemplate(t *testing.T) {
 	// comes from an included list.
 	other := m.writeTemplate(t, "other.toml", "[files]\n"+
 		"\"{{home}}/.tool\" = { render = \"./files/tool.tmpl\", "+
-		"when = { os = \"nowhere\" }, vars = { size = \"9\" } }\n")
+		"when = { os = \""+otherOS()+"\" }, vars = { size = \"9\" } }\n")
 	m.writeFilesList(t, "include = [\""+filepath.ToSlash(other)+"\"]\n"+
 		"[vars]\nfont = \"Mono\"\nsize = \"11\"\n"+
 		"[files]\n"+
