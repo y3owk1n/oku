@@ -598,6 +598,11 @@ order step in `prd/product.md`.
   own files.
 - B370 [3] `oku gc --keep N` deletes the links of each set of packages that no
   kept generation uses.
+- B455 [3] With `latest = true` a release source takes the release the forge
+  marks as latest as the newest, and passes over any higher version. A pinned
+  version or a range picks from every release.
+- B456 [4] `latest` with a source other than a release source, or with `tag`,
+  is an error.
 
 ## Publishing
 

@@ -87,6 +87,7 @@ finds, for a version a recipe pins, and for a version in `oku.lock`.
 | `from` | one of `value` and `from` | Where versions come from, see the next table. |
 | `repo` | with `from` | What to read. Its form depends on `from`. |
 | `strip_prefix` | no | Text cut off the front of a tag to get the version, such as `"v"`. oku ignores a tag without the prefix, except for `v`, see [How oku reads tags](#how-oku-reads-tags). Not for `npm`, `pypi`, `go`, `crates` or `git-branch`. |
+| `latest` | no | `true` makes the release that GitHub, Gitea or GitLab marks as latest the newest. oku then passes over a higher version, such as one left behind when a project restarted its numbering. A pinned version or a range still picks from every release. It works only with `github-releases`, `gitea-releases` or `gitlab-releases`, and not with `tag`. |
 | `tag` | no | One tag that upstream moves, such as `"nightly"`. Only with `github-releases`, `gitea-releases` or `gitlab-releases`, and not with `strip_prefix`. See [Follow a moving tag](#follow-a-moving-tag). |
 | `branch` | with `git-branch` | The branch to follow, such as `"main"`. See [Follow a branch](#follow-a-branch). |
 | `regex` | with `redirect` or `page` | Finds the version, see [Follow a download URL](#follow-a-download-url). Not with `sparkle`. |
@@ -147,6 +148,15 @@ Version pins and ranges are in [Refs](refs.md#pin-a-version).
   `go`, a version with a `-` is never the newest.
 - A prerelease is never the newest, and `oku add <ref>@1.27rc1` still installs
   it.
+- With `latest = true` the newest is the release the forge marks as latest,
+  even when an older stream has a higher version:
+
+  ```toml
+  [version]
+  from = "github-releases"
+  repo = "throneproj/Throne"
+  latest = true
+  ```
 
 ### Follow a moving tag
 

@@ -1406,6 +1406,8 @@ type releaseServer struct {
 	hits      int
 	unchanged int
 	nextOnly  bool
+	// latest is the tag of the release the server marks as latest.
+	latest string
 
 	// together holds each request for a page after the first until that many
 	// have been in flight at once, for up to a second. most records the most
@@ -1419,6 +1421,12 @@ func newReleaseServer(t *testing.T, tags ...string) *releaseServer {
 
 	rs := &releaseServer{tags: tags}
 	rs.Server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/repos/owner/tool/releases/latest" && rs.latest != "" {
+			_, _ = fmt.Fprintf(w, `{"tag_name": %q}`, rs.latest)
+
+			return
+		}
+
 		if r.URL.Path != "/api/repos/owner/tool/releases" {
 			http.NotFound(w, r)
 
@@ -1568,6 +1576,43 @@ func TestB118AddFindsAVersionPastTheFirstPageOfReleases(t *testing.T) {
 
 	if got := m.toolOutput(t); got != "2.0.3" {
 		t.Fatalf("add installed %s, want 2.0.3 from the third page", got)
+	}
+}
+
+func TestB455LatestTakesTheReleaseTheForgeMarksAsLatest(t *testing.T) {
+	m := newMachine(t)
+
+	// An older stream left a higher version behind, as Throne's 4.3.7.
+	server := newReleaseServer(t, "v4.3.7", "v1.3.1", "v1.3.0")
+	server.latest = "v1.3.1"
+	m.opts.GitHubAPI = server.URL + "/api"
+
+	ref := m.discoveredManifest(t, "4.3.7", "1.3.1", "1.3.0")
+	data, err := os.ReadFile(ref)
+	must(t, err)
+	must(t, os.WriteFile(ref, []byte(strings.Replace(string(data), "strip_prefix = \"v\"\n",
+		"strip_prefix = \"v\"\nlatest = true\n", 1)), 0o644))
+
+	if out, err := m.run(t, "", "add", ref); err != nil || m.toolOutput(t) != "1.3.1" {
+		t.Fatalf("add did not take the latest release 1.3.1: %v\n%s", err, out)
+	}
+
+	// A pinned version picks from every release.
+	if out, err := m.run(t, "", "add", ref+"@4.3.7"); err != nil || m.toolOutput(t) != "4.3.7" {
+		t.Fatalf("a pin did not reach 4.3.7: %v\n%s", err, out)
+	}
+}
+
+func TestB456LatestNeedsAReleaseSource(t *testing.T) {
+	m := newMachine(t)
+	path := filepath.Join(m.fixtures, "tool.toml")
+	must(t, os.WriteFile(path, []byte("[package]\nname = \"tool\"\n[version]\nfrom = \"git-tags\"\n"+
+		"repo = \"https://example.com/tool.git\"\nlatest = true\n"+
+		"[[artifact]]\nurl = \"https://example.com/tool.tar.gz\"\nbin = [\"tool\"]\n"), 0o644))
+
+	out, err := m.run(t, "", "manifest", "lint", path)
+	if err == nil || !strings.Contains(out, "version.latest needs version.from") {
+		t.Fatalf("lint does not refuse latest with git-tags: %v\n%s", err, out)
 	}
 }
 

@@ -1812,3 +1812,15 @@ a missing one showed up only as a compiler error in the middle of a build. The
 author knows what the package needs, so the manifest says it once for every
 user, as with deps.
 
+## D110. A release source can follow the release the forge marks as latest
+
+`latest = true` under `[version]` makes the release that GitHub, Gitea or
+GitLab marks as latest the newest for `github-releases`, `gitea-releases` and
+`gitlab-releases`. oku reads that release and picks as if the version were a
+range up to it, so the minimum release age and a second page of releases work
+as before. A pin or a range the user writes picks from every release. Why: a
+project that restarted its numbering leaves a higher version behind, as Throne
+did with 4.3.7 before 1.3.1, and oku takes the highest. It is opt-in and not
+the rule for every release source, because a maintainer sets the mark by hand,
+and a repo that forgets to move it would hold every user back.
+

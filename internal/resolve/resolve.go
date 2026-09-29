@@ -141,6 +141,17 @@ func (r *Resolver) PickWaiting(
 		return Release{Version: v.Value, Tag: v.Value}, Release{}, nil
 	}
 
+	// With latest, the release the forge marks as latest bounds the newest, and
+	// a pin or a range picks from every release as usual.
+	if v.Latest && want == "" {
+		latest, err := r.latest(ctx, v)
+		if err != nil {
+			return Release{}, Release{}, err
+		}
+
+		want = "<=" + latest
+	}
+
 	// The newest page of releases holds the version to install for nearly every
 	// package.
 	releases, more, err := r.listing(ctx, v, false)
@@ -161,6 +172,34 @@ func (r *Resolver) PickWaiting(
 	}
 
 	return r.pickFrom(v, releases, want)
+}
+
+// latest returns the version of the release that the forge marks as latest.
+func (r *Resolver) latest(ctx context.Context, v manifest.Version) (string, error) {
+	host, repo, err := r.open(v)
+	if err != nil {
+		return "", err
+	}
+
+	marked, err := host.Release(ctx, repo, "")
+	if err != nil {
+		return "", explain(err, "read the latest release of "+v.Repo, "the repository has no latest release")
+	}
+
+	for _, all := range []bool{false, true} {
+		releases, _, err := r.listing(ctx, v, all)
+		if err != nil {
+			return "", err
+		}
+
+		for _, release := range releases {
+			if release.Tag == marked.Tag {
+				return release.Version, nil
+			}
+		}
+	}
+
+	return "", fmt.Errorf("the latest release of %s is %s, which gives no version", v.Repo, marked.Tag)
 }
 
 // pickFrom picks the release of v to install out of releases, newest first.
