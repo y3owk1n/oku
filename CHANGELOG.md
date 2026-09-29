@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.11.0](https://github.com/y3owk1n/oku/compare/v0.10.0...v0.11.0) (2026-09-28)
+
+
+### Features
+
+* **cli:** answer a yes or no question with one key ([#323](https://github.com/y3owk1n/oku/issues/323)) ([c230cef](https://github.com/y3owk1n/oku/commit/c230cefe77c6156e63da3e3474ac1b365af079a8))
+
+
+### Bug Fixes
+
+* **cli:** mark dry runs, gc removals and config changes ([#327](https://github.com/y3owk1n/oku/issues/327)) ([8b2597c](https://github.com/y3owk1n/oku/commit/8b2597cba2d02088fff06fbf34ba21497caf3f17))
+* **cli:** mark notes with ! and show the lock wait as a wait line ([#326](https://github.com/y3owk1n/oku/issues/326)) ([c9f1dde](https://github.com/y3owk1n/oku/commit/c9f1dde737e6ce4f8056936d0a55dfaef7de5970))
+* **cli:** name the next step in more errors ([#329](https://github.com/y3owk1n/oku/issues/329)) ([2003706](https://github.com/y3owk1n/oku/commit/2003706f18acf7fc2ffd0da7403e519920b87168))
+* **cli:** refuse --json where a command has none, and mark lint lines ([#328](https://github.com/y3owk1n/oku/issues/328)) ([91e56ea](https://github.com/y3owk1n/oku/commit/91e56eacb07b57260f8ff02057be86ca918f2864))
+* **git:** fail at once when ssh would ask a question ([#320](https://github.com/y3owk1n/oku/issues/320)) ([d2cb944](https://github.com/y3owk1n/oku/commit/d2cb9440fbb10c7af5f0aab157ac1427f899c0c0))
+* **sync:** mark each row with its change, not a check ([#325](https://github.com/y3owk1n/oku/issues/325)) ([0104c5c](https://github.com/y3owk1n/oku/commit/0104c5c2bbebd23dd93d838a46ed342202a5aad4))
+* **ui:** drop the carriage return of a CRLF line end in messages ([#322](https://github.com/y3owk1n/oku/issues/322)) ([c56509a](https://github.com/y3owk1n/oku/commit/c56509a866997e17ed04b01b7cb31c92391c2400))
+* **ui:** keep the terminal layout under NO_COLOR ([#324](https://github.com/y3owk1n/oku/issues/324)) ([6ea72a1](https://github.com/y3owk1n/oku/commit/6ea72a109ba0c64ce5fb350b5ba940fc26d23982))
+
 ## [0.10.0](https://github.com/y3owk1n/oku/compare/v0.9.0...v0.10.0) (2026-09-27)
 
 
