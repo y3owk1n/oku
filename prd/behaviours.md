@@ -1084,6 +1084,10 @@ order step in `prd/product.md`.
 - B301 [8] When the top of a `.dmg` holds a `.pkg` and no app, oku unpacks
   each package into a folder named after it, so `bin` and `app` name files of
   its payload. oku keeps the packages of an image with an app as files.
+- B443 [8] When a `.pkg` component's install location names a bundle, such as
+  `/Applications/Tool.app`, and its payload holds only the bundle's
+  `Contents`, oku unpacks the payload into a folder of the bundle's name. A
+  cask that installs such a package then translates with its app.
 - B287 [8] A disk image that a killed oku process left mounted does not stop
   the next install of it. That install detaches it and unpacks the image, and
   `oku gc` detaches it too.
