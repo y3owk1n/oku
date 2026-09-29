@@ -4,12 +4,14 @@ import (
 	"bufio"
 	"bytes"
 	"compress/bzip2"
+	"encoding/xml"
 	"errors"
 	"fmt"
 	"io"
 	"io/fs"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"runtime"
 	"strconv"
@@ -449,7 +451,18 @@ func unpkg(src, dest string) error {
 		return err
 	}
 
+	// A flat package is one component, a distribution holds one per folder.
+	if err := nameBundlePayload(expanded); err != nil {
+		return err
+	}
+
 	for _, entry := range entries {
+		if entry.IsDir() {
+			if err := nameBundlePayload(filepath.Join(expanded, entry.Name())); err != nil {
+				return err
+			}
+		}
+
 		if err := os.Rename(
 			filepath.Join(expanded, entry.Name()),
 			filepath.Join(dest, entry.Name()),
@@ -459,6 +472,46 @@ func unpkg(src, dest string) error {
 	}
 
 	return os.Remove(expanded)
+}
+
+// nameBundlePayload moves a component's payload into a folder named after the
+// bundle it installs. A component with install-location="/Applications/Tool.app"
+// may hold only Contents at the top of its payload, which the installer puts
+// inside Tool.app.
+func nameBundlePayload(component string) error {
+	payload := filepath.Join(component, "Payload")
+
+	if info, err := os.Stat(filepath.Join(payload, "Contents")); err != nil || !info.IsDir() {
+		return nil
+	}
+
+	data, err := os.ReadFile(filepath.Join(component, "PackageInfo"))
+	if err != nil {
+		return err
+	}
+
+	var info struct {
+		InstallLocation string `xml:"install-location,attr"`
+	}
+	if err := xml.Unmarshal(data, &info); err != nil {
+		return fmt.Errorf("read the PackageInfo of %s: %w", filepath.Base(component), err)
+	}
+
+	bundle := path.Base(info.InstallLocation)
+	if path.Ext(bundle) == "" {
+		return nil
+	}
+
+	moved := payload + ".bundle"
+	if err := os.Mkdir(moved, 0o755); err != nil {
+		return err
+	}
+
+	if err := os.Rename(payload, filepath.Join(moved, bundle)); err != nil {
+		return err
+	}
+
+	return os.Rename(moved, payload)
 }
 
 func copyFileMode(source, dest string, mode fs.FileMode) error {
