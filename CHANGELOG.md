@@ -1,5 +1,28 @@
 # Changelog
 
+## [0.13.0](https://github.com/y3owk1n/oku/compare/v0.12.0...v0.13.0) (2026-09-30)
+
+
+### Features
+
+* **cli:** add common aliases for commands ([#356](https://github.com/y3owk1n/oku/issues/356)) ([2eb4890](https://github.com/y3owk1n/oku/commit/2eb4890e74bba9dc225c6fff7d2c647ff06ac258))
+* **infer:** find the program by the assets' name, per arch, and skip libraries ([#353](https://github.com/y3owk1n/oku/issues/353)) ([2d15965](https://github.com/y3owk1n/oku/commit/2d15965f135dba293a8c22aace64771d5810e31a))
+* **infer:** name the programs an inferred manifest leaves out, prefer msvc on Windows ([#355](https://github.com/y3owk1n/oku/issues/355)) ([254d9db](https://github.com/y3owk1n/oku/commit/254d9db35a09849be17812351e1a40ba93967317))
+* **infer:** rank plain builds first, read more platform names, refuse setup programs ([#352](https://github.com/y3owk1n/oku/issues/352)) ([ec600f5](https://github.com/y3owk1n/oku/commit/ec600f5142bf6992c29b3a10a535dda28225fe94))
+* **infer:** read SHASUMS256.txt and sha256.txt, skip hash files, explain an empty release ([#354](https://github.com/y3owk1n/oku/issues/354)) ([a80b63d](https://github.com/y3owk1n/oku/commit/a80b63de0b8e4a4ea5511b6799b75f50f66abe47))
+* **network:** check where oku connects against [network] in config.toml ([#347](https://github.com/y3owk1n/oku/issues/347)) ([ce7564f](https://github.com/y3owk1n/oku/commit/ce7564fc698b70f0af8d54aeff54bbd15a3f0120))
+* **trust:** ask before a project installs from a source you have not trusted ([#349](https://github.com/y3owk1n/oku/issues/349)) ([024ee9e](https://github.com/y3owk1n/oku/commit/024ee9efd6b80023fe0dee1a40ad564637274471))
+* **trust:** name where a locked package downloads from in the trust question ([#351](https://github.com/y3owk1n/oku/issues/351)) ([b28bdfe](https://github.com/y3owk1n/oku/commit/b28bdfe9ef418f791cd1b92b4c97c433fcee5065))
+* **update:** show what changed in an included list and ask before taking it ([#350](https://github.com/y3owk1n/oku/issues/350)) ([9f49310](https://github.com/y3owk1n/oku/commit/9f49310e8d16c08d816b70988451063e33a0f3e3))
+
+
+### Bug Fixes
+
+* **sandbox:** keep builds from the user's agent sockets and processes ([#357](https://github.com/y3owk1n/oku/issues/357)) ([ae10023](https://github.com/y3owk1n/oku/commit/ae1002350ab682ed6ba074deb4286fe040ff0411))
+* **sandbox:** keep Linux builds from the host's unix sockets ([#358](https://github.com/y3owk1n/oku/issues/358)) ([125b690](https://github.com/y3owk1n/oku/commit/125b6905079ec9ae14d501df4c72404a172dea22))
+* **sandbox:** keep macOS builds from the clipboard and correct the launchd limit ([#359](https://github.com/y3owk1n/oku/issues/359)) ([3c55e5a](https://github.com/y3owk1n/oku/commit/3c55e5aeabcb582ec1d13d33e0ba18a4d1e1bdad))
+* **sandbox:** refuse Linux builds a socket that appears while they run ([#360](https://github.com/y3owk1n/oku/issues/360)) ([9bea17c](https://github.com/y3owk1n/oku/commit/9bea17c042d7691ffed303639e4e19bde947391b))
+
 ## [0.12.0](https://github.com/y3owk1n/oku/compare/v0.11.0...v0.12.0) (2026-09-29)
 
 
