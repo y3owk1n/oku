@@ -144,6 +144,7 @@ with `--bin`. See [Fix a wrong pick](guides/add-packages.md#fix-a-wrong-pick-wit
 | Message | Fix |
 |---|---|
 | `no release asset fits this machine (darwin-arm64)`, then the files of the release | No file name says your OS and CPU. Pass one of the listed files to `--asset`. `oku add`, `oku run` and `oku shell` all take it. |
+| `release <tag> of <repo> has no assets` | The newest release holds no files, which happens when a project publishes its downloads on its own site. Name an older release that has them, as `github:owner/repo@1.2.0`, or write a manifest. |
 | `no release asset fits linux-amd64-glibc`, with a platform that is not yours | oku pins the package for a `[lock]` platform, and no file name says that OS and CPU. Leave the platform out of the package's `when`, or write a manifest. |
 | `cannot tell which file is the program, executables found: ...` | The download holds several programs and none has the repo's name. Pass one to `--bin`. |
 | `no file in it is executable` | Write a manifest, see [Publish a manifest](guides/publish-a-manifest.md). |

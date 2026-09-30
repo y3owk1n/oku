@@ -129,7 +129,8 @@ var (
 	// skipped are endings of files that are not the package itself, or that oku
 	// cannot unpack.
 	skipped = []string{
-		".sha256", ".sha256sum", ".sha512", ".md5", ".sig", ".asc", ".pem", ".sbom", ".json",
+		".sha256", ".sha256sum", ".sha256sums", ".sha512", ".sha512sum", ".sha1", ".shasum", ".md5", ".md5sum",
+		".sig", ".asc", ".pem", ".sbom", ".json",
 		".txt", ".apk", ".minisig", ".crt", ".intoto.jsonl", ".vsix", ".delta",
 	}
 	// signatures are endings of files that sign or describe a checksum file.
@@ -236,9 +237,14 @@ func (inf *Inferrer) Manifest(
 			fix = "leave " + host.String() + " out of the package's when, or write a manifest for it"
 		}
 
+		has := "has: " + strings.Join(names, ", ")
+		if len(names) == 0 {
+			has, fix = "has no assets", "name an older release with @<version>, or write a manifest for it"
+		}
+
 		return Inferred{}, fmt.Errorf(
-			"%w %s\nrelease %s of %s has: %s\n%s",
-			ErrNoAsset, Machine(host), rel.Tag, repo, strings.Join(names, ", "), fix,
+			"%w %s\nrelease %s of %s %s\n%s",
+			ErrNoAsset, Machine(host), rel.Tag, repo, has, fix,
 		)
 	}
 
@@ -1011,13 +1017,16 @@ func checksumAsset(names []string, asset string) string {
 	// "tool-mac-checksums.txt" or "tool-linux-arm64-checksums.txt". The one for
 	// another platform does not list the asset, so a generic file such as
 	// "checksums.txt" or "SHA256SUMS" beats it, and a file that names the
-	// asset's own OS and arch wins over both.
+	// asset's own OS and arch wins over both. "SHASUMS256.txt" and
+	// "sha256.txt" are shared files too. A ".shasum" file holds a SHA-1.
 	best, bestScore := "", 0
 
 	for _, name := range names {
 		lower := strings.ToLower(name)
-		if hasAnySuffix(lower, signatures) ||
-			!strings.Contains(lower, "checksum") && !strings.Contains(lower, "sha256sum") {
+		shared := strings.Contains(lower, "checksum") || strings.Contains(lower, "sha256sum") ||
+			strings.Contains(lower, "shasums256") || lower == "sha256.txt"
+
+		if hasAnySuffix(lower, signatures) || !shared {
 			continue
 		}
 

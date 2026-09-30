@@ -1508,7 +1508,8 @@ again. `oku update` infers again.
 - It takes tar archives in any compression oku knows, zip and 7z archives,
   single binaries, compressed or not, and the installers oku
   [unpacks](#downloads-oku-can-unpack): `.deb`, `.rpm`, `.msi`, `.dmg`, `.pkg`
-  and AppImage. It skips editor extensions (`.vsix`).
+  and AppImage. It skips editor extensions (`.vsix`) and hash files such as
+  `.sha1`, `.shasum`, `.md5sum` and `.sha512sum`.
 - An installer's format names its OS, so `Tool1.2.dmg` is a macOS asset with no
   OS word, and `tool-aarch64.AppImage` is a Linux one. A `.exe` with no OS word
   is a Windows asset, as `sops-v3.9.0.amd64.exe`.
@@ -1617,8 +1618,10 @@ manifest does not name them, so its text is the same on every machine. An
 
 ### How inference finds a checksum
 
-- It uses `<asset>.sha256` as `sha256_url` when that exists, else a release
-  file with `checksum` or `sha256sum` in its name that is not a signature.
+- It uses `<asset>.sha256` or `<asset>.sha256sum` as `sha256_url` when that
+  exists. Otherwise it takes a shared file, one with `checksum`, `sha256sum` or
+  `shasums256` in its name, or `sha256.txt`. It skips signatures, and every
+  `.shasum` file, which holds a SHA-1.
 - When a release has one such file for each OS or platform, such as
   `tool-mac-checksums.txt` or `tool-linux-arm64-checksums.txt`, oku takes the
   one that names the asset's OS and arch, then one that names its OS or arch
