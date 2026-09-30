@@ -1052,6 +1052,11 @@ order step in `prd/product.md`.
 - B407 [6] On a host without a sandbox the approval prompt says so before it
   asks. With `require_sandbox = true` in `config.toml`, oku refuses to run a
   package's commands there, before any change.
+- B493 [6] On Linux and macOS a `run` step with `network = true` cannot
+  connect to a unix socket of the user's, such as the one `ssh-agent` keeps
+  under `/tmp`.
+- B494 [6] On Linux and macOS a `run` step cannot signal a process of the
+  user's. On Linux it cannot see one either.
 - B51 [6] A `fetch` step without sha256 or sha256_url fails lint. With one, it
   may download, and the file must match that sha256, or the digest that the
   checksum file at sha256_url gives for the file's name.

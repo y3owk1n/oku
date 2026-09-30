@@ -52,6 +52,8 @@ everything except:
 | Blocked | Details |
 |---|---|
 | Network | All of it, unless the step sets `network = true`. |
+| Your sockets | A step with `network = true` reaches DNS and the sockets in its own directories, and no other unix socket. It cannot connect to your `ssh-agent`, to Docker or to another agent. |
+| Your processes | Sending a signal to a process outside the build. |
 | Your home directory | Reading any file or listing any directory in it. Names and sizes stay readable, because paths to the store pass through it. The store and the directories of the `needs` tools stay readable. |
 | Your temporary and cache directories | Reading anything under `/private/var/folders`, where macOS keeps them. |
 | Your preferences and keychain | The `cfprefsd` and `securityd` services, which would otherwise read `~/Library/Preferences` and the keychain for the build. |
@@ -69,15 +71,17 @@ stop one.
 
 ## Linux
 
-oku starts each command in new user, mount and network namespaces, and sets
-them up before the command runs:
+oku starts each command in new user, mount, network and pid namespaces, and
+sets them up before the command runs:
 
 | Blocked | Details |
 |---|---|
 | Network | A network namespace with no interfaces, unless the step sets `network = true`. |
 | Your home directory | oku covers it with an empty tmpfs, then mounts the store, the `needs` tools and the build's own directories back in. |
+| Shared temporary directories | oku covers `/tmp` and `/var/tmp` with an empty tmpfs, then mounts the build's own directories back in. The sockets of `ssh-agent` and the X server are not in them. |
 | Writing | Every mount is read-only except the build's source directory, its `HOME` and temporary directory, and `{{prefix}}`. |
-| Your session | oku hides `/run/user`, which holds your D-Bus and systemd sockets, and the X server's sockets. |
+| Your session | oku hides `/run/user`, which holds your D-Bus and systemd sockets. On Linux 6.12 and later a step with `network = true` cannot reach an abstract socket outside the build either. |
+| Your processes | The build gets a `/proc` of its pid namespace. It sees only its own processes and cannot signal yours. |
 | Shared memory | `/dev/shm` is the build's own. |
 | Terminals | `/dev/pts` is a new instance, so your terminals are not in it. The build can still open terminals of its own. |
 
@@ -94,6 +98,11 @@ A host has to let an unprivileged user create these namespaces. These do not:
 - A kernel with `kernel.unprivileged_userns_clone=0`.
 
 oku finds out by setting up a sandbox once with a command that does nothing.
+
+In a container that masks parts of its `/proc`, such as a Docker container
+that is not privileged, the kernel refuses a new `/proc`. The build then keeps
+the container's `/proc`. It sees the container's processes there and still
+cannot signal them.
 
 ## Windows
 
@@ -153,6 +162,8 @@ prints the last lines of its output.
   step, or a [`vendor` step](manifest.md#vendoring). `network = true` gives one
   `run` step the network. oku shows it as `(wants network)` in the approval
   prompt and marks the package impure.
+- A build that reads a file under `/tmp` on Linux, or under your temporary
+  directory on macOS, cannot see it. Put the file in the manifest's source.
 - A build that reads a tool's files in your home directory needs that tool in
   `needs`, or a toolchain package as a dep. See
   [the build environment](manifest.md#the-build-environment).

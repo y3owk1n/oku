@@ -9,7 +9,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
-	"strconv"
 	"strings"
 	"syscall"
 	"testing"
@@ -63,7 +62,9 @@ func TestMain(m *testing.M) {
 		os.Exit(0)
 	case "interrupt":
 		dir := os.Getenv("OKU_SANDBOX_TEST_DIR")
-		out, err := run(dir, `sleep 60 & echo $! > pid.tmp && mv pid.tmp pid; wait`)
+		// The child writes a counter while it runs. In a pid namespace its pid is
+		// not a pid of the host, so the test watches the counter.
+		out, err := run(dir, `(i=0; while :; do i=$((i+1)); echo $i > beat; sleep 0.05; done) & touch started; wait`)
 		if err != nil {
 			fmt.Print(out, err)
 			os.Exit(1)
@@ -124,18 +125,14 @@ func TestB405InterruptStopsTheBuildWithItsChildren(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	var pid int
-
-	for deadline := time.Now().Add(10 * time.Second); pid == 0; {
-		if data, err := os.ReadFile(filepath.Join(dir, "pid")); err == nil {
-			pid, _ = strconv.Atoi(strings.TrimSpace(string(data)))
-		} else if time.Now().After(deadline) {
+	for deadline := time.Now().Add(10 * time.Second); !exists(filepath.Join(dir, "started")); {
+		if time.Now().After(deadline) {
 			_ = cmd.Process.Kill()
 			_ = cmd.Wait()
 			t.Fatalf("the build did not start its child within 10 seconds:\n%s", out.String())
-		} else {
-			time.Sleep(20 * time.Millisecond)
 		}
+
+		time.Sleep(20 * time.Millisecond)
 	}
 
 	must(t, cmd.Process.Signal(syscall.SIGINT))
@@ -150,14 +147,20 @@ func TestB405InterruptStopsTheBuildWithItsChildren(t *testing.T) {
 		t.Fatalf("the build took %s to stop after the interrupt", waited)
 	}
 
-	for deadline := time.Now().Add(5 * time.Second); syscall.Kill(pid, 0) == nil; {
-		if time.Now().After(deadline) {
-			_ = syscall.Kill(pid, syscall.SIGKILL)
-			t.Fatalf("the build's child %d still runs after the interrupt", pid)
-		}
+	beat, err := os.ReadFile(filepath.Join(dir, "beat"))
+	must(t, err)
 
-		time.Sleep(20 * time.Millisecond)
+	time.Sleep(500 * time.Millisecond)
+
+	if again, _ := os.ReadFile(filepath.Join(dir, "beat")); string(again) != string(beat) {
+		t.Fatal("the build's child still runs after the interrupt")
 	}
+}
+
+func exists(path string) bool {
+	_, err := os.Stat(path)
+
+	return err == nil
 }
 
 func must(t *testing.T, err error) {

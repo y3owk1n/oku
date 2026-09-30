@@ -40,7 +40,23 @@ func profile(spec Spec) string {
 
 	if !spec.Network {
 		b.WriteString("(deny network*)\n")
+	} else {
+		// With the network the build still must not reach the user's agents, such as
+		// ssh-agent under /private/var/run or Docker's socket in home. The rule
+		// allows mDNSResponder, for DNS, and the sockets in the build's own
+		// directories.
+		b.WriteString(`(deny network-outbound (require-all (remote unix-socket)` +
+			` (require-not (remote unix-socket (path-literal "/private/var/run/mDNSResponder")))`)
+
+		for _, path := range spec.Writable {
+			fmt.Fprintf(&b, " (require-not (remote unix-socket (subpath %q)))", path)
+		}
+
+		b.WriteString("))\n")
 	}
+
+	// A build signals its own processes only, not the user's.
+	b.WriteString("(deny signal (require-not (target same-sandbox)))\n")
 
 	// A build that could ask LaunchServices, another app or launchd to start a
 	// program would run that program outside the sandbox. A program that talks to

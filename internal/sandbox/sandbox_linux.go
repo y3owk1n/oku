@@ -10,13 +10,13 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
+	"unsafe"
 
 	"golang.org/x/sys/unix"
-
-	"github.com/y3owk1n/oku/internal/tempdir"
 )
 
 // specEnv carries the Spec to the init process.
@@ -64,7 +64,9 @@ func unavailable() string {
 
 func namespaces() *syscall.SysProcAttr {
 	return &syscall.SysProcAttr{
-		Cloneflags: syscall.CLONE_NEWUSER | syscall.CLONE_NEWNS | syscall.CLONE_NEWNET,
+		// A pid namespace keeps the build from seeing or signalling the user's
+		// processes.
+		Cloneflags: syscall.CLONE_NEWUSER | syscall.CLONE_NEWNS | syscall.CLONE_NEWNET | syscall.CLONE_NEWPID,
 		// Mounting needs root inside the namespace. That root maps to the real user,
 		// so files are still created as that user.
 		UidMappings: []syscall.SysProcIDMap{{ContainerID: 0, HostID: os.Getuid(), Size: 1}},
@@ -101,10 +103,11 @@ func command(ctx context.Context, spec Spec) (*exec.Cmd, string) {
 	return cmd, ""
 }
 
-// Init runs inside the new namespaces. It hides Home behind an empty tmpfs,
-// puts the readable and writable paths back, hides the sockets of the user's
-// session, makes every mount read-only but the writable paths, and replaces
-// itself with the build command.
+// Init runs inside the new namespaces. It mounts a /proc of the new pid
+// namespace, hides Home and the shared temporary directories behind empty
+// tmpfs mounts, puts the readable and writable paths back, hides the sockets of
+// the user's session, makes every mount read-only but the writable paths, and
+// replaces itself with the build command.
 func Init() error {
 	var spec Spec
 	if err := json.Unmarshal([]byte(os.Getenv(specEnv)), &spec); err != nil {
@@ -116,18 +119,32 @@ func Init() error {
 		return fmt.Errorf("make mounts private: %w", err)
 	}
 
+	// The kernel refuses a new /proc in a container that masks parts of its own.
+	// The build then keeps the old /proc, where it sees the user's processes and
+	// still cannot signal them.
+	flags := uintptr(syscall.MS_NOSUID | syscall.MS_NODEV | syscall.MS_NOEXEC)
+	if err := syscall.Mount("proc", "/proc", "proc", flags, ""); err != nil && !errors.Is(err, fs.ErrPermission) {
+		return fmt.Errorf("mount /proc: %w", err)
+	}
+
+	keep := append(append([]string{}, spec.Readable...), spec.Writable...)
+
 	if spec.Home != "" {
-		if err := hide(
-			spec.Home,
-			append(append([]string{}, spec.Readable...), spec.Writable...),
-		); err != nil {
+		if err := hide(spec.Home, keep, "mode=0700"); err != nil {
 			return err
 		}
 	}
 
-	// A build that reached the user's D-Bus or X server could start a program
-	// outside the sandbox. Abstract sockets belong to the network namespace, so
-	// the build cannot reach those either.
+	// The user's ssh-agent and X server keep their sockets in the shared
+	// temporary directories.
+	for _, dir := range tempDirs {
+		if err := hide(dir, keep, "mode=1777"); err != nil {
+			return err
+		}
+	}
+
+	// A build that reached the user's D-Bus or systemd could start a program
+	// outside the sandbox.
 	for _, dir := range sessionSockets {
 		if err := syscall.Mount("tmpfs", dir, "tmpfs", 0, "mode=0755"); err != nil &&
 			!errors.Is(err, fs.ErrNotExist) {
@@ -150,6 +167,14 @@ func Init() error {
 		return err
 	}
 
+	// Abstract sockets belong to the network namespace. A step with the network
+	// shares the host's, where the user's session may listen on one.
+	if spec.Network {
+		if err := scopeAbstractSockets(); err != nil {
+			return err
+		}
+	}
+
 	env := make([]string, 0, len(spec.Env))
 	for _, kv := range spec.Env {
 		if !strings.HasPrefix(kv, specEnv+"=") {
@@ -169,43 +194,38 @@ func Init() error {
 	return syscall.Exec(program, spec.Argv, env)
 }
 
-// hide mounts an empty tmpfs over home and binds the kept paths inside it back
-// into place.
-func hide(home string, keep []string) error {
-	stash, err := tempdir.Dir("sandbox")
-	if err != nil {
-		return err
+// hide mounts an empty tmpfs with options over dir and binds the kept paths
+// inside it back into place. A dir that does not exist needs no hiding.
+func hide(dir string, keep []string, options string) error {
+	type kept struct {
+		fd   int
+		path string
 	}
-
-	type kept struct{ at, path string }
 
 	var inside []kept
 
-	for i, path := range keep {
-		rel, err := filepath.Rel(home, path)
+	for _, path := range keep {
+		rel, err := filepath.Rel(dir, path)
 		if err != nil || strings.HasPrefix(rel, "..") {
 			continue
 		}
 
-		info, err := os.Stat(path)
-		if err != nil || !info.IsDir() {
+		// The descriptor still reaches the directory after the tmpfs covers its path.
+		fd, err := unix.Open(path, unix.O_PATH|unix.O_DIRECTORY|unix.O_CLOEXEC, 0)
+		if err != nil {
 			continue
 		}
+		defer func() { _ = unix.Close(fd) }()
 
-		at := filepath.Join(stash, fmt.Sprint(i))
-		if err := os.Mkdir(at, 0o700); err != nil {
-			return err
-		}
-
-		if err := syscall.Mount(path, at, "", syscall.MS_BIND|syscall.MS_REC, ""); err != nil {
-			return fmt.Errorf("keep %s: %w", path, err)
-		}
-
-		inside = append(inside, kept{at: at, path: path})
+		inside = append(inside, kept{fd: fd, path: path})
 	}
 
-	if err := syscall.Mount("tmpfs", home, "tmpfs", 0, "mode=0700"); err != nil {
-		return fmt.Errorf("hide %s: %w", home, err)
+	if err := syscall.Mount("tmpfs", dir, "tmpfs", 0, options); err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil
+		}
+
+		return fmt.Errorf("hide %s: %w", dir, err)
 	}
 
 	for _, k := range inside {
@@ -213,7 +233,8 @@ func hide(home string, keep []string) error {
 			return err
 		}
 
-		if err := syscall.Mount(k.at, k.path, "", syscall.MS_BIND|syscall.MS_REC, ""); err != nil {
+		from := "/proc/self/fd/" + strconv.Itoa(k.fd)
+		if err := syscall.Mount(from, k.path, "", syscall.MS_BIND|syscall.MS_REC, ""); err != nil {
 			return fmt.Errorf("restore %s: %w", k.path, err)
 		}
 	}
@@ -221,9 +242,42 @@ func hide(home string, keep []string) error {
 	return nil
 }
 
+// scopeAbstractSockets keeps the build from connecting to an abstract socket
+// that a process outside it listens on. Landlock scopes them since Linux 6.12,
+// and an older kernel leaves them reachable.
+func scopeAbstractSockets() error {
+	abi, _, errno := unix.Syscall(unix.SYS_LANDLOCK_CREATE_RULESET, 0, 0, unix.LANDLOCK_CREATE_RULESET_VERSION)
+	if errno != 0 || abi < 6 {
+		return nil
+	}
+
+	attr := unix.LandlockRulesetAttr{Scoped: unix.LANDLOCK_SCOPE_ABSTRACT_UNIX_SOCKET}
+
+	fd, _, errno := unix.Syscall(
+		unix.SYS_LANDLOCK_CREATE_RULESET, uintptr(unsafe.Pointer(&attr)), unsafe.Sizeof(attr), 0,
+	)
+	if errno != 0 {
+		return fmt.Errorf("scope abstract sockets: %w", errno)
+	}
+	defer func() { _ = unix.Close(int(fd)) }()
+
+	if err := unix.Prctl(unix.PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0); err != nil {
+		return fmt.Errorf("scope abstract sockets: %w", err)
+	}
+
+	if _, _, errno := unix.Syscall(unix.SYS_LANDLOCK_RESTRICT_SELF, fd, 0, 0); errno != 0 {
+		return fmt.Errorf("scope abstract sockets: %w", errno)
+	}
+
+	return nil
+}
+
+// tempDirs are the temporary directories that every program of the host shares.
+var tempDirs = []string{"/tmp", "/var/tmp"}
+
 // sessionSockets are the directories that hold the sockets of the user's
-// session: the user's D-Bus and systemd under /run/user, and the X server.
-var sessionSockets = []string{"/run/user", "/tmp/.X11-unix"}
+// session, the user's D-Bus and systemd under /run/user.
+var sessionSockets = []string{"/run/user"}
 
 // readOnly makes every mount read-only, then binds each writable path onto
 // itself and makes that bind writable again.
