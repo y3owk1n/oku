@@ -97,18 +97,20 @@ func TestB198InferencePrefersTheSmallerAssetAndNoneNamedAsAnApp(t *testing.T) {
 	m := newMachine(t)
 	_, arch, _ := hostWords()
 
-	// The command line build has the longer name, so only its size favours it.
+	// Both builds add one word to the name, so only its size favours the
+	// command line build.
 	cli, _ := m.archive(t, "cli-slim", map[string]string{"tool": script})
 	bundle, _ := m.archive(t, "bundle", map[string]string{
 		"tool": script, "resources.bin": strings.Repeat("x", 1<<16),
 	})
 	app, _ := m.archive(t, "app", map[string]string{"tool": script})
 
-	name := hostAssetName()
-	slim := strings.TrimSuffix(name, ".tar.gz") + "-slim.tar.gz"
+	base := strings.TrimSuffix(hostAssetName(), ".tar.gz")
+	name := base + "-full.tar.gz"
+	slim := base + "-slim.tar.gz"
 	appName := strings.Replace(name, "tool-", "tool-app-", 1)
 	// The same build in another format is an alternative too.
-	sevenZip := strings.TrimSuffix(name, ".tar.gz") + ".7z"
+	sevenZip := base + "-slim.7z"
 
 	inferServer(t, &m, map[string]string{name: bundle, slim: cli, appName: app, sevenZip: cli})
 
@@ -516,5 +518,195 @@ func TestB433AnAssetGlobForAnotherBuildKeepsTheRepoName(t *testing.T) {
 
 	if !strings.Contains(out, `name = "tool"`) || !strings.Contains(hostArtifact(t, out), "/portable.tar.gz") {
 		t.Fatalf("the package should keep the repo's name and download the portable build:\n%s", out)
+	}
+}
+
+// artifactURL returns the url of the first artifact of an inferred manifest
+// whose match starts with selector, such as `os = "linux", arch = "amd64"`,
+// with the tag in place of its variable, or "" when there is none.
+func artifactURL(out, selector string) string {
+	at := strings.Index(out, "match = { "+selector)
+	if at < 0 {
+		return ""
+	}
+
+	rest := out[at:]
+	rest = rest[strings.Index(rest, "url = ")+len("url = "):]
+
+	return strings.ReplaceAll(rest[:strings.Index(rest, "\n")], "{{tag}}", "v1.4.0")
+}
+
+// inferAssets serves the host's asset and one archive per other name, each
+// holding the program, and returns the manifest oku infers.
+func inferAssets(t *testing.T, names ...string) string {
+	t.Helper()
+
+	m := newMachine(t)
+	assets := map[string]string{}
+
+	for _, name := range append(names, hostAssetName()) {
+		assets[name], _ = m.archive(t, strings.TrimSuffix(name, ".tar.gz"), map[string]string{"tool": script})
+	}
+
+	inferServer(t, &m, assets)
+
+	out, err := m.run(t, "", "manifest", "init", "--from", "owner/tool", "-o", "-")
+	if err != nil {
+		t.Fatalf("manifest init: %v\n%s", err, out)
+	}
+
+	return out
+}
+
+func TestB478InferencePrefersThePlainBuildOverAVariant(t *testing.T) {
+	m := newMachine(t)
+
+	// The plain build is the largest, so only its name favours it.
+	plain, _ := m.archive(t, "tool-v1.4.0-linux-amd64", map[string]string{
+		"tool": script, "resources.bin": strings.Repeat("x", 1<<16),
+	})
+	baseline, _ := m.archive(t, "tool-v1.4.0-linux-amd64-baseline", map[string]string{"tool": script})
+	pivkey, _ := m.archive(t, "tool-v1.4.0-linux-pivkey-amd64", map[string]string{"tool": script})
+	host, _ := m.archive(t, "host", map[string]string{"tool": script})
+
+	inferServer(t, &m, map[string]string{
+		"tool-v1.4.0-linux-amd64.tar.gz":          plain,
+		"tool-v1.4.0-linux-amd64-baseline.tar.gz": baseline,
+		"tool-v1.4.0-linux-pivkey-amd64.tar.gz":   pivkey,
+		hostAssetName():                           host,
+	})
+
+	out, err := m.run(t, "", "manifest", "init", "--from", "owner/tool", "-o", "-")
+	must(t, err)
+
+	if got := artifactURL(out, `os = "linux", arch = "amd64"`); !strings.Contains(got, "/tool-v1.4.0-linux-amd64.tar.gz") {
+		t.Fatalf("linux amd64 should take the plain build, got %s:\n%s", got, out)
+	}
+}
+
+func TestB479InferenceTakesTheBuildWithoutALibcAsGlibcBesideAMuslBuild(t *testing.T) {
+	out := inferAssets(t, "tool-v1.4.0-linux-arm64.tar.gz", "tool-v1.4.0-linux-arm64-musl.tar.gz")
+
+	if got := artifactURL(out, `os = "linux", arch = "arm64", libc = "glibc" }`); !strings.Contains(got, "/tool-v1.4.0-linux-arm64.tar.gz") {
+		t.Fatalf("glibc hosts should take the build without a libc, got %s:\n%s", got, out)
+	}
+
+	if got := artifactURL(out, `os = "linux", arch = "arm64" }`); !strings.Contains(got, "/tool-v1.4.0-linux-arm64-musl.tar.gz") {
+		t.Fatalf("other hosts should take the musl build, got %s:\n%s", got, out)
+	}
+
+	// A .deb names no libc either, but it is no glibc build of its own.
+	out = inferAssets(t, "tool_1.4.0_arm64.deb", "tool-v1.4.0-linux-arm64-musl.tar.gz")
+
+	if got := artifactURL(out, `os = "linux", arch = "arm64", libc = "glibc" }`); got != "" {
+		t.Fatalf("glibc hosts should take the musl build, not %s:\n%s", got, out)
+	}
+}
+
+func TestB480InferenceSkipsAssetsOfUnknownArchesAndAndroid(t *testing.T) {
+	out := inferAssets(t,
+		"tool-v1.4.0-linux-ppc64le.rpm", "tool-v1.4.0-linux-armv6.tar.gz", "tool-v1.4.0-linux-arm64-android.tar.gz",
+		"tool-v1.4.0-armv7-linux-androideabi.tar.gz",
+	)
+
+	for _, name := range []string{"ppc64le", "armv6", "android"} {
+		if strings.Contains(out, name) {
+			t.Fatalf("no artifact should take the %s asset:\n%s", name, out)
+		}
+	}
+}
+
+func TestB481InferenceReadsPlatformsFromMoreNames(t *testing.T) {
+	cases := []struct{ asset, selector string }{
+		{"tool-v1.4.0-macos.tar.gz", `os = "darwin", arch = "amd64"`},
+		{"tool-v1.4.0-win32-x64.tar.gz", `os = "windows", arch = "amd64"`},
+		{"tool-v1.4.0-Linux-64bit.tar.gz", `os = "linux", arch = "amd64"`},
+		{"tool-v1.4.0-linux-32bit.tar.gz", `os = "linux", arch = "386"`},
+		{"tool-v1.4.0-linux-32-bit.tar.gz", `os = "linux", arch = "386"`},
+		{"tool-v1.4.0-macOS_64-bit.tar.gz", `os = "darwin", arch = "amd64"`},
+	}
+
+	for _, c := range cases {
+		t.Run(c.asset, func(t *testing.T) {
+			out := inferAssets(t, c.asset)
+
+			if got := artifactURL(out, c.selector); !strings.Contains(got, "/"+strings.TrimSuffix(c.asset, ".tar.gz")) {
+				t.Fatalf("%s should take %s, got %s:\n%s", c.selector, c.asset, got, out)
+			}
+
+			amd64 := filepath.Base(artifactURL(out, `os = "linux", arch = "amd64"`))
+			if strings.Contains(amd64, "32bit") || strings.Contains(amd64, "32-bit") {
+				t.Fatalf("a 32-bit build is no amd64 build:\n%s", out)
+			}
+		})
+	}
+
+	t.Run("exe", func(t *testing.T) {
+		m := newMachine(t)
+		host, _ := m.archive(t, "host", map[string]string{"tool": script})
+		exe := filepath.Join(m.fixtures, "tool.exe")
+		must(t, os.WriteFile(exe, []byte(script), 0o755))
+
+		inferServer(t, &m, map[string]string{"tool.exe": exe, hostAssetName(): host})
+
+		out, err := m.run(t, "", "manifest", "init", "--from", "owner/tool", "-o", "-")
+		must(t, err)
+
+		if got := artifactURL(out, `os = "windows", arch = "amd64"`); !strings.Contains(got, "/tool.exe") {
+			t.Fatalf("windows amd64 should take tool.exe, got %s:\n%s", got, out)
+		}
+
+		if artifactURL(out, `os = "windows", arch = "arm64"`) != "" {
+			t.Fatalf("an exe without an arch is no arm64 build:\n%s", out)
+		}
+	})
+}
+
+func TestB482InferenceRefusesAWindowsSetupProgram(t *testing.T) {
+	for _, mark := range []string{"Inno Setup Setup Data (6.4.3)", "Nullsoft.NSIS.exehead"} {
+		t.Run(mark, func(t *testing.T) {
+			m := newMachine(t)
+			host, _ := m.archive(t, "host", map[string]string{"tool": script})
+			setup := filepath.Join(m.fixtures, "tool-x86_64.exe")
+			must(t, os.WriteFile(setup, []byte("MZ\x00\x00"+mark), 0o644))
+
+			inferServer(t, &m, map[string]string{"tool-x86_64.exe": setup, hostAssetName(): host})
+
+			out, err := m.run(t, "", "manifest", "init", "--from", "owner/tool", "-o", "-")
+			must(t, err)
+
+			if strings.Contains(out, `os = "windows"`) {
+				t.Fatalf("windows should get no artifact from a setup program:\n%s", out)
+			}
+		})
+	}
+}
+
+func TestB482AddLeavesOutAnExeItDidNotOpen(t *testing.T) {
+	m := newMachine(t)
+
+	// add opens the host's asset only. The host's is a single binary, so an
+	// unopened exe would otherwise take its layout.
+	host := filepath.Join(m.fixtures, "tool-host")
+	must(t, os.WriteFile(host, []byte(script), 0o755))
+	setup := filepath.Join(m.fixtures, "tool-x86_64.exe")
+	must(t, os.WriteFile(setup, []byte("MZ\x00\x00Nullsoft.NSIS.exehead"), 0o644))
+
+	inferServer(t, &m, map[string]string{
+		strings.TrimSuffix(hostAssetName(), ".tar.gz"): host,
+		"tool-x86_64.exe": setup,
+	})
+
+	out, err := m.run(t, "", "add", "github:owner/tool")
+	if err != nil {
+		t.Fatalf("add: %v\n%s", err, out)
+	}
+
+	locked, err := lock.Read(filepath.Join(m.config, "oku.lock"))
+	must(t, err)
+
+	pkg, _ := locked.Find("tool")
+	if strings.Contains(pkg.Manifest, `os = "windows"`) {
+		t.Fatalf("windows should get no artifact from an exe add did not open:\n%s", pkg.Manifest)
 	}
 }

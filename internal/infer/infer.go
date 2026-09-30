@@ -24,13 +24,14 @@ import (
 type Inspector func(ctx context.Context, url string, auth forge.Auth) ([]File, error)
 
 // File is one regular file of an unpacked asset. Text holds the text of a
-// Linux desktop entry or of an app bundle's Info.plist, and GUI marks a
-// Windows program that opens no console.
+// Linux desktop entry or of an app bundle's Info.plist, GUI marks a Windows
+// program that opens no console, and Setup a Windows setup program.
 type File struct {
 	Path       string
 	Executable bool
 	Text       string
 	GUI        bool
+	Setup      bool
 }
 
 var errNoRelease = errors.New("has no release")
@@ -88,12 +89,12 @@ var (
 	osWords = map[string][]string{
 		"linux":   {"linux"},
 		"darwin":  {"darwin", "macos", "macosx", "apple", "osx", "mac"},
-		"windows": {"windows", "win64", "win"},
+		"windows": {"windows", "win64", "win32", "win"},
 	}
 	archWords = map[string][]string{
-		"amd64":   {"x86_64", "x86-64", "amd64", "x64"},
+		"amd64":   {"x86_64", "x86-64", "amd64", "x64", "64bit", "64-bit"},
 		"arm64":   {"aarch64", "arm64"},
-		"386":     {"i386", "i686", "386"},
+		"386":     {"i386", "i686", "386", "ia32", "32bit", "32-bit"},
 		"arm":     {"armv7", "armv7l", "armhf", "arm"},
 		"riscv64": {"riscv64"},
 	}
@@ -101,9 +102,19 @@ var (
 		"darwin": {"universal", "universal2", "all"},
 	}
 	libcWords = map[string][]string{
-		"glibc": {"gnu", "glibc"},
-		"musl":  {"musl"},
+		"glibc": {"gnu", "glibc", "gnueabi", "gnueabihf"},
+		"musl":  {"musl", "musleabi", "musleabihf"},
 	}
+	// otherArches are words of arches oku has no target for. An asset that
+	// names one is no build for any arch, whatever its format.
+	otherArches = []string{
+		"ppc64le", "ppc64", "powerpc64le", "powerpc64", "powerpc", "s390x", "loong64", "loongarch64",
+		"mips", "mipsel", "mipsle", "mips64", "mips64el", "mips64le", "sparc64", "m68k", "i586",
+		"armv5", "armv5te", "armv6", "armv6l", "armel",
+	}
+	// fillers are words of a platform triple that say nothing about the build,
+	// as "unknown" in "x86_64-unknown-linux-gnu".
+	fillers = []string{"unknown", "pc", "msvc", "exe", "eabi", "eabihf"}
 	// unpackable are the archive endings oku can unpack. A name with no known
 	// ending is taken as a single binary, which is what an AppImage is.
 	unpackable = []string{
@@ -308,10 +319,12 @@ func (inf *Inferrer) Manifest(
 		l, known := layouts[kind+" "+c.OS]
 		if !known {
 			// An app bundle is macOS's, so the layout of another OS gives none.
+			// An exe with no Windows word may be a setup program, and only its
+			// contents show that.
 			l, known = anyOS[kind]
 			l.app = nil
 
-			if !known || len(l.bins) == 0 {
+			if !known || len(l.bins) == 0 || exeByFormat(c.asset) {
 				continue
 			}
 		}
@@ -585,28 +598,34 @@ func targets() []target {
 
 // pick returns the assets that fit t, the best one first. It requires the OS and
 // arch words in the name. A linux target also requires its libc word, or no libc
-// word when it has none. Elsewhere "gnu" names a toolchain, as in
+// word when it has none. A glibc target also takes an archive or a binary that
+// names no libc when a musl build of the arch sits beside it, since that one is
+// then the glibc build. Elsewhere "gnu" names a toolchain, as in
 // "x86_64-pc-windows-gnu".
 func pick(names []string, sizes map[string]int64, pkg string, t target) []string {
 	var fits []string
 
-	for _, name := range names {
+	musl := slices.ContainsFunc(names, func(name string) bool {
 		lower := strings.ToLower(name)
 
-		// A macOS-only app often names no platform at all, as "Tool1.2.dmg". Its
-		// format names the OS, and with no arch word oku takes it as a build for
-		// the arches the OS still runs on.
-		formatOS := installerOS(lower)
-		anyArch := formatOS != "" && !namesArch(lower) && (t.Arch == "amd64" || t.Arch == "arm64")
+		return fitsPlatform(lower, t) && hasWord(lower, libcWords["musl"])
+	})
 
-		if hasAnySuffix(lower, skipped) || !hasWord(lower, t.words.os) && formatOS != t.OS ||
-			!hasWord(lower, t.words.arch) && !hasWord(lower, t.words.fat) && !anyArch {
+	for _, name := range names {
+		lower := strings.ToLower(name)
+		if !fitsPlatform(lower, t) {
 			continue
 		}
 
 		namesLibc := hasWord(lower, libcWords["glibc"]) || hasWord(lower, libcWords["musl"])
-		if len(t.words.libc) > 0 && !hasWord(lower, t.words.libc) ||
-			len(t.words.libc) == 0 && namesLibc && t.OS == "linux" {
+		glibc := !namesLibc && musl && installerOS(lower) == ""
+
+		switch {
+		case t.Libc == "glibc" && !hasWord(lower, t.words.libc) && !glibc:
+			continue
+		case t.Libc == "" && len(t.words.libc) > 0 && !hasWord(lower, t.words.libc):
+			continue
+		case len(t.words.libc) == 0 && namesLibc && t.OS == "linux":
 			continue
 		}
 
@@ -617,17 +636,19 @@ func pick(names []string, sizes map[string]int64, pkg string, t target) []string
 	// the same release, as "tool-x86_64" before "tool-server-x86_64", in any
 	// format and for any arch. A build for the arch sorts before a universal
 	// one. A command line build sorts before a desktop app, which holds no
-	// program to link. A tar archive keeps file modes, so it sorts before a
-	// zip, and both sort before an installer, whose paths are the ones of an
-	// install tree. A smaller asset
+	// program to link. A plain build sorts before a variant whose name adds a
+	// word, as "tool-linux-amd64" before "tool-linux-amd64-baseline". A tar
+	// archive keeps file modes, so it sorts before a zip, and both sort before
+	// an installer, whose paths are the ones of an install tree. A smaller asset
 	// sorts before a larger one, because a desktop app with a plain name still
-	// bundles far more than a command line tool. A shorter name sorts before variants such as
-	// "-debug".
+	// bundles far more than a command line tool. A shorter name sorts before
+	// variants such as "-debug".
 	slices.SortFunc(fits, func(a, b string) int {
 		return cmp.Or(
 			cmp.Compare(sibling(a, pkg), sibling(b, pkg)),
 			cmp.Compare(t.fat(a), t.fat(b)),
 			cmp.Compare(desktop(a), desktop(b)),
+			cmp.Compare(variant(a), variant(b)),
 			cmp.Compare(rank(a), rank(b)),
 			smaller(sizes[a], sizes[b]),
 			cmp.Compare(len(a), len(b)),
@@ -636,6 +657,94 @@ func pick(names []string, sizes map[string]int64, pkg string, t target) []string
 	})
 
 	return fits
+}
+
+// fitsPlatform reports whether an asset's lower-case name fits t's OS and arch.
+// A name that holds no arch word fits the arches its OS is built for without
+// one: amd64 and arm64 for an installer and for macOS, which builds universal
+// apps, and amd64 elsewhere. A name with no OS word names it by its format, as
+// ".dmg" or ".exe" do. oku targets no Android, so an Android build fits nothing.
+func fitsPlatform(lower string, t target) bool {
+	if hasAnySuffix(lower, skipped) || hasWord(lower, []string{"android", "androideabi"}) {
+		return false
+	}
+
+	formatOS := installerOS(lower)
+	if formatOS == "" && exeByFormat(lower) && desktop(lower) == 0 {
+		formatOS = "windows"
+	}
+
+	namesOS := hasWord(lower, t.words.os)
+	if !namesOS && formatOS != t.OS {
+		return false
+	}
+
+	if hasWord(lower, t.words.arch) || hasWord(lower, t.words.fat) {
+		return true
+	}
+
+	if namesArch(lower) {
+		return false
+	}
+
+	universal := installerOS(lower) != "" || t.OS == "darwin" && namesOS
+
+	return t.Arch == "amd64" || universal && t.Arch == "arm64"
+}
+
+// exeByFormat reports whether an asset fits Windows by its ".exe" alone, with
+// no Windows word in its name.
+func exeByFormat(name string) bool {
+	lower := strings.ToLower(name)
+
+	return strings.HasSuffix(lower, ".exe") && !hasWord(lower, osWords["windows"])
+}
+
+// variant counts the words of an asset's name that name neither the program,
+// its version, nor its platform, as "baseline" in "tool-linux-x64-baseline.zip".
+func variant(name string) int {
+	lower := strings.ToLower(name)
+	lower = strings.TrimSuffix(lower, ending(lower))
+	lower = lower[len(stem(lower)):]
+
+	for _, groups := range []map[string][]string{osWords, archWords, fatWords, libcWords} {
+		for _, words := range groups {
+			lower = blank(lower, words)
+		}
+	}
+
+	lower = blank(lower, fillers)
+
+	count := 0
+
+	for _, word := range strings.FieldsFunc(lower, func(r rune) bool { return r > unicode.MaxASCII || !isAlnum(byte(r)) }) {
+		if !startsWithTag(word) {
+			count++
+		}
+	}
+
+	return count
+}
+
+// blank replaces each whole word of words in name with a space.
+func blank(name string, words []string) string {
+	for _, word := range words {
+		for from := 0; ; {
+			at := strings.Index(name[from:], word)
+			if at < 0 {
+				break
+			}
+
+			start, end := from+at, from+at+len(word)
+			if (start == 0 || !isAlnum(name[start-1])) && (end == len(name) || !isAlnum(name[end])) {
+				name = name[:start] + strings.Repeat(" ", len(word)) + name[end:]
+			}
+
+			from = start + 1
+		}
+	}
+
+	return name
 }
 
 // installerOS returns the OS an installer format or an AppImage runs on, or
@@ -654,8 +763,13 @@ func installerOS(name string) string {
 	}
 }
 
-// namesArch reports whether name holds a word of any arch.
+// namesArch reports whether name holds a word of any arch, one without a
+// target included.
 func namesArch(name string) bool {
+	if hasWord(name, otherArches) {
+		return true
+	}
+
 	for _, words := range archWords {
 		if hasWord(name, words) {
 			return true
@@ -712,9 +826,11 @@ func rank(name string) int {
 }
 
 // sibling is 1 for an asset of another program than pkg, as
-// "tool-server-x86_64" is for tool.
+// "tool-server-x86_64" is for tool. An asset named after pkg alone, as
+// "tool.exe", is pkg's.
 func sibling(name, pkg string) int {
-	if stem(name) == pkg {
+	lower := strings.ToLower(name)
+	if stem(name) == pkg || strings.TrimSuffix(strings.TrimSuffix(lower, ending(lower)), ".exe") == pkg {
 		return 0
 	}
 
@@ -734,24 +850,7 @@ func (t target) fat(name string) int {
 // does not match inside "darwin". It searches the name and does not split it,
 // because a word such as "x86_64" contains a separator itself.
 func hasWord(name string, words []string) bool {
-	for _, word := range words {
-		for from := 0; ; {
-			at := strings.Index(name[from:], word)
-			if at < 0 {
-				break
-			}
-
-			start, end := from+at, from+at+len(word)
-			if (start == 0 || !isAlnum(name[start-1])) &&
-				(end == len(name) || !isAlnum(name[end])) {
-				return true
-			}
-
-			from = start + 1
-		}
-	}
-
-	return false
+	return blank(name, words) != name
 }
 
 func isAlnum(c byte) bool {
@@ -943,6 +1042,10 @@ func findLayout(files []File, name string, named []string, archive bool) (layout
 
 	if !archive {
 		var l layout
+
+		if len(files) == 1 && files[0].Setup {
+			return l, errors.New("it is a setup program, which oku does not run\nwrite a manifest for it")
+		}
 
 		switch len(wants) {
 		case 0:
