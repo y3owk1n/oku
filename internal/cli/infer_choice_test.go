@@ -1,6 +1,9 @@
 package cli_test
 
 import (
+	"archive/tar"
+	"bytes"
+	"compress/gzip"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -708,5 +711,138 @@ func TestB482AddLeavesOutAnExeItDidNotOpen(t *testing.T) {
 	pkg, _ := locked.Find("tool")
 	if strings.Contains(pkg.Manifest, `os = "windows"`) {
 		t.Fatalf("windows should get no artifact from an exe add did not open:\n%s", pkg.Manifest)
+	}
+}
+
+// plainArchive writes a tar.gz whose files have no mode bits for running,
+// as a tar made without modes has, and returns its path.
+func plainArchive(t *testing.T, m machine, name string, files map[string]string) string {
+	t.Helper()
+
+	var buf bytes.Buffer
+
+	gz := gzip.NewWriter(&buf)
+	tw := tar.NewWriter(gz)
+
+	for path, body := range files {
+		must(t, tw.WriteHeader(&tar.Header{Name: path, Mode: 0o644, Size: int64(len(body))}))
+
+		_, err := tw.Write([]byte(body))
+		must(t, err)
+	}
+
+	must(t, tw.Close())
+	must(t, gz.Close())
+
+	path := filepath.Join(m.fixtures, name+".tar.gz")
+	must(t, os.WriteFile(path, buf.Bytes(), 0o644))
+
+	return path
+}
+
+func TestB483InferenceTakesTheProgramEveryAssetIsNamedAfter(t *testing.T) {
+	stemmed := strings.Replace(hostAssetName(), "tool-", "toolfmt-", 1)
+
+	t.Run("single binary", func(t *testing.T) {
+		m := newMachine(t)
+		bin := filepath.Join(m.fixtures, "toolfmt")
+		must(t, os.WriteFile(bin, []byte(script), 0o755))
+
+		inferServer(t, &m, map[string]string{strings.TrimSuffix(stemmed, ".tar.gz"): bin})
+
+		out, err := m.run(t, "", "manifest", "init", "--from", "owner/tool", "-o", "-")
+		must(t, err)
+
+		if !strings.Contains(out, `name = "tool"`) || !strings.Contains(out, `bin = ["toolfmt"]`) {
+			t.Fatalf("the package should keep the repo's name and run toolfmt:\n%s", out)
+		}
+	})
+
+	t.Run("archive with several programs", func(t *testing.T) {
+		m := newMachine(t)
+		archive, _ := m.archive(t, "toolfmt", map[string]string{"toolfmt": script, "toolfmt_plugin": script})
+
+		inferServer(t, &m, map[string]string{stemmed: archive})
+
+		out, err := m.run(t, "", "manifest", "init", "--from", "owner/tool", "-o", "-")
+		if err != nil {
+			t.Fatalf("manifest init: %v\n%s", err, out)
+		}
+
+		if !strings.Contains(out, `bin = ["toolfmt"]`) {
+			t.Fatalf("the program should be toolfmt:\n%s", out)
+		}
+	})
+}
+
+func TestB484AProgramNamedAfterItsAssetRunsUnderThePackagesName(t *testing.T) {
+	hostOS, arch, otherArch := hostWords()
+	own := map[string]string{"darwin": "apple-darwin", "linux": "unknown-linux-musl"}[hostOS]
+
+	m := newMachine(t)
+	assets := map[string]string{}
+
+	// A tar made without modes leaves the program plain, and a script beside
+	// it is executable.
+	for _, a := range []string{arch, otherArch} {
+		file := "tool-" + a + "-" + own
+		assets[file+".tar.gz"] = plainArchive(t, m, file, map[string]string{file: script, "install-man.sh": script})
+	}
+
+	inferServer(t, &m, assets)
+
+	out, err := m.run(t, "", "manifest", "init", "--from", "owner/tool", "-o", "-")
+	if err != nil {
+		t.Fatalf("manifest init: %v\n%s", err, out)
+	}
+
+	for _, a := range []string{arch, otherArch} {
+		want := `bin = [{ name = "tool", path = "tool-` + a + "-" + own + `" }]`
+		if !strings.Contains(out, want) {
+			t.Fatalf("the %s artifact should run its own file as tool:\n%s", a, out)
+		}
+	}
+}
+
+func TestB485LibrariesAndScriptsAreNoPrograms(t *testing.T) {
+	m := newMachine(t)
+	archive, _ := m.archive(t, "release", map[string]string{
+		"bin/runner": script, "lib/parser.so": "x", "lib/libtool.so.1": "x", "share/less.sh": script,
+	})
+
+	inferServer(t, &m, map[string]string{hostAssetName(): archive})
+
+	out, err := m.run(t, "", "manifest", "init", "--from", "owner/tool", "-o", "-")
+	if err != nil {
+		t.Fatalf("manifest init: %v\n%s", err, out)
+	}
+
+	if !strings.Contains(out, `bin = ["bin/runner"]`) {
+		t.Fatalf("the only program should be bin/runner:\n%s", out)
+	}
+}
+
+func TestB486ADesktopEntryIsAnAppOnLinuxOnly(t *testing.T) {
+	m := newMachine(t)
+	archive, _ := m.archive(t, "release", map[string]string{
+		"tool": script,
+		"etc/linux-desktop/tool.desktop": "[Desktop Entry]\nType=Application\nName=Tool\nExec=tool %U\n",
+	})
+
+	assets := map[string]string{hostAssetName(): archive}
+	for _, name := range []string{"tool-v1.4.0-x86_64-unknown-linux-gnu.tar.gz", "tool-v1.4.0-x86_64-apple-darwin.tar.gz"} {
+		assets[name] = archive
+	}
+
+	inferServer(t, &m, assets)
+
+	out, err := m.run(t, "", "manifest", "init", "--from", "owner/tool", "-o", "-")
+	must(t, err)
+
+	for _, artifact := range strings.Split(out, "[[artifact]]")[1:] {
+		linux := strings.Contains(artifact, `os = "linux"`)
+		if hasApp := strings.Contains(artifact, "tool.desktop"); hasApp != linux {
+			t.Fatalf("only a linux artifact should list the desktop entry:\n%s", out)
+		}
 	}
 }

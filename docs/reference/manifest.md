@@ -1579,6 +1579,19 @@ manifest does not name them, so its text is the same on every machine. An
   before the suffix, as `skhd-arm64-macos.tar.gz`, that part names the program
   and the package. In an archive with no executable files, which is what a zip made
   on Windows is, it is the file named after the repo.
+- When every archive and single binary of the release is named after one
+  program, oku looks for that program before the repo's. So `mvdan/sh`, whose
+  assets are `shfmt_v3.10.0_linux_amd64` and the like, runs `shfmt`, and
+  `neovim/neovim` runs `bin/nvim`. The package keeps the repo's name.
+- A program whose file is named after its asset, as `gdu_darwin_arm64` in
+  `gdu_darwin_arm64.tgz`, gets a `bin` table that gives it the package's name,
+  `{ name = "gdu", path = "gdu_darwin_arm64" }`. Each artifact names the file of
+  its own asset. oku takes the file even when the archive gives it no exec bit.
+  An asset whose name holds the version gets no such table, because a `bin`
+  path takes no variables.
+- Libraries (`.so`, `.dylib`, `.dll`) and scripts (`.sh`, `.ps1`, `.bat`,
+  `.cmd`) are not programs, even when the archive marks them executable.
+- A desktop entry is an `app` of a Linux artifact only.
 - An executable next to the program is a program too when its name starts
   with the program's name and a `-`, such as `age-keygen` next to `age`. In a
   Windows zip an `.exe` of such a name counts.

@@ -709,6 +709,18 @@ order step in `prd/product.md`.
 - B482 [4] Inference gives no artifact from an Inno Setup or NSIS setup
   program, and fails when the host's asset is one. `add` gives none to a
   `.exe` with no OS word that it did not open.
+- B483 [4] When every archive and single binary of a release is named after
+  one program, as `shfmt` of `mvdan/sh`, inference looks for that program
+  before the repo's, and a single binary runs as that program. The package
+  keeps the repo's name.
+- B484 [4] A program whose file is named after its asset, as
+  `yq_darwin_arm64` in `yq_darwin_arm64.tar.gz`, runs under the program's
+  name through a `bin` table, and each artifact names its own asset's file.
+  oku takes the file even without an exec bit. An asset whose name holds the
+  version gets no artifact from such a layout.
+- B485 [4] Libraries (`.so`, `.dylib`, `.dll`) and scripts (`.sh`, `.ps1`,
+  `.bat`, `.cmd`) in an asset are not programs, even when marked executable.
+- B486 [4] An inferred desktop entry is an `app` of a Linux artifact only.
 - B354 [8] An artifact's `app` names a bundle, a desktop entry or a program.
   On Linux oku writes a desktop entry for each desktop entry or program, with
   its name, the program it runs and its icon, and on Windows a Start Menu
