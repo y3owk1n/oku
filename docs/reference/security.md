@@ -231,9 +231,20 @@ oku checks the packages, includes and `[runtimes]` of the project's own
 ```
 oku: /home/you/work/api installs from sources you have not trusted:
   github:acme for tool
+    tool downloads from downloads.acme.dev
   npm:@scope for lint
 run `oku allow` to trust them, or pass --yes to oku sync
 ```
+
+The source is who wrote the manifest, and the manifest may download from
+somewhere else. When the project's `oku.lock` pins a package, oku names who
+serves its downloads for this machine, when that differs from the source. On a
+host of many owners, such as `github.com`, that is the host and the owner, as in
+`github.com/acme`. oku leaves out npm, PyPI, crates.io and Go packages, whose
+downloads come from their registry. A package that the lock does not pin gets
+no such line, since oku reads nothing from the source before you trust it.
+`[network] allow` limits the hosts themselves, see
+[Where oku connects](#where-oku-connects).
 
 You trust a source without being asked when you:
 

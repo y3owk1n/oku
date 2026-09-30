@@ -4,12 +4,15 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"net/url"
 	"slices"
 	"strings"
 
 	"github.com/spf13/cobra"
 
 	"github.com/y3owk1n/oku/internal/list"
+	"github.com/y3owk1n/oku/internal/lock"
+	"github.com/y3owk1n/oku/internal/platform"
 	"github.com/y3owk1n/oku/internal/ref"
 	"github.com/y3owk1n/oku/internal/source"
 	"github.com/y3owk1n/oku/internal/status"
@@ -21,6 +24,9 @@ import (
 type untrustedError struct {
 	project string
 	origins map[string][]string
+	// downloads names, for a package of the lock, where its downloads come from
+	// when that is not its source.
+	downloads map[string][]string
 }
 
 func (u untrustedError) Error() string {
@@ -37,6 +43,12 @@ func (u untrustedError) list() string {
 
 	for _, origin := range slices.Sorted(maps.Keys(u.origins)) {
 		fmt.Fprintf(&b, "  %s for %s\n", origin, strings.Join(u.origins[origin], ", "))
+
+		for _, what := range u.origins[origin] {
+			if from := u.downloads[what]; len(from) > 0 {
+				fmt.Fprintf(&b, "    %s downloads from %s\n", what, strings.Join(from, ", "))
+			}
+		}
 	}
 
 	return b.String()
@@ -119,7 +131,10 @@ func (e env) trustProject(cmd *cobra.Command, opts Options, yes bool) error {
 		return err
 	}
 
-	refused := untrustedError{project: e.project, origins: origins}
+	refused, err := e.refuseUntrusted(origins)
+	if err != nil {
+		return err
+	}
 
 	if !yes {
 		if !interactive(cmd, opts) {
@@ -137,6 +152,111 @@ func (e env) trustProject(cmd *cobra.Command, opts Options, yes bool) error {
 	}
 
 	return e.recordTrust(cmd, slices.Sorted(maps.Keys(origins)))
+}
+
+// refuseUntrusted is the error for the origins, with where oku.lock says each
+// of their packages downloads from.
+func (e env) refuseUntrusted(origins map[string][]string) (untrustedError, error) {
+	locked, err := lock.Read(e.lockPath())
+	if err != nil {
+		return untrustedError{}, err
+	}
+
+	downloads := map[string][]string{}
+
+	for origin, names := range origins {
+		for _, name := range names {
+			if p, ok := locked.Find(name); ok {
+				if from := publishers(p, origin); len(from) > 0 {
+					downloads[name] = from
+				}
+			}
+		}
+	}
+
+	return untrustedError{project: e.project, origins: origins, downloads: downloads}, nil
+}
+
+// publishers names who serves the downloads that p pins for this machine, or
+// for every platform when it pins none for this one, leaving out the ones that
+// origin already names. A registry's package downloads from the registry, which
+// says nothing more than origin does.
+func publishers(p lock.Package, origin string) []string {
+	r, err := ref.Parse(p.Ref)
+	if err != nil || r.Kind == ref.NPM || r.Kind == ref.PyPI || r.Kind == ref.Cargo || r.Kind == ref.Go {
+		return nil
+	}
+
+	entries := slices.Collect(maps.Values(p.Platforms))
+	if entry, ok := p.Platforms[platform.Host().String()]; ok {
+		entries = []lock.Platform{entry}
+	}
+
+	var found []string
+
+	for _, entry := range entries {
+		if from := publisher(entry.URL); from != "" && !sameOwner(origin, from) && !slices.Contains(found, from) {
+			found = append(found, from)
+		}
+	}
+
+	slices.Sort(found)
+
+	return found
+}
+
+// sharedHosts serve files of many owners, so the first part of the path, the
+// owner, says who published a file there.
+var sharedHosts = []string{
+	"github.com", "gitlab.com", "codeberg.org", "bitbucket.org",
+	"storage.googleapis.com", "sourceforge.net", "downloads.sourceforge.net",
+}
+
+// publisher is who serves the file at rawURL: the host, or on a shared host the
+// host and the owner, such as github.com/acme. It is "" for a file on this
+// machine.
+func publisher(rawURL string) string {
+	u, err := url.Parse(rawURL)
+	if err != nil || u.Hostname() == "" || u.Scheme == "file" {
+		return ""
+	}
+
+	host := strings.ToLower(u.Hostname())
+	if !slices.Contains(sharedHosts, host) {
+		return host
+	}
+
+	parts := strings.Split(strings.Trim(u.Path, "/"), "/")
+
+	// SourceForge puts its projects under /projects/ and /project/.
+	if len(parts) > 1 && (parts[0] == "projects" || parts[0] == "project") {
+		parts = parts[1:]
+	}
+
+	return host + "/" + parts[0]
+}
+
+// forgeHosts are the hosts that a forge ref without a host of its own reads.
+var forgeHosts = map[string]string{"github": "github.com", "gitlab": "gitlab.com", "codeberg": "codeberg.org"}
+
+// sameOwner reports whether publisher is the owner or host that origin names,
+// as github.com/acme is github:acme.
+func sameOwner(origin, publisher string) bool {
+	scheme, owner, ok := strings.Cut(origin, ":")
+	if !ok {
+		return strings.EqualFold(origin, publisher)
+	}
+
+	if host, known := forgeHosts[scheme]; known && !strings.Contains(owner, "/") {
+		owner = host + "/" + owner
+	}
+
+	// A forge of the user's own serves its files from its host.
+	if host, _, _ := strings.Cut(owner, "/"); strings.EqualFold(host, publisher) {
+		return true
+	}
+
+	return strings.EqualFold(owner, publisher)
 }
 
 // trustTyped trusts the origin of a ref the user typed.
