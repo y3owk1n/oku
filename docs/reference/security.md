@@ -341,7 +341,8 @@ first.
 ## The build sandbox
 
 On macOS and Linux, build commands run in a sandbox with no network, no access
-to your home directory, and a scrubbed environment. Windows, and a Linux host
+to your home directory, your `ssh-agent` or your processes, and a scrubbed
+environment. Windows, and a Linux host
 that forbids unprivileged user namespaces, have no sandbox. oku says so in the
 approval prompt and after the build, and `require_sandbox = true` in
 `config.toml` makes it refuse instead. See [The build sandbox](sandbox.md) for

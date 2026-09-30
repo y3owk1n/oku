@@ -16,6 +16,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -148,10 +149,12 @@ func TestMain(m *testing.M) {
 		os.Exit(0)
 	}
 
-	// On macOS t.TempDir is under /private/var/folders, which the build sandbox
-	// does not let a build read, and some builds read fixtures by path.
-	if runtime.GOOS == "darwin" {
-		dir, err := os.MkdirTemp("/private/tmp", "oku-test-")
+	// t.TempDir is under /private/var/folders on macOS and /tmp on Linux, which
+	// the build sandbox does not let a build read, and some builds read fixtures
+	// by path. The sandbox hides only each test's own HOME, so the user's cache
+	// directory stays readable.
+	if parent := map[string]string{"darwin": "/private/tmp", "linux": cacheDir()}[runtime.GOOS]; parent != "" {
+		dir, err := os.MkdirTemp(parent, "oku-test-")
 		if err == nil {
 			err = os.Setenv("TMPDIR", dir)
 		}
@@ -167,6 +170,15 @@ func TestMain(m *testing.M) {
 	}
 
 	os.Exit(m.Run())
+}
+
+func cacheDir() string {
+	dir, err := os.UserCacheDir()
+	if err != nil || os.MkdirAll(dir, 0o755) != nil {
+		return ""
+	}
+
+	return dir
 }
 
 func newMachine(t *testing.T) machine {
@@ -4646,6 +4658,100 @@ install = { share = ["probe.txt"] }
 
 	if got := m.probeResult(t); strings.Contains(got, "readable") || strings.Contains(got, "visible") {
 		t.Fatalf("the run step reached what it should not: %q", got)
+	}
+}
+
+func TestB493RunStepWithTheNetworkCannotReachTheUsersSockets(t *testing.T) {
+	m, _, _ := sandboxedMachine(t)
+
+	// ssh-agent keeps its socket in the shared temporary directory. A short path,
+	// since a socket's path has a limit near 100 bytes.
+	dir, err := os.MkdirTemp("/tmp", "oku-agent-")
+	must(t, err)
+	t.Cleanup(func() { os.RemoveAll(dir) })
+
+	socket := filepath.Join(dir, "agent")
+
+	listener, err := net.Listen("unix", socket)
+	must(t, err)
+
+	server := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte("ok"))
+	})}
+	go func() { _ = server.Serve(listener) }()
+	t.Cleanup(func() { server.Close() })
+
+	if out, err := exec.Command("curl", "-s", "--unix-socket", socket, "http://agent/").Output(); err != nil ||
+		string(out) != "ok" {
+		t.Fatalf("the socket does not answer outside the sandbox: %v %q", err, out)
+	}
+
+	path := filepath.Join(m.fixtures, "agent.toml")
+	must(t, os.WriteFile(path, []byte(fmt.Sprintf(`[package]
+name = "agent"
+[version]
+value = "1.0.0"
+[build]
+[[build.step]]
+run = """
+curl -s --unix-socket %s http://agent/ >/dev/null 2>&1 && echo agent=reached > probe.txt || echo agent=blocked > probe.txt
+"""
+shell = "sh"
+network = true
+[[build.step]]
+install = { share = ["probe.txt"] }
+`, socket)), 0o644))
+
+	out, err := m.run(t, "", "add", path, "--yes")
+	if err != nil {
+		t.Fatalf("add: %v\n%s", err, out)
+	}
+
+	if got := m.probeResult(t); !strings.Contains(got, "agent=blocked") {
+		t.Fatalf("the run step reached a socket of the user: %q", got)
+	}
+}
+
+func TestB494RunStepCannotSignalTheUsersProcesses(t *testing.T) {
+	m, _, _ := sandboxedMachine(t)
+
+	sleeper := exec.Command("sleep", "60")
+	must(t, sleeper.Start())
+	t.Cleanup(func() {
+		_ = sleeper.Process.Kill()
+		_ = sleeper.Wait()
+	})
+
+	pid := sleeper.Process.Pid
+
+	probe := fmt.Sprintf(`kill -0 %d 2>/dev/null && echo signal=sent > probe.txt || echo signal=refused > probe.txt`, pid)
+	if runtime.GOOS == "linux" {
+		probe += fmt.Sprintf(`
+test -e /proc/%d && echo process=visible >> probe.txt || echo process=hidden >> probe.txt`, pid)
+	}
+
+	path := filepath.Join(m.fixtures, "signaller.toml")
+	must(t, os.WriteFile(path, []byte(fmt.Sprintf(`[package]
+name = "signaller"
+[version]
+value = "1.0.0"
+[build]
+[[build.step]]
+run = """
+%s
+"""
+shell = "sh"
+[[build.step]]
+install = { share = ["probe.txt"] }
+`, probe)), 0o644))
+
+	out, err := m.run(t, "", "add", path, "--yes")
+	if err != nil {
+		t.Fatalf("add: %v\n%s", err, out)
+	}
+
+	if got := m.probeResult(t); strings.Contains(got, "sent") || strings.Contains(got, "visible") {
+		t.Fatalf("the run step reached a process of the user: %q", got)
 	}
 }
 
