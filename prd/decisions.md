@@ -1824,3 +1824,20 @@ did with 4.3.7 before 1.3.1, and oku takes the highest. It is opt-in and not
 the rule for every release source, because a maintainer sets the mark by hand,
 and a repo that forgets to move it would hold every user back.
 
+## D111. config.toml says where oku connects, and oku checks the dialed address
+
+`[network]` in `config.toml` holds `deny_private` (true by default),
+`private` and `allow`. Every Go client oku downloads with dials through one
+function that resolves the host and connects only to an address the policy
+allows, and a transport in front checks each request's host, redirects
+included. Git is checked before it runs and follows no http redirect. Why: the
+lock already pins what a download is, so a domain list adds little to
+integrity. What a manifest still controls is where oku connects, such as the
+cloud metadata address or a service on the LAN, and a host that resolves to a
+public address once and a private one on the next lookup gets past any check
+on the name. Checking the address that is dialed closes that. `private` is its
+own key and not part of `allow`, because adding one LAN host to `allow` would
+turn an empty list, which allows every host, into one that allows only it.
+Only `config.toml` sets it, so a cloned project cannot widen it. Per-domain
+prompts were declined: GitHub alone redirects through three hosts, and people
+answer yes to prompts they do not understand.
