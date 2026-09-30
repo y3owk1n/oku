@@ -129,8 +129,15 @@ func (e env) loadList(
 		return merged{}, err
 	}
 
-	if origins, err := e.untrusted(); err != nil || origins != nil {
-		return merged{}, cmp.Or(err, error(untrustedError{project: e.project, origins: origins}))
+	origins, err := e.untrusted()
+	if err != nil {
+		return merged{}, err
+	}
+
+	if origins != nil {
+		refused, err := e.refuseUntrusted(origins)
+
+		return merged{}, cmp.Or(err, error(refused))
 	}
 
 	m := &merger{

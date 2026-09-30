@@ -105,3 +105,43 @@ func TestB474ReadingAnUntrustedProjectRefuses(t *testing.T) {
 		t.Fatalf("want outdated refused in an untrusted project, got %v:\n%s", err, out)
 	}
 }
+
+func TestB477TheQuestionNamesWhereALockedPackageDownloadsFrom(t *testing.T) {
+	m := newMachine(t)
+	project := filepath.Join(m.fixtures, "project")
+	must(t, os.MkdirAll(project, 0o755))
+	must(t, os.WriteFile(filepath.Join(project, "oku.toml"), []byte(
+		"[packages]\ntool = \"github:acme/tool\"\nother = \"github:acme/other\"\n",
+	), 0o644))
+	must(t, os.WriteFile(filepath.Join(project, "oku.lock"), []byte(`
+[[package]]
+name = "tool"
+ref = "github:acme/tool"
+manifest_sha256 = "x"
+version = "1.0.0"
+[package.platform.linux-amd64-glibc]
+strategy = "artifact"
+url = "https://downloads.example.com/tool-1.0.0.tar.gz"
+
+[[package]]
+name = "other"
+ref = "github:acme/other"
+manifest_sha256 = "x"
+version = "1.0.0"
+[package.platform.linux-amd64-glibc]
+strategy = "artifact"
+url = "https://github.com/acme/other/releases/download/v1.0.0/other.tar.gz"
+`), 0o644))
+
+	m.opts.WorkDir = project
+
+	_, err := m.run(t, "", "sync")
+	if err == nil || !strings.Contains(err.Error(), "tool downloads from downloads.example.com") {
+		t.Fatalf("want the question to name the host tool downloads from, got %v", err)
+	}
+
+	// other downloads from its own owner on GitHub, which github:acme names.
+	if strings.Contains(err.Error(), "other downloads from") {
+		t.Fatalf("want no line for a download from the source itself, got %v", err)
+	}
+}

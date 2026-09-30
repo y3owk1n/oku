@@ -1105,6 +1105,10 @@ order step in `prd/product.md`.
   trusted source names in turn, a dep or an include of its own.
 - B474 [7] `outdated`, `list` and the other commands that read an untrusted
   project's list refuse with the same message.
+- B477 [7] For a package that the project's `oku.lock` pins, the trust
+  question names who serves its downloads for this machine when that is not
+  its source: the host, or on a shared host such as `github.com` the host and
+  owner. Registry packages get no such line.
 - B324 [7] The hook sets `OKU_PROJECT` to the project's directory while the
   project applies, and removes it outside one or when the project does not
   apply. `oku exec` sets it for its command in a project.
