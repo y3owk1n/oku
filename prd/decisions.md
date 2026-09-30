@@ -1841,3 +1841,20 @@ turn an empty list, which allows every host, into one that allows only it.
 Only `config.toml` sets it, so a cloned project cannot widen it. Per-domain
 prompts were declined: GitHub alone redirects through three hosts, and people
 answer yes to prompts they do not understand.
+
+## D112. A project installs only from sources the user trusted
+
+oku asks the user to trust each source that a project's own `oku.toml` names,
+before it reads the project's list. A source is who wrote the manifest: a
+forge owner, a URL host, an npm scope, or another registry's package. Typing a
+ref in `oku add`, `oku allow`, `--yes` and `[trust] sources` in `config.toml`
+trust a source, and oku keeps the answer in the data directory. Why: a build
+already asked before it ran a command. A prebuilt artifact did not, so a
+cloned repo's `oku.toml` or an included list could install a program from any
+ref. Trust is per source
+and not per package, so that a project with twenty packages from one owner
+asks once. The global list is the user's own file, and a dep or a nested
+include is trusted with the source that named it, because its author chose it
+and the lock pins what it resolved to. `oku allow` trusts the sources too,
+since a user who allows a project has read its `oku.toml`, and `--yes`
+trusts them so that CI, which already passes it, keeps working.
