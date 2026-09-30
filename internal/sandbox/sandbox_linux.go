@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -84,7 +85,9 @@ func command(ctx context.Context, spec Spec) (*exec.Cmd, string) {
 		return nil, "oku cannot find its own binary: " + err.Error()
 	}
 
-	encoded, err := json.Marshal(spec)
+	// The init process runs in a new network namespace, where it cannot list the
+	// host's sockets.
+	encoded, err := json.Marshal(initSpec{Spec: spec, Sockets: hostSockets()})
 	if err != nil {
 		return nil, err.Error()
 	}
@@ -103,13 +106,45 @@ func command(ctx context.Context, spec Spec) (*exec.Cmd, string) {
 	return cmd, ""
 }
 
+// initSpec is what the init process reads. Sockets are the paths of the unix
+// sockets that listen on the host.
+type initSpec struct {
+	Spec
+	Sockets []string
+}
+
+// hostSockets lists the path of every unix socket in /proc/net/unix. The path
+// is the eighth column to the end of the line, and an abstract socket's starts
+// with @.
+func hostSockets() []string {
+	data, err := os.ReadFile("/proc/net/unix")
+	if err != nil {
+		return nil
+	}
+
+	var sockets []string
+
+	for line := range strings.SplitSeq(string(data), "\n") {
+		fields := strings.Fields(line)
+		if len(fields) < 8 {
+			continue
+		}
+
+		if path := strings.Join(fields[7:], " "); strings.HasPrefix(path, "/") && !slices.Contains(sockets, path) {
+			sockets = append(sockets, path)
+		}
+	}
+
+	return sockets
+}
+
 // Init runs inside the new namespaces. It mounts a /proc of the new pid
 // namespace, hides Home and the shared temporary directories behind empty
 // tmpfs mounts, puts the readable and writable paths back, hides the sockets of
-// the user's session, makes every mount read-only but the writable paths, and
-// replaces itself with the build command.
+// the user's session and of the host, makes every mount read-only but the
+// writable paths, and replaces itself with the build command.
 func Init() error {
-	var spec Spec
+	var spec initSpec
 	if err := json.Unmarshal([]byte(os.Getenv(specEnv)), &spec); err != nil {
 		return fmt.Errorf("read the sandbox spec: %w", err)
 	}
@@ -149,6 +184,21 @@ func Init() error {
 		if err := syscall.Mount("tmpfs", dir, "tmpfs", 0, "mode=0755"); err != nil &&
 			!errors.Is(err, fs.ErrNotExist) {
 			return fmt.Errorf("hide %s: %w", dir, err)
+		}
+	}
+
+	// A build that reached Docker, the system D-Bus or another daemon could start
+	// a program outside the sandbox. A connection to a socket that /dev/null covers
+	// fails. The build cannot reach a socket in a directory the user cannot
+	// search, so that socket needs no mount.
+	for _, path := range spec.Sockets {
+		if within(path, keep) || within(path, resolverSockets) {
+			continue
+		}
+
+		if err := syscall.Mount("/dev/null", path, "", syscall.MS_BIND, ""); err != nil &&
+			!errors.Is(err, fs.ErrNotExist) && !errors.Is(err, unix.EACCES) {
+			return fmt.Errorf("hide the socket %s: %w", path, err)
 		}
 	}
 
@@ -205,8 +255,7 @@ func hide(dir string, keep []string, options string) error {
 	var inside []kept
 
 	for _, path := range keep {
-		rel, err := filepath.Rel(dir, path)
-		if err != nil || strings.HasPrefix(rel, "..") {
+		if !within(path, []string{dir}) {
 			continue
 		}
 
@@ -271,6 +320,21 @@ func scopeAbstractSockets() error {
 
 	return nil
 }
+
+// within reports whether path is one of dirs or inside one.
+func within(path string, dirs []string) bool {
+	for _, dir := range dirs {
+		if rel, err := filepath.Rel(dir, path); err == nil && !strings.HasPrefix(rel, "..") {
+			return true
+		}
+	}
+
+	return false
+}
+
+// resolverSockets are where nscd and systemd-resolved answer name lookups,
+// which a step with the network needs.
+var resolverSockets = []string{"/run/nscd", "/var/run/nscd", "/run/systemd/resolve"}
 
 // tempDirs are the temporary directories that every program of the host shares.
 var tempDirs = []string{"/tmp", "/var/tmp"}

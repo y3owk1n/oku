@@ -534,7 +534,8 @@ How the maintainer rotates the key is in
   steps rely on their `sha256`.
 - A build command you approved, on a host where the sandbox is not available.
 - A build that reaches a service outside the sandbox, such as launchd over XPC
-  on macOS or the Docker socket on Linux, and asks it to start a program. The
+  on macOS or a socket that appears on Linux after the build starts, and asks
+  it to start a program. The
   sandbox blocks the ways that the [manifest reference](manifest.md) lists, not
   every way.
 - A cache key you trusted that signs something malicious.

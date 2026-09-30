@@ -4661,30 +4661,43 @@ install = { share = ["probe.txt"] }
 	}
 }
 
-func TestB493RunStepWithTheNetworkCannotReachTheUsersSockets(t *testing.T) {
+func TestB493RunStepCannotReachTheUsersSockets(t *testing.T) {
 	m, _, _ := sandboxedMachine(t)
 
-	// ssh-agent keeps its socket in the shared temporary directory. A short path,
-	// since a socket's path has a limit near 100 bytes.
-	dir, err := os.MkdirTemp("/tmp", "oku-agent-")
-	must(t, err)
-	t.Cleanup(func() { os.RemoveAll(dir) })
+	// ssh-agent keeps its socket in the shared temporary directory, and Docker
+	// keeps its socket elsewhere on the host. On Linux the tests' own temporary
+	// directory is outside /tmp. Short paths, since a socket's path has a limit
+	// near 100 bytes.
+	var sockets []string
 
-	socket := filepath.Join(dir, "agent")
+	for _, parent := range []string{"/tmp", os.TempDir()} {
+		dir, err := os.MkdirTemp(parent, "oku-sock-")
+		must(t, err)
+		t.Cleanup(func() { os.RemoveAll(dir) })
 
-	listener, err := net.Listen("unix", socket)
-	must(t, err)
+		socket := filepath.Join(dir, "s")
 
-	server := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		_, _ = w.Write([]byte("ok"))
-	})}
-	go func() { _ = server.Serve(listener) }()
-	t.Cleanup(func() { _ = server.Close() })
+		listener, err := net.Listen("unix", socket)
+		must(t, err)
 
-	if out, err := exec.Command("curl", "-s", "--unix-socket", socket, "http://agent/").Output(); err != nil ||
-		string(out) != "ok" {
-		t.Fatalf("the socket does not answer outside the sandbox: %v %q", err, out)
+		server := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			_, _ = w.Write([]byte("ok"))
+		})}
+		go func() { _ = server.Serve(listener) }()
+		t.Cleanup(func() { _ = server.Close() })
+
+		if out, err := exec.Command("curl", "-s", "--unix-socket", socket, "http://s/").Output(); err != nil ||
+			string(out) != "ok" {
+			t.Fatalf("the socket does not answer outside the sandbox: %v %q", err, out)
+		}
+
+		sockets = append(sockets, socket)
 	}
+
+	probe := fmt.Sprintf(`for s in %s; do
+  curl -s --unix-socket $s http://s/ >/dev/null 2>&1 && echo "$s reached" >> probe.txt || true
+done
+touch probe.txt`, strings.Join(sockets, " "))
 
 	path := filepath.Join(m.fixtures, "agent.toml")
 	must(t, os.WriteFile(path, []byte(fmt.Sprintf(`[package]
@@ -4694,21 +4707,26 @@ value = "1.0.0"
 [build]
 [[build.step]]
 run = """
-curl -s --unix-socket %s http://agent/ >/dev/null 2>&1 && echo agent=reached > probe.txt || echo agent=blocked > probe.txt
+%[1]s
+"""
+shell = "sh"
+[[build.step]]
+run = """
+%[1]s
 """
 shell = "sh"
 network = true
 [[build.step]]
 install = { share = ["probe.txt"] }
-`, socket)), 0o644))
+`, probe)), 0o644))
 
 	out, err := m.run(t, "", "add", path, "--yes")
 	if err != nil {
 		t.Fatalf("add: %v\n%s", err, out)
 	}
 
-	if got := m.probeResult(t); !strings.Contains(got, "agent=blocked") {
-		t.Fatalf("the run step reached a socket of the user: %q", got)
+	if got := m.probeResult(t); got != "" {
+		t.Fatalf("the run step reached a socket of the user:\n%s", got)
 	}
 }
 

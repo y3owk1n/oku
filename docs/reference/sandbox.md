@@ -81,6 +81,7 @@ sets them up before the command runs:
 | Shared temporary directories | oku covers `/tmp` and `/var/tmp` with an empty tmpfs, then mounts the build's own directories back in. The sockets of `ssh-agent` and the X server are not in them. |
 | Writing | Every mount is read-only except the build's source directory, its `HOME` and temporary directory, and `{{prefix}}`. |
 | Your session | oku hides `/run/user`, which holds your D-Bus and systemd sockets. On Linux 6.12 and later a step with `network = true` cannot reach an abstract socket outside the build either. |
+| The host's sockets | Before the command starts, oku mounts `/dev/null` over every unix socket that listens on the host outside the build's own directories, such as Docker's, Podman's and the system D-Bus. A connection to one fails. oku leaves the sockets of `nscd` and `systemd-resolved`, which answer name lookups. |
 | Your processes | The build gets a `/proc` of its pid namespace. It sees only its own processes and cannot signal yours. |
 | Shared memory | `/dev/shm` is the build's own. |
 | Terminals | `/dev/pts` is a new instance, so your terminals are not in it. The build can still open terminals of its own. |
