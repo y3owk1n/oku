@@ -12,9 +12,10 @@ import (
 // Command returns git with args, set so that neither git nor ssh asks a
 // question. A URL goes over ssh when the user's git config rewrites it. ssh then
 // asks on the terminal, where oku's progress line hides the question, and waits
-// forever.
+// forever. Git follows no http redirect, since oku checked the host it names
+// and not where a redirect leads.
 func Command(ctx context.Context, args ...string) *exec.Cmd {
-	cmd := exec.CommandContext(ctx, "git", args...)
+	cmd := exec.CommandContext(ctx, "git", append([]string{"-c", "http.followRedirects=false"}, args...)...)
 	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
 
 	if ssh := batchSSH(ctx); ssh != "" {

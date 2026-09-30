@@ -6,13 +6,16 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"net/url"
 	"os"
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/pelletier/go-toml/v2"
 
 	"github.com/y3owk1n/oku/internal/list"
+	"github.com/y3owk1n/oku/internal/netpolicy"
 	"github.com/y3owk1n/oku/internal/ref"
 )
 
@@ -44,6 +47,47 @@ type Config struct {
 	RequireSandbox bool `toml:"require_sandbox,omitempty"`
 	// Forge holds the user's own forge servers.
 	Forge Forge `toml:"forge,omitempty"`
+	// Network says where oku may connect.
+	Network Network `toml:"network,omitempty"`
+}
+
+// Network is the [network] table of config.toml.
+type Network struct {
+	// DenyPrivate refuses private addresses, unless the URL names this machine
+	// or Private lists the host. Unset means true.
+	DenyPrivate *bool `toml:"deny_private,omitempty"`
+	// Allow lists the only hosts oku connects to. Empty means every host.
+	Allow []string `toml:"allow,omitempty"`
+	// Private lists the hosts that may resolve to a private address.
+	Private []string `toml:"private,omitempty"`
+}
+
+// Policy is the network policy of the config. The hosts of the caches and of
+// [forge] hosts are the user's own, so they may be private, and an allow list
+// takes them too.
+func (c *Config) Policy() netpolicy.Policy {
+	var named []string
+
+	for _, cache := range c.Caches {
+		if u, err := url.Parse(cache); err == nil && u.Hostname() != "" {
+			named = append(named, u.Hostname())
+		}
+	}
+
+	for host := range c.Forge.Hosts {
+		named = append(named, host)
+	}
+
+	p := netpolicy.Policy{
+		AllowPrivate: c.Network.DenyPrivate != nil && !*c.Network.DenyPrivate,
+		Private:      slices.Concat(c.Network.Private, named),
+	}
+
+	if len(c.Network.Allow) > 0 {
+		p.Allow = slices.Concat(c.Network.Allow, named)
+	}
+
+	return p
 }
 
 // Forge is the [forge] table of config.toml.
@@ -72,6 +116,14 @@ func Read(path string) (*Config, error) {
 	for host, kind := range c.Forge.Hosts {
 		if kind != "github" && kind != "gitea" && kind != "gitlab" {
 			return nil, fmt.Errorf("%s: forge.hosts.%q must be \"github\", \"gitea\" or \"gitlab\"", path, host)
+		}
+	}
+
+	for key, patterns := range map[string][]string{"allow": c.Network.Allow, "private": c.Network.Private} {
+		for _, pattern := range patterns {
+			if err := netpolicy.ValidPattern(pattern); err != nil {
+				return nil, fmt.Errorf("%s: network.%s: %w", path, key, err)
+			}
 		}
 	}
 

@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/y3owk1n/oku/internal/forge"
 	"github.com/y3owk1n/oku/internal/manifest"
 )
 
@@ -80,14 +81,18 @@ func (r *Resolver) fetchText(ctx context.Context, v manifest.Version, re *regexp
 	if v.From == manifest.FromRedirect {
 		// Not r.Hosts.HTTP, whose cache would keep the download at the end of
 		// redirects that regex never matches.
-		client = &http.Client{CheckRedirect: func(req *http.Request, via []*http.Request) error {
+		client = r.Hosts.Net.Client(func(req *http.Request, via []*http.Request) error {
+			if err := forge.CheckRedirect(req, via); err != nil {
+				return err
+			}
+
 			hops = append(hops, req.URL.String())
 			if re.MatchString(req.URL.String()) || len(via) >= maxHops {
 				return http.ErrUseLastResponse
 			}
 
 			return nil
-		}}
+		})
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, v.Repo, nil)

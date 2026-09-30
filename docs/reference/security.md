@@ -157,6 +157,53 @@ The variables and their hosts are in [tokens per host](refs.md#tokens-per-host).
   is a link out of the repo, oku reads none of the collection, and
   `oku search` skips that source and names the file.
 
+## Where oku connects
+
+`[network]` in `config.toml` says which hosts oku connects to. A list or a
+project `oku.toml` cannot change it, so a repo you clone cannot either.
+
+- oku does not connect to a private address: loopback, `10.0.0.0/8`,
+  `172.16.0.0/12`, `192.168.0.0/16`, `100.64.0.0/10`, link-local such as the
+  cloud metadata address `169.254.169.254`, `fc00::/7`, and multicast. A
+  manifest could otherwise make oku read a service on your network.
+- A URL that names this machine, such as `http://127.0.0.1:8080` or
+  `localhost`, still works, since you named it. A public name that resolves to
+  loopback does not, and neither does a redirect to this machine from another
+  host.
+- oku checks the address it connects to, after DNS, on every redirect. When a
+  second lookup of a name gives a private address, oku does not connect.
+- `private` names the hosts that may resolve to a private address. The hosts
+  of `caches` and `[forge] hosts` may already. `deny_private = false` turns the
+  check off.
+- `allow`, when set, lists the only hosts oku connects to, such as for a
+  machine that may reach only a mirror. A URL of this machine and the hosts of `caches` and
+  `[forge] hosts` pass too.
+
+```toml
+[network]
+private = ['git.corp.example']
+allow = ['github.com', 'api.github.com', '*.githubusercontent.com', 'git.corp.example']
+```
+
+A release file on GitHub redirects to `release-assets.githubusercontent.com`,
+and a manifest to `raw.githubusercontent.com`, so an allow list for GitHub
+names both. oku refuses a host and names it:
+
+```
+oku: fetch https://example.org/x.toml: Get "https://example.org/x.toml": example.org is not in [network] allow in config.toml, so oku does not connect there
+```
+
+What it does not cover:
+
+- Behind `HTTPS_PROXY` or `HTTP_PROXY`, oku connects to the proxy, which
+  resolves the name. oku checks the host names and not their addresses.
+- oku checks a git URL before it runs `git`, and git follows no http
+  redirect. An `insteadOf` in your git config that sends the URL elsewhere is
+  your own, and oku does not check where it leads.
+- A build step with the network on runs its own tool, and `[network]` does
+  not reach it. That covers a `vendor` step, a `run` step with
+  `network = true`, and an npm install script. See [Sandbox](sandbox.md).
+
 ## Approve build commands
 
 A manifest with a `[build]` can run commands on your machine. Before the first

@@ -765,7 +765,7 @@ func (r *Resolver) branchHead(ctx context.Context, v manifest.Version) (Release,
 		refused = err
 	}
 
-	release, err := cloneHead(ctx, v)
+	release, err := r.cloneHead(ctx, v)
 	if err != nil && refused != nil {
 		return Release{}, fmt.Errorf("%w, and the host's API said: %w", err, refused)
 	}
@@ -788,7 +788,7 @@ func branchRelease(branch, sha string, date time.Time) (Release, error) {
 
 // cloneHead reads the newest commit of a branch with git, for a host that
 // serves no API oku knows.
-func cloneHead(ctx context.Context, v manifest.Version) (Release, error) {
+func (r *Resolver) cloneHead(ctx context.Context, v manifest.Version) (Release, error) {
 	if _, err := exec.LookPath("git"); err != nil {
 		return Release{}, errors.New(
 			"oku reads a branch of this host with git, so it needs git on PATH",
@@ -796,6 +796,10 @@ func cloneHead(ctx context.Context, v manifest.Version) (Release, error) {
 	}
 
 	what := "read the branch " + v.Branch + " of " + v.Repo
+
+	if err := r.Hosts.Net.CheckURL(ctx, v.Repo); err != nil {
+		return Release{}, fmt.Errorf("%s: %w", what, err)
+	}
 
 	dir, err := tempdir.Dir("branch")
 	if err != nil {
@@ -850,6 +854,10 @@ func (r *Resolver) tags(ctx context.Context, url string) ([]string, error) {
 		}
 
 		refused = err
+	}
+
+	if err := r.Hosts.Net.CheckURL(ctx, url); err != nil {
+		return nil, fmt.Errorf("list tags of %s: %w", url, err)
 	}
 
 	tags, err := gitTags(ctx, url)

@@ -24,11 +24,14 @@ import (
 // nothing changed. GitHub does not count a 304 against the rate limit of a
 // request with a token. The host checks every request, so the answer is never
 // stale.
-func Revalidating(dir string) *http.Client {
-	return &http.Client{Transport: revalidator{dir: dir}, CheckRedirect: CheckRedirect}
+func Revalidating(dir string, next http.RoundTripper) *http.Client {
+	return &http.Client{Transport: revalidator{dir: dir, next: next}, CheckRedirect: CheckRedirect}
 }
 
-type revalidator struct{ dir string }
+type revalidator struct {
+	dir  string
+	next http.RoundTripper
+}
 
 // encoder and decoder pack and unpack the body of a kept answer. A release list
 // of 6.6 MB packs to 0.4 MB, and both calls are safe to use from several
@@ -38,14 +41,14 @@ var (
 	decoder, _ = zstd.NewReader(nil, zstd.WithDecoderMaxMemory(maxAnswer))
 )
 
-// next is the transport of http.DefaultClient, so a test that replaces it
-// reaches the forges through this cache too.
-func next() http.RoundTripper {
+// forward is the transport of http.DefaultClient when a test replaces it, so
+// the test reaches the forges through this cache too, else r.next.
+func (r revalidator) forward() http.RoundTripper {
 	if t := http.DefaultClient.Transport; t != nil {
 		return t
 	}
 
-	return http.DefaultTransport
+	return r.next
 }
 
 // kept is one answer on disk. Link holds the next page of a list, and Type the
@@ -91,7 +94,7 @@ func read(path string) (kept, bool) {
 
 func (r revalidator) RoundTrip(req *http.Request) (*http.Response, error) {
 	if req.Method != http.MethodGet {
-		return next().RoundTrip(req)
+		return r.forward().RoundTrip(req)
 	}
 
 	if a, ok := req.Context().Value(answersKey{}).(*answers); ok {
@@ -114,7 +117,7 @@ func (r revalidator) revalidate(req *http.Request) (*http.Response, error) {
 		req.Header.Set("If-None-Match", old.ETag)
 	}
 
-	resp, err := next().RoundTrip(req)
+	resp, err := r.forward().RoundTrip(req)
 	if err != nil {
 		return nil, err
 	}

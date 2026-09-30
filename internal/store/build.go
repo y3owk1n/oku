@@ -598,6 +598,10 @@ func (s *Store) fetchSource(
 ) (fetchedSource, error) {
 	switch {
 	case source.Git != "" && commit != "":
+		if err := s.net.CheckURL(ctx, source.Git); err != nil {
+			return fetchedSource{}, fmt.Errorf("fetch %s: %w", source.Git, err)
+		}
+
 		defer status.Start(ctx, "fetching commit %s of %s", commit[:7], source.Git)()
 
 		for _, args := range [][]string{
@@ -622,6 +626,10 @@ func (s *Store) fetchSource(
 		args := []string{"clone", "--quiet", "--depth", "1"}
 		if tag != "" {
 			args = append(args, "--branch", tag)
+		}
+
+		if err := s.net.CheckURL(ctx, source.Git); err != nil {
+			return fetchedSource{}, fmt.Errorf("git clone %s: %w", source.Git, err)
 		}
 
 		defer status.Start(ctx, "cloning %s", source.Git)()

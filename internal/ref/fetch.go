@@ -22,6 +22,7 @@ import (
 
 	"github.com/y3owk1n/oku/internal/forge"
 	"github.com/y3owk1n/oku/internal/gitcmd"
+	"github.com/y3owk1n/oku/internal/netpolicy"
 	"github.com/y3owk1n/oku/internal/status"
 )
 
@@ -50,12 +51,17 @@ type Fetched struct {
 // ErrNotFound reports that the file a ref or path names does not exist.
 var ErrNotFound = errors.New("not found")
 
-// NewFetcher returns a Fetcher that clones under cacheDir and keeps the answers
-// of forge APIs there.
-func NewFetcher(cacheDir string) *Fetcher {
+// NewFetcher returns a Fetcher that clones under cacheDir, keeps the answers of
+// forge APIs there, and connects only where net allows.
+func NewFetcher(cacheDir string, net netpolicy.Policy) *Fetcher {
+	api := net.Transport(http.DefaultTransport.(*http.Transport).Clone())
+
 	return &Fetcher{
-		HTTP:     &http.Client{CheckRedirect: forge.CheckRedirect},
-		Hosts:    forge.Hosts{HTTP: forge.Revalidating(filepath.Join(cacheDir, "api"))},
+		HTTP: net.Client(forge.CheckRedirect),
+		Hosts: forge.Hosts{
+			HTTP: forge.Revalidating(filepath.Join(cacheDir, "api"), api),
+			Net:  net,
+		},
 		GitCache: filepath.Join(cacheDir, "git"),
 	}
 }
@@ -361,6 +367,10 @@ func (f *Fetcher) Archive(ctx context.Context, r Ref, commit string) ([]byte, in
 func (f *Fetcher) checkout(ctx context.Context, r Ref, commit string) (string, string, error) {
 	if _, err := exec.LookPath("git"); err != nil {
 		return "", "", fmt.Errorf("%s: git+ refs need git on PATH", r)
+	}
+
+	if err := f.Hosts.Net.CheckURL(ctx, r.Location); err != nil {
+		return "", "", fmt.Errorf("fetch %s: %w", r, err)
 	}
 
 	sum := sha256.Sum256([]byte(r.Location))
