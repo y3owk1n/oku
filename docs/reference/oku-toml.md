@@ -594,6 +594,7 @@ and you may edit it by hand.
 | `[network] deny_private` | boolean | by hand | `true` by default. oku does not connect to a private address, such as `10.0.0.5`, `192.168.1.2` or `169.254.169.254`, unless the URL names this machine or `private` lists the host. See [Where oku connects](security.md#where-oku-connects). |
 | `[network] private` | array of strings | by hand | Hosts that may resolve to a private address, such as a mirror on your network. `"*.corp.example"` takes its subdomains. The hosts of `caches` and `[forge] hosts` are on it already. |
 | `[network] allow` | array of strings | by hand | The only hosts oku connects to, in the same form. Empty or unset means every host. The hosts of `caches` and `[forge] hosts` are on it already. |
+| `[trust] sources` | array of strings | by hand | Sources a project may install from without asking, such as `"github:acme"`, `"github:acme/tool"`, `"example.com"` or `"npm:@scope"`. See [Trusted sources](security.md#trusted-sources). |
 | `store_root` | string | `oku setup --system` | The shared store root, such as `/opt/oku`. Delete the line to go back to the store in the data directory, then run `oku sync`. |
 
 ```toml

@@ -400,6 +400,15 @@ func setAllowed(cmd *cobra.Command, opts Options, args []string, allow bool) err
 
 	finished(cmd.OutOrStdout(), "allowed %s", e.project)
 
+	origins, err := e.untrusted()
+	if err != nil {
+		return err
+	}
+
+	if err := e.recordTrust(cmd, slices.Sorted(maps.Keys(origins))); err != nil {
+		return err
+	}
+
 	for _, path := range tracked {
 		fmt.Fprintf(cmd.OutOrStdout(), "  git tracks %s, so a change to it needs a new allow\n", path)
 	}

@@ -409,6 +409,20 @@ domain for every subdomain. A message that ends in `Redirected from` lists
 the URLs that redirected to the refused host. See
 [Where oku connects](reference/security.md#where-oku-connects).
 
+## A project installs from sources you have not trusted
+
+```
+oku: /home/you/work/api installs from sources you have not trusted:
+  github:acme for tool
+run `oku allow` to trust them, or pass --yes to oku sync
+```
+
+The project's `oku.toml` names a source you have not trusted, and oku cannot
+ask without a terminal. Read the project's `oku.toml`, then run `oku allow`
+in it, or `oku sync` on a terminal to answer the question. In CI,
+`oku sync --yes` trusts them. See
+[Trusted sources](reference/security.md#trusted-sources).
+
 ## A build ran without the sandbox
 
 ```

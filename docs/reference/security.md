@@ -204,6 +204,47 @@ What it does not cover:
   not reach it. That covers a `vendor` step, a `run` step with
   `network = true`, and an npm install script. See [Sandbox](sandbox.md).
 
+## Trusted sources
+
+A project's `oku.toml` comes with the repo, and someone else may have written
+it. Before oku installs from it, you trust each source it names. A source is who wrote
+the manifest:
+
+| Ref | Source |
+|---|---|
+| `github:acme/tool`, `gitea:host/acme/tool`, `gitlab:acme/group/tool` | the owner or top group, `github:acme` |
+| `https://example.com/x.toml`, `git+https://example.com/x` | the host, `example.com` |
+| `npm:@scope/name` | the scope, `npm:@scope` |
+| `npm:name`, `pypi:`, `cargo:`, `go:`, `cask:`, `scoop:`, `aqua:`, `winget:` | the package, such as `pypi:ruff` |
+| a path on this machine, `localhost` or `127.0.0.1` | yours, and needs no trust |
+
+oku checks the packages, includes and `[runtimes]` of the project's own
+`oku.toml`:
+
+- On a terminal, `sync`, `update` and `add` name the sources you have not
+  trusted and ask once.
+- Without a terminal they stop, and so do `outdated`, `list` and the other
+  commands that read the project's list. `--yes` on `sync`, `update` or `add`
+  trusts them, which the [GitHub Action](../guides/ci.md) passes.
+- [`oku allow`](commands.md#oku-allow-oku-deny) trusts them too.
+
+```
+oku: /home/you/work/api installs from sources you have not trusted:
+  github:acme for tool
+  npm:@scope for lint
+run `oku allow` to trust them, or pass --yes to oku sync
+```
+
+You trust a source without being asked when you:
+
+- type it, as in `oku add github:acme/tool`
+- list it in `[trust] sources` in `config.toml`, as the owner such as
+  `"github:acme"` or as one repo such as `"github:acme/tool"`
+
+oku keeps the rest of what you trusted in `trust/sources.toml` in the data
+directory. The global list is yours, so it needs no trust. oku also trusts a dep or an
+include that a trusted source names, since the lock pins what it resolved to.
+
 ## Approve build commands
 
 A manifest with a `[build]` can run commands on your machine. Before the first

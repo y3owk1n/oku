@@ -63,7 +63,7 @@ Installs the package that a [ref](refs.md) points at, and writes it to
 | `--from-source` | Builds from source even when a prebuilt download fits. `oku.lock` records the choice, so `oku sync` builds too. |
 | `--asset <glob>` | For a repo with no manifest, the release asset to use. A glob that names one asset takes it for this machine. One that names more takes the best of them on every platform. Other platforms take the asset of the same program. |
 | `--bin <name>` | For a repo with no manifest, or a URL of the download itself, the file name of a program inside it. Give it once per program. oku records `--asset` and `--bin` in `oku.toml` and `oku.lock`, and `oku update` infers the next version with them. |
-| `--yes`, `-y` | Approves the manifest's build commands, the command that generates an artifact's completions, and the variables its `[env]` sets, without asking. See [approvals](security.md#approve-build-commands). |
+| `--yes`, `-y` | Approves the manifest's build commands, the command that generates an artifact's completions, and the variables its `[env]` sets, without asking. See [approvals](security.md#approve-build-commands). In a project it also trusts the [sources](security.md#trusted-sources) of the project's other entries. |
 | `--accept-key` | Accepts a manifest whose `signing_key` differs from the one in `oku.lock`. See [signing keys](security.md#signing-keys-of-a-manifest). |
 | `--min-release-age AGE` | Takes only a version that came out at least AGE ago, such as `3d`, in place of the list's. `0` takes the newest. See [Minimum release age](security.md#minimum-release-age). |
 | `--accept-unknown-age` | Takes a version whose source gives no release time without asking, whatever `[lock]` `unknown_release_age` says. See [Minimum release age](security.md#minimum-release-age). |
@@ -209,7 +209,7 @@ With no names it updates every package of the list.
 |---|---|
 | `--dry-run` | Checks everything and prints what would change. It changes only the store and the cache. See [A dry run](#a-dry-run). |
 | `--system` | Also applies system-scope apps, fonts and services, which needs administrator rights. |
-| `--yes`, `-y` | Approves a manifest's commands and `[env]` without asking. |
+| `--yes`, `-y` | Approves a manifest's commands and `[env]` without asking, and in a project trusts the [sources](security.md#trusted-sources) its `oku.toml` installs from. |
 | `--accept-key` | Accepts a changed `signing_key`. |
 | `--min-release-age AGE` | As in `oku add`. `0` takes a version that waits now. |
 | `--accept-unknown-age` | As in `oku add`. |
@@ -490,7 +490,7 @@ tables.
 | `--locked` | Fails when `oku.lock` would change. For CI. |
 | `--rebuild <name>` | Builds the package again even though the store holds its build. Repeat the flag, or separate names with commas. |
 | `--system` | Also applies system-scope apps, fonts and services, which needs administrator rights. |
-| `--yes`, `-y` | Approves a manifest's commands and `[env]` without asking. |
+| `--yes`, `-y` | Approves a manifest's commands and `[env]` without asking, and in a project trusts the [sources](security.md#trusted-sources) its `oku.toml` installs from. |
 | `--accept-key` | Accepts a changed `signing_key`. |
 | `--min-release-age AGE` | As in `oku add`, for the packages that sync picks a version for. |
 | `--accept-unknown-age` | As in `oku add`. |
@@ -615,6 +615,8 @@ dry run: nothing was changed
 - It writes no generation, no `oku.lock`, no file, no service and no setting.
 - Downloads and builds stay in the store and the cache, where the real command
   finds them. `oku gc` deletes the unused ones.
+- A [source](security.md#trusted-sources) you trust at its question stays
+  trusted.
 - When an earlier change did not finish, it stops and says to run `oku sync`
   first.
 - With nothing to change it prints `dry run: already in sync`.
@@ -962,8 +964,9 @@ oku allow [dir]
 oku deny [dir]
 ```
 
-`allow` lets the shell hook apply a project's environment. `deny` takes that
-back.
+`allow` lets the shell hook apply a project's environment, and trusts the
+sources that the project's `oku.toml` installs from. `deny` takes back the
+allow, and keeps the sources trusted.
 
 - An allow belongs to the project's `oku.toml` as it is now, and to each
   [`.env` file](oku-toml.md#envfile) and
@@ -975,9 +978,14 @@ back.
 - Both default to the project you are in, and fail when there is no
   `oku.toml` in the directory or above it.
 
+- It trusts each source of the project's packages, includes and runtimes
+  that you have not trusted yet, and names it. See
+  [Trusted sources](security.md#trusted-sources).
+
 ```
 $ oku allow
 ✓ allowed /home/you/work/api
+✓ trusted github:acme
 ```
 
 ### oku hook

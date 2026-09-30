@@ -124,6 +124,10 @@ func (e env) loadList(
 		return merged{}, err
 	}
 
+	if origins, err := e.untrusted(); err != nil || origins != nil {
+		return merged{}, cmp.Or(err, error(untrustedError{project: e.project, origins: origins}))
+	}
+
 	m := &merger{
 		ctx:      ctx,
 		fetcher:  e.fetcher(opts),
