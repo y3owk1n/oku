@@ -1865,8 +1865,9 @@ On Windows the link is a shim, and the environment differs, see
 
 ## The build sandbox
 
-On macOS and Linux a `run` step runs in a sandbox. It has no network, cannot
-read the user's home directory, and can only write to the source directory, its
+On macOS and Linux a `run` step runs in a sandbox. It has no network, and
+cannot read the user's home directory or temporary directory, which is `/tmp`
+on Linux. It can only write to the source directory, its
 temporary `HOME` and `TMPDIR`, and `{{prefix}}`. The store and the directories
 of the `needs` tools stay readable. See [The build sandbox](sandbox.md) for the
 full list per platform, and for hosts without a sandbox.

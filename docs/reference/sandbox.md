@@ -58,16 +58,18 @@ everything except:
 | Your temporary and cache directories | Reading anything under `/private/var/folders`, where macOS keeps them. |
 | Your preferences and keychain | The `cfprefsd` and `securityd` services, which would otherwise read `~/Library/Preferences` and the keychain for the build. |
 | Writing | Anywhere except the build's source directory, its `HOME` and temporary directory, `{{prefix}}`, `/dev/null` and `/dev/fd`. |
-| Starting programs outside the sandbox | Apple Events, LaunchServices (`open`) and `/bin/launchctl`. |
+| Starting programs outside the sandbox | Apple Events, LaunchServices (`open`) and `/bin/launchctl`. launchd itself refuses a new job from a sandboxed process. |
+| Your clipboard | Reading it and writing it, so a build can neither take a password you copied nor leave a command for you to paste. |
 | Terminals | Reading `/dev/tty` and `/dev/ttys*`. |
 
 The tools in `/usr/bin` ask `xcrun` where the real tool is, and `xcrun` caches
 the answer. oku points that cache at the build's own temporary directory, so
 `cc`, `ar` and the others run without an "Operation not permitted" warning.
 
-A program that talks to launchd over XPC itself can still start a program
-outside the sandbox. The sandbox makes a malicious build harder, and does not
-stop one.
+A program that talks to launchd over its bootstrap port can still start a job
+that is already loaded, such as a service that `oku service` or another app
+installed. That job runs its own program with its own arguments, and nothing
+that the build wrote. No sandbox rule covers the bootstrap port.
 
 ## Linux
 
@@ -81,7 +83,7 @@ sets them up before the command runs:
 | Shared temporary directories | oku covers `/tmp` and `/var/tmp` with an empty tmpfs, then mounts the build's own directories back in. The sockets of `ssh-agent` and the X server are not in them. |
 | Writing | Every mount is read-only except the build's source directory, its `HOME` and temporary directory, and `{{prefix}}`. |
 | Your session | oku hides `/run/user`, which holds your D-Bus and systemd sockets. On Linux 6.12 and later a step with `network = true` cannot reach an abstract socket outside the build either. |
-| The host's sockets | Before the command starts, oku mounts `/dev/null` over every unix socket that listens on the host outside the build's own directories, such as Docker's, Podman's and the system D-Bus. A connection to one fails. oku leaves the sockets of `nscd` and `systemd-resolved`, which answer name lookups. |
+| The host's sockets | Before the command starts, oku mounts `/dev/null` over every unix socket that listens on the host outside the build's own directories, such as Docker's, Podman's and the system D-Bus. A connection to one fails. oku leaves the sockets of `nscd` and `systemd-resolved`, which answer name lookups. oku lists the sockets when each step starts, so a socket that a daemon binds while the step runs stays reachable. |
 | Your processes | The build gets a `/proc` of its pid namespace. It sees only its own processes and cannot signal yours. |
 | Shared memory | `/dev/shm` is the build's own. |
 | Terminals | `/dev/pts` is a new instance, so your terminals are not in it. The build can still open terminals of its own. |
