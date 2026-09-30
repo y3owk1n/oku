@@ -315,7 +315,7 @@ func (h Hosts) GitHubDir(ctx context.Context, repo, commit, dir string) ([]strin
 func (h Hosts) GitHubAsset(ctx context.Context, rawURL string) (string, string, error) {
 	g := h.github("")
 	if g.http == nil {
-		g.http = http.DefaultClient
+		g.http = h.Net.Client(CheckRedirect)
 	}
 
 	rest, ok := strings.CutPrefix(rawURL, g.web+"/")

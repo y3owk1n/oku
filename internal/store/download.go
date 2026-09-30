@@ -19,6 +19,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/y3owk1n/oku/internal/forge"
 	"github.com/y3owk1n/oku/internal/status"
 )
 
@@ -239,10 +240,10 @@ func (s *Store) privateGet(ctx context.Context, url string) (*http.Response, err
 	// The address the API redirects to is signed, so the token never follows,
 	// whichever host it names.
 	client := *s.http
-	client.CheckRedirect = func(next *http.Request, _ []*http.Request) error {
+	client.CheckRedirect = func(next *http.Request, via []*http.Request) error {
 		next.Header.Del("Authorization")
 
-		return nil
+		return forge.CheckRedirect(next, via)
 	}
 
 	resp, err := client.Do(req)

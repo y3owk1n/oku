@@ -23,6 +23,7 @@ import (
 	"github.com/y3owk1n/oku/internal/list"
 	"github.com/y3owk1n/oku/internal/lock"
 	"github.com/y3owk1n/oku/internal/manifest"
+	"github.com/y3owk1n/oku/internal/netpolicy"
 	"github.com/y3owk1n/oku/internal/profile"
 	"github.com/y3owk1n/oku/internal/ref"
 	"github.com/y3owk1n/oku/internal/resolve"
@@ -412,6 +413,8 @@ type env struct {
 	runtimes map[string]manifest.Dep
 	// hosts opens forges, with the addresses that tests give.
 	hosts forge.Hosts
+	// net is where oku may connect, from config.toml.
+	net netpolicy.Policy
 }
 
 func loadEnv() (env, error) {
@@ -436,6 +439,10 @@ func loadEnv() (env, error) {
 	if err != nil {
 		return e, err
 	}
+
+	e.net = config.Policy()
+	e.hosts.Net = e.net
+	e.hosts.HTTP = e.net.Client(forge.CheckRedirect)
 
 	e.root = e.data
 	if config.StoreRoot != "" {
@@ -533,7 +540,7 @@ func projectProfile(dir string) string {
 }
 
 func (e env) store() *store.Store {
-	s := store.New(e.root, e.cache)
+	s := store.New(e.root, e.cache, e.net)
 	s.Private = e.hosts.GitHubAsset
 
 	return s
@@ -546,11 +553,11 @@ func (e env) stores() []*store.Store {
 		return []*store.Store{e.store()}
 	}
 
-	return []*store.Store{e.store(), store.New(e.data, e.cache)}
+	return []*store.Store{e.store(), store.New(e.data, e.cache, e.net)}
 }
 
 func (e env) fetcher(opts Options) *ref.Fetcher {
-	f := ref.NewFetcher(e.cache)
+	f := ref.NewFetcher(e.cache, e.net)
 	f.Hosts.GitHubAPI, f.Hosts.GitHubRaw = opts.GitHubAPI, opts.GitHubRaw
 	// The resolver takes these hosts. It reads a git URL on github.com through
 	// the API, so a test's github.com belongs here too.

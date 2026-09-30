@@ -27,6 +27,7 @@ import (
 	"github.com/y3owk1n/oku/internal/forge"
 	"github.com/y3owk1n/oku/internal/infer"
 	"github.com/y3owk1n/oku/internal/manifest"
+	"github.com/y3owk1n/oku/internal/netpolicy"
 	"github.com/y3owk1n/oku/internal/platform"
 	"github.com/y3owk1n/oku/internal/sandbox"
 	"github.com/y3owk1n/oku/internal/shim"
@@ -47,6 +48,8 @@ type Store struct {
 	dir   string
 	cache string
 	http  *http.Client
+	// net is where the store may connect, for git.
+	net netpolicy.Policy
 	// auth is the login for downloads from one host.
 	auth forge.Auth
 	// Private finds where the API serves a download that answered 404, such as
@@ -84,15 +87,17 @@ type Meta struct {
 	DepDLLs []string `toml:"dep_dlls,omitempty"`
 }
 
-// New returns the store under dataDir that caches downloads under cacheDir.
-func New(dataDir, cacheDir string) *Store {
+// New returns the store under dataDir that caches downloads under cacheDir and
+// connects only where net allows.
+func New(dataDir, cacheDir string, net netpolicy.Policy) *Store {
 	transport := http.DefaultTransport.(*http.Transport).Clone()
 	transport.RegisterProtocol("file", fileTransport{})
 
 	return &Store{
 		dir:   filepath.Join(dataDir, "store"),
 		cache: cacheDir,
-		http:  &http.Client{Transport: transport, CheckRedirect: forge.CheckRedirect},
+		http:  &http.Client{Transport: net.Transport(transport), CheckRedirect: forge.CheckRedirect},
+		net:   net,
 	}
 }
 

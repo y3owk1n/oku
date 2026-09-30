@@ -386,6 +386,29 @@ Change `insteadOf` to `pushInsteadOf`, so fetches stay on https and only pushes
 use ssh. Or, to keep ssh, run `ssh -T git@github.com` once to trust the host,
 and `ssh-add` to load the key into your agent.
 
+## oku does not connect to a host
+
+```
+oku: ...: git.corp.example resolves to 10.0.0.5, a private address, and oku does not connect there. Add "git.corp.example" to [network] private in config.toml to reach it
+```
+
+oku does not connect to an address on your network unless you name the host.
+When you trust it, add it to `config.toml`:
+
+```toml
+[network]
+private = ['git.corp.example']
+```
+
+```
+oku: ...: example.org is not in [network] allow in config.toml, so oku does not connect there
+```
+
+Your `[network] allow` list does not name the host. Add it, or `*.` and its
+domain for every subdomain. A message that ends in `Redirected from` lists
+the URLs that redirected to the refused host. See
+[Where oku connects](reference/security.md#where-oku-connects).
+
 ## A build ran without the sandbox
 
 ```

@@ -163,6 +163,21 @@ order step in `prd/product.md`.
   download.
 - B421 [2] A manifest or list ref over plain `http://`, or `git+http://`, to
   another machine is an error. `http://127.0.0.1` and `localhost` work.
+- B467 [2] oku connects to no private address: loopback, RFC 1918,
+  `100.64.0.0/10`, link-local, `fc00::/7`, unspecified or multicast. It checks
+  the address it dials, after DNS, on every redirect. A URL whose own host is
+  `localhost` or a loopback address works, and a redirect to one from another
+  host does not. `[network] private` in `config.toml` names the hosts that
+  may, the hosts of `caches` and `[forge] hosts` may, and
+  `deny_private = false` turns the check off.
+- B468 [2] With `[network] allow` in `config.toml`, oku connects only to the
+  hosts it lists, `*.example.com` for subdomains, plus this machine and the
+  hosts of `caches` and `[forge] hosts`. The refusal names the host, the key,
+  and the redirects that led there.
+- B469 [2] oku checks a git URL's host against `[network]` before it runs
+  `git`, and git follows no http redirect.
+- B470 [2] A `redirect` version source and a private GitHub release download
+  follow the redirect rules of B419.
 - B422 [2] `oku manifest lint` fails on an artifact or a build source at an
   `http://` URL without a `sha256`.
 - B431 [2] A `file://` URL names a file of this machine: `file:///C:/x` a

@@ -591,6 +591,9 @@ and you may edit it by hand.
 | `[runtimes]` | table | by hand | The same table as in [oku.toml](#runtimes). oku uses it when no list names that runtime. A relative path starts at the directory of `config.toml`, and a ref may be a source alias such as `core/node`. |
 | `require_sandbox` | boolean | by hand | `true` refuses to run a package's commands on a host that cannot sandbox them. See [Refuse to build without a sandbox](sandbox.md#refuse-to-build-without-a-sandbox). |
 | `[forge] hosts` | table of strings | by hand | Servers of your own and their kind, `"github"`, `"gitea"` or `"gitlab"`, such as `"git.example.com" = "gitea"`. oku sends `GH_ENTERPRISE_TOKEN`, `GITEA_TOKEN` and `GITLAB_SERVER_TOKEN` only to a host listed here. See [tokens per host](refs.md#tokens-per-host). |
+| `[network] deny_private` | boolean | by hand | `true` by default. oku does not connect to a private address, such as `10.0.0.5`, `192.168.1.2` or `169.254.169.254`, unless the URL names this machine or `private` lists the host. See [Where oku connects](security.md#where-oku-connects). |
+| `[network] private` | array of strings | by hand | Hosts that may resolve to a private address, such as a mirror on your network. `"*.corp.example"` takes its subdomains. The hosts of `caches` and `[forge] hosts` are on it already. |
+| `[network] allow` | array of strings | by hand | The only hosts oku connects to, in the same form. Empty or unset means every host. The hosts of `caches` and `[forge] hosts` are on it already. |
 | `store_root` | string | `oku setup --system` | The shared store root, such as `/opt/oku`. Delete the line to go back to the store in the data directory, then run `oku sync`. |
 
 ```toml
@@ -603,6 +606,9 @@ core = 'github:you/recipes'
 
 [runtimes]
 node = 'core/node'
+
+[network]
+private = ['mirror.corp.example']
 ```
 
 `signing.key`, the secret key of `oku cache push`, is a separate file beside

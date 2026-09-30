@@ -15,6 +15,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/y3owk1n/oku/internal/netpolicy"
 )
 
 // ErrNotFound reports that the host has no such repository, file, tag or
@@ -247,7 +249,9 @@ type Commit struct {
 // Hosts opens forges. GitHubAPI and GitHubRaw replace the github.com URLs when
 // set, which tests do.
 type Hosts struct {
-	HTTP      *http.Client
+	HTTP *http.Client
+	// Net is where oku may connect. Git calls check it before they run.
+	Net       netpolicy.Policy
 	GitHubAPI string
 	GitHubRaw string
 	// GitHubWeb replaces https://github.com, for tests.
