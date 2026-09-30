@@ -1858,3 +1858,17 @@ include is trusted with the source that named it, because its author chose it
 and the lock pins what it resolved to. `oku allow` trusts the sources too,
 since a user who allows a project has read its `oku.toml`, and `--yes`
 trusts them so that CI, which already passes it, keeps working.
+
+## D113. update shows what changed in an included list and asks
+
+When `oku update` reads an included list fresh and its sha256 differs from the
+lock, oku reads the pinned version again at its locked commit and prints a line
+diff, each changed line under the table it is in. It asks on a terminal, and
+refuses without one unless `--yes`. A list at a URL has no commit, so oku
+prints the whole new list. Why: typing an include trusts the list as it was. A
+list from a repo can place files, change settings and set variables, so what
+its author adds later is a bigger risk than a new package source, and the source
+check of D112 does not look at it. A line diff shows every table without oku
+naming each kind of change, so a table added later is covered too. The lock
+keeps no list text, since a commit already names it and a list at a URL is
+rare.

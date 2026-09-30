@@ -321,6 +321,12 @@ order step in `prd/product.md`.
   included entry of the same name. `sync` stops when a list from a URL or a
   repo changed since the lock, and reads a list on this machine as it is.
   `remove` refuses a package only an include declares.
+- B475 [2] `update` with no names shows the lines that changed in an included
+  list from a repo or a URL since the lock pinned it, each under its table,
+  and asks before it takes them. A no changes nothing, and without a terminal
+  it refuses and names `--yes`.
+- B476 [2] For a list at a URL, which has no commit to read again, `update`
+  shows the whole new list. `--yes` takes a changed list and says so.
 - B17 [2] `sync` does not install an entry whose `when` does not match the
   host, and its lock entry stays for other platforms.
 - B270 [2] `when` in a list is one table or an array of tables, and matches a
