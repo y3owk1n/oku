@@ -1535,10 +1535,12 @@ With several candidates for one platform, it prefers, in order:
    the version and the platform, as `baseline` does in
    `bun-linux-x64-baseline.zip`. So `cosign-linux-amd64` wins over
    `cosign-linux-pivkey-pkcs11key-amd64`.
-5. A tar archive over a zip, both over a single binary, that over an installer,
+5. On Windows, an `msvc` build over a `gnu` one, so
+   `fd-v10.5.0-x86_64-pc-windows-msvc.zip` over `...-windows-gnu.zip`.
+6. A tar archive over a zip, both over a single binary, that over an installer,
    and a `.dmg` over a `.pkg`.
-6. The smaller asset, when the host reports sizes.
-7. The shortest name.
+7. The smaller asset, when the host reports sizes.
+8. The shortest name.
 
 When one platform has an asset named after the repo, a platform that has only
 another program's asset gets no artifact. An installer such as a `.deb` is
@@ -1596,6 +1598,10 @@ manifest does not name them, so its text is the same on every machine. An
 - An executable next to the program is a program too when its name starts
   with the program's name and a `-`, such as `age-keygen` next to `age`. In a
   Windows zip an `.exe` of such a name counts.
+- Other programs next to it stay out, such as `uvx` next to `uv`. `oku add`
+  names them and prints the command that adds them, such as
+  `oku add github:astral-sh/uv --bin uv --bin uvx`. `oku add --plan` lists them
+  under `also holds`, and `oku manifest init` names them on stderr.
 - With `--bin`, the programs are the files it names instead.
 - A single top-level directory becomes `strip = 1`.
 - Files ending in `.1` become `man`. With more than 8 of them only the

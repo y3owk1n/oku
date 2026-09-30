@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -894,5 +895,77 @@ func TestB489AReleaseWithNoAssetsSaysSo(t *testing.T) {
 	out, err := m.run(t, "", "manifest", "init", "--from", "owner/tool", "-o", "-")
 	if err == nil || !strings.Contains(out+err.Error(), "release v1.4.0 of owner/tool has no assets\nname an older release") {
 		t.Fatalf("init should say the release has no assets and what to do: %v\n%s", err, out)
+	}
+}
+
+func TestB490OkuNamesTheProgramsItLeftOutAndHowToAddThem(t *testing.T) {
+	m := newMachine(t)
+	archive, _ := m.archive(t, "release", map[string]string{"tool": script, "toolx": script})
+
+	inferServer(t, &m, map[string]string{hostAssetName(): archive})
+
+	out, err := m.run(t, "", "manifest", "init", "--from", "owner/tool", "-o", "-")
+	must(t, err)
+
+	if !strings.Contains(out, `bin = ["tool"]`) || !strings.Contains(out, "the asset also holds toolx") {
+		t.Fatalf("init should leave toolx out and say so:\n%s", out)
+	}
+
+	out, err = m.run(t, "", "add", "github:owner/tool", "--plan")
+	must(t, err)
+
+	if !strings.Contains(out, "also holds") || !strings.Contains(out, "oku add github:owner/tool --bin tool --bin toolx") {
+		t.Fatalf("the plan should list toolx and the command:\n%s", out)
+	}
+
+	out, err = m.run(t, "", "add", "github:owner/tool", "--plan", "--json")
+	must(t, err)
+
+	if !regexp.MustCompile(`"other_programs":\s*\[\s*"toolx"\s*\]`).MatchString(out) {
+		t.Fatalf("the JSON plan should list toolx in other_programs:\n%s", out)
+	}
+
+	out, err = m.run(t, "", "add", "github:owner/tool")
+	must(t, err)
+
+	want := "tool also holds toolx, which oku left out\nadd them with: oku add github:owner/tool --bin tool --bin toolx"
+	if !strings.Contains(out, want) {
+		t.Fatalf("add should name toolx and the command:\n%s", out)
+	}
+
+	out, err = m.run(t, "", "add", "github:owner/tool", "--bin", "tool", "--bin", "toolx")
+	if err != nil {
+		t.Fatalf("the suggested command: %v\n%s", err, out)
+	}
+
+	locked, err := lock.Read(filepath.Join(m.config, "oku.lock"))
+	must(t, err)
+
+	pkg, _ := locked.Find("tool")
+	if !strings.Contains(pkg.Manifest, `bin = ["tool", "toolx"]`) {
+		t.Fatalf("the suggested command should expose toolx:\n%s", pkg.Manifest)
+	}
+}
+
+func TestB491InferencePrefersAnMSVCBuildOnWindows(t *testing.T) {
+	m := newMachine(t)
+	host, _ := m.archive(t, "host", map[string]string{"tool": script})
+	// The gnu build is smaller, so only its toolchain puts it second.
+	msvc, _ := m.archive(t, "tool-v1.4.0-x86_64-pc-windows-msvc", map[string]string{
+		"tool.exe": script, "resources.bin": strings.Repeat("x", 1<<16),
+	})
+	gnu, _ := m.archive(t, "tool-v1.4.0-x86_64-pc-windows-gnu", map[string]string{"tool.exe": script})
+
+	inferServer(t, &m, map[string]string{
+		hostAssetName(): host,
+		"tool-v1.4.0-x86_64-pc-windows-msvc.tar.gz": msvc,
+		"tool-v1.4.0-x86_64-pc-windows-gnu.tar.gz":  gnu,
+	})
+
+	out, err := m.run(t, "", "manifest", "init", "--from", "owner/tool", "-o", "-")
+	must(t, err)
+
+	if got := artifactURL(out, `os = "windows", arch = "amd64"`); !strings.Contains(got, "windows-msvc") {
+		t.Fatalf("windows should take the msvc build, got %s:\n%s", got, out)
 	}
 }

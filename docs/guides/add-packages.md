@@ -324,7 +324,9 @@ the exact build. See [Update packages](#update-packages).
 Inference can pick the wrong release file, or fail to tell which file in it is
 the program. It also exposes only the program and the executables next to it
 whose names start with the program's name and a `-`, such as `age-keygen`
-next to `age`. Other programs in the download need `--bin`. `--asset` names
+next to `age`. Other programs in the download need `--bin`. When the program
+has others next to it, `oku add` names them and prints the command that adds
+them. `--asset` names
 the release file with a glob, and `--bin` names the program inside it:
 
 ```sh

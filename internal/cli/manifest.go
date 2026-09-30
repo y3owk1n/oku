@@ -96,6 +96,13 @@ this machine to find the executable, so run it where a release asset exists.`,
 				)
 			}
 
+			if len(inferred.Found) > 0 {
+				warn(
+					cmd.ErrOrStderr(), "the asset also holds %s, which the manifest leaves out\nadd them to bin to expose them",
+					strings.Join(inferred.Found, ", "),
+				)
+			}
+
 			if output == "-" {
 				fmt.Fprint(cmd.OutOrStdout(), text)
 
