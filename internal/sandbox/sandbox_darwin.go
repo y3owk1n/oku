@@ -59,12 +59,17 @@ func profile(spec Spec) string {
 	b.WriteString("(deny signal (require-not (target same-sandbox)))\n")
 
 	// A build that could ask LaunchServices, another app or launchd to start a
-	// program would run that program outside the sandbox. A program that talks to
-	// launchd over XPC itself still can, so the sandbox limits a malicious build
-	// and does not contain it.
+	// program would run that program outside the sandbox. launchd itself refuses
+	// a new job from a sandboxed process. It still starts a job that is already
+	// loaded, over the bootstrap port that no rule covers.
 	b.WriteString(`(deny appleevent-send)
 (deny mach-lookup (global-name-prefix "com.apple.coreservices.") (global-name-prefix "com.apple.lsd."))
 (deny process-exec (literal "/bin/launchctl"))
+`)
+
+	// A build that wrote the clipboard could leave a command there for the user to
+	// paste into a shell, and one that read it could take a password.
+	b.WriteString(`(deny mach-lookup (global-name-prefix "com.apple.pasteboard"))
 `)
 
 	// cfprefsd reads the user's preferences under ~/Library/Preferences for the

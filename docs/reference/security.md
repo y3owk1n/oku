@@ -533,9 +533,8 @@ How the maintainer rotates the key is in
 - The sources of a `[build]`. `signing_key` covers artifacts only, and `fetch`
   steps rely on their `sha256`.
 - A build command you approved, on a host where the sandbox is not available.
-- A build that reaches a service outside the sandbox, such as launchd over XPC
-  on macOS or a socket that appears on Linux after the build starts, and asks
-  it to start a program. The
-  sandbox blocks the ways that the [manifest reference](manifest.md) lists, not
-  every way.
+- A build that asks a service outside the sandbox to start a program, such as
+  a launchd job that is already loaded on macOS, or a daemon on Linux whose
+  socket appeared while the step ran. The sandbox blocks the ways that
+  [The build sandbox](sandbox.md) lists, not every way.
 - A cache key you trusted that signs something malicious.

