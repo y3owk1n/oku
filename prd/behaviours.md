@@ -1085,6 +1085,20 @@ order step in `prd/product.md`.
   `OKU_ENV` names. An untracked overlay, and the `.env` files it loads, change
   without a new allow. Asking git runs no program the repo names, such as its
   `core.fsmonitor`.
+- B471 [7] In a project whose own `oku.toml` names a package, include or
+  runtime from a source the user has not trusted, `sync`, `update` and `add`
+  name each source and ask once on a terminal. A no installs nothing, and
+  without a terminal they refuse and name `oku allow` and `--yes`. A source is
+  a forge owner or top group, the host of a URL or git ref, an npm scope, or
+  the package of any other registry. A path on this machine, `localhost` and
+  `127.0.0.1` need no trust.
+- B472 [7] `oku allow`, `--yes`, a ref typed in `oku add`, and `[trust] sources`
+  in `config.toml`, as an owner or one forge repo, trust a source. oku keeps
+  what the user trusted in `trust/sources.toml` in the data directory.
+- B473 [7] The global list's entries need no trust, and neither does what a
+  trusted source names in turn, a dep or an include of its own.
+- B474 [7] `outdated`, `list` and the other commands that read an untrusted
+  project's list refuse with the same message.
 - B324 [7] The hook sets `OKU_PROJECT` to the project's directory while the
   project applies, and removes it outside one or when the project does not
   apply. `oku exec` sets it for its command in a project.

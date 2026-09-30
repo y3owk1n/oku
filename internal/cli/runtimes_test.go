@@ -158,7 +158,8 @@ func TestB183AProjectLockNamesTheNodeRelativeToTheProject(t *testing.T) {
 
 	m.opts.WorkDir = moved
 
-	if out, err := m.run(t, "", "sync", "--locked"); err != nil {
+	// A new machine has not trusted the project's npm scope yet.
+	if out, err := m.run(t, "", "sync", "--locked", "--yes"); err != nil {
 		t.Fatalf("sync --locked in the moved project: %v\n%s", err, out)
 	}
 }

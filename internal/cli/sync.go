@@ -151,6 +151,10 @@ func reconcile(
 		return err
 	}
 
+	if err := e.trustProject(cmd, opts, flags.yes); err != nil {
+		return err
+	}
+
 	// Updating everything also refreshes includes. Updating named packages keeps
 	// them pinned, so the package set stays the same.
 	all, err := e.loadList(cmd.Context(), opts, locked, update && len(names) == 0)

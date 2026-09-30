@@ -64,6 +64,9 @@ that puts oku on `PATH`. [Set up your shell](../getting-started.md#2-set-up-your
 has it for bash, zsh, fish and PowerShell. `oku doctor` says whether it is in
 place.
 
+The first `oku sync` in a repo you cloned asks you to trust the sources its
+`oku.toml` installs from. See [Trusted sources](../reference/security.md#trusted-sources).
+
 Then allow the project, once:
 
 ```

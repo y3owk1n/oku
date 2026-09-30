@@ -44,6 +44,8 @@ The action does this:
    therefore pins the script too.
 2. It restores the store and the downloads from the Actions cache.
 3. It runs `oku sync --yes --locked` in the directory of your `oku.toml`.
+   `--yes` trusts the sources the project installs from, as well as its
+   builds.
 4. It puts the programs of the global profile and of the
    [project](../how-oku-works.md#project) on `PATH` for the later steps. It
    runs `oku allow` for the project and exports the `[env]` of its packages,

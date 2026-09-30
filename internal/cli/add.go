@@ -261,8 +261,17 @@ func runAdd(
 		return false, err
 	}
 
+	if err := e.trustProject(cmd, opts, flags.yes); err != nil {
+		return false, err
+	}
+
 	e, req, locked, err := addRequest(cmd, opts, arg, when, asset)
 	if err != nil {
+		return false, err
+	}
+
+	// Typing a ref trusts its source.
+	if err := e.trustTyped(req.ref); err != nil {
 		return false, err
 	}
 

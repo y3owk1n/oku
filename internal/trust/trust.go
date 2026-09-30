@@ -146,3 +146,65 @@ func (a *Allowed) Set(dir string, allow *Allow) error {
 
 	return nil
 }
+
+// Sources is the origins the user trusts to name what oku installs, beyond the
+// ones config.toml lists.
+type Sources struct {
+	path  string
+	Items []Source `toml:"source"`
+}
+
+// Source is one trusted origin, such as "github:owner" or "example.com".
+type Source struct {
+	Origin    string    `toml:"origin"`
+	TrustedAt time.Time `toml:"trusted_at"`
+}
+
+// ReadSources loads the trusted origins under dataDir. A missing file trusts
+// none.
+func ReadSources(dataDir string) (*Sources, error) {
+	s := &Sources{path: filepath.Join(dataDir, "trust", "sources.toml")}
+
+	data, err := os.ReadFile(s.path)
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return nil, fmt.Errorf("read %s: %w", s.path, err)
+	}
+
+	if err := toml.Unmarshal(data, s); err != nil {
+		return nil, fmt.Errorf("parse %s: %w", s.path, err)
+	}
+
+	return s, nil
+}
+
+// Has reports whether origin is trusted.
+func (s *Sources) Has(origin string) bool {
+	return slices.ContainsFunc(s.Items, func(item Source) bool { return item.Origin == origin })
+}
+
+// Add records the origins that are not trusted yet and saves the file.
+func (s *Sources) Add(origins ...string) error {
+	now := time.Now().UTC().Truncate(time.Second)
+	before := len(s.Items)
+
+	for _, origin := range origins {
+		if origin != "" && !s.Has(origin) {
+			s.Items = append(s.Items, Source{Origin: origin, TrustedAt: now})
+		}
+	}
+
+	if len(s.Items) == before {
+		return nil
+	}
+
+	data, err := toml.Marshal(s)
+	if err != nil {
+		return fmt.Errorf("write %s: %w", s.path, err)
+	}
+
+	if err := list.WriteFile(s.path, data); err != nil {
+		return fmt.Errorf("write %s: %w", s.path, err)
+	}
+
+	return nil
+}

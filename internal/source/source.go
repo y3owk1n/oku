@@ -49,6 +49,8 @@ type Config struct {
 	Forge Forge `toml:"forge,omitempty"`
 	// Network says where oku may connect.
 	Network Network `toml:"network,omitempty"`
+	// Trust names the origins whose refs a project may install.
+	Trust Trust `toml:"trust,omitempty"`
 }
 
 // Network is the [network] table of config.toml.
@@ -88,6 +90,13 @@ func (c *Config) Policy() netpolicy.Policy {
 	}
 
 	return p
+}
+
+// Trust is the [trust] table of config.toml.
+type Trust struct {
+	// Sources are trusted origins, such as "github:owner", "github:owner/repo",
+	// "example.com" or "npm:@scope".
+	Sources []string `toml:"sources,omitempty"`
 }
 
 // Forge is the [forge] table of config.toml.
