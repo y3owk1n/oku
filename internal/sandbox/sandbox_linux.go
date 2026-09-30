@@ -215,7 +215,7 @@ func hide(dir string, keep []string, options string) error {
 		if err != nil {
 			continue
 		}
-		defer unix.Close(fd)
+		defer func() { _ = unix.Close(fd) }()
 
 		inside = append(inside, kept{fd: fd, path: path})
 	}
@@ -259,7 +259,7 @@ func scopeAbstractSockets() error {
 	if errno != 0 {
 		return fmt.Errorf("scope abstract sockets: %w", errno)
 	}
-	defer unix.Close(int(fd))
+	defer func() { _ = unix.Close(int(fd)) }()
 
 	if err := unix.Prctl(unix.PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0); err != nil {
 		return fmt.Errorf("scope abstract sockets: %w", err)

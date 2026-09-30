@@ -4679,7 +4679,7 @@ func TestB493RunStepWithTheNetworkCannotReachTheUsersSockets(t *testing.T) {
 		_, _ = w.Write([]byte("ok"))
 	})}
 	go func() { _ = server.Serve(listener) }()
-	t.Cleanup(func() { server.Close() })
+	t.Cleanup(func() { _ = server.Close() })
 
 	if out, err := exec.Command("curl", "-s", "--unix-socket", socket, "http://agent/").Output(); err != nil ||
 		string(out) != "ok" {
