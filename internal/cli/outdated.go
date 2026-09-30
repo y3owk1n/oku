@@ -61,7 +61,7 @@ func (e env) outdated(cmd *cobra.Command, opts Options) error {
 	}
 
 	// A version in the list limits what oku update takes.
-	all, err := e.loadList(cmd.Context(), opts, locked, false)
+	all, err := e.loadList(cmd.Context(), opts, locked, nil)
 	if err != nil {
 		return err
 	}

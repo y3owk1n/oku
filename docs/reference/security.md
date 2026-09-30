@@ -245,6 +245,33 @@ oku keeps the rest of what you trusted in `trust/sources.toml` in the data
 directory. The global list is yours, so it needs no trust. oku also trusts a dep or an
 include that a trusted source names, since the lock pins what it resolved to.
 
+A `git pull` in your config directory is yours too, and oku does not check
+what it brings. Read the changes before you run `oku sync`.
+
+## Changed included lists
+
+You trust an included list as it was when you added it. A list from a repo can
+place files, change settings and set variables, so its author's later edits
+need your yes too. `oku sync` reads a list from a repo or a URL at the commit
+and sha256 that `oku.lock` pinned, and stops when its content changed.
+`oku update` with no names reads it fresh. When the content changed, it shows
+the lines that were added and removed, each under its table, and asks:
+
+```
+the included list git+https://example.com/machines#base.toml changed since oku.lock was written:
+  [packages]
+  + other = "github:acme/other"
+  [files]
+  - "{{home}}/.gitconfig" = { link = "./files/gitconfig" }
+? take the change? y/N
+```
+
+- A no changes nothing.
+- Without a terminal it stops. `--yes` takes the change and says so.
+- A list at a URL has no commit, so oku cannot read the version it pinned.
+  It shows the whole new list instead.
+- A local list is your own file, and oku reads it as it is.
+
 ## Approve build commands
 
 A manifest with a `[build]` can run commands on your machine. Before the first

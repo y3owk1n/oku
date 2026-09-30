@@ -47,9 +47,9 @@ type merger struct {
 	ctx     context.Context
 	fetcher *ref.Fetcher
 	locked  *lock.Lock
-	// With refresh, merge reads includes at their newest commit and accepts
-	// changed content.
-	refresh bool
+	// With refresh, merge reads includes at their newest commit, and takes
+	// changed content once refresh accepts it.
+	refresh listReview
 	// project is set for a project list, which may not place files.
 	project  string
 	packages map[string]listed
@@ -110,14 +110,19 @@ func (e env) lockPlatforms(
 	return platforms, strict
 }
 
+// listReview accepts or refuses the new content of an included list at r.
+// before is the content oku.lock pinned, or nil when oku cannot read it again.
+type listReview func(r ref.Ref, before, after []byte) error
+
 // loadList reads the global list and merges its includes under it. An included
 // list is read at the commit oku.lock pinned and must still have the pinned
-// hash, unless refresh is set.
+// hash, unless refresh is set. Then it is read at its newest commit, and
+// refresh reviews content that changed.
 func (e env) loadList(
 	ctx context.Context,
 	opts Options,
 	locked *lock.Lock,
-	refresh bool,
+	refresh listReview,
 ) (merged, error) {
 	own, err := list.Read(e.listPath())
 	if err != nil {
@@ -227,8 +232,10 @@ func (m *merger) merge(
 
 		m.seen[r.String()] = true
 
-		pin, _ := m.locked.FindInclude(r.String())
-		if m.refresh {
+		pinned, _ := m.locked.FindInclude(r.String())
+
+		pin := pinned
+		if m.refresh != nil {
 			pin = lock.Include{}
 		}
 
@@ -255,6 +262,20 @@ func (m *merger) merge(
 				"include %s: the included list changed since oku.lock was written\n"+
 					"run `oku update` to accept it", r,
 			)
+		}
+
+		if !local && m.refresh != nil && pinned.SHA256 != "" && pinned.SHA256 != digest {
+			var before []byte
+
+			if pinned.Commit != "" {
+				if old, err := m.fetcher.Fetch(m.ctx, r, pinned.Commit, ref.List); err == nil {
+					before = old.Data
+				}
+			}
+
+			if err := m.refresh(r, before, fetched.Data); err != nil {
+				return err
+			}
 		}
 
 		if local {

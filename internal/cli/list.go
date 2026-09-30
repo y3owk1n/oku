@@ -261,7 +261,7 @@ func (e env) mergedList(cmd *cobra.Command, opts Options) (merged, error) {
 		return merged{}, err
 	}
 
-	return e.loadList(cmd.Context(), opts, locked, false)
+	return e.loadList(cmd.Context(), opts, locked, nil)
 }
 
 // hint prints a line that says what to do next, such as the hint of an empty

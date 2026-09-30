@@ -209,7 +209,7 @@ With no names it updates every package of the list.
 |---|---|
 | `--dry-run` | Checks everything and prints what would change. It changes only the store and the cache. See [A dry run](#a-dry-run). |
 | `--system` | Also applies system-scope apps, fonts and services, which needs administrator rights. |
-| `--yes`, `-y` | Approves a manifest's commands and `[env]` without asking, and in a project trusts the [sources](security.md#trusted-sources) its `oku.toml` installs from. |
+| `--yes`, `-y` | Approves a manifest's commands and `[env]` without asking, takes a changed included list, and in a project trusts the [sources](security.md#trusted-sources) its `oku.toml` installs from. |
 | `--accept-key` | Accepts a changed `signing_key`. |
 | `--min-release-age AGE` | As in `oku add`. `0` takes a version that waits now. |
 | `--accept-unknown-age` | As in `oku add`. |
@@ -227,6 +227,9 @@ checksum when the manifest states one.
 - With no names it also reads included lists fresh, so packages they gained
   are installed and packages they lost are dropped. With names, includes stay
   pinned, so it never adds or drops packages.
+- When an included list from a repo or a URL changed since `oku.lock` pinned
+  it, oku shows the lines that changed and asks before it takes them. See
+  [Changed included lists](security.md#changed-included-lists).
 - A name that is in neither `oku.toml` nor its includes fails.
 - `oku update` is the only command that accepts a changed manifest or
   checksum. See [what the lock pins](lock.md#what-each-pin-does).
