@@ -534,7 +534,7 @@ How the maintainer rotates the key is in
   steps rely on their `sha256`.
 - A build command you approved, on a host where the sandbox is not available.
 - A build that asks a service outside the sandbox to start a program, such as
-  a launchd job that is already loaded on macOS, or a daemon on Linux whose
-  socket appeared while the step ran. The sandbox blocks the ways that
-  [The build sandbox](sandbox.md) lists, not every way.
+  a launchd job that is already loaded on macOS, or a daemon whose socket
+  appeared while the step ran on Linux before 7.1. The sandbox blocks the ways
+  that [The build sandbox](sandbox.md) lists, not every way.
 - A cache key you trusted that signs something malicious.
