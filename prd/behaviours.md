@@ -1057,6 +1057,7 @@ order step in `prd/product.md`.
   the one `ssh-agent` keeps under `/tmp` or Docker's.
 - B494 [6] On Linux and macOS a `run` step cannot signal a process of the
   user's. On Linux it cannot see one either.
+- B495 [6] On macOS a `run` step cannot read or change the user's clipboard.
 - B51 [6] A `fetch` step without sha256 or sha256_url fails lint. With one, it
   may download, and the file must match that sha256, or the digest that the
   checksum file at sha256_url gives for the file's name.
