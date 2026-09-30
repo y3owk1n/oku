@@ -53,6 +53,8 @@ or not at all. See [the transaction model](paths.md#how-a-change-applies).
 oku add <ref>[@version]... [flags]
 ```
 
+Alias: `install`.
+
 Installs the package that a [ref](refs.md) points at, and writes it to
 `oku.toml` and `oku.lock`.
 
@@ -183,6 +185,8 @@ asset. Neither runs a build step or a command from the manifest.
 oku remove <name>...
 ```
 
+Aliases: `rm`, `uninstall`.
+
 Drops packages from the profile, from `oku.toml` and from `oku.lock`, in one
 generation.
 
@@ -203,6 +207,8 @@ The packages' files stay in the store, so adding one again needs no download.
 ```
 oku update [name...] [flags]
 ```
+
+Alias: `upgrade`.
 
 Resolves packages from their refs again, rewrites `oku.lock`, then syncs.
 With no names it updates every package of the list.
@@ -290,6 +296,8 @@ that opens a pull request. See [CI](../guides/ci.md).
 oku list [--files | --settings]
 ```
 
+Alias: `ls`.
+
 Prints one line per installed package: name, version and ref.
 
 | Flag | Effect |
@@ -312,6 +320,8 @@ installed it says so and points at `oku add`.
 ```
 oku info <name>
 ```
+
+Alias: `show`.
 
 Shows what oku knows about an installed package.
 
@@ -664,6 +674,8 @@ oku service list
 oku service start|stop|restart|logs <name> [--system]
 oku service status <name>
 ```
+
+`list` also runs as `ls`.
 
 Controls the services of installed packages through launchd, systemd or Task
 Scheduler. See [Services](../guides/services.md).
@@ -1245,6 +1257,8 @@ oku source remove <alias>
 oku source list
 ```
 
+`remove` also runs as `rm`, and `list` as `ls`.
+
 Names the manifest collections you install from, so `core/ripgrep` stands for
 a full ref. See [Sources](refs.md#sources-and-aliases).
 
@@ -1294,6 +1308,8 @@ oku cache list
 oku cache push <directory> [name...]
 ```
 
+`remove` also runs as `rm`, and `list` as `ls`.
+
 Uses and fills caches of built packages. See
 [Build caches](../guides/build-caches.md).
 
@@ -1326,6 +1342,8 @@ oku key trust <public-key>
 oku key revoke <public-key>
 oku key list
 ```
+
+`list` also runs as `ls`.
 
 Manages the minisign keys that sign and verify cache entries. See
 [signed caches](security.md#signed-caches).
@@ -1384,6 +1402,8 @@ oku: doctor found 1 problem
 ```
 oku self update [--check] [--nightly | --release | --to <tag>] [--min-release-age AGE]
 ```
+
+Alias: `oku self upgrade`.
 
 Replaces the `oku` binary with the newest release from
 `github.com/y3owk1n/oku`, after it checks the signature. See

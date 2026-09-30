@@ -113,9 +113,10 @@ an entry only when a key from "oku key trust" signed it.`,
 			},
 		},
 		&cobra.Command{
-			Use:   "remove <directory-or-url>",
-			Short: "Stop looking in this cache",
-			Args:  exactArgs(1),
+			Use:     "remove <directory-or-url>",
+			Aliases: []string{"rm"},
+			Short:   "Stop looking in this cache",
+			Args:    exactArgs(1),
 			RunE: func(cmd *cobra.Command, args []string) error {
 				return editConfig(func(c *source.Config) error {
 					abs, _ := filepath.Abs(args[0])
@@ -138,9 +139,10 @@ an entry only when a key from "oku key trust" signed it.`,
 			},
 		},
 		&cobra.Command{
-			Use:   "list",
-			Short: "List your caches",
-			Args:  cobra.NoArgs,
+			Use:     "list",
+			Aliases: []string{"ls"},
+			Short:   "List your caches",
+			Args:    cobra.NoArgs,
 			RunE: func(cmd *cobra.Command, _ []string) error {
 				e, err := loadEnv()
 				if err != nil {
@@ -379,9 +381,10 @@ func newKeyCmd() *cobra.Command {
 			},
 		},
 		&cobra.Command{
-			Use:   "list",
-			Short: "List the trusted keys, and your own public key",
-			Args:  cobra.NoArgs,
+			Use:     "list",
+			Aliases: []string{"ls"},
+			Short:   "List the trusted keys, and your own public key",
+			Args:    cobra.NoArgs,
 			RunE: func(cmd *cobra.Command, _ []string) error {
 				e, err := loadEnv()
 				if err != nil {

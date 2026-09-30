@@ -79,6 +79,11 @@ order step in `prd/product.md`.
   `there is no repo at <url>`, and oku does not infer a manifest for it.
   `self update --check` names the command that takes the newer version, with
   the flags that chose it. `self update` marks what it did with a check.
+- B492 [1] An alias runs the command it stands for, with the same arguments
+  and flags. `install` runs `add`, `rm` and `uninstall` run `remove`,
+  `upgrade` runs `update` and `self update`, `ls` runs `list` and `show` runs
+  `info`. Under `service`, `source`, `cache` and `key`, `ls` runs `list`.
+  Under `source` and `cache`, `rm` runs `remove`.
 - B236 [1] `oku add` takes several refs and adds them one after another, one
   generation each, and says once how to run their programs, with "it" for one
   package and "them" for several. A failure stops

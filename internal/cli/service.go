@@ -209,9 +209,10 @@ start and stop act on this login session only.`,
 	}
 
 	cmd.AddCommand(&cobra.Command{
-		Use:   "list",
-		Short: "List the services of installed packages",
-		Args:  cobra.NoArgs,
+		Use:     "list",
+		Aliases: []string{"ls"},
+		Short:   "List the services of installed packages",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return listServices(cmd, opts)
 		},
