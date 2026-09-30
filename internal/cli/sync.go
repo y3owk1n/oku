@@ -157,7 +157,12 @@ func reconcile(
 
 	// Updating everything also refreshes includes. Updating named packages keeps
 	// them pinned, so the package set stays the same.
-	all, err := e.loadList(cmd.Context(), opts, locked, update && len(names) == 0)
+	var refresh listReview
+	if update && len(names) == 0 {
+		refresh = e.listReviewer(cmd, opts, flags.yes)
+	}
+
+	all, err := e.loadList(cmd.Context(), opts, locked, refresh)
 	if err != nil {
 		return err
 	}

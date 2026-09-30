@@ -196,7 +196,8 @@ run `oku update` to accept it
 ```
 
 `oku update` with no names reads includes fresh, so oku installs their new
-packages and removes the ones they dropped. `oku update <name>` keeps them pinned.
+packages and removes the ones they dropped. It shows what changed in each list
+and asks first. `oku update <name>` keeps them pinned.
 
 oku never edits an included list. `oku remove` refuses a package that only an
 include declares, so remove it there or take the include out.

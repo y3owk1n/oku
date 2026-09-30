@@ -203,6 +203,18 @@ oku: include github:you/machines#base: the included list changed since oku.lock 
 run `oku update` to accept it
 ```
 
+`oku update` then shows what changed in the list and asks. Without a terminal
+it stops:
+
+```
+oku: include github:you/machines#base changed, and this is not a terminal
+pass --yes to take the change
+```
+
+Read the lines it printed, then run `oku update` on a terminal, or
+`oku update --yes` to take them. See
+[Changed included lists](reference/security.md#changed-included-lists).
+
 ## Checksum mismatch
 
 ```

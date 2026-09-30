@@ -185,7 +185,7 @@ run `oku update` to accept it
 | `oku remove` | Drops the package's entry. |
 | `oku sync` | Adds an entry for a package that has none, adds your platform or a `[lock]` platform to an entry that lacks it, and drops a package that left the list. It changes no pin that is there. |
 | `oku sync --locked` | Never. It fails when the lock would change, or when it holds a package that left the list, or lacks a `[lock]` platform. |
-| `oku update` | Resolves again and rewrites the entries it touched. It clears the platform entries of a package whose manifest changed, because they described the old one. Each machine adds its entry again on its next sync. With no names it also reads includes fresh. |
+| `oku update` | Resolves again and rewrites the entries it touched. It clears the platform entries of a package whose manifest changed, because they described the old one. Each machine adds its entry again on its next sync. With no names it also reads includes fresh, and asks before it takes one that changed. |
 | `oku rollback` | Replaces the lock with the copy saved in that generation. |
 | `oku sync <list-ref>` | Writes a new global lock from the published one, see [Adopt a published list](commands.md#adopt-a-published-list). |
 

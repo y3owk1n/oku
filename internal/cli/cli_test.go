@@ -1163,7 +1163,8 @@ func TestB16SyncStopsWhenAListFromAURLChanged(t *testing.T) {
 		t.Fatal("the refused sync changed the profile")
 	}
 
-	if out, err := m.run(t, "", "update"); err != nil {
+	// The list changed, so update takes it only with the user's yes.
+	if out, err := m.run(t, "", "update", "--yes"); err != nil {
 		t.Fatalf("update: %v\n%s", err, out)
 	}
 
