@@ -87,7 +87,7 @@ func (inf *Inferrer) FromURL(
 		return "", fmt.Errorf("inspect %s: %w", asset, err)
 	}
 
-	l, err := findLayout(files, name, bins, isArchive(asset))
+	l, err := findLayout(files, name, strings.TrimSuffix(asset, ending(asset)), bins, isArchive(asset))
 	if err != nil {
 		return "", fmt.Errorf("%s: %w", asset, err)
 	}
@@ -102,7 +102,7 @@ func (inf *Inferrer) FromURL(
 		selectorTOML(platform.Selector{OS: host.OS, Arch: host.Arch}), at,
 	)
 
-	b.WriteString(l.toml(host.OS))
+	b.WriteString(l.toml(host.OS, strings.TrimSuffix(asset, ending(asset))))
 
 	return b.String(), nil
 }

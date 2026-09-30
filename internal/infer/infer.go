@@ -218,6 +218,13 @@ func (inf *Inferrer) Manifest(
 
 	name := cmp.Or(opts.Name, program)
 
+	// Every asset may be named after a program whose name is not the repo's,
+	// as shfmt of mvdan/sh or nvim of neovim/neovim. The package keeps the
+	// repo's name, and oku looks for that program first.
+	if shared := sharedStem(chosen); opts.Asset == "" && shared != "" {
+		program = shared
+	}
+
 	var result Inferred
 
 	if i := slices.IndexFunc(chosen, func(c choice) bool { return c.Matches(host) }); i >= 0 {
@@ -260,7 +267,8 @@ func (inf *Inferrer) Manifest(
 			continue
 		}
 
-		l, err := inf.layoutOf(ctx, server.Auth(), urls[c.asset], c.asset, program, opts.Bins)
+		l, err := inf.layoutOf(ctx, server.Auth(), urls[c.asset], c.asset, versionless(c.asset, version),
+			[]string{program, repoProgram}, opts.Bins)
 
 		switch {
 		case err != nil && isHost && len(c.others) > 0:
@@ -329,6 +337,12 @@ func (inf *Inferrer) Manifest(
 			}
 		}
 
+		// When an asset's name holds the version, a program named after it has
+		// another path on each release, and a bin path takes no variables.
+		if l.named != "" && versionless(c.asset, version) == "" {
+			continue
+		}
+
 		b.WriteString("\n")
 		fmt.Fprintf(&b, "[[artifact]]\nmatch = %s\n", selectorTOML(c.Selector))
 		fmt.Fprintf(&b, "url = %q\n", template(urls[c.asset], rel.Tag, version))
@@ -337,7 +351,7 @@ func (inf *Inferrer) Manifest(
 			fmt.Fprintf(&b, "sha256_url = %q\n", template(urls[sums], rel.Tag, version))
 		}
 
-		b.WriteString(l.toml(c.OS))
+		b.WriteString(l.toml(c.OS, versionless(c.asset, version)))
 	}
 
 	result.Text = b.String()
@@ -345,8 +359,11 @@ func (inf *Inferrer) Manifest(
 	return result, nil
 }
 
-// toml writes the strip, bin, app and man lines of a layout for an artifact of os.
-func (l layout) toml(os string) string {
+// toml writes the strip, bin, app and man lines of a layout for an artifact of
+// os. file is the name of the program's file when a program is named after
+// the artifact's asset, as "gdu_darwin_arm64" is of "gdu_darwin_arm64.tgz".
+// A desktop entry is Linux's, so another OS gets none.
+func (l layout) toml(os, file string) string {
 	var b strings.Builder
 
 	if l.strip > 0 {
@@ -354,18 +371,32 @@ func (l layout) toml(os string) string {
 	}
 
 	if len(l.bins) > 0 {
-		bins := slices.Clone(l.bins)
+		entries := make([]string, len(l.bins))
+
+		exe := ""
 		if os == "windows" {
-			for i := range bins {
-				bins[i] += ".exe"
-			}
+			exe = ".exe"
 		}
 
-		fmt.Fprintf(&b, "bin = [%s]\n", quoteAll(bins))
+		for i, bin := range l.bins {
+			if i == 0 && l.named != "" {
+				p := path.Join(path.Dir(bin), strings.TrimSuffix(file, ".exe")) + exe
+				entries[i] = fmt.Sprintf("{ name = %q, path = %q }", l.named+exe, p)
+
+				continue
+			}
+
+			entries[i] = fmt.Sprintf("%q", bin+exe)
+		}
+
+		fmt.Fprintf(&b, "bin = [%s]\n", strings.Join(entries, ", "))
 	}
 
-	if len(l.app) > 0 {
-		fmt.Fprintf(&b, "app = [%s]\n", quoteAll(l.app))
+	apps := slices.DeleteFunc(slices.Clone(l.app), func(app string) bool {
+		return os != "linux" && strings.HasSuffix(app, ".desktop")
+	})
+	if len(apps) > 0 {
+		fmt.Fprintf(&b, "app = [%s]\n", quoteAll(apps))
 	}
 
 	if len(l.man) > 0 {
@@ -375,18 +406,67 @@ func (l layout) toml(os string) string {
 	return b.String()
 }
 
+// layoutOf opens an asset and finds the programs in it. file is the name of a
+// program's file named after the asset, or "". names are the names the
+// package's program may have, in the order oku looks for them.
 func (inf *Inferrer) layoutOf(
 	ctx context.Context,
 	auth forge.Auth,
-	url, asset, name string,
-	bins []string,
+	url, asset, file string,
+	names, bins []string,
 ) (layout, error) {
 	files, err := inf.Inspect(ctx, url, auth)
 	if err != nil {
 		return layout{}, fmt.Errorf("inspect it: %w", err)
 	}
 
-	return findLayout(files, name, bins, isArchive(asset))
+	var first error
+
+	for _, name := range names {
+		l, err := findLayout(files, name, file, bins, isArchive(asset))
+		if err == nil {
+			return l, nil
+		}
+
+		first = cmp.Or(first, err)
+	}
+
+	return layout{}, first
+}
+
+// sharedStem returns the program every archive and single binary of chosen is
+// named after, or "" when they name more than one or none. An installer is
+// named after the distro's package, so its name does not count.
+func sharedStem(chosen []choice) string {
+	shared := ""
+
+	for _, c := range chosen {
+		if installerOS(strings.ToLower(c.asset)) != "" {
+			continue
+		}
+
+		s := stem(c.asset)
+		if s == "" || shared != "" && s != shared {
+			return ""
+		}
+
+		shared = s
+	}
+
+	return shared
+}
+
+// versionless returns the name of the file an archive asset would hold for a
+// program named after it, as "yq_darwin_arm64" of "yq_darwin_arm64.tar.gz".
+// It returns "" for a single binary, and for a name that holds the version,
+// since a bin path takes no variables.
+func versionless(asset, version string) string {
+	file := strings.TrimSuffix(asset, ending(asset))
+	if !isArchive(asset) || strings.Contains(file, version) {
+		return ""
+	}
+
+	return file
 }
 
 // choose lists the artifacts to write, in the order of targets, and returns the
@@ -779,6 +859,15 @@ func namesArch(name string) bool {
 	return false
 }
 
+// notProgram reports whether p is a library or a script that an archive may
+// mark executable and that no one runs by name, as "lib/parser.so".
+func notProgram(p string) bool {
+	base := strings.ToLower(path.Base(p))
+
+	return hasAnySuffix(base, []string{".so", ".dylib", ".dll", ".sh", ".ps1", ".bat", ".cmd"}) ||
+		strings.Contains(base, ".so.")
+}
+
 // desktopWords name a desktop app rather than a command line build, such as
 // "tool-desktop-mac-arm64.app.tar.gz" beside "tool-darwin-arm64.zip". A format
 // such as .dmg is not a word here, because rank orders formats.
@@ -1025,8 +1114,11 @@ type layout struct {
 	// bins are the programs. The first is the package's own, whose man page
 	// stays when there are too many.
 	bins []string
-	app  []string
-	man  []string
+	// named is the program's name when the first of bins is named after the
+	// asset. Each artifact then runs the file of its own asset.
+	named string
+	app   []string
+	man   []string
 }
 
 // findLayout locates the programs among files. Each of wants names one.
@@ -1034,7 +1126,7 @@ type layout struct {
 // executable there is, and an executable beside it whose name starts with
 // "<name>-", such as age-keygen beside age, is a program too. A macOS app
 // bundle becomes an app, and the files inside it are no program.
-func findLayout(files []File, name string, named []string, archive bool) (layout, error) {
+func findLayout(files []File, name, file string, named []string, archive bool) (layout, error) {
 	wants := make([]string, len(named))
 	for i, want := range named {
 		wants[i] = strings.ToLower(strings.TrimSuffix(want, ".exe"))
@@ -1124,7 +1216,7 @@ func findLayout(files []File, name string, named []string, archive bool) (layout
 			}
 		case strings.HasSuffix(f.Path, ".1"):
 			l.man = append(l.man, inside(f.Path))
-		case f.Executable:
+		case f.Executable && !notProgram(f.Path):
 			executables = append(executables, inside(f.Path))
 		default:
 			plain = append(plain, inside(f.Path))
@@ -1199,6 +1291,15 @@ func findLayout(files []File, name string, named []string, archive bool) (layout
 
 	if len(wants) == 0 {
 		main := find(name, false)
+
+		// A program named after the asset, as "yq_darwin_arm64" in
+		// "yq_darwin_arm64.tar.gz", runs under the package's name. A zip made
+		// on Windows or a tar made without modes leaves it plain.
+		if main == "" && file != "" {
+			if main = find(program(file), true); main != "" {
+				l.named = name
+			}
+		}
 
 		switch {
 		case main != "":
