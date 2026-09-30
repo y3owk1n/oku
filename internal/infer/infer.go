@@ -159,6 +159,10 @@ type Inferred struct {
 	// the assets that fit the host as well, which --asset may pick instead.
 	Asset  string
 	Others []string
+	// Bins are the programs of the host's artifact, and Found the other
+	// programs beside the first, which --bin may add.
+	Bins  []string
+	Found []string
 }
 
 // Manifest returns the manifest inferred for the repo that a forge ref's
@@ -298,6 +302,15 @@ func (inf *Inferrer) Manifest(
 
 		if isHost {
 			hostDone = true
+		}
+	}
+
+	if i := slices.IndexFunc(chosen, func(c choice) bool { return c.Matches(host) }); i >= 0 {
+		l := layouts[ending(chosen[i].asset)+" "+chosen[i].OS]
+		result.Found = l.found
+
+		for _, bin := range l.bins {
+			result.Bins = append(result.Bins, strings.ToLower(path.Base(bin)))
 		}
 	}
 
@@ -723,9 +736,10 @@ func pick(names []string, sizes map[string]int64, pkg string, t target) []string
 	// format and for any arch. A build for the arch sorts before a universal
 	// one. A command line build sorts before a desktop app, which holds no
 	// program to link. A plain build sorts before a variant whose name adds a
-	// word, as "tool-linux-amd64" before "tool-linux-amd64-baseline". A tar
-	// archive keeps file modes, so it sorts before a zip, and both sort before
-	// an installer, whose paths are the ones of an install tree. A smaller asset
+	// word, as "tool-linux-amd64" before "tool-linux-amd64-baseline". On
+	// Windows an msvc build sorts before a gnu one, as scoop and aqua pick it.
+	// A tar archive keeps file modes, so it sorts before a zip, and both sort
+	// before an installer, whose paths are the ones of an install tree. A smaller asset
 	// sorts before a larger one, because a desktop app with a plain name still
 	// bundles far more than a command line tool. A shorter name sorts before
 	// variants such as "-debug".
@@ -735,6 +749,7 @@ func pick(names []string, sizes map[string]int64, pkg string, t target) []string
 			cmp.Compare(t.fat(a), t.fat(b)),
 			cmp.Compare(desktop(a), desktop(b)),
 			cmp.Compare(variant(a), variant(b)),
+			cmp.Compare(t.gnu(a), t.gnu(b)),
 			cmp.Compare(rank(a), rank(b)),
 			smaller(sizes[a], sizes[b]),
 			cmp.Compare(len(a), len(b)),
@@ -932,6 +947,16 @@ func sibling(name, pkg string) int {
 	return 1
 }
 
+// gnu is 1 for a Windows build made with the GNU toolchain, as
+// "x86_64-pc-windows-gnu".
+func (t target) gnu(name string) int {
+	if t.OS == "windows" && hasWord(strings.ToLower(name), []string{"gnu"}) {
+		return 1
+	}
+
+	return 0
+}
+
 // fat is 1 for an asset that fits t as a universal build only.
 func (t target) fat(name string) int {
 	if hasWord(strings.ToLower(name), t.words.arch) {
@@ -1126,6 +1151,9 @@ type layout struct {
 	// named is the program's name when the first of bins is named after the
 	// asset. Each artifact then runs the file of its own asset.
 	named string
+	// found are the names of the other programs beside the first of bins,
+	// which the manifest leaves out.
+	found []string
 	app   []string
 	man   []string
 }
@@ -1332,6 +1360,10 @@ func findLayout(files []File, name, file string, named []string, archive bool) (
 		l.bins = append(l.bins, main)
 		l.bins = append(l.bins, siblings(main, executables, plain)...)
 		commands()
+
+		if l.named == "" {
+			l.found = beside(main, l.bins, executables, plain)
+		}
 	}
 
 	l.app = append(l.app, launched(files, l.bins, inside)...)
@@ -1418,6 +1450,28 @@ func siblings(main string, executables, plain []string) []string {
 		if path.Dir(p) == path.Dir(main) && strings.HasSuffix(strings.ToLower(p), ".exe") &&
 			strings.HasPrefix(program(p), prefix) {
 			found = append(found, p)
+		}
+	}
+
+	slices.Sort(found)
+
+	return found
+}
+
+// beside returns the names of the programs in the directory of main that are
+// none of bins, with the same rule for an .exe as siblings.
+func beside(main string, bins, executables, plain []string) []string {
+	var found []string
+
+	for _, p := range executables {
+		if path.Dir(p) == path.Dir(main) && !slices.Contains(bins, p) {
+			found = append(found, program(p))
+		}
+	}
+
+	for _, p := range plain {
+		if path.Dir(p) == path.Dir(main) && strings.HasSuffix(strings.ToLower(p), ".exe") && !slices.Contains(bins, p) {
+			found = append(found, program(p))
 		}
 	}
 

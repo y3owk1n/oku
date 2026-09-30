@@ -157,6 +157,8 @@ plan: nothing was changed
   them before it runs them.
 - `also fits` lists the other assets that fit this machine, and a line names
   the `--asset` flag that picks one.
+- `also holds` lists the programs in the download that the inferred manifest
+  leaves out, and a line gives the `--bin` flags that add them.
 - `installed` names the version that `oku.lock` holds now.
 - Other rows, such as `deps`, `build deps`, `needs`, `apps`, `services` and
   `env`, appear when the manifest has them. `--json` prints the same fields.

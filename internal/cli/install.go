@@ -46,6 +46,9 @@ type installed struct {
 	firstUseOthers []string
 	// inferred is the manifest text when oku inferred it during this install.
 	inferred string
+	// bins are the programs of an inferred manifest, and found the other
+	// programs beside them that it leaves out.
+	bins, found []string
 	// unsupported holds the platforms install was asked for that the manifest
 	// has no artifact and no build for. when is then the entry's when narrowed to
 	// the platforms it fits, or empty when it fits none of them.
@@ -355,6 +358,7 @@ func (e env) installOnce(ctx context.Context, opts Options, req request) (instal
 		return installed{}, fmt.Errorf("%w\n%s", err, inferredHints(req, inferred))
 	}
 
+	got.bins, got.found = inferred.Bins, inferred.Found
 	got.lockOnly = req.lockOnly
 	got.support = slices.DeleteFunc(platform.All(), func(p platform.Platform) bool {
 		return !m.Supports(p)
@@ -1889,6 +1893,26 @@ func reportInferred(w io.Writer, got installed, verbose bool) {
 	}
 
 	reportNodeRuntime(w, got)
+	reportFound(w, got)
+}
+
+// reportFound names the programs beside an inferred package's own that its
+// manifest leaves out, and the command that adds them.
+func reportFound(w io.Writer, got installed) {
+	if len(got.found) > 0 {
+		warn(w, "%s also holds %s, which oku left out\nadd them with: %s",
+			got.lock.Name, strings.Join(got.found, ", "), addBins(got.lock.Ref, got.bins, got.found))
+	}
+}
+
+// addBins is the oku add command that exposes bins and found.
+func addBins(ref string, bins, found []string) string {
+	cmd := "oku add " + ref
+	for _, bin := range append(slices.Clone(bins), found...) {
+		cmd += " --bin " + bin
+	}
+
+	return cmd
 }
 
 // inferredWhy says where oku took an inferred manifest from, for one package
@@ -1950,6 +1974,7 @@ func reportInferredTogether(w io.Writer, all []installed) {
 
 		for _, got := range group {
 			reportNodeRuntime(w, got)
+			reportFound(w, got)
 		}
 	}
 }

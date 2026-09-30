@@ -727,6 +727,13 @@ order step in `prd/product.md`.
   fit no platform as assets.
 - B489 [4] Inference from a release with no assets says that the release has
   none, and suggests an older release with `@<version>` or a manifest.
+- B490 [4] Programs beside an inferred package's program that B278 leaves
+  out stay out of the manifest. `add` names them and prints the
+  `oku add <ref> --bin ...` command that adds them. `add --plan` lists them
+  under `also holds`, and in `other_programs` with `--json`. `manifest init`
+  names them on stderr.
+- B491 [4] On Windows, inference takes an `msvc` build before a `gnu` build of
+  the same platform, whatever their sizes.
 - B354 [8] An artifact's `app` names a bundle, a desktop entry or a program.
   On Linux oku writes a desktop entry for each desktop entry or program, with
   its name, the program it runs and its icon, and on Windows a Start Menu

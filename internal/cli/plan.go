@@ -47,6 +47,9 @@ type planned struct {
 	Inferred    bool     `json:"inferred"`
 	Asset       string   `json:"asset,omitempty"`
 	OtherAssets []string `json:"other_assets"`
+	// OtherPrograms are the programs beside an inferred package's own that its
+	// manifest leaves out.
+	OtherPrograms []string `json:"other_programs"`
 	// Install is "download", "build", or "pin" for a package that has nothing
 	// for this machine and goes in oku.lock only.
 	Install    string   `json:"install"`
@@ -116,7 +119,7 @@ func runPlan(cmd *cobra.Command, opts Options, args []string, flags planFlags) e
 
 		// A script can always iterate over a list, so none is null.
 		for _, list := range []*[]string{
-			&p.OtherAssets, &p.Needs, &p.Deps, &p.BuildDeps, &p.Programs, &p.Apps,
+			&p.OtherAssets, &p.OtherPrograms, &p.Needs, &p.Deps, &p.BuildDeps, &p.Programs, &p.Apps,
 			&p.Fonts, &p.Services, &p.Env, &p.Platforms,
 		} {
 			if *list == nil {
@@ -149,6 +152,10 @@ func runPlan(cmd *cobra.Command, opts Options, args []string, flags planFlags) e
 
 		if len(p.OtherAssets) > 0 {
 			hint(out, fmt.Sprintf("pick another asset with `oku add %s --asset %s`", p.Ref, p.OtherAssets[0]))
+		}
+
+		if len(p.OtherPrograms) > 0 {
+			hint(out, fmt.Sprintf("add the other programs with `%s`", addBins(p.Ref, p.Programs, p.OtherPrograms)))
 		}
 
 		if p.Inferred {
@@ -223,21 +230,22 @@ func (e env) planFrom(
 	}
 
 	p := planned{
-		Ref:         req.ref.String(),
-		Name:        m.Package.Name,
-		Version:     m.Version.Value,
-		Description: m.Package.Description,
-		Homepage:    m.Package.Homepage,
-		License:     m.Package.License,
-		Manifest:    fetched.Path,
-		Commit:      fetched.Commit,
-		Inferred:    inferred.Text != "",
-		Asset:       inferred.Asset,
-		OtherAssets: inferred.Others,
-		Platform:    host.String(),
-		SigningKey:  m.Package.SigningKey,
-		Deps:        depNames(m.Runtime.Deps),
-		List:        e.listPath(),
+		Ref:           req.ref.String(),
+		Name:          m.Package.Name,
+		Version:       m.Version.Value,
+		Description:   m.Package.Description,
+		Homepage:      m.Package.Homepage,
+		License:       m.Package.License,
+		Manifest:      fetched.Path,
+		Commit:        fetched.Commit,
+		Inferred:      inferred.Text != "",
+		Asset:         inferred.Asset,
+		OtherAssets:   inferred.Others,
+		OtherPrograms: inferred.Found,
+		Platform:      host.String(),
+		SigningKey:    m.Package.SigningKey,
+		Deps:          depNames(m.Runtime.Deps),
+		List:          e.listPath(),
 	}
 
 	for _, at := range platform.All() {
@@ -460,6 +468,7 @@ func (p planned) pairs(s ui.Style) [][2]string {
 		{"build deps", list(p.BuildDeps)},
 		{"deps", list(p.Deps)},
 		{"programs", list(p.Programs)},
+		{"also holds", list(p.OtherPrograms)},
 		{"apps", list(p.Apps)},
 		{"fonts", list(p.Fonts)},
 		{"services", list(p.Services)},
