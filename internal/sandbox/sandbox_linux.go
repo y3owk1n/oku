@@ -217,12 +217,8 @@ func Init() error {
 		return err
 	}
 
-	// Abstract sockets belong to the network namespace. A step with the network
-	// shares the host's, where the user's session may listen on one.
-	if spec.Network {
-		if err := scopeAbstractSockets(); err != nil {
-			return err
-		}
+	if err := restrictSockets(spec.Network); err != nil {
+		return err
 	}
 
 	env := make([]string, 0, len(spec.Env))
@@ -291,31 +287,78 @@ func hide(dir string, keep []string, options string) error {
 	return nil
 }
 
-// scopeAbstractSockets keeps the build from connecting to an abstract socket
-// that a process outside it listens on. Landlock scopes them since Linux 6.12,
-// and an older kernel leaves them reachable.
-func scopeAbstractSockets() error {
+// landlockResolveUnix is LANDLOCK_ACCESS_FS_RESOLVE_UNIX, which x/sys does not
+// have yet.
+const landlockResolveUnix = 1 << 16
+
+// restrictSockets uses Landlock to keep the build from connecting to a socket
+// that a process outside it listens on. Since Linux 7.1 it covers every path
+// socket outside resolverSockets, also one that appears after the step starts.
+// On an older kernel only the mounts over the host's sockets cover path sockets.
+// Abstract sockets belong to the network namespace, so only a step with the
+// network shares the host's, and Linux 6.12 and later scope those.
+func restrictSockets(network bool) error {
 	abi, _, errno := unix.Syscall(unix.SYS_LANDLOCK_CREATE_RULESET, 0, 0, unix.LANDLOCK_CREATE_RULESET_VERSION)
-	if errno != 0 || abi < 6 {
+	if errno != 0 {
 		return nil
 	}
 
-	attr := unix.LandlockRulesetAttr{Scoped: unix.LANDLOCK_SCOPE_ABSTRACT_UNIX_SOCKET}
+	var attr unix.LandlockRulesetAttr
+	if network && abi >= 6 {
+		attr.Scoped = unix.LANDLOCK_SCOPE_ABSTRACT_UNIX_SOCKET
+	}
+
+	if abi >= 9 {
+		attr.Access_fs = landlockResolveUnix
+	}
+
+	if attr == (unix.LandlockRulesetAttr{}) {
+		return nil
+	}
 
 	fd, _, errno := unix.Syscall(
 		unix.SYS_LANDLOCK_CREATE_RULESET, uintptr(unsafe.Pointer(&attr)), unsafe.Sizeof(attr), 0,
 	)
 	if errno != 0 {
-		return fmt.Errorf("scope abstract sockets: %w", errno)
+		return fmt.Errorf("restrict sockets: %w", errno)
 	}
 	defer func() { _ = unix.Close(int(fd)) }()
 
+	if attr.Access_fs != 0 {
+		for _, dir := range resolverSockets {
+			if err := allowSockets(int(fd), dir); err != nil {
+				return err
+			}
+		}
+	}
+
 	if err := unix.Prctl(unix.PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0); err != nil {
-		return fmt.Errorf("scope abstract sockets: %w", err)
+		return fmt.Errorf("restrict sockets: %w", err)
 	}
 
 	if _, _, errno := unix.Syscall(unix.SYS_LANDLOCK_RESTRICT_SELF, fd, 0, 0); errno != 0 {
-		return fmt.Errorf("scope abstract sockets: %w", errno)
+		return fmt.Errorf("restrict sockets: %w", errno)
+	}
+
+	return nil
+}
+
+// allowSockets lets the build connect to the sockets under dir. A dir that
+// does not exist needs no rule.
+func allowSockets(ruleset int, dir string) error {
+	fd, err := unix.Open(dir, unix.O_PATH|unix.O_DIRECTORY|unix.O_CLOEXEC, 0)
+	if err != nil {
+		return nil //nolint:nilerr
+	}
+	defer func() { _ = unix.Close(fd) }()
+
+	rule := unix.LandlockPathBeneathAttr{Allowed_access: landlockResolveUnix, Parent_fd: int32(fd)}
+
+	if _, _, errno := unix.Syscall6(
+		unix.SYS_LANDLOCK_ADD_RULE, uintptr(ruleset), unix.LANDLOCK_RULE_PATH_BENEATH,
+		uintptr(unsafe.Pointer(&rule)), 0, 0, 0,
+	); errno != 0 {
+		return fmt.Errorf("allow the sockets under %s: %w", dir, errno)
 	}
 
 	return nil
@@ -333,7 +376,8 @@ func within(path string, dirs []string) bool {
 }
 
 // resolverSockets are where nscd and systemd-resolved answer name lookups,
-// which a step with the network needs.
+// which a step with the network needs. Neither the mounts over the host's
+// sockets nor the Landlock rule covers them.
 var resolverSockets = []string{"/run/nscd", "/var/run/nscd", "/run/systemd/resolve"}
 
 // tempDirs are the temporary directories that every program of the host shares.
