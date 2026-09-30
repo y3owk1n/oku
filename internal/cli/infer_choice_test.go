@@ -846,3 +846,53 @@ func TestB486ADesktopEntryIsAnAppOnLinuxOnly(t *testing.T) {
 		}
 	}
 }
+
+func TestB487InferenceReadsSHASUMS256AndSha256Txt(t *testing.T) {
+	for _, sums := range []string{"SHASUMS256.txt", "sha256.txt"} {
+		t.Run(sums, func(t *testing.T) {
+			m := newMachine(t)
+			archive, _ := m.archive(t, "release", map[string]string{"tool": script})
+			file := filepath.Join(m.fixtures, sums)
+			must(t, os.WriteFile(file, []byte("x"), 0o644))
+
+			inferServer(t, &m, map[string]string{hostAssetName(): archive, sums: file})
+
+			out, err := m.run(t, "", "manifest", "init", "--from", "owner/tool", "-o", "-")
+			must(t, err)
+
+			if !strings.Contains(hostArtifact(t, out), "/"+sums+`"`) {
+				t.Fatalf("the artifact should read %s:\n%s", sums, out)
+			}
+		})
+	}
+}
+
+func TestB488InferenceSkipsSHA1AndOtherHashFiles(t *testing.T) {
+	m := newMachine(t)
+	archive, _ := m.archive(t, "release", map[string]string{"tool": script})
+	name := strings.TrimSuffix(hostAssetName(), ".tar.gz")
+
+	assets := map[string]string{hostAssetName(): archive}
+	for _, ending := range []string{".shasum", ".sha1", ".md5sum", ".sha512sum"} {
+		assets[name+ending] = archive
+	}
+
+	inferServer(t, &m, assets)
+
+	out, err := m.run(t, "", "manifest", "init", "--from", "owner/tool", "-o", "-")
+	must(t, err)
+
+	if strings.Contains(out, "fit "+infer.Machine(platform.Host())+" too") {
+		t.Fatalf("no hash file should fit as an asset:\n%s", out)
+	}
+}
+
+func TestB489AReleaseWithNoAssetsSaysSo(t *testing.T) {
+	m := newMachine(t)
+	inferServer(t, &m, map[string]string{})
+
+	out, err := m.run(t, "", "manifest", "init", "--from", "owner/tool", "-o", "-")
+	if err == nil || !strings.Contains(out+err.Error(), "release v1.4.0 of owner/tool has no assets\nname an older release") {
+		t.Fatalf("init should say the release has no assets and what to do: %v\n%s", err, out)
+	}
+}

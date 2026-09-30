@@ -721,6 +721,12 @@ order step in `prd/product.md`.
 - B485 [4] Libraries (`.so`, `.dylib`, `.dll`) and scripts (`.sh`, `.ps1`,
   `.bat`, `.cmd`) in an asset are not programs, even when marked executable.
 - B486 [4] An inferred desktop entry is an `app` of a Linux artifact only.
+- B487 [4] Inference takes `SHASUMS256.txt` and `sha256.txt` as shared
+  checksum files, and never a `.shasum` file, which holds a SHA-1.
+- B488 [4] Hash files such as `.sha1`, `.shasum`, `.md5sum` and `.sha512sum`
+  fit no platform as assets.
+- B489 [4] Inference from a release with no assets says that the release has
+  none, and suggests an older release with `@<version>` or a manifest.
 - B354 [8] An artifact's `app` names a bundle, a desktop entry or a program.
   On Linux oku writes a desktop entry for each desktop entry or program, with
   its name, the program it runs and its icon, and on Windows a Start Menu
