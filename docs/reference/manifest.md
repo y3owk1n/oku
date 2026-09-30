@@ -1500,17 +1500,26 @@ again. `oku update` infers again.
   names a libc on Linux only, so `x86_64-pc-windows-gnu` is a Windows asset.
 - On Linux it writes the glibc build first and the musl build second with no
   `libc` in its `match`, so glibc machines with no build of their own use the
-  musl build.
+  musl build. When an arch has a musl build and an archive or binary that names
+  no libc, as `bun-linux-x64.zip` beside `bun-linux-x64-musl.zip`, the one that
+  names none is the glibc build.
+- An asset that names an arch oku has no platform for, such as `ppc64le`,
+  `s390x`, `armv6` or `i586`, fits no platform. Neither does an Android build.
 - It takes tar archives in any compression oku knows, zip and 7z archives,
   single binaries, compressed or not, and the installers oku
   [unpacks](#downloads-oku-can-unpack): `.deb`, `.rpm`, `.msi`, `.dmg`, `.pkg`
   and AppImage. It skips editor extensions (`.vsix`).
 - An installer's format names its OS, so `Tool1.2.dmg` is a macOS asset with no
-  OS word, and `tool-aarch64.AppImage` is a Linux one. One that names no arch
-  fits amd64 and arm64 of that OS.
+  OS word, and `tool-aarch64.AppImage` is a Linux one. A `.exe` with no OS word
+  is a Windows asset, as `sops-v3.9.0.amd64.exe`.
+- An asset that names its OS and no arch fits amd64 and arm64 on macOS, where
+  such a build is universal, and amd64 elsewhere. An installer that names no
+  arch fits amd64 and arm64 of its OS.
 - oku can open a `.dmg` or `.pkg` on macOS and an `.msi` on Windows only, so run
-  inference for those on that OS. oku cannot unpack a Windows `-setup.exe`
-  without running it, so it takes none.
+  inference for those on that OS. oku does not run Windows setup programs, the
+  Inno Setup and NSIS `.exe` files. A platform whose asset is one gets no
+  artifact. oku cannot tell a setup program by its name, so `oku add` leaves
+  out a `.exe` with no OS word that it did not open.
 
 With several candidates for one platform, it prefers, in order:
 
@@ -1521,10 +1530,14 @@ With several candidates for one platform, it prefers, in order:
 2. A build for the arch over a universal one.
 3. A command line build over a desktop app, which is an asset with `desktop`,
    `app`, `gui`, `installer`, `setup` or `.app.` in its name.
-4. A tar archive over a zip, both over a single binary, that over an installer,
+4. A plain build over a variant. A variant's name adds a word to the program,
+   the version and the platform, as `baseline` does in
+   `bun-linux-x64-baseline.zip`. So `cosign-linux-amd64` wins over
+   `cosign-linux-pivkey-pkcs11key-amd64`.
+5. A tar archive over a zip, both over a single binary, that over an installer,
    and a `.dmg` over a `.pkg`.
-5. The smaller asset, when the host reports sizes.
-6. The shortest name.
+6. The smaller asset, when the host reports sizes.
+7. The shortest name.
 
 When one platform has an asset named after the repo, a platform that has only
 another program's asset gets no artifact. An installer such as a `.deb` is
@@ -1539,15 +1552,15 @@ manifest does not name them, so its text is the same on every machine. An
 |---|---|
 | `linux` | `linux` |
 | `darwin` | `darwin`, `macos`, `macosx`, `apple`, `osx`, `mac` |
-| `windows` | `windows`, `win64`, `win` |
-| `amd64` | `x86_64`, `x86-64`, `amd64`, `x64` |
+| `windows` | `windows`, `win64`, `win32`, `win` |
+| `amd64` | `x86_64`, `x86-64`, `amd64`, `x64`, `64bit`, `64-bit` |
 | `arm64` | `aarch64`, `arm64` |
-| `386` | `i386`, `i686`, `386` |
+| `386` | `i386`, `i686`, `386`, `ia32`, `32bit`, `32-bit` |
 | `arm` | `armv7`, `armv7l`, `armhf`, `arm` |
 | `riscv64` | `riscv64` |
 | any arch, on `darwin` | `universal`, `universal2`, `all` |
-| `glibc` | `gnu`, `glibc` |
-| `musl` | `musl` |
+| `glibc` | `gnu`, `glibc`, `gnueabi`, `gnueabihf` |
+| `musl` | `musl`, `musleabi`, `musleabihf` |
 
 ### How inference reads an asset
 

@@ -658,8 +658,9 @@ order step in `prd/product.md`.
   checksum file that states another digest for it, and oku checks the
   download against GitHub's digest.
 - B198 [4] With several assets that fit a platform equally, inference skips
-  one whose name says `desktop`, `app`, `gui`, `installer` or `setup`,
-  and takes the smaller of the rest when the host reports sizes. `manifest
+  one whose name says `desktop`, `app`, `gui`, `installer` or `setup`, then
+  one that adds more words to its name (B478), and takes the smaller of the
+  rest when the host reports sizes. `manifest
   init` lists on stderr every other asset that fits the host, in any format,
   and leaves out a universal build beside one for the arch.
 - B349 [4] Among assets that fit a platform, inference takes one named after
@@ -690,6 +691,24 @@ order step in `prd/product.md`.
 - B353 [4] When one platform has an asset named after the repo, inference
   gives no artifact to a platform that has only another program's asset. An
   installer such as a `.deb` keeps its platform whatever its name.
+- B478 [4] Among assets that fit a platform, inference takes a plain build
+  before a variant, whose name adds a word to the program, version and
+  platform. So `tool-linux-amd64` comes before `tool-linux-amd64-baseline` and
+  `tool-linux-pivkey-amd64`, whatever their sizes.
+- B479 [4] When a Linux arch has a musl build and an archive or binary that
+  names no libc, glibc hosts take the one that names none and other hosts the
+  musl build. A `.deb` or `.rpm` that names no libc does not count as the
+  glibc build.
+- B480 [4] An asset that names an arch oku has no platform for, such as
+  `ppc64le`, `armv6` or `i586`, fits no platform, whatever its format. An
+  Android build fits none either.
+- B481 [4] An asset that names its OS and no arch fits amd64 and arm64 on
+  macOS, and amd64 on Linux and Windows. `win32` names Windows, a `.exe` with
+  no OS word is a Windows build, `64bit` and `64-bit` name amd64, and `32bit`
+  and `32-bit` name 386.
+- B482 [4] Inference gives no artifact from an Inno Setup or NSIS setup
+  program, and fails when the host's asset is one. `add` gives none to a
+  `.exe` with no OS word that it did not open.
 - B354 [8] An artifact's `app` names a bundle, a desktop entry or a program.
   On Linux oku writes a desktop entry for each desktop entry or program, with
   its name, the program it runs and its icon, and on Windows a Start Menu
@@ -708,7 +727,8 @@ order step in `prd/product.md`.
 - B222 [4] Inference takes a `.deb`, `.rpm`, `.msi`, `.dmg`, `.pkg` or
   AppImage asset when no archive or single binary fits, a `.dmg` before a
   `.pkg`. An installer's format names its OS, and one that names no arch fits
-  amd64 and arm64 of that OS. An asset that holds `Name.app` gives
+  amd64 and arm64 of that OS. Any other asset that names no arch follows
+  B481. An asset that holds `Name.app` gives
   `app = ["Name.app"]`, and oku does not strip a bundle at the top of the
   asset. A program of the bundle whose name starts with the package's is a
   program, except the one `Info.plist` says opens the app, unless that one has

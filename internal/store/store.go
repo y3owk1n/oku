@@ -4,6 +4,7 @@ package store
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/binary"
@@ -1074,7 +1075,9 @@ func (s *Store) Inspect(ctx context.Context, url string) ([]infer.File, error) {
 			return nil, err
 		}
 
-		return []infer.File{{Path: path.Base(url), Executable: true, GUI: windowsGUI(download)}}, nil
+		return []infer.File{{
+			Path: path.Base(url), Executable: true, GUI: windowsGUI(download), Setup: windowsSetup(download),
+		}}, nil
 	}
 
 	if err != nil {
@@ -1113,7 +1116,7 @@ func (s *Store) Inspect(ctx context.Context, url string) ([]infer.File, error) {
 
 			file.Text = string(data)
 		case strings.HasSuffix(strings.ToLower(p), ".exe"):
-			file.GUI = windowsGUI(p)
+			file.GUI, file.Setup = windowsGUI(p), windowsSetup(p)
 		}
 
 		files = append(files, file)
@@ -1151,6 +1154,30 @@ func windowsGUI(p string) bool {
 	const subsystemGUI = 2
 
 	return binary.LittleEndian.Uint16(head[at+24+68:]) == subsystemGUI
+}
+
+// setupMarks are texts that the stub of an Inno Setup or NSIS setup program
+// holds near its start.
+var setupMarks = [][]byte{[]byte("Inno Setup Setup Data"), []byte("Nullsoft.NSIS.exehead")}
+
+// windowsSetup reports whether the file at p is an Inno Setup or NSIS setup
+// program, which installs the package when it runs and is not the package.
+func windowsSetup(p string) bool {
+	f, err := os.Open(p)
+	if err != nil {
+		return false
+	}
+	defer f.Close()
+
+	head := make([]byte, 2<<20)
+	n, _ := io.ReadFull(f, head)
+	head = head[:n]
+
+	if !bytes.HasPrefix(head, []byte("MZ")) {
+		return false
+	}
+
+	return slices.ContainsFunc(setupMarks, func(mark []byte) bool { return bytes.Contains(head, mark) })
 }
 
 // Hashes downloads url into the cache and returns the two digests a manifest

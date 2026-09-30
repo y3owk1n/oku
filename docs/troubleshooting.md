@@ -147,6 +147,7 @@ with `--bin`. See [Fix a wrong pick](guides/add-packages.md#fix-a-wrong-pick-wit
 | `no release asset fits linux-amd64-glibc`, with a platform that is not yours | oku pins the package for a `[lock]` platform, and no file name says that OS and CPU. Leave the platform out of the package's `when`, or write a manifest. |
 | `cannot tell which file is the program, executables found: ...` | The download holds several programs and none has the repo's name. Pass one to `--bin`. |
 | `no file in it is executable` | Write a manifest, see [Publish a manifest](guides/publish-a-manifest.md). |
+| `<file>: it is a setup program, which oku does not run` | The release file for your machine is an Inno Setup or NSIS installer. Pass another file to `--asset`, try `scoop:` or `winget:`, or write a manifest. |
 | `it chose the asset <file> for this machine` | The install failed. The next lines list the other files that fit, and the `oku add --asset` command that picks one. `--verbose` adds the manifest oku inferred. |
 | `--asset "<glob>" names 0 assets for <platform>, want one of: ...` | The glob matches no file that fits your machine. Pick a name from the list. |
 | `--asset and --bin apply when oku infers a manifest, and <ref> has one` | The ref has a manifest, so these flags do nothing. Drop them. |
