@@ -1872,3 +1872,16 @@ check of D112 does not look at it. A line diff shows every table without oku
 naming each kind of change, so a table added later is covered too. The lock
 keeps no list text, since a commit already names it and a list at a URL is
 rare.
+
+## D114. The trust question names where a locked package downloads from
+
+The source a user trusts is who wrote the manifest, and the manifest may
+download from somewhere else, as a cask downloads from its vendor. oku reads
+the download URLs from the project's `oku.lock` and names their publisher next
+to each package, when it differs from the source. Why: a cloned project ships
+its lock, and the lock already holds each platform's URL, so the question needs
+no network and no manifest from a source the user has not trusted yet. A
+package the lock does not pin gets no line. Resolving it first would move the
+question after inference and version picking, into the parallel install. The
+domain is not what the user trusts, because on a shared host anyone can
+publish, and the manifest still decides the programs, deps and `[env]`.
