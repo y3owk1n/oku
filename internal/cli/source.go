@@ -61,9 +61,10 @@ with no sources.`,
 	}
 
 	remove := &cobra.Command{
-		Use:   "remove <alias>",
-		Short: "Forget an alias",
-		Args:  exactArgs(1),
+		Use:     "remove <alias>",
+		Aliases: []string{"rm"},
+		Short:   "Forget an alias",
+		Args:    exactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			e, err := loadEnv()
 			if err != nil {
@@ -92,9 +93,10 @@ with no sources.`,
 	}
 
 	list := &cobra.Command{
-		Use:   "list",
-		Short: "List your aliases",
-		Args:  cobra.NoArgs,
+		Use:     "list",
+		Aliases: []string{"ls"},
+		Short:   "List your aliases",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			e, err := loadEnv()
 			if err != nil {

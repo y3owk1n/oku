@@ -13,9 +13,10 @@ import (
 
 func newRemoveCmd(opts Options) *cobra.Command {
 	return &cobra.Command{
-		Use:   "remove <name>...",
-		Short: "Remove packages from the profile",
-		Args:  minArgs(1),
+		Use:     "remove <name>...",
+		Aliases: []string{"rm", "uninstall"},
+		Short:   "Remove packages from the profile",
+		Args:    minArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			e, err := scopedEnv(cmd, opts)
 			if err != nil {

@@ -44,8 +44,9 @@ func newSelfUpdateCmd(opts Options) *cobra.Command {
 	)
 
 	cmd := &cobra.Command{
-		Use:   "update",
-		Short: "Replace oku with the newest release, after checking its signature",
+		Use:     "update",
+		Aliases: []string{"upgrade"},
+		Short:   "Replace oku with the newest release, after checking its signature",
 		Long: `Replace oku with the newest release, after checking its signature.
 
 oku downloads the binary for this OS and CPU from its GitHub releases, with the

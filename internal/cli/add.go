@@ -33,8 +33,9 @@ func newAddCmd(opts Options) *cobra.Command {
 	)
 
 	cmd := &cobra.Command{
-		Use:   "add <ref>[@version]...",
-		Short: "Install packages from their manifests",
+		Use:     "add <ref>[@version]...",
+		Aliases: []string{"install"},
+		Short:   "Install packages from their manifests",
 		Long: `Install packages from their manifests, one generation each, in the order
 given. A failure stops the command, and the packages before it stay. A ref is
 one of:

@@ -19,9 +19,10 @@ func newListCmd(opts Options) *cobra.Command {
 	var files, settings bool
 
 	cmd := &cobra.Command{
-		Use:   "list",
-		Short: "List installed packages, or the files and settings of the list",
-		Args:  cobra.NoArgs,
+		Use:     "list",
+		Aliases: []string{"ls"},
+		Short:   "List installed packages, or the files and settings of the list",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			e, err := scopedEnv(cmd, opts)
 			if err != nil {

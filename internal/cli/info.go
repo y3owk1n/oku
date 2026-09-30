@@ -17,9 +17,10 @@ import (
 
 func newInfoCmd(opts Options) *cobra.Command {
 	return &cobra.Command{
-		Use:   "info <name>",
-		Short: "Show what oku knows about an installed package",
-		Args:  exactArgs(1),
+		Use:     "info <name>",
+		Aliases: []string{"show"},
+		Short:   "Show what oku knows about an installed package",
+		Args:    exactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			e, err := scopedEnv(cmd, opts)
 			if err != nil {
