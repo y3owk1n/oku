@@ -1311,6 +1311,14 @@ order step in `prd/product.md`.
   and a published digest rank the same.
 - B498 [10] `add --plan` shows the check, with `verified` in `--json`, and
   `info` shows the check the lock recorded for the machine.
+- B499 [10] With `[lock]` `unverified = "refuse"`, `add`, `update`, `sync`,
+  `shell` and `run` do not trust a download that nothing states a digest for,
+  on any platform they pin. A package that the lock holds stays at its locked
+  version and the command goes on, saying so. `--accept-unverified` trusts it,
+  oku never refuses a digest the lock pins, and another value is an error.
+- B500 [10] `unverified = "warn"` asks `trust it?` on a terminal, once for
+  every platform of the same version, and refuses without one. `"allow"`, the
+  default, trusts the download and says so.
 
 ## Tooling
 
