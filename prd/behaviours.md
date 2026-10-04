@@ -697,7 +697,8 @@ order step in `prd/product.md`.
   asset's OS and arch, then one that names its OS or arch alone, then a generic
   one such as `checksums.txt` or `SHA256SUMS`, and never one that names another
   OS or arch. The `.sha256` or `.sha256sum` file of another asset, such as
-  `tool.deb.sha256sum`, is not a shared checksum file.
+  `tool.deb.sha256sum`, is not a shared checksum file, and neither is a
+  Sigstore bundle such as `checksums.txt.bundle` or a `.shasum` file.
 - B536 [4] An inferred URL has `{{tag}}` in place of the release's tag, also
   where GitHub writes the tag's `+` as `%2B`. A one-number version with a
   letter before it, such as the `2` of the repo name `tool2`, stays as written.
