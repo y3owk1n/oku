@@ -20,7 +20,7 @@ func newGenerationsCmd(opts Options) *cobra.Command {
 	return &cobra.Command{
 		Use:   "generations",
 		Short: "List the profile's generations",
-		Args:  cobra.NoArgs,
+		Args:  noArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			e, err := scopedEnv(cmd, opts)
 			if err != nil {
@@ -234,7 +234,7 @@ func newRollbackCmd(opts Options) *cobra.Command {
 Without a number, rollback goes to the generation before the current one. The
 switch is one link change, because every generation's packages are still in
 the store. Rollback does not change oku.toml.`,
-		Args: cobra.MaximumNArgs(1),
+		Args: maxArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runRollback(cmd, opts, args)
 		},
@@ -360,12 +360,18 @@ func runRollback(cmd *cobra.Command, opts Options, args []string) error {
 
 	for _, pkg := range target.Packages {
 		if _, ok := own.Packages[pkg.Name]; !ok {
+			// With the version, oku add takes what the generation held, not the newest.
+			add := pkg.Ref
+			if pkg.Version != "" {
+				add += "@" + pkg.Version
+			}
+
 			warn(
 				cmd.ErrOrStderr(),
 				"%s does not list %s, so `oku sync` will remove it again. Run `oku add %s` to keep it.",
 				e.listPath(),
 				pkg.Name,
-				pkg.Ref,
+				add,
 			)
 		}
 	}

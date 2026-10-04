@@ -141,8 +141,14 @@ func TestB371GCOlderThanKeepsWhatWasActiveThen(t *testing.T) {
 		must(t, os.WriteFile(path, data, 0o644))
 	}
 
-	if _, err := m.run(t, "", "gc", "--older-than", "30"); err == nil {
-		t.Fatal("--older-than took a number without a unit")
+	for _, age := range []string{"30", "0", "3m"} {
+		if _, err := m.run(t, "", "gc", "--older-than", age, "--dry-run"); err == nil {
+			t.Fatalf("--older-than took %q", age)
+		}
+	}
+
+	if out, err := m.run(t, "", "gc", "--older-than", "12h", "--dry-run"); err != nil {
+		t.Fatalf("--older-than should take hours, as --min-release-age does: %v\n%s", err, out)
 	}
 
 	out, err := m.run(t, "", "gc", "--older-than", "30d")

@@ -26,7 +26,7 @@ func newDoctorCmd(opts Options) *cobra.Command {
 
 doctor reads local files only. It prints one line per check, and exits with
 code 1 when a check found a problem.`,
-		Args: cobra.NoArgs,
+		Args: noArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return runDoctor(cmd, opts)
 		},
@@ -253,7 +253,7 @@ func checkSandbox(r *report) {
 
 func checkHook(r *report, opts Options) {
 	if lines := hookLines(); len(lines) > 0 {
-		r.ok("the shell hook is loaded from %s", strings.Join(lines, ", "))
+		r.ok("the shell hook line is in %s", strings.Join(lines, ", "))
 
 		return
 	}

@@ -212,7 +212,7 @@ start and stop act on this login session only.`,
 		Use:     "list",
 		Aliases: []string{"ls"},
 		Short:   "List the services of installed packages",
-		Args:    cobra.NoArgs,
+		Args:    noArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return listServices(cmd, opts)
 		},
@@ -391,10 +391,12 @@ func controlService(cmd *cobra.Command, opts Options, action, name string) error
 
 	d, ok := defs[name]
 	if !ok {
-		known := slices.Sorted(maps.Keys(defs))
+		if len(defs) == 0 {
+			return fmt.Errorf("no installed package ships a service called %s, or any service", name)
+		}
 
 		return fmt.Errorf("no installed package ships a service called %s, the services are: %s",
-			name, strings.Join(known, ", "))
+			name, strings.Join(slices.Sorted(maps.Keys(defs)), ", "))
 	}
 
 	ctx, out := cmd.Context(), cmd.OutOrStdout()

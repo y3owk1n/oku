@@ -29,7 +29,7 @@ Packages built from source can embed their store path, so only machines with
 the same store root can share them. "oku setup --system" creates that root once,
 with administrator rights, and makes your user its owner. No later command
 needs those rights.`,
-		Args: cobra.NoArgs,
+		Args: noArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if !system {
 				return errors.New(`"oku setup" needs --system, which is the only thing it sets up`)

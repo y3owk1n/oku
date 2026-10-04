@@ -8,13 +8,13 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
-	"strconv"
 	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
 
 	"github.com/y3owk1n/oku/internal/forge"
+	"github.com/y3owk1n/oku/internal/list"
 	"github.com/y3owk1n/oku/internal/profile"
 	"github.com/y3owk1n/oku/internal/status"
 	"github.com/y3owk1n/oku/internal/store"
@@ -50,7 +50,7 @@ instead.
 
 gc also shares the identical files of store paths that an older oku installed,
 so the disk keeps each of them once.`,
-		Args: cobra.NoArgs,
+		Args: noArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if cmd.Flags().Changed("keep") && keep < 1 {
 				return fmt.Errorf("--keep must be at least 1, got %d", keep)
@@ -102,21 +102,17 @@ so the disk keeps each of them once.`,
 	return cmd
 }
 
-// parseAge reads a number of days or weeks, such as 30d or 2w. An error names
-// the flag the age came from.
+// parseAge reads a number of hours, days or weeks, such as 12h, 30d or 2w, as
+// --min-release-age does. An error names the flag the age came from.
 func parseAge(flag, text string) (time.Duration, error) {
-	units := map[string]time.Duration{"d": 24 * time.Hour, "w": 7 * 24 * time.Hour}
-
-	n, err := strconv.Atoi(text[:max(len(text)-1, 0)])
-	unit, ok := units[text[max(len(text)-1, 0):]]
-
-	if err != nil || !ok || n < 1 {
+	age, err := list.ParseAge(text)
+	if err != nil || age == 0 {
 		return 0, fmt.Errorf(
-			"%s takes a number of days or weeks, such as 30d or 2w, got %q", flag, text,
+			"%s takes a number of hours, days or weeks, such as 12h, 30d or 2w, got %q", flag, text,
 		)
 	}
 
-	return time.Duration(n) * unit, nil
+	return age, nil
 }
 
 // ages is how long each part of the cache stays after oku last read it.

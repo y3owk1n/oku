@@ -62,7 +62,7 @@ pass --release, which goes back to the newest release.
 A release that came out less than the minimum release age ago waits, as it
 does for packages: [lock] min_release_age in the global oku.toml, 1d unless it
 says otherwise, or --min-release-age for one run. --to and --nightly skip it.`,
-		Args: cobra.NoArgs,
+		Args: noArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if nightly && release {
 				return errors.New("--nightly and --release exclude each other")

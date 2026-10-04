@@ -10,6 +10,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/y3owk1n/oku/internal/expose"
+	"github.com/y3owk1n/oku/internal/list"
 	"github.com/y3owk1n/oku/internal/lock"
 	"github.com/y3owk1n/oku/internal/platform"
 	"github.com/y3owk1n/oku/internal/ui"
@@ -22,7 +23,7 @@ func newListCmd(opts Options) *cobra.Command {
 		Use:     "list",
 		Aliases: []string{"ls"},
 		Short:   "List installed packages, or the files and settings of the list",
-		Args:    cobra.NoArgs,
+		Args:    noArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			e, err := scopedEnv(cmd, opts)
 			if err != nil {
@@ -41,6 +42,12 @@ func newListCmd(opts Options) *cobra.Command {
 			pkgs, err := e.profile().Packages()
 			if err != nil {
 				return err
+			}
+
+			// The profile is what the last sync made, and a list that no longer
+			// parses would keep the next sync from changing it.
+			if _, err := list.Read(e.listPath()); err != nil {
+				warn(cmd.ErrOrStderr(), "%v", err)
 			}
 
 			if wantJSON(cmd) {

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"net/url"
 	"os"
 	"path/filepath"
 	"slices"
@@ -87,10 +88,20 @@ an entry only when a key from "oku key trust" signed it.`,
 			Args:  exactArgs(1),
 			RunE: func(cmd *cobra.Command, args []string) error {
 				location := args[0]
-				if !strings.Contains(location, "://") {
+
+				switch u, err := url.Parse(location); {
+				case strings.Contains(location, "://") && (err != nil || u.Host == "" ||
+					u.Scheme != "https" && u.Scheme != "http"):
+					return fmt.Errorf("%s is not a cache. A cache is an http(s) URL or a directory", location)
+				case !strings.Contains(location, "://"):
 					abs, err := filepath.Abs(location)
 					if err != nil {
 						return err
+					}
+
+					if info, err := os.Stat(abs); err != nil || !info.IsDir() {
+						return fmt.Errorf("%s is not a directory. A cache is an http(s) URL or a directory\n"+
+							"`oku cache push %s` makes one", abs, abs)
 					}
 
 					location = abs
@@ -142,7 +153,7 @@ an entry only when a key from "oku key trust" signed it.`,
 			Use:     "list",
 			Aliases: []string{"ls"},
 			Short:   "List your caches",
-			Args:    cobra.NoArgs,
+			Args:    noArgs,
 			RunE: func(cmd *cobra.Command, _ []string) error {
 				e, err := loadEnv()
 				if err != nil {
@@ -177,7 +188,7 @@ an entry only when a key from "oku key trust" signed it.`,
 Without names it pushes every built package of the global profile. Serve the
 directory over http(s), or share it, and it is a cache. oku signs with the key
 from "oku key generate".`,
-			Args: cobra.MinimumNArgs(1),
+			Args: minArgs(1),
 			RunE: func(cmd *cobra.Command, args []string) error {
 				return runPush(cmd, args[0], args[1:])
 			},
@@ -296,7 +307,7 @@ func newKeyCmd() *cobra.Command {
 		&cobra.Command{
 			Use:   "generate",
 			Short: "Create the key that \"oku cache push\" signs with",
-			Args:  cobra.NoArgs,
+			Args:  noArgs,
 			RunE: func(cmd *cobra.Command, _ []string) error {
 				e, err := loadEnv()
 				if err != nil {
@@ -384,7 +395,7 @@ func newKeyCmd() *cobra.Command {
 			Use:     "list",
 			Aliases: []string{"ls"},
 			Short:   "List the trusted keys, and your own public key",
-			Args:    cobra.NoArgs,
+			Args:    noArgs,
 			RunE: func(cmd *cobra.Command, _ []string) error {
 				e, err := loadEnv()
 				if err != nil {

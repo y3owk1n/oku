@@ -32,6 +32,10 @@ refs to lists.
 | `scoop:name`, `scoop:bucket/name`, `scoop:owner/repo/name` | A Scoop manifest, which oku translates into a manifest. oku looks up a bare name in the `main` bucket, then `extras`. `owner/repo` names a bucket on GitHub. |
 | `core/ripgrep` | The package `ripgrep` in your source `core`, see [Sources and aliases](#sources-and-aliases). |
 
+A ref that starts with a scheme oku does not know, such as `gihub:`, fails and
+lists the schemes, unless a file has that name. A `#` with nothing after it
+fails too.
+
 The registry refs `npm:`, `pypi:`, `go:` and `cargo:` have no manifest, so oku
 always infers one. How each installs, and the runtime it needs, is in
 [npm, PyPI, Go and cargo](../guides/npm-pypi-go-cargo.md).

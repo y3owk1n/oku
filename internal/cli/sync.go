@@ -47,7 +47,7 @@ func newSyncCmd(opts Options) *cobra.Command {
 With a list ref, such as github:you/machines, sync first sets this machine up
 from that list and the lock beside it. That needs a machine with no global
 oku.toml yet.`,
-		Args: cobra.MaximumNArgs(1),
+		Args: maxArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := recoverFirst(cmd, opts); err != nil {
 				return err
@@ -452,14 +452,15 @@ func reconcile(
 			))
 		}
 
-		if kind, version, note := j.row(style, host); kind != "" && !live {
+		// In a pipe a dry run says what would change in its "would" lines alone.
+		if kind, version, note := j.row(style, host); kind != "" && !live && !dryRun {
 			syncRow(style, summary, kind, name, version, note)
 		}
 
 		if style.On() && !flags.verbose {
 			inferred = append(inferred, got)
 		} else {
-			reportInferred(out, got, flags.verbose)
+			reportInferred(cmd.ErrOrStderr(), got, flags.verbose)
 		}
 
 		e.reportFirstUse(cmd.ErrOrStderr(), got)
@@ -488,7 +489,7 @@ func reconcile(
 		}
 	}
 
-	reportInferredTogether(out, inferred)
+	reportInferredTogether(cmd.ErrOrStderr(), inferred)
 
 	// A dry run says "would remove" further down, so it needs no row here.
 	if !dryRun {

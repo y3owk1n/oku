@@ -96,7 +96,7 @@ with no sources.`,
 		Use:     "list",
 		Aliases: []string{"ls"},
 		Short:   "List your aliases",
-		Args:    cobra.NoArgs,
+		Args:    noArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			e, err := loadEnv()
 			if err != nil {
