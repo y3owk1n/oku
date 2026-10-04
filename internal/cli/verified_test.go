@@ -188,3 +188,85 @@ func TestB498PlanAndInfoShowTheCheck(t *testing.T) {
 		t.Fatalf("want info to show the check:\n%s", out)
 	}
 }
+
+func TestB499RefuseStopsAFirstDownloadAndALockedPackageStays(t *testing.T) {
+	m := newMachine(t)
+	tool, publish := digestReleases(t, &m, map[string]bool{"v1.0.0": false})
+	lockPath := filepath.Join(m.config, "oku.lock")
+
+	m.writeFilesList(t, fmt.Sprintf("[lock]\nunverified = \"refuse\"\n[packages]\ntool = %q\n", tool))
+
+	_, err := m.run(t, "", "sync")
+	if err == nil || !strings.Contains(err.Error(), "--accept-unverified") {
+		t.Fatalf("want sync to refuse a first download, got %v", err)
+	}
+
+	_, err = m.run(t, "", "sync", "--accept-unverified")
+	must(t, err)
+
+	// A pin in oku.lock is never asked about.
+	_, err = m.run(t, "", "sync")
+	must(t, err)
+
+	publish(map[string]bool{"v1.0.0": false, "v1.1.0": false})
+
+	out, err := m.run(t, "", "update")
+	if err != nil {
+		t.Fatalf("update failed: %v\n%s", err, out)
+	}
+
+	text, err := os.ReadFile(lockPath)
+	must(t, err)
+
+	if !strings.Contains(string(text), "version = '1.0.0'") || !strings.Contains(out, "tool stays at 1.0.0") {
+		t.Fatalf("want tool kept at 1.0.0, the lock is\n%s\nand update said\n%s", text, out)
+	}
+
+	_, err = m.run(t, "", "update", "--accept-unverified")
+	must(t, err)
+
+	text, err = os.ReadFile(lockPath)
+	must(t, err)
+
+	if !strings.Contains(string(text), "version = '1.1.0'") {
+		t.Fatalf("want --accept-unverified to take 1.1.0:\n%s", text)
+	}
+
+	m.writeFilesList(t, "[lock]\nunverified = \"never\"\n")
+
+	if _, err := m.run(t, "", "sync"); err == nil || !strings.Contains(err.Error(), "wants \"allow\"") {
+		t.Fatalf("an unknown value passed: %v", err)
+	}
+}
+
+func TestB500WarnAsksOncePerVersionAndAllowTrusts(t *testing.T) {
+	m := newMachine(t)
+	tool, _ := digestReleases(t, &m, map[string]bool{"v1.0.0": false})
+
+	m.writeFilesList(t, "[lock]\nunverified = \"warn\"\n"+
+		"platforms = [\"darwin-arm64\", \"linux-amd64-glibc\", \"windows-amd64\"]\n")
+
+	_, err := m.run(t, "", "add", tool)
+	if err == nil || !strings.Contains(err.Error(), "this is not a terminal") {
+		t.Fatalf("want add without a terminal refused, got %v", err)
+	}
+
+	m.opts.Interactive = yes()
+
+	out, err := m.run(t, "y\n", "add", tool)
+	must(t, err)
+
+	if strings.Count(out, "trust it?") != 1 {
+		t.Fatalf("want one question for every platform of the version:\n%s", out)
+	}
+
+	plain := newMachine(t)
+	other, _ := digestReleases(t, &plain, map[string]bool{"v1.0.0": false})
+
+	out, err = plain.run(t, "", "add", other)
+	must(t, err)
+
+	if !strings.Contains(out, "trusted this download") {
+		t.Fatalf("want the default to trust the download and say so:\n%s", out)
+	}
+}

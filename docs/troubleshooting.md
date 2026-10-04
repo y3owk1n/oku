@@ -364,6 +364,22 @@ run the command with --accept-unknown-age, or set min_release_age = "0" on lua
 Run the command with `--accept-unknown-age`, or set `unknown_release_age` in
 [`[lock]`](reference/oku-toml.md#lock).
 
+## oku does not trust a first download
+
+With `[lock]` `unverified = "warn"`, oku asks before it trusts a download that
+nothing states a digest for. In a script it stops:
+
+```
+oku: nothing states a digest for the download of hello 1.2.0 for darwin-arm64, so oku asks before it trusts it, and this is not a terminal
+run the command with --accept-unverified, or set [lock] unverified = "allow"
+```
+
+With `unverified = "refuse"` it stops at a terminal too. Ask the developer to
+publish a checksum, or check the file yourself and run the command with
+`--accept-unverified`. A package that `oku.lock` holds stays at its locked
+version instead, and the line says `hello stays at 1.1.0`. See
+[Trust on first use](reference/security.md#trust-on-first-use).
+
 ## Something the machine needs is missing
 
 A package can name what it needs of the machine in `[host]`, such as Xcode

@@ -282,7 +282,7 @@ func runAdd(
 	req.service, req.acceptKey, req.system = enable, flags.acceptKey, system
 	req.acceptWeaker = flags.acceptWeaker
 	req.verbose, req.approve, req.log = flags.verbose, e.approver(cmd, opts, flags), buildLog(cmd, flags)
-	req.checkAge = e.ageChecker(cmd, opts, flags)
+	req.checkAge, req.checkTrust = e.ageChecker(cmd, opts, flags), e.trustChecker(cmd, opts, flags)
 
 	got, err := e.install(cmd.Context(), opts, req)
 	if err != nil {

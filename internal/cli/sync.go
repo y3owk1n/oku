@@ -295,6 +295,7 @@ func reconcile(
 				verbose:         flags.verbose,
 				approve:         e.approver(cmd, opts, flags),
 				checkAge:        e.ageChecker(cmd, opts, flags),
+				checkTrust:      e.trustChecker(cmd, opts, flags),
 				log:             buildLog(cmd, flags),
 				root:            name,
 				deps:            deps,

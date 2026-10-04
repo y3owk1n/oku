@@ -70,6 +70,7 @@ Installs the package that a [ref](refs.md) points at, and writes it to
 | `--accept-weaker-check` | Accepts a download that oku checks more weakly than the one in `oku.lock`. See [weaker checks](security.md#weaker-checks). |
 | `--min-release-age AGE` | Takes only a version that came out at least AGE ago, such as `3d`, in place of the list's. `0` takes the newest. See [Minimum release age](security.md#minimum-release-age). |
 | `--accept-unknown-age` | Takes a version whose source gives no release time without asking, whatever `[lock]` `unknown_release_age` says. See [Minimum release age](security.md#minimum-release-age). |
+| `--accept-unverified` | Trusts a download that nothing states a digest for without asking, whatever `[lock]` `unverified` says. See [Trust on first use](security.md#trust-on-first-use). |
 | `--verbose`, `-v` | Shows the output of build commands as they run, and prints a manifest that oku inferred. |
 | `--when <key=value,...>` | Limits the package to matching platforms and writes `when` to `oku.toml`, such as `--when os=linux,libc=glibc`. Give it once per table of an array. When it leaves out this machine, `add` pins the package for the `[lock]` platforms it matches and installs nothing. |
 | `--plan` | Prints what oku found for the ref and what `add` would do, and changes nothing. See [A plan](#a-plan). |
@@ -227,6 +228,7 @@ With no names it updates every package of the list.
 | `--accept-weaker-check` | As in `oku add`. |
 | `--min-release-age AGE` | As in `oku add`. `0` takes a version that waits now. |
 | `--accept-unknown-age` | As in `oku add`. |
+| `--accept-unverified` | As in `oku add`. |
 | `--verbose`, `-v` | Shows build output, and a manifest that oku inferred. |
 
 It reads the newest commit of forge and `git+` refs, moves each package to the
@@ -419,6 +421,7 @@ profile. For one program, or for an app, use [oku run](#oku-run).
 | `--accept-weaker-check` | As in `oku add`. |
 | `--min-release-age AGE` | As in `oku add`. |
 | `--accept-unknown-age` | As in `oku add`. |
+| `--accept-unverified` | As in `oku add`. |
 | `--verbose`, `-v` | As in `oku add`. |
 
 ```
@@ -467,6 +470,7 @@ and no copy of an app.
 | `--accept-weaker-check` | As in `oku add`. |
 | `--min-release-age AGE` | As in `oku add`. |
 | `--accept-unknown-age` | As in `oku add`. |
+| `--accept-unverified` | As in `oku add`. |
 | `--verbose`, `-v` | As in `oku add`. |
 
 ```
@@ -520,6 +524,7 @@ tables.
 | `--accept-weaker-check` | As in `oku add`. |
 | `--min-release-age AGE` | As in `oku add`, for the packages that sync picks a version for. |
 | `--accept-unknown-age` | As in `oku add`. |
+| `--accept-unverified` | As in `oku add`. |
 | `--verbose`, `-v` | Shows build output, and a manifest that oku inferred. |
 
 What it does:

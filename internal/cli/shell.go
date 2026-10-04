@@ -183,6 +183,7 @@ func openRefs(
 			acceptWeaker: flags.acceptWeaker,
 			approve:      e.approver(cmd, opts, flags),
 			checkAge:     e.ageChecker(cmd, opts, flags),
+			checkTrust:   e.trustChecker(cmd, opts, flags),
 			log:          buildLog(cmd, flags),
 		})
 		if err != nil {
