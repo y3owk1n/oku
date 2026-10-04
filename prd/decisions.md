@@ -327,8 +327,8 @@ macOS uses a `sandbox-exec` profile that denies the network, file contents and
 directory listings under the home directory, and every write outside the
 build's own directories. Linux uses user, mount and network namespaces, and a
 hidden `oku sandbox-init` command that mounts a tmpfs over the home directory
-and binds the store and tool directories back. The step sees uid 0, mapped to
-the real user. Where no sandbox exists, oku builds with the scrubbed
+and binds the store and tool directories back. The step runs as the real
+user with no capabilities (D118). Where no sandbox exists, oku builds with the scrubbed
 environment and prints a warning that names the reason. Why: the user already
 approved the commands, so refusing to build would only make oku unusable in
 containers and on Windows. The warning tells the user that the build had fewer
@@ -345,9 +345,9 @@ the user's D-Bus, X server or LaunchServices can start a program outside the
 sandbox.
 
 Known limit: the sandbox limits a malicious build and does not contain it. A
-program that talks to launchd over XPC on macOS, or to a socket outside the
-hidden directories on Linux, such as Docker's, can still start a program
-outside it.
+program that talks to launchd over XPC on macOS can still start a program
+outside it. On Linux, the `/dev/null` mounts over the host's sockets and
+Landlock now block those (B493).
 
 ## D34. Vendor output is pinned per platform and checked after the build
 
@@ -1940,3 +1940,17 @@ it signs them with a Sigstore of its own, and oku failed on every one. The
 gh CLI's `gh attestation verify` picks the trust root by the same issuer and
 requires the same timestamp. The workflow, repo and ref checks stay the same, since
 GitHub's certificates carry the same fields.
+
+## D118. A Linux build runs as the user, with no capabilities
+
+The Linux sandbox maps the user's own uid and gid into the user namespace, not
+uid 0. The init process keeps only `CAP_SYS_ADMIN`, as an ambient capability,
+to make its mounts. Before it runs the build command, it clears the ambient,
+bounding and inheritable sets and sets `no_new_privs`, so the command starts
+with no capability, also when the user runs oku as root.
+
+Why: as root of its namespace with every capability, a build could unmount
+the tmpfs that hides the home directory, `/tmp` and `/run/user`, and read the
+real ones, the ssh-agent socket and the user's D-Bus among them. A process
+without capabilities cannot unmount, and a namespace it creates itself sees
+those mounts locked.
