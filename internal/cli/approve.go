@@ -246,9 +246,15 @@ func (e env) approver(
 	flags *buildFlags,
 ) func(*manifest.Manifest, platform.Platform, *manifest.Artifact) error {
 	return func(m *manifest.Manifest, host platform.Platform, a *manifest.Artifact) error {
+		// One approval covers the manifest hash, and pinning the lock for another
+		// platform can run that platform's vendor steps, so the prompt lists the
+		// commands of every platform.
 		var steps map[int]manifest.Step
 		if a == nil {
-			steps = m.Build.CommandSteps(host)
+			steps = map[int]manifest.Step{}
+			for _, p := range platform.All() {
+				maps.Copy(steps, m.Build.CommandSteps(p))
+			}
 		}
 
 		generates := a != nil && a.Completions.Generate != ""

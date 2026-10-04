@@ -4164,6 +4164,19 @@ func TestB41RunStepsNeedApprovalOncePerManifestHash(t *testing.T) {
 	}
 }
 
+func TestB535TheApprovalListsTheCommandsOfEveryPlatform(t *testing.T) {
+	m := newMachine(t)
+	m.opts.Interactive = yes()
+
+	elsewhere := "[[build.step]]\nrun = \"echo only-on-windows\"\nshell = \"sh\"\nwhen = { os = \"windows\" }\n"
+	ref := m.buildManifest(t, false, "", writeTool+elsewhere+installTool)
+
+	out, _ := m.run(t, "n\n", "add", ref)
+	if !strings.Contains(out, "only-on-windows") {
+		t.Fatalf("the approval left out a command of another platform:\n%s", out)
+	}
+}
+
 func TestB42NonInteractiveRunsRefuseUnapprovedStepsUnlessYes(t *testing.T) {
 	m := newMachine(t)
 	ref := m.buildManifest(t, false, "", writeTool+installTool)

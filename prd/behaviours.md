@@ -164,8 +164,8 @@ order step in `prd/product.md`.
 - B419 [2] A download follows no redirect to a `file://` URL and none from
   https to another scheme, and fails naming both URLs.
 - B420 [2] Only a manifest that is a file on this machine, or in a
-  `git+file://` repo, may name a `file://` URL. Any other fails before a
-  download.
+  `git+file://` repo, may name a `file://` URL, a local repo as `source.git`,
+  or a local signature or provenance file. Any other fails before a download.
 - B421 [2] A manifest or list ref over plain `http://`, or `git+http://`, to
   another machine is an error. `http://127.0.0.1` and `localhost` work.
 - B467 [2] oku connects to no private address: loopback, RFC 1918,
@@ -1027,6 +1027,8 @@ order step in `prd/product.md`.
   asks for approval. The same manifest hash is never asked twice. A changed
   manifest asks again. A dep that builds asks for itself.
 - B42 [5] Non-interactive runs refuse unapproved `run` steps unless `--yes`.
+- B535 [5] The approval of a build lists the `run` and `vendor` steps of every
+  platform, not only of this machine.
 - B413 [5] oku prints each control character in a package's text, other than
   a tab or a newline, as `\x1b` and the like: in the approval prompt, in
   `--plan`, in `oku info`, in search results and in error messages. oku drops a
