@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -180,6 +181,25 @@ func TestB181LockedSyncFailsWhenTheLockWouldChange(t *testing.T) {
 
 	if string(after) != foreign || len(m.storeEntries(t)) != 0 {
 		t.Fatalf("a locked sync changed the lock or the store: %v\n%s", m.storeEntries(t), after)
+	}
+
+	// A list that asks for another version than the lock holds, on a store
+	// with the locked version in it, downloads nothing either.
+	must(t, os.WriteFile(lockPath, locked, 0o644))
+
+	_, err = m.run(t, "", "sync")
+	must(t, err)
+
+	stored := m.storeEntries(t)
+	m.writeFilesList(t, fmt.Sprintf("[packages]\ntool = { ref = %q, version = \"2\" }\n", ref))
+
+	_, err = m.run(t, "", "sync", "--locked")
+	if err == nil || !strings.Contains(err.Error(), `pins tool at 1.2.3, which version "2" leaves out`) {
+		t.Fatalf("want an error that names tool and both versions, got %v", err)
+	}
+
+	if after := m.storeEntries(t); !slices.Equal(after, stored) {
+		t.Fatalf("a locked sync of another version changed the store: %v, was %v", after, stored)
 	}
 
 	// A lock that holds a package the list dropped is out of date too.

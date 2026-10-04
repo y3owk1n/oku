@@ -21,6 +21,7 @@ import (
 	"github.com/y3owk1n/oku/internal/lock"
 	"github.com/y3owk1n/oku/internal/platform"
 	"github.com/y3owk1n/oku/internal/profile"
+	"github.com/y3owk1n/oku/internal/resolve"
 	"github.com/y3owk1n/oku/internal/status"
 	"github.com/y3owk1n/oku/internal/store"
 	"github.com/y3owk1n/oku/internal/ui"
@@ -206,8 +207,9 @@ func reconcile(
 	var (
 		jobs []*job
 		deps = newDepCache()
-		// unpinned holds the packages that oku.lock does not pin for the host.
-		unpinned []string
+		// unpinned holds the packages that oku.lock does not pin for the host, and
+		// outside those it pins at a version the list leaves out.
+		unpinned, outside []string
 	)
 
 	frozen, _ := cmd.Flags().GetBool(lockedFlag)
@@ -243,10 +245,17 @@ func reconcile(
 			continue
 		}
 
-		pinned := previous.Ref == r.String() &&
-			previous.Platforms[host.String()] != (lock.Platform{})
-		if !lockOnly && !pinned {
+		// A lock entry pins the package only at a version the list allows, since
+		// install picks another version from the source otherwise.
+		allowed, _ := resolve.Matches(previous.Version, r.Version)
+		pinned := previous.Ref == r.String() && previous.Platforms[host.String()] != (lock.Platform{})
+
+		switch {
+		case lockOnly:
+		case !pinned:
 			unpinned = append(unpinned, name)
+		case !allowed:
+			outside = append(outside, fmt.Sprintf("%s at %s, which version %q leaves out", name, previous.Version, r.Version))
 		}
 
 		commit := previous.Commit
@@ -306,11 +315,15 @@ func reconcile(
 	}
 
 	// A locked sync downloads nothing that oku.lock does not pin.
-	if frozen && len(unpinned) > 0 {
+	switch {
+	case !frozen:
+	case len(unpinned) > 0:
 		return fmt.Errorf(
 			"%s does not pin %s for %s\n%s",
 			e.lockPath(), strings.Join(unpinned, ", "), host, lockedHint,
 		)
+	case len(outside) > 0:
+		return fmt.Errorf("%s pins %s\n%s", e.lockPath(), strings.Join(outside, ", "), lockedHint)
 	}
 
 	// The first failure stops the packages that are still installing.
