@@ -960,6 +960,10 @@ $sources = Join-Path $configDir 'files'
 New-Item -ItemType Directory -Force (Join-Path $sources 'nvim') | Out-Null
 Set-Content (Join-Path $sources 'nvim\init.lua') 'first'
 Set-Content (Join-Path $sources 'gitconfig') 'linked file'
+# cmd reads & as the start of another command.
+New-Item -ItemType Directory -Force (Join-Path $sources 'r&d') | Out-Null
+Set-Content (Join-Path $sources 'r&d
+otes.txt') 'research'
 [IO.File]::WriteAllText((Join-Path $sources 'greeting.tmpl'), "say {{ greeting }}`r`n\{{kept}}")
 
 $nvim = Join-Path $env:XDG_CONFIG_HOME 'nvim'
@@ -975,6 +979,7 @@ greeting = "hi"
 "{{config}}/greeting.txt" = { render = "./files/greeting.tmpl" }
 "{{config}}/nvim" = { link = "./files/nvim" }
 "{{config}}/git/config" = { link = "./files/gitconfig" }
+"{{config}}/r&d" = { link = "./files/r&d" }
 "{{localappdata}}/oku-live-files/note.txt" = { text = "one", when = { os = "windows" } }
 '@
 
@@ -982,6 +987,10 @@ Oku sync
 Set-Content (Join-Path $sources 'nvim\init.lua') 'second'
 Check 'a linked directory is a junction, and an edit of its source shows with no sync' {
     ((Get-Item $nvim).LinkType -eq 'Junction') -and ((Get-Content "$nvim\init.lua") -eq 'second')
+}
+Check 'a linked directory whose path holds & is a junction to it' {
+    $rd = Join-Path $env:XDG_CONFIG_HOME 'r&d'
+    ((Get-Item $rd).LinkType -eq 'Junction') -and ((Get-Content "$rd\notes.txt") -eq 'research')
 }
 Check 'a linked file and a text are copies with the right bytes' {
     ((Get-Content $gitconfig) -eq 'linked file') -and ((Get-Content $note -Raw) -eq 'one') -and

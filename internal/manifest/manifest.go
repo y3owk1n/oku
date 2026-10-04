@@ -976,6 +976,11 @@ func (m *Manifest) Select(p platform.Platform) (Artifact, bool, error) {
 
 var envNameRe = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 
+// ValidName reports whether name can name a package or a service.
+func ValidName(name string) bool {
+	return nameRe.MatchString(name)
+}
+
 // ValidEnvName reports whether name can name an environment variable.
 func ValidEnvName(name string) bool {
 	return envNameRe.MatchString(name)

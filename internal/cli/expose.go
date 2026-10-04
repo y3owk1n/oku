@@ -14,6 +14,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/y3owk1n/oku/internal/expose"
+	"github.com/y3owk1n/oku/internal/manifest"
 	"github.com/y3owk1n/oku/internal/profile"
 	"github.com/y3owk1n/oku/internal/service"
 	"github.com/y3owk1n/oku/internal/store"
@@ -501,6 +502,14 @@ func (e env) applyAsRoot(
 		return err
 	}
 
+	// A service that runs as the user logs into oku's data directory, which the
+	// user must own, so the user makes it and root does not.
+	if d := change.Definition; change.Item.Kind == "service" && d.User != "" && d.LogFile != "" {
+		if err := os.MkdirAll(filepath.Dir(d.LogFile), 0o755); err != nil {
+			return err
+		}
+	}
+
 	executable := opts.Executable
 	if executable == "" {
 		if executable, err = os.Executable(); err != nil {
@@ -566,6 +575,11 @@ func applySystem(cmd *cobra.Command, opts Options, action string, change systemC
 	item, d := change.Item, change.Definition
 
 	if item.Kind == "service" {
+		// The name comes from exposed.toml too, and becomes a path and a label.
+		if !manifest.ValidName(item.Name) {
+			return fmt.Errorf("%q is not the name of a service", item.Name)
+		}
+
 		manager := systemServices(opts)
 		d.Name = item.Name
 
