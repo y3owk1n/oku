@@ -28,7 +28,6 @@ func putLE32(val uint32, buf []byte) {
 	buf[1] = byte(val >> 8)
 	buf[2] = byte(val >> 16)
 	buf[3] = byte(val >> 24)
-	return
 }
 
 func putBE32(val uint32, buf []byte) {
@@ -36,7 +35,6 @@ func putBE32(val uint32, buf []byte) {
 	buf[1] = byte(val >> 16)
 	buf[2] = byte(val >> 8)
 	buf[3] = byte(val)
-	return
 }
 
 func putLE64(val uint64, buf []byte) {
@@ -48,5 +46,4 @@ func putLE64(val uint64, buf []byte) {
 	buf[5] = byte(val >> 40)
 	buf[6] = byte(val >> 48)
 	buf[7] = byte(val >> 56)
-	return
 }

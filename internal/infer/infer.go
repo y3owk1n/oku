@@ -1078,7 +1078,10 @@ func checksumAsset(names []string, asset string) string {
 		shared := strings.Contains(lower, "checksum") || strings.Contains(lower, "sha256sum") ||
 			strings.Contains(lower, "shasums256") || lower == "sha256.txt"
 
-		if hasAnySuffix(lower, signatures) || !shared || ownChecksum(names, name) {
+		// A Sigstore bundle of a checksum file names "checksum" too, and a
+		// ".shasum" file holds a SHA-1.
+		if hasAnySuffix(lower, signatures) || hasAnySuffix(lower, []string{".bundle", ".shasum", ".intoto.jsonl"}) ||
+			!shared || ownChecksum(names, name) {
 			continue
 		}
 

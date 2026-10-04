@@ -5,7 +5,10 @@
   when the repo has none.
 - **Ref**: a pointer to a manifest or list. Forms: `./rg.toml`,
   `https://host/rg.toml`, `github:owner/repo`, `github:owner/repo#name`,
-  `git+https://host/repo#path`, `alias/name`. An `@version` suffix pins the
+  `github:host/owner/repo`, `codeberg:owner/repo`, `gitea:host/owner/repo`,
+  `gitlab:group/project`, `git+https://host/repo#path`, the registry refs
+  `npm:`, `pypi:`, `go:` and `cargo:`, the recipe refs `cask:`, `scoop:`,
+  `aqua:` and `winget:`, and `alias/name`. An `@version` suffix pins the
   version.
 - **List ref**: a ref read as a list. It names the file an `include` merges or
   `oku sync <ref>` adopts.
@@ -13,7 +16,12 @@
   starting from the lock beside it.
 - **Collection**: a repo or directory holding many manifests as `<name>.toml`,
   at its root or under `packages/`.
-- **Source**: a user-defined alias for a collection. oku ships none.
+- **Source**: a user-defined alias for a collection, as `oku source add`
+  makes. oku ships none.
+- **Trusted source**: who wrote what a ref points at, for source trust, such as
+  the forge owner `github:owner`, a host or an npm scope. `[trust] sources`
+  lists them. A ref you type trusts its source, and a project asks before it
+  installs from one you have not trusted. It is not a Source.
 - **Artifact**: a prebuilt download in a manifest, chosen by a selector.
 - **Selector**: `{ os, arch, libc }` match table. Omitted keys match anything.
 - **Build**: the ordered steps that produce a package from source.

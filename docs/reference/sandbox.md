@@ -16,14 +16,19 @@ A package's code runs in the sandbox, and nothing else does:
 
 oku does `fetch`, `extract`, `patch`, `install` and `copy` steps itself, and
 unpacks downloads itself. It never runs a script that a package ships, such as
-the maintainer scripts of a `.deb` or the install scripts of a `.pkg`.
+the maintainer scripts of a `.deb` or the install scripts of a `.pkg`. The one
+exception is an `.msi`, which oku unpacks with `msiexec /a`, and msiexec runs
+any actions the package authors for that administrative install, outside the
+sandbox. Few packages have such actions.
 
 These steps run outside the sandbox, after `run` steps that could leave
 symlinks in the source directory and in `{{prefix}}`. oku follows such a link
 only while it stays inside the directory it is in. A step that reaches a link
 leading outside fails, so a `run` step cannot use one to make oku read your
-files or write elsewhere. When a command ends, oku also stops anything it left
-running, so nothing changes a link while oku works.
+files or write elsewhere. When a command ends, oku stops its process group, and
+on Linux with the sandbox everything in its PID namespace. On macOS, and on
+Linux without the sandbox, a process that starts a session of its own outlives
+the command and could still change a link while oku works.
 
 Every command above needs your [approval](security.md#approve-build-commands)
 first, once per manifest hash.
@@ -40,9 +45,10 @@ On every platform, a build command:
 On Linux and macOS it also stops with all of its child processes when you
 press Ctrl-C, and oku then fails the command and leaves the machine as it was.
 It runs in a session of its own, without the terminal
-oku runs in. It cannot read what you type, write to your screen, or push a
-command into your shell to run after oku exits. This holds on a Linux host
-without the sandbox too.
+oku runs in, so it cannot push a command into your shell to run after oku
+exits. The sandbox also hides your terminal, so it cannot read what you type or
+write to your screen. On a Linux host without the sandbox it can still open the
+terminal by its path and do both.
 
 ## macOS
 

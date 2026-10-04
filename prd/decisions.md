@@ -191,6 +191,11 @@ shells out to `git` for a depth-1 fetch. Why: a fresh machine may have no git,
 and `github:` is the common case. Other hosts share no HTTP API, so `git` is
 the only portable way to read them.
 
+Revisited 2026-10-05. `codeberg:`, `gitea:` and `gitlab:` refs came later and
+read their hosts through each forge's own API, as `github:` does, and D102 does
+the same for a git version source on a host oku knows. `git+` refs still run
+`git` for any other host.
+
 ## D22. Rollback restores the lock and never edits the list
 
 Each generation stores a copy of `oku.lock`. `oku rollback` switches the
@@ -219,6 +224,11 @@ deleted only by `--keep N`, which keeps the newest N and the active one. Why:
 every generation stays a working rollback target until the user says
 otherwise. A gc that deleted generations by default would remove rollback
 targets without the user asking.
+
+Revisited 2026-10-05. `--older-than` is a second way to ask. It deletes the
+generations older than an age, and keeps the one that was active then. D100
+removes the profile of a project that is gone. Plain `gc` still deletes no
+generation.
 
 ## D24. Versions are ordered by their numbers, and the tag is kept
 
@@ -1526,6 +1536,9 @@ a day old may belong to a run that has not written its lock yet, and the index
 by url exists for that run. `api/` holds
 ETags that keep oku under forge rate limits, and a deleted clone in `git/`
 costs a full clone.
+
+Revisited 2026-10-05. D103 lets `gc --cache` delete an API answer that no
+command read for 30 days, so `api/` no longer stays whole. `git/` still does.
 
 ## D95. The store keeps one copy of each identical file
 

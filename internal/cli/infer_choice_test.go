@@ -98,6 +98,23 @@ func TestB197InferencePrefersTheChecksumsOfTheAssetsPlatformOrAGenericFile(t *te
 		}
 	})
 
+	t.Run("not a bundle or a SHA-1 file of the checksums", func(t *testing.T) {
+		m := newMachine(t)
+		archive, _ := m.archive(t, "release", map[string]string{"tool": script})
+
+		assets := sums(t, m, "checksums.txt.bundle", "checksums.shasum")
+		assets[hostAssetName()] = archive
+
+		inferServer(t, &m, assets)
+
+		out, err := m.run(t, "", "manifest", "init", "--from", "owner/tool", "-o", "-")
+		must(t, err)
+
+		if got := hostArtifact(t, out); strings.Contains(got, "sha256_url") {
+			t.Fatalf("the artifact should read no bundle or SHA-1 file as its checksums:\n%s", out)
+		}
+	})
+
 	t.Run("not the checksum file of another asset", func(t *testing.T) {
 		m := newMachine(t)
 		archive, _ := m.archive(t, "release", map[string]string{"tool": script})

@@ -608,7 +608,10 @@ it. Every pin and what it stops is in [what each pin does](lock.md#what-each-pin
 
 oku unpacks archives and installers itself and never runs anything a package
 ships during install. That includes the maintainer scripts of a `.deb`, the
-scriptlets of an `.rpm`, and the install scripts of a macOS `.pkg`.
+scriptlets of an `.rpm`, and the install scripts of a macOS `.pkg`. The
+exception is an `.msi`. oku unpacks it with `msiexec /a`, and msiexec runs any
+actions the package authors for that administrative install, without the
+sandbox. Few packages have them.
 
 - It refuses entries that are absolute or contain `..`, and symlinks that
   resolve outside the package.
@@ -667,8 +670,10 @@ you added with `oku key trust`.
 - Get a cache's public key from its owner directly, because oku installs
   whatever that key signed without asking.
 - `oku key revoke` stops trusting a key. Packages already installed stay.
-- `oku cache push` refuses a build that had network access, because it can
-  differ from run to run.
+- `oku cache push` refuses a build whose `run` step asked for the network with
+  `network = true`, because it can differ from run to run. A build that ran
+  without the sandbox could reach the network without asking, and push still
+  takes it, so push from a host that has the sandbox.
 - `signing.key` has no password, so a push can run in CI. Keep it private.
   `oku self uninstall` deletes it, even with `--keep-list`.
 - The signatures are plain minisign signatures, so `minisign -V` verifies them
