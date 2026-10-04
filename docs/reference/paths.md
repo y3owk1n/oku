@@ -230,11 +230,19 @@ The install scripts read `OKU_INSTALL_DIR` and `OKU_VERSION`, see
    the new generation and prints the error of the step that failed.
 
 `pending.toml` holds the two generation numbers and the text of `oku.toml` and
-`oku.lock` from before. When an oku process is killed halfway, the next of
-these commands finds the file, puts the machine back first, and prints:
+`oku.lock` from before. Ctrl-C during step 2 does not stop oku halfway. It
+finishes or undoes the change first. When an oku process is killed halfway, the
+next of these commands finds the file, puts the machine back first, and prints:
 
 ```
 the last change did not finish, so oku put generation 4 back
+```
+
+When you edited `oku.toml` or `oku.lock` since, it leaves the file as it is and
+says so. It restores the file only when oku was killed while it wrote it:
+
+```
+~/.config/oku/oku.toml changed since the last change started, so oku left it as it is
 ```
 
 `oku gc` refuses to run until that has happened. When oku cannot undo a step,

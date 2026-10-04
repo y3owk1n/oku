@@ -709,7 +709,13 @@ a step fails oku makes the ledger match the old generation again, deletes the
 new one and leaves the lock as it was. It then reports the first error. A
 command that finds `pending.toml` does that revert before anything else, and
 says so. When a revert step fails too, oku stops, names what is left and keeps
-`pending.toml`, and `oku doctor` reports it.
+`pending.toml`, and `oku doctor` reports it. `pending.toml` also holds the
+lists as the change found them, and marks when oku begins to write them. A
+revert by a later command leaves a list that no longer holds what the change
+found, unless oku was writing it, since the user edited it after the crash.
+oku holds Ctrl-C and SIGTERM from the switch of `current` until the change has
+finished or been undone, so only a kill, not an interrupt, leaves
+`pending.toml`.
 
 `--dry-run` on `sync` and `update` runs the plan, prints what the apply would
 do, and stops. It can still fill the store and the cache, like any plan. It does

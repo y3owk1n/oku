@@ -603,6 +603,9 @@ When an oku process is killed halfway through a change, the next `add`,
 the last change did not finish, so oku put generation 4 back
 ```
 
+An `oku.toml` or `oku.lock` that you edited since stays as you left it, and oku
+says so. Check that it holds what you want, then run `oku sync`.
+
 Until then, `oku gc` and any `--dry-run` refuse to run and tell you to run
 `oku sync` first. When oku cannot undo a step, for example because the service
 manager refuses, it names the step. `oku doctor` then reports
