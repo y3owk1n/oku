@@ -2,6 +2,7 @@
 package list
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -168,7 +169,21 @@ func Parse(data []byte, origin string) (*List, error) {
 		Host     map[string]any `toml:"host"`
 	}
 
-	if err := toml.Unmarshal(data, &raw); err != nil {
+	// A misspelt table would be left out, and [package] for [packages] would
+	// empty the list, so a sync would remove every package.
+	decoder := toml.NewDecoder(bytes.NewReader(data))
+	decoder.DisallowUnknownFields()
+
+	var strict *toml.StrictMissingError
+	if err := decoder.Decode(&raw); errors.As(err, &strict) {
+		var keys []string
+		for _, missing := range strict.Errors {
+			row, _ := missing.Position()
+			keys = append(keys, fmt.Sprintf("line %d: unknown table or key %s", row, strings.Join(missing.Key(), ".")))
+		}
+
+		return nil, fmt.Errorf("%s: %s", origin, strings.Join(keys, ", "))
+	} else if err != nil {
 		return nil, fmt.Errorf("parse %s: %w", origin, err)
 	}
 
@@ -524,12 +539,33 @@ func toFile(value any) (File, error) {
 }
 
 // toEntry accepts the short form "ref" and the table form { ref, version, when, ... }.
+// entryKeys are the keys of a package entry, each with the Go type its value
+// must have, or "" for one that toEntry checks itself.
+var entryKeys = map[string]string{
+	"ref": "string", "version": "string", "service": "bool", "system": "bool", "asset": "string",
+	"run_as": "string", "min_release_age": "", "signing_key": "string", "signer_workflow": "string",
+	"bin": "", "when": "",
+}
+
 func toEntry(value any) (Entry, error) {
 	switch v := value.(type) {
 	case string:
 		return Entry{Ref: v}, nil
 	case map[string]any:
 		var e Entry
+
+		// A misspelt or mistyped key would be left out, and with it a pin the user
+		// asked for, such as version or signing_key.
+		for _, key := range slices.Sorted(maps.Keys(v)) {
+			want, known := entryKeys[key]
+
+			switch {
+			case !known:
+				return e, fmt.Errorf("unknown key %s, an entry takes %s", key, strings.Join(slices.Sorted(maps.Keys(entryKeys)), ", "))
+			case want != "" && fmt.Sprintf("%T", v[key]) != want:
+				return e, fmt.Errorf("%s wants a %s", key, map[string]string{"string": "string", "bool": "true or false"}[want])
+			}
+		}
 
 		e.Ref, _ = v["ref"].(string)
 		e.Version, _ = v["version"].(string)

@@ -79,6 +79,28 @@ type Report struct {
 	Warnings []string
 }
 
+// unknownKeys decodes data into full and returns, with its line, each key that
+// the manifest schema does not have.
+func unknownKeys(data []byte, full *schema) ([]string, error) {
+	decoder := toml.NewDecoder(bytes.NewReader(data))
+	decoder.DisallowUnknownFields()
+
+	err := decoder.Decode(full)
+
+	var strict *toml.StrictMissingError
+	if !errors.As(err, &strict) {
+		return nil, err
+	}
+
+	keys := make([]string, 0, len(strict.Errors))
+	for _, missing := range strict.Errors {
+		row, _ := missing.Position()
+		keys = append(keys, fmt.Sprintf("line %d: unknown key %s", row, strings.Join(missing.Key(), ".")))
+	}
+
+	return keys, nil
+}
+
 // Lint checks manifest data against the whole schema.
 func Lint(data []byte) Report {
 	var (
@@ -86,26 +108,14 @@ func Lint(data []byte) Report {
 		full   schema
 	)
 
-	decoder := toml.NewDecoder(bytes.NewReader(data))
-	decoder.DisallowUnknownFields()
-
-	err := decoder.Decode(&full)
-
-	var strict *toml.StrictMissingError
-
-	switch {
-	case errors.As(err, &strict):
-		for _, missing := range strict.Errors {
-			row, _ := missing.Position()
-			report.Errors = append(report.Errors, fmt.Sprintf(
-				"line %d: unknown key %s", row, strings.Join(missing.Key(), "."),
-			))
-		}
-	case err != nil:
+	unknown, err := unknownKeys(data, &full)
+	if err != nil {
 		report.Errors = append(report.Errors, err.Error())
 
 		return report
 	}
+
+	report.Errors = append(report.Errors, unknown...)
 
 	var m Manifest
 	if err := toml.Unmarshal(data, &m); err == nil {

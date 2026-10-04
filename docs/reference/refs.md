@@ -99,7 +99,8 @@ oku add github:BurntSushi/ripgrep@14.1.1
   than the [minimum release age](security.md#minimum-release-age). With
   `latest = true` in the manifest's `[version]`, that is the release the forge
   marks as latest. A version or a range you write picks from every release.
-- A list ref takes no `@version`.
+- A list ref takes no `@version`, and oku refuses one, since it follows the
+  list.
 
 ## Sources and aliases
 

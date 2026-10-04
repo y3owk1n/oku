@@ -233,6 +233,10 @@ func (m *merger) merge(
 			return fmt.Errorf("%s: include: %w", origin, err)
 		}
 
+		if r.Version != "" {
+			return fmt.Errorf("%s: include %s takes no @version, since oku follows the list it names", origin, include)
+		}
+
 		if m.seen[r.String()] {
 			return fmt.Errorf("%s: %s is included twice or includes itself", origin, r)
 		}
@@ -314,6 +318,14 @@ func (m *merger) merge(
 		r, err := parse(entry.Ref)
 		if err != nil {
 			return fmt.Errorf("%s: packages.%s: %w", origin, name, err)
+		}
+
+		// The version of a ref string would be dropped for the entry's.
+		if r.Version != "" {
+			at := strings.LastIndex(entry.Ref, "@")
+
+			return fmt.Errorf("%s: packages.%s: write the version on its own, as %s = { ref = %q, version = %q }",
+				origin, name, name, entry.Ref[:at], r.Version)
 		}
 
 		r.Version = entry.Version

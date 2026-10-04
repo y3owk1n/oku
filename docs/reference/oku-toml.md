@@ -50,9 +50,12 @@ autohide = true
 | `[host]` | table | [\[host\]](#host) |
 | `[defaults]`, `[defaults-currenthost]`, `[registry]`, `[dconf]` | tables | [Settings tables](#settings-tables) |
 
-oku ignores a key it does not know at the top of the file and inside a
-`[packages]` table. `when`, `[lock]`, `[runtimes]`, `[env]`, `[host]`, `[files]`
-and `[secrets]` reject a key they do not know.
+oku refuses a list that has a table or key it does not know, at the top of
+the file or in a package's entry. It also refuses a value of the wrong type,
+such as `version = 22`. It names the line and changes nothing, so a misspelt
+`[package]` cannot empty the list and `verison` cannot drop a pin. `when`,
+`[lock]`, `[runtimes]`, `[env]`, `[host]`, `[files]` and `[secrets]` reject a key
+they do not know too.
 
 ### How oku edits the file
 
@@ -84,7 +87,7 @@ or a table:
 
 | Key | Type | Meaning |
 |---|---|---|
-| `ref` | string | Required. The [ref](refs.md), without `@version`. |
+| `ref` | string | Required. The [ref](refs.md), without `@version`. oku refuses a ref with one, and names the `version` to write instead. |
 | `version` | string | An exact version, a prefix such as `"22"`, or a range such as `"^1.4"`. See [Pin a version](refs.md#pin-a-version). `oku add <ref>@<version>` writes it. |
 | `when` | table or array of tables | Installs the package only on matching machines. See [when](#when). |
 | `service` | boolean | `true` runs the package's services now and at every login. `oku add --service` writes it. See [Services](../guides/services.md). |
