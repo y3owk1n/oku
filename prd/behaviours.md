@@ -355,8 +355,9 @@ order step in `prd/product.md`.
   package it names the list and the `when` the entry needs there.
 - B18 [2] `oku sync <ref>` on a machine with no global list adopts that list
   and its lock, then syncs. Two machines of the same platform doing so end
-  with identical store hashes. On a machine that has a global list it refuses
-  and changes nothing.
+  with identical store hashes. On a machine whose global list holds anything,
+  such as `[vars]` or `[files]` alone, it refuses and changes nothing. A list
+  with nothing in it, not even an entry under `[packages]`, counts as none.
 - B19 [2] A relative file ref in a list resolves against that list's
   directory. A list from a URL or a repo that names an absolute path is an
   error.

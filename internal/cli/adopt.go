@@ -36,9 +36,9 @@ func adopt(cmd *cobra.Command, opts Options, e env, arg string) error {
 		return fmt.Errorf("%s: a list ref takes no @version", arg)
 	}
 
-	if len(own.Include) > 0 || len(own.Packages) > 0 {
+	if !own.Empty() {
 		return fmt.Errorf(
-			"%s already has packages or includes, so oku will not replace it\n"+
+			"%s already holds a list, so oku will not replace it\n"+
 				"add %q to its include array and run `oku sync`",
 			e.listPath(), r.String(),
 		)

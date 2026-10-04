@@ -139,6 +139,15 @@ type List struct {
 	Host map[string]host.Requirement
 }
 
+// Empty reports whether l holds nothing: no include, package, file, setting,
+// secret, variable, [lock] key, [env], runtime or [host] entry.
+func (l *List) Empty() bool {
+	return len(l.Include) == 0 && len(l.Packages) == 0 && len(l.Files) == 0 && len(l.Settings) == 0 &&
+		len(l.Secrets) == 0 && len(l.Vars) == 0 && len(l.LockPlatforms) == 0 && l.MinReleaseAge == "" &&
+		l.UnknownReleaseAge == "" && l.Unverified == "" && len(l.Env) == 0 && len(l.EnvFiles) == 0 &&
+		len(l.Runtimes) == 0 && len(l.Host) == 0
+}
+
 // Read parses the list at path. A missing file is an empty list.
 func Read(path string) (*List, error) {
 	data, err := os.ReadFile(path)

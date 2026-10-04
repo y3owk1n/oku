@@ -26,7 +26,7 @@ func TestB417AUnitFileHoldsEachValueOnItsOwnLine(t *testing.T) {
 
 func TestB427ASystemUnitNamesTheUserItRunsAs(t *testing.T) {
 	unit := string((&systemd{scope: "--system"}).unitFile(Definition{Name: "food", Program: "/p", User: "kyle"}))
-	if !strings.Contains(unit, "User=\"kyle\"\n") {
+	if !strings.Contains(unit, "\nUser=kyle\n") {
 		t.Fatalf("the unit does not run as its user:\n%s", unit)
 	}
 

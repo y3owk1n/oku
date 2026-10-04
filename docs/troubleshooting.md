@@ -585,12 +585,13 @@ permission you grant it may not carry over to a later install. Add it with
 ## oku sync with a list ref refuses
 
 ```
-oku: ~/.config/oku/oku.toml already has packages or includes, so oku will not replace it
+oku: ~/.config/oku/oku.toml already holds a list, so oku will not replace it
 add "github:you/machines" to its include array and run `oku sync`
 ```
 
-`oku sync github:you/machines` sets up a machine whose list is empty. On any
-other machine, add the ref to `include` as it says. Inside a project it refuses
+`oku sync github:you/machines` sets up a machine whose list is missing or
+holds nothing, not even `[vars]`, `[files]` or a setting. On any other machine,
+add the ref to `include` as it says. Inside a project it refuses
 too, and `--global` sends it to your own list. A list ref takes no `@version`.
 See [A new machine](guides/new-machine.md).
 

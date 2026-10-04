@@ -1301,8 +1301,30 @@ func TestB18SyncRefAdoptsListAndLockWithIdenticalStoreHashes(t *testing.T) {
 		}
 
 		_, err = m.run(t, "", "sync", "github:me/machines")
-		if err == nil || !strings.Contains(err.Error(), "already has packages or includes") {
+		if err == nil || !strings.Contains(err.Error(), "already holds a list") {
 			t.Fatalf("want a second adoption to be refused, got %v", err)
+		}
+	}
+
+	// A list with no packages still holds what the user wrote, and one with an
+	// empty [packages] holds nothing.
+	for _, tc := range []struct {
+		list    string
+		refused bool
+	}{
+		{"[vars]\nemail = \"me@example.com\"\n", true},
+		{"[packages]\n", false},
+	} {
+		m := setUp()
+		m.writeFilesList(t, tc.list)
+
+		_, err := m.run(t, "", "sync", "github:me/machines")
+		if refused := err != nil && strings.Contains(err.Error(), "already holds a list"); refused != tc.refused {
+			t.Fatalf("with %q, want a refusal %v, got %v", tc.list, tc.refused, err)
+		}
+
+		if body, _ := os.ReadFile(filepath.Join(m.config, "oku.toml")); tc.refused && string(body) != tc.list {
+			t.Fatalf("a refused adoption changed the list:\n%s", body)
 		}
 	}
 }
