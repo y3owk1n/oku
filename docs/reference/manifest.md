@@ -428,6 +428,7 @@ machine, so put specific entries before general ones.
 | `sha256_url_bundle` | no | The URL of a Sigstore bundle in which `signer_workflow` signs the file at `sha256_url`. |
 | `sigstore_signature`, `sigstore_certificate` | no | The URLs of a cosign signature of the download and of its certificate. Set both. |
 | `sha256_url_signature`, `sha256_url_certificate` | no | The URLs of a cosign signature of the file at `sha256_url` and of its certificate. Set both. |
+| `provenance` | no | The URL of the download's SLSA provenance from slsa-github-generator, see [SLSA provenance](#slsa-provenance). |
 | `version` | no | Where this artifact's own version comes from, see [A version for each platform](#a-version-for-each-platform). |
 | `integrity` | no | A sha512 digest the way npm publishes it, `sha512-` and the digest in base64. |
 | `strip` | no | How many leading path components to drop when unpacking. Default 0. |
@@ -624,9 +625,41 @@ bin = ["tool"]
   another workflow.
 - With a Sigstore check, an artifact without `sha256` is no longer trust on
   first use.
-- oku does not yet check SLSA provenance, or a cosign signature made with a
-  key of the developer's own. GitHub signs the attestations of a private repo
-  with a Sigstore of its own, and oku fails on them.
+- oku does not check a cosign signature made with a key of the developer's
+  own. GitHub signs the attestations of a private repo with a Sigstore of its
+  own, and oku fails on them.
+
+### SLSA provenance
+
+A release built with
+[slsa-github-generator](https://github.com/slsa-framework/slsa-github-generator)
+carries a provenance file, often `multiple.intoto.jsonl`. Name it on the
+artifact:
+
+```toml
+[[artifact]]
+url = "https://github.com/you/tool/releases/download/{{tag}}/tool-linux-amd64.tar.gz"
+provenance = "https://github.com/you/tool/releases/download/{{tag}}/multiple.intoto.jsonl"
+bin = ["tool"]
+```
+
+oku installs the download only when a line of the file shows that:
+
+- one of the builders that slsa-verifier trusts signed it:
+  `generator_generic_slsa3.yml`, `builder_go_slsa3.yml` or
+  `builder_container-based_slsa3.yml` of `slsa-framework/slsa-github-generator`,
+  at a release tag of the builder such as `v2.1.0`
+- the build ran for the repo of your releases and the release's tag
+- the provenance names the sha256 of the download
+- Sigstore's transparency log holds the signature
+
+A line may be a Sigstore bundle, as the generator writes now, or a signed
+envelope with its certificate, as it wrote before. For an envelope oku finds
+the log's entry in `rekor.sigstore.dev`.
+
+- `provenance` needs `[version]` `from = "github-releases"` with `owner/repo`,
+  since it names the repo of the releases.
+- oku trusts only these builders, so `provenance` needs no `signer_workflow`.
 
 ### Prebuilt libraries
 
@@ -1804,6 +1837,7 @@ release file of each platform:
 | `cosign` of the checksum, with a bundle from the release, or with `--signature` and `--certificate` | `sha256_url_bundle`, or `sha256_url_signature` and `sha256_url_certificate`, and its workflow as `signer_workflow` |
 | `cosign` of the file, the same way | `sigstore_bundle`, or `sigstore_signature` and `sigstore_certificate`, and its workflow as `signer_workflow` |
 | `github_artifact_attestations` | `attestations = true`, and its `signer_workflow` |
+| `slsa_provenance` of type `github_release`, with no other `source_uri` or `source_tag` | `provenance` |
 | `version_prefix` | `strip_prefix` |
 | `type: http` with a `url` | That `url` as the download, and the repo's releases as the version source |
 

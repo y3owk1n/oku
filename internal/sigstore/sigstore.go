@@ -34,11 +34,30 @@ type Identity struct {
 	Workflow string
 	Repo     string
 	Ref      string
+	// subject replaces the pattern that Workflow makes for the certificate's
+	// subject.
+	subject string
+}
+
+// slsaBuilders are the workflows of slsa-github-generator whose provenance
+// slsa-verifier trusts for a release file, each at a release of the builder.
+const slsaBuilders = `^https://github\.com/slsa-framework/slsa-github-generator/\.github/workflows/` +
+	`(generator_generic_slsa3|builder_go_slsa3|builder_container-based_slsa3)\.yml@refs/tags/v[0-9]+\.[0-9]+\.[0-9]+$`
+
+// SLSABuilder is the identity of the SLSA provenance of a release: a trusted
+// builder of slsa-github-generator, run for repo and ref.
+func SLSABuilder(repo, ref string) Identity {
+	return Identity{Repo: repo, Ref: ref, subject: slsaBuilders}
 }
 
 // certificate returns the identity the certificate must name.
 func (id Identity) certificate() (verify.CertificateIdentity, error) {
-	san, err := verify.NewSANMatcher("", "^https://github\\.com/"+regexp.QuoteMeta(id.Workflow)+"@.+$")
+	subject := id.subject
+	if subject == "" {
+		subject = "^https://github\\.com/" + regexp.QuoteMeta(id.Workflow) + "@.+$"
+	}
+
+	san, err := verify.NewSANMatcher("", subject)
 	if err != nil {
 		return verify.CertificateIdentity{}, err
 	}

@@ -344,6 +344,7 @@ func (e env) planFrom(
 	for _, signature := range []string{
 		artifact.SigstoreBundle, artifact.SHA256URLBundle, artifact.SigstoreSignature,
 		artifact.SigstoreCertificate, artifact.SHA256URLSignature, artifact.SHA256URLCertificate,
+		artifact.Provenance,
 	} {
 		if signature != "" {
 			urls = append(urls, signature)

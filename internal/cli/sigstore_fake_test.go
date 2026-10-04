@@ -319,21 +319,58 @@ func (f *fakeSigstore) signBlob(t *testing.T, r run, data []byte) []byte {
 func (f *fakeSigstore) attest(t *testing.T, r run, digest string) []byte {
 	t.Helper()
 
-	cert, key := f.leaf(t, r)
+	cert, statement, sig, entry := f.statement(t, r, digest)
 
-	const payloadType = "application/vnd.in-toto+json"
+	return f.bundle(t, cert, entry, &protobundle.Bundle_DsseEnvelope{DsseEnvelope: &protodsse.Envelope{
+		Payload: statement, PayloadType: inToto, Signatures: []*protodsse.Signature{{Sig: sig}},
+	}})
+}
+
+// envelope returns the same statement as attest, as a signed envelope with
+// its certificate, the way slsa-github-generator wrote before it wrote
+// bundles, and records it in the fake Rekor.
+func (f *fakeSigstore) envelope(t *testing.T, r run, digest string) []byte {
+	t.Helper()
+
+	cert, statement, sig, entry := f.statement(t, r, digest)
+
+	f.mu.Lock()
+	f.logged[digest] = append(f.logged[digest], entry)
+	f.mu.Unlock()
+
+	out, err := json.Marshal(map[string]any{
+		"payloadType": inToto,
+		"payload":     base64.StdEncoding.EncodeToString(statement),
+		"signatures": []map[string]string{{
+			"keyid": "", "sig": base64.StdEncoding.EncodeToString(sig), "cert": string(certPEM(cert)),
+		}},
+	})
+	must(t, err)
+
+	return out
+}
+
+const inToto = "application/vnd.in-toto+json"
+
+// statement signs, as r, an in-toto statement that names the file whose
+// sha256 is digest, and returns the certificate, the statement, the signature
+// and the log's entry.
+func (f *fakeSigstore) statement(t *testing.T, r run, digest string) (*x509.Certificate, []byte, []byte, *protorekor.TransparencyLogEntry) {
+	t.Helper()
+
+	cert, key := f.leaf(t, r)
 
 	statement := []byte(`{"_type": "https://in-toto.io/Statement/v1", ` +
 		`"subject": [{"name": "tool.tar.gz", "digest": {"sha256": "` + digest + `"}}], ` +
 		`"predicateType": "https://slsa.dev/provenance/v1", "predicate": {}}`)
 
-	pae := sha256.Sum256(dsse.PAE(payloadType, statement))
+	pae := sha256.Sum256(dsse.PAE(inToto, statement))
 
 	sig, err := ecdsa.SignASN1(rand.Reader, key, pae[:])
 	must(t, err)
 
 	envelope, err := json.Marshal(dsse.Envelope{
-		PayloadType: payloadType,
+		PayloadType: inToto,
 		Payload:     base64.StdEncoding.EncodeToString(statement),
 		Signatures:  []dsse.Signature{{Sig: base64.StdEncoding.EncodeToString(sig)}},
 	})
@@ -345,9 +382,7 @@ func (f *fakeSigstore) attest(t *testing.T, r run, digest string) []byte {
 		PKIFormat:      string(pki.X509),
 	})
 
-	return f.bundle(t, cert, entry, &protobundle.Bundle_DsseEnvelope{DsseEnvelope: &protodsse.Envelope{
-		Payload: statement, PayloadType: payloadType, Signatures: []*protodsse.Signature{{Sig: sig}},
-	}})
+	return cert, statement, sig, entry
 }
 
 // bundle writes a version 0.1 bundle, which takes a log's promise of

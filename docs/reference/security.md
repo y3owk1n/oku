@@ -239,7 +239,8 @@ A release file on GitHub redirects to `release-assets.githubusercontent.com`,
 and a manifest to `raw.githubusercontent.com`, so an allow list for GitHub
 names both. A manifest with [Sigstore signatures](#sigstore-signatures-of-a-manifest)
 also needs `tuf-repo-cdn.sigstore.dev`, where oku reads Sigstore's trust root,
-`rekor.sigstore.dev` for a cosign signature without a bundle, and with
+`rekor.sigstore.dev` for a cosign signature or a provenance envelope without
+a bundle, and with
 attestations the host where GitHub stores large ones. oku refuses a host and
 names it:
 
@@ -432,7 +433,9 @@ developer.
 A manifest can name the GitHub Actions workflow that signs its releases with
 [Sigstore](https://www.sigstore.dev), as `signer_workflow`, and where its
 signatures are: GitHub artifact attestations, or a bundle or a cosign
-signature and certificate beside the download or beside its checksum file. See
+signature and certificate beside the download or beside its checksum file. A
+manifest can also name the download's [SLSA provenance](manifest.md#slsa-provenance)
+from slsa-github-generator, whose builders oku trusts as slsa-verifier does. See
 [Sigstore signatures](manifest.md#sigstore-signatures). oku installs the
 artifact only when the signature shows that:
 

@@ -101,7 +101,7 @@ oku keeps `vendor_sha256` and `impure` beside the build in the store, so
 
 | `verified` | oku checked the file against |
 |---|---|
-| `sigstore` | a Sigstore signature by the manifest's [`signer_workflow`](manifest.md#sigstore-signatures), of the file or of its checksum file |
+| `sigstore` | a Sigstore signature by the manifest's [`signer_workflow`](manifest.md#sigstore-signatures), of the file or of its checksum file, or the file's [SLSA provenance](manifest.md#slsa-provenance) |
 | `minisign` | a signature by the manifest's [`signing_key`](manifest.md#signatures) |
 | `manifest` | the `sha256` or `integrity` in the manifest |
 | `checksum-file` | the file at the manifest's `sha256_url` |
