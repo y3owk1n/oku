@@ -21,7 +21,6 @@ import (
 
 	"github.com/bodgit/sevenzip"
 	"github.com/cavaliergopher/cpio"
-	"github.com/cavaliergopher/rpm"
 	"github.com/klauspost/compress/gzip"
 	"github.com/klauspost/compress/zstd"
 
@@ -149,12 +148,12 @@ func undeb(f *os.File, root *os.Root, strip int) error {
 // unrpm unpacks the file payload of an RPM package. It never runs the scriptlets
 // in the package header.
 func unrpm(f *os.File, root *os.Root, strip int) error {
-	pkg, err := rpm.Read(f)
+	format, err := rpmPayload(f)
 	if err != nil {
 		return err
 	}
 
-	if format := pkg.PayloadFormat(); format != "cpio" {
+	if format != "cpio" {
 		return fmt.Errorf("the payload is %s, and oku unpacks cpio payloads", format)
 	}
 

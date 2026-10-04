@@ -1,0 +1,27 @@
+name: vuln
+
+# govulncheck reports the advisories that reach oku's code. New advisories
+# appear without a change here, so it runs each week as well as on every pull
+# request.
+on:
+  pull_request:
+  schedule:
+    - cron: "17 3 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  govulncheck:
+    if: ${{ !startsWith(github.head_ref, 'release-please--') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # The action installs the go of oku.toml with the nightly oku.
+      - uses: ./
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        with:
+          version: nightly
+      - run: go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...

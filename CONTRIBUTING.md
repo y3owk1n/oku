@@ -51,6 +51,11 @@ only bumps the version and the changelog, skips every job. It installs its tools
 `oku.lock`, with the nightly oku, so a broken commit cannot break the tools
 that test it.
 
+`.github/workflows/vuln.yml` runs `govulncheck` on each pull request and every
+Monday, since a new advisory can appear without a change to oku. It fails when
+an advisory reaches code that oku calls. Move the dependency to its fixed
+version, or replace it when there is none.
+
 ## Tests and behaviours
 
 `prd/behaviours.md` lists what oku promises, one testable line each, such as
