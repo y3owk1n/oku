@@ -573,6 +573,14 @@ oku: ./oku.lock does not pin ripgrep for linux-amd64-glibc
 run `oku sync` without --locked, and commit oku.lock
 ```
 
+It also stops when the lock pins a package at a version that the list's
+`version` leaves out:
+
+```
+oku: ./oku.lock pins ripgrep at 15.2.0, which version "14" leaves out
+run `oku sync` without --locked, and commit oku.lock
+```
+
 It also fails with `oku.lock is out of date` when the lock holds a package
 that left the list, or lacks a platform that `[lock]` names. Line endings do
 not count, so a lock and a local manifest that git checked out with CRLF pass.
