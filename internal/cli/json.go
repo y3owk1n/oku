@@ -29,6 +29,23 @@ func exactArgs(n int) cobra.PositionalArgs {
 	}
 }
 
+// noArgs is cobra.NoArgs with the usage line under the error, for a command
+// without subcommands.
+func noArgs(cmd *cobra.Command, args []string) error {
+	return maxArgs(0)(cmd, args)
+}
+
+// maxArgs is cobra.MaximumNArgs with the usage line under the error.
+func maxArgs(n int) cobra.PositionalArgs {
+	return func(cmd *cobra.Command, args []string) error {
+		if len(args) > n {
+			return fmt.Errorf("too many arguments\nusage: %s", cmd.UseLine())
+		}
+
+		return nil
+	}
+}
+
 // minArgs is cobra.MinimumNArgs with the usage line under the error.
 func minArgs(n int) cobra.PositionalArgs {
 	return func(cmd *cobra.Command, args []string) error {

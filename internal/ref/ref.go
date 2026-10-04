@@ -143,7 +143,10 @@ func ParseIn(dir, s string) (Ref, error) {
 	case hasAnyPrefix(body, []string{"github:", "gitea:", "codeberg:", "gitlab:"}):
 		r.Kind = Forge
 		r.Scheme, body, _ = strings.Cut(body, ":")
-		r.Location, r.Fragment, _ = strings.Cut(body, "#")
+		var hash bool
+		if r.Location, r.Fragment, hash = strings.Cut(body, "#"); hash && r.Fragment == "" {
+			return Ref{}, fmt.Errorf("%s: nothing follows #, which names a manifest in the repo", s)
+		}
 
 		switch {
 		case r.Scheme == "github" && !githubRe.MatchString(r.Location):
@@ -230,7 +233,10 @@ func ParseIn(dir, s string) (Ref, error) {
 		}
 	case strings.HasPrefix(body, "git+"):
 		r.Kind = Git
-		r.Location, r.Fragment, _ = strings.Cut(strings.TrimPrefix(body, "git+"), "#")
+		var hash bool
+		if r.Location, r.Fragment, hash = strings.Cut(strings.TrimPrefix(body, "git+"), "#"); hash && r.Fragment == "" {
+			return Ref{}, fmt.Errorf("%s: nothing follows #, which names a manifest in the repo", s)
+		}
 
 		if !hasAnyPrefix(r.Location, gitSchema) {
 			return Ref{}, fmt.Errorf("%s: want git+https://, git+ssh:// or git+file://", s)
@@ -252,6 +258,12 @@ func ParseIn(dir, s string) (Ref, error) {
 		r.Location = body
 	case strings.Contains(body, "://"):
 		return Ref{}, fmt.Errorf("%s: unsupported scheme", s)
+	case schemeRe.MatchString(body) && !exists(inDir(body)):
+		scheme, _, _ := strings.Cut(body, ":")
+
+		return Ref{}, fmt.Errorf("%s: oku knows no ref scheme %s: and no file has that name\n"+
+			"the schemes are github:, codeberg:, gitea:, gitlab:, npm:, pypi:, go:, cargo:, "+
+			"cask:, scoop:, aqua:, winget:, git+ and https://", s, scheme)
 	default:
 		abs, err := filepath.Abs(inDir(body))
 		if err != nil {
@@ -367,6 +379,16 @@ func Beside(r Ref, got Fetched, rel string) (Ref, error) {
 	default:
 		return Ref{}, fmt.Errorf("%s: %s is not beside a file in a repo or at a URL", r, rel)
 	}
+}
+
+// schemeRe matches a ref that starts with a scheme, such as gihub:owner/repo.
+// One letter before the colon is a Windows drive.
+var schemeRe = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9+.-]+:`)
+
+func exists(path string) bool {
+	_, err := os.Stat(path)
+
+	return err == nil
 }
 
 // splitVersion cuts "@version" off the end of s. A version holds no "/" or ":",

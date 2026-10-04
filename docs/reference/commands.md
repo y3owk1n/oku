@@ -41,7 +41,8 @@ per command. These are `add`, `remove`, `list`, `sync`, `update`, `outdated`,
 `oku doctor`, `oku verify` and `oku manifest lint` exit with `1` when they
 find a problem.
 `--json` does not change an exit code. A command that gets the wrong number of
-arguments prints its usage line and exits with `1`.
+arguments says whether one is missing or there are too many, prints its usage
+line and exits with `1`.
 
 `add`, `remove`, `sync`, `update` and `rollback` change the machine all the way
 or not at all. See [the transaction model](paths.md#how-a-change-applies).
@@ -202,6 +203,7 @@ The packages' files stay in the store, so adding one again needs no download.
 
 - It also works when only the list or the lock still names the package, as
   after the data directory was deleted.
+- A name given twice counts once, and an empty name fails.
 - A name found nowhere stops the command before anything changes, with
   `<name> is not installed, so nothing was removed`.
 - It refuses a package that only an included list declares, because oku does
@@ -323,7 +325,9 @@ ripgrep  14.1.1  github:BurntSushi/ripgrep
 
 On a terminal a last column says `service` or `system` for a package that has
 one, and a footer counts the packages and names the list. With nothing
-installed it says so and points at `oku add`.
+installed it says so and points at `oku add`. When `oku.toml` does not parse,
+`list` prints the error with its line and column above the packages that the
+last sync installed.
 
 ### oku info
 
@@ -390,7 +394,8 @@ oku which <program>
 
 Says which package provides a program and which file in the store it runs.
 Inside a project it looks in the project's profile first, then in the global
-one.
+one. An empty name, `.`, `..` or a path is no program name, and `which` refuses
+it.
 
 ```
 $ oku which rg
@@ -831,7 +836,8 @@ generation 1 is active, 1 package: - fd
   lacks gets the notice above. A package the generation holds and the list no
   longer names gets the other notice, unless the list includes other lists:
   ``~/.config/oku/oku.toml does not list fzf, so `oku sync` will remove it
-  again. Run `oku add github:junegunn/fzf` to keep it.``
+  again. Run `oku add github:junegunn/fzf@0.56.3` to keep it.`` The version is
+  the one the generation held.
 - It writes no new generation. After `oku rollback 1`, `oku rollback 3` goes
   forward again. The next command that changes something builds on
   generation 1 and writes the number after the highest, and 2 and 3 stay.
@@ -865,7 +871,7 @@ identical files of store paths that an older oku installed, see
 | Flag | Effect |
 |---|---|
 | `--keep N` | First deletes all generations of each profile except the newest N. The active generation always stays. N is at least 1. |
-| `--older-than AGE` | First deletes the generations of each profile older than AGE, a number of days or weeks such as `30d` or `2w`. It keeps the newest generation older than AGE, which was active then, so you can still roll back to how things were AGE ago. With `--keep`, a generation stays when either flag keeps it. With `--cache` and no `--cache-older-than`, it also sets how long a download and an API answer stay. |
+| `--older-than AGE` | First deletes the generations of each profile older than AGE, a number of hours, days or weeks such as `12h`, `30d` or `2w`, the same ages that `--min-release-age` takes. It keeps the newest generation older than AGE, which was active then, so you can still roll back to how things were AGE ago. With `--keep`, a generation stays when either flag keeps it. With `--cache` and no `--cache-older-than`, it also sets how long a download and an API answer stay. |
 | `--cache` | Also deletes the downloads in the cache that no kept store path was made from, the downloads that no install has used for two days, and the API answers that no command has read for 30 days, see below. |
 | `--cache-older-than AGE` | Sets how long a download and an API answer stay without being read, and turns on `--cache`. It takes the same ages as `--older-than`, and oku uses it instead of `--older-than` for the cache. It deletes no generation, so every rollback stays. |
 | `--dry-run` | Prints what would be deleted and deletes nothing. |
@@ -1351,7 +1357,7 @@ Uses and fills caches of built packages. See
 
 | Subcommand | Effect |
 |---|---|
-| `add` | Looks in this cache before building. The location is an http(s) URL or a directory. Prints `added cache <location>`. |
+| `add` | Looks in this cache before building. The location is an http(s) URL or a directory that exists, and anything else fails. Prints `added cache <location>`. |
 | `remove` | Stops looking in it. |
 | `list` | Lists your caches, in the order oku tries them. |
 | `push` | Writes `<store path>.tar.zst` and `<store path>.tar.zst.minisig` into the directory, for each named package of your global profile and each of its deps. Without names it takes every package. |
@@ -1415,7 +1421,7 @@ none it ends with `no problems found`.
 $ oku doctor
 ok       the store is /home/you/.local/share/oku/store, in your data directory
 ok       builds from source run in a sandbox
-ok       the shell hook is loaded from /home/you/.zshrc: [ -x "$HOME/.local/bin/oku" ] && eval "$("$HOME/.local/bin/oku" hook zsh)"
+ok       the shell hook line is in /home/you/.zshrc: [ -x "$HOME/.local/bin/oku" ] && eval "$("$HOME/.local/bin/oku" hook zsh)"
 ok       /home/you/.local/share/oku/profiles/global/current/bin is on PATH
 problem  /usr/bin/rg runs in place of oku's rg, because /usr/bin is earlier on PATH. Put /home/you/.local/share/oku/profiles/global/current/bin before it, or remove the other copy
 ok       every link in 3 profiles points at a file in the store
@@ -1675,6 +1681,9 @@ message, see [Troubleshooting](../troubleshooting.md).
 
 These rules apply to every command.
 
+- **Streams.** stdout holds what a command reports, such as a table, a
+  finished line or JSON. Waits, notes, approval texts and questions go to
+  stderr, so a script that reads stdout gets no prompt in it.
 - **Waits.** While oku waits, stderr says what for, with the package's name in
   front: reading a manifest, looking up versions, downloading, unpacking,
   cloning, asking a cache, or running a build step. On a terminal that is one

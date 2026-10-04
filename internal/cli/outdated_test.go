@@ -34,6 +34,10 @@ func TestB262OutdatedListsWhatHasANewerVersionAndChangesNothing(t *testing.T) {
 	server := newReleaseServer(t, "v1.0.0")
 	m.opts.GitHubAPI = server.URL + "/api"
 
+	if out, err := m.run(t, "", "outdated"); err != nil || !strings.Contains(out, "oku.lock holds no packages") {
+		t.Fatalf("outdated with an empty lock: %v\n%s", err, out)
+	}
+
 	_, err := m.run(t, "", "add", m.discoveredManifest(t, "1.0.0", "1.1.0"))
 	must(t, err)
 

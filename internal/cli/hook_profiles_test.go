@@ -27,7 +27,7 @@ func TestB91DoctorFindsTheHookLineInEveryPowerShellProfile(t *testing.T) {
 			file := writeProfile(t, name, "# mine\n"+windowsHookLine+"\n")
 
 			out, _ := m.run(t, "", "doctor")
-			if !strings.Contains(out, "the shell hook is loaded from "+file) {
+			if !strings.Contains(out, "the shell hook line is in "+file) {
 				t.Fatalf("doctor does not find the hook line in %s:\n%s", file, out)
 			}
 		})

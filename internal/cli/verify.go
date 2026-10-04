@@ -28,7 +28,7 @@ next oku sync downloads them again and checks them against oku.lock.
 
 A package that an older oku installed has no record. --record writes one from
 its files as they are now, so that later runs check it.`,
-		Args: cobra.NoArgs,
+		Args: noArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return runVerify(cmd, opts, repair, record)
 		},

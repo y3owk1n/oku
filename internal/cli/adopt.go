@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"os"
 	"path"
 	"slices"
 	"strconv"
@@ -34,6 +35,11 @@ func adopt(cmd *cobra.Command, opts Options, e env, arg string) error {
 
 	if r.Version != "" {
 		return fmt.Errorf("%s: a list ref takes no @version", arg)
+	}
+
+	if _, err := os.Stat(r.Location); r.Kind == ref.File && err != nil {
+		return fmt.Errorf("there is no list at %s\n"+
+			"`oku sync <list-ref>` sets this machine up from a list, and `oku add <ref>` installs a package", r.Location)
 	}
 
 	if !own.Empty() {

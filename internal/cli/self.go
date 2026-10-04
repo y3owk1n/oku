@@ -36,7 +36,7 @@ func newSelfCmd(opts Options) *cobra.Command {
 	uninstall := &cobra.Command{
 		Use:   "uninstall",
 		Short: "Remove oku and everything it installed",
-		Args:  cobra.NoArgs,
+		Args:  noArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return runUninstall(cmd, opts, executable, keepList, yes, system)
 		},

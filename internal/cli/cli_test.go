@@ -725,6 +725,15 @@ func TestB10AddAcceptsEveryRefKind(t *testing.T) {
 	if _, err := m.run(t, "", "add", "github:owner/missing"); err == nil {
 		t.Fatal("adding a repo that does not exist succeeded")
 	}
+
+	// oku says what is wrong with a mistyped scheme and an empty #.
+	for ref, want := range map[string]string{
+		"gihub:owner/repo": "oku knows no ref scheme gihub:", "github:owner/repo#": "nothing follows #",
+	} {
+		if _, err := m.run(t, "", "add", ref); err == nil || !strings.Contains(err.Error(), want) {
+			t.Fatalf("add %s: want %q, got %v", ref, want, err)
+		}
+	}
 }
 
 func TestB11AddWritesListAndLock(t *testing.T) {

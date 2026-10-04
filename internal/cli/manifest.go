@@ -34,14 +34,19 @@ func newManifestCmd(opts Options) *cobra.Command {
 
 	init := &cobra.Command{
 		Use:   "init --from <owner/repo>",
-		Short: "Write a manifest inferred from a GitHub repo's newest release",
-		Long: `Write a manifest inferred from a repo's newest release.
+		Short: "Write a manifest inferred from a repo's newest release or a registry package",
+		Long: `Write a manifest inferred from a repo's newest release, or from a package
+of npm, PyPI, the Go module proxy or crates.io.
 
 This is the manifest "oku add github:owner/repo" uses for a repo that has none.
 Commit it as oku.pkg.toml to control it yourself. Inference opens the asset for
 this machine to find the executable, so run it where a release asset exists.`,
-		Args: cobra.NoArgs,
+		Args: noArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			if from == "" {
+				return fmt.Errorf("missing --from\nusage: %s", cmd.UseLine())
+			}
+
 			// A bare "owner/repo" is a GitHub repo.
 			if !strings.Contains(from, ":") {
 				from = "github:" + from
@@ -128,7 +133,6 @@ this machine to find the executable, so run it where a release asset exists.`,
 	init.Flags().
 		StringVarP(&output, "output", "o", ref.Manifest.Default, `the file to write, or "-" for stdout`)
 	init.Flags().BoolVar(&force, "force", false, "replace the output file when it exists")
-	_ = init.MarkFlagRequired("from")
 
 	cmd.AddCommand(init, newLintCmd(), newBumpCmd(opts), newTestCmd(opts), newHashCmd())
 
@@ -162,7 +166,7 @@ status 1 when any file has an error. Warnings do not fail it.`,
 			var reports []linted
 
 			for _, file := range args {
-				data, err := os.ReadFile(file)
+				data, err := readManifestFile(file)
 				if err != nil {
 					return err
 				}
@@ -306,6 +310,10 @@ publishes an integrity.`,
 					return err
 				}
 
+				if info, err := os.Stat(abs); err != nil || info.IsDir() {
+					return fmt.Errorf("there is no file at %s", abs)
+				}
+
 				at = "file://" + filepath.ToSlash(abs)
 			}
 
@@ -326,6 +334,16 @@ publishes an integrity.`,
 	}
 }
 
+// readManifestFile reads the manifest at path, and names a missing one plainly.
+func readManifestFile(path string) ([]byte, error) {
+	data, err := os.ReadFile(path)
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, fmt.Errorf("there is no manifest at %s", path)
+	}
+
+	return data, err
+}
+
 func newBumpCmd(opts Options) *cobra.Command {
 	var repo, prefix, to string
 
@@ -337,7 +355,7 @@ func newBumpCmd(opts Options) *cobra.Command {
 Bump rewrites version.value and every inline sha256, and downloads each artifact
 to compute its new digest. It reads the repo from artifact URLs on github.com,
 codeberg.org or gitlab.com, or from --repo, which any other host needs. A manifest that discovers its versions needs no bump.`,
-		Args: cobra.MaximumNArgs(1),
+		Args: maxArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			file := ref.Manifest.Default
 			if len(args) == 1 {
@@ -358,7 +376,7 @@ codeberg.org or gitlab.com, or from --repo, which any other host needs. A manife
 }
 
 func runBump(cmd *cobra.Command, opts Options, file, repo, prefix, to string) error {
-	data, err := os.ReadFile(file)
+	data, err := readManifestFile(file)
 	if err != nil {
 		return err
 	}
@@ -516,7 +534,7 @@ Without a file it tests oku.pkg.toml. A manifest with a [build] is built from
 source, deps included, in the same sandbox a user gets. A manifest with only
 artifacts installs the artifact for this machine. Your own store, profile,
 oku.toml and oku.lock are not touched. Downloads still go to your cache.`,
-		Args: cobra.MaximumNArgs(1),
+		Args: maxArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			file := ref.Manifest.Default
 			if len(args) == 1 {

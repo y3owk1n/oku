@@ -1,7 +1,9 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -18,6 +20,20 @@ func newRemoveCmd(opts Options) *cobra.Command {
 		Short:   "Remove packages from the profile",
 		Args:    minArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if slices.Contains(args, "") {
+				return errors.New("an empty name is no package name")
+			}
+
+			// A name given twice is one package.
+			var names []string
+			for _, name := range args {
+				if !slices.Contains(names, name) {
+					names = append(names, name)
+				}
+			}
+
+			args = names
+
 			e, err := scopedEnv(cmd, opts)
 			if err != nil {
 				return err

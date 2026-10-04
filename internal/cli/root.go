@@ -205,19 +205,17 @@ func groupCommands(root *cobra.Command) {
 		title    string
 		commands []string
 	}{
+		// The groups and their order follow docs/reference/commands.md.
 		{
 			"Packages",
-			[]string{
-				"add", "remove", "sync", "update", "outdated", "list", "info", "why",
-				"which", "verify", "shell", "run",
-			},
+			[]string{"add", "remove", "update", "outdated", "list", "info", "why", "which", "shell", "run"},
 		},
-		{"Finding packages", []string{"search", "source"}},
-		{"Generations", []string{"generations", "rollback", "gc", "du"}},
-		{"Projects and shells", []string{"hook", "env", "allow", "deny"}},
-		{"Services and caches", []string{"service", "cache", "key"}},
-		{"Publishing", []string{"manifest"}},
-		{"oku itself", []string{"doctor", "setup", "self", "completion", "help"}},
+		{"The machine", []string{"sync", "service", "setup"}},
+		{"History", []string{"generations", "rollback", "gc", "du"}},
+		{"Projects", []string{"allow", "deny", "hook", "env", "exec"}},
+		{"Manifests", []string{"manifest"}},
+		{"Sources, caches and keys", []string{"source", "search", "cache", "key"}},
+		{"Self and diagnostics", []string{"doctor", "verify", "self", "completion", "help"}},
 	}
 
 	groupOf := map[string]string{}

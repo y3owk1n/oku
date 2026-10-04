@@ -382,8 +382,9 @@ func TestB239RollbackSaysWhenSyncWouldRemoveAPackageAgain(t *testing.T) {
 	out, err := m.run(t, "", "rollback")
 	must(t, err)
 
-	if !strings.Contains(out, "does not list first, so `oku sync` will remove it again") {
-		t.Fatalf("rollback should say the next sync removes first:\n%s", out)
+	if !strings.Contains(out, "does not list first, so `oku sync` will remove it again") ||
+		!strings.Contains(out, "@1.2.3` to keep it") {
+		t.Fatalf("rollback should say the next sync removes first, and add it at its version:\n%s", out)
 	}
 }
 

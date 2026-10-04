@@ -22,6 +22,10 @@ func newWhichCmd(opts Options) *cobra.Command {
 		Short: "Say which package provides a program, and whether PATH runs it",
 		Args:  exactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if name := args[0]; name == "" || name == "." || name == ".." || strings.ContainsAny(name, `/\`) {
+				return fmt.Errorf("%q is no program name, which names a file in a bin folder", name)
+			}
+
 			e, err := scopedEnv(cmd, opts)
 			if err != nil {
 				return err

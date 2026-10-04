@@ -34,7 +34,7 @@ reaches no menu and no Spotlight result. "oku gc" deletes the package later.
 
 A package that ships no app and one program runs that program. Arguments after
 "--" go to what starts, and oku exits with its code.`,
-		Args: cobra.MinimumNArgs(1),
+		Args: minArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			refs, command := args, []string(nil)
 			if at := cmd.ArgsLenAtDash(); at >= 0 {

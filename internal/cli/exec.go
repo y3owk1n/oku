@@ -31,7 +31,7 @@ its own programs first on PATH.
 An editor or a script that does not run the shell hook can start a program
 this way, such as a language server "oku exec gopls". oku exits with the
 command's exit code.`,
-		Args: cobra.MinimumNArgs(1),
+		Args: minArgs(1),
 		// The command's stderr is its own, so oku does not name the project.
 		Annotations: map[string]string{projectShown: "yes"},
 		RunE: func(cmd *cobra.Command, command []string) error {

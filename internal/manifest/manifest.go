@@ -320,7 +320,7 @@ var (
 func Parse(data []byte, origin string) (*Manifest, error) {
 	var m Manifest
 	if err := toml.Unmarshal(data, &m); err != nil {
-		return nil, fmt.Errorf("parse manifest %s: %w", origin, err)
+		return nil, fmt.Errorf("parse manifest %s: %s%w", origin, position(err), err)
 	}
 
 	// A manifest written for a newer oku still installs (D27), and the install
@@ -1266,4 +1266,17 @@ func CheckVersion(v string) error {
 	}
 
 	return nil
+}
+
+// position returns "line N, column M: " for a TOML syntax error, so the user
+// finds the mistake, or "" for any other error.
+func position(err error) string {
+	var syntax *toml.DecodeError
+	if !errors.As(err, &syntax) {
+		return ""
+	}
+
+	row, column := syntax.Position()
+
+	return fmt.Sprintf("line %d, column %d: ", row, column)
 }

@@ -34,7 +34,7 @@ func newDuCmd() *cobra.Command {
 the apps and fonts it copied out of the store, and the rest of its data.
 
 --packages lists each store path instead, with what keeps it.`,
-		Args: cobra.NoArgs,
+		Args: noArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			e, err := loadEnv()
 			if err != nil {

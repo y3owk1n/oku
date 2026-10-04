@@ -193,7 +193,7 @@ func Parse(data []byte, origin string) (*List, error) {
 
 		return nil, fmt.Errorf("%s: %s", origin, strings.Join(keys, ", "))
 	} else if err != nil {
-		return nil, fmt.Errorf("parse %s: %w", origin, err)
+		return nil, fmt.Errorf("parse %s: %s%w", origin, position(err), err)
 	}
 
 	l := &List{
@@ -861,7 +861,7 @@ func ReadOverlay(path string) (*List, error) {
 
 	var raw map[string]any
 	if err := toml.Unmarshal(data, &raw); err != nil {
-		return nil, fmt.Errorf("parse %s: %w", path, err)
+		return nil, fmt.Errorf("parse %s: %s%w", path, position(err), err)
 	}
 
 	for key := range raw {
@@ -871,4 +871,17 @@ func ReadOverlay(path string) (*List, error) {
 	}
 
 	return Parse(data, path)
+}
+
+// position returns "line N, column M: " for a TOML syntax error, so the user
+// finds the mistake, or "" for any other error.
+func position(err error) string {
+	var syntax *toml.DecodeError
+	if !errors.As(err, &syntax) {
+		return ""
+	}
+
+	row, column := syntax.Position()
+
+	return fmt.Sprintf("line %d, column %d: ", row, column)
 }

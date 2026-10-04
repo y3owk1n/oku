@@ -112,7 +112,7 @@ func (e env) ageChecker(
 		// question.
 		defer status.Pause(cmd.Context())()
 
-		out := cmd.OutOrStdout()
+		out := cmd.ErrOrStderr()
 
 		question := "take it?"
 		if locked != "" {
@@ -182,7 +182,7 @@ func (e env) trustChecker(
 		// question.
 		defer status.Pause(cmd.Context())()
 
-		out := cmd.OutOrStdout()
+		out := cmd.ErrOrStderr()
 		fmt.Fprintf(out, "%s, so oku would trust its first download.\n", why)
 
 		if !confirm(cmd.InOrStdin(), out, "trust it?") {
@@ -215,13 +215,13 @@ const minReleaseAgeFlag = "min-release-age"
 // names: --min-release-age, else the entry's, else the list's, else
 // list.DefaultReleaseAge.
 func releaseAge(cmd *cobra.Command, own *list.List, entry list.Entry) (time.Duration, error) {
-	text := entry.MinReleaseAge
+	text, from := entry.MinReleaseAge, "min_release_age"
 	if own != nil && text == "" {
 		text = own.MinReleaseAge
 	}
 
 	if flag := cmd.Flags().Lookup(minReleaseAgeFlag); flag != nil && flag.Changed {
-		text = flag.Value.String()
+		text, from = flag.Value.String(), "--"+minReleaseAgeFlag
 	}
 
 	if text == "" {
@@ -230,7 +230,7 @@ func releaseAge(cmd *cobra.Command, own *list.List, entry list.Entry) (time.Dura
 
 	age, err := list.ParseAge(text)
 	if err != nil {
-		return 0, fmt.Errorf("min_release_age: %w", err)
+		return 0, fmt.Errorf("%s: %w", from, err)
 	}
 
 	return age, nil
@@ -298,7 +298,7 @@ func (e env) approver(
 
 			// The block goes to a buffer first, so that oku knows how many lines to
 			// erase once the user answered.
-			terminal := cmd.OutOrStdout()
+			terminal := cmd.ErrOrStderr()
 			s := ui.For(terminal)
 
 			var block strings.Builder

@@ -85,7 +85,7 @@ only. It never uses the network and never runs anything from a manifest.
 With --json or --dotenv, oku prints every variable the directory sets, for an
 editor or a tool that reads an environment file. JSON gives an unset variable
 as null, and a .env file leaves it out.`,
-		Args: cobra.NoArgs,
+		Args: noArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			e, err := loadEnv()
 			if err != nil {
@@ -388,7 +388,7 @@ An allow belongs to the oku.toml as it is now, and to each .env file it loads
 that git tracks, since a pull can change those. After one of them changes, the
 hook stops and asks you to allow it again. A .env file that git does not track
 is yours, and you change it without a new allow.`,
-		Args: cobra.MaximumNArgs(1),
+		Args: maxArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return setAllowed(cmd, opts, args, true)
 		},
@@ -399,7 +399,7 @@ func newDenyCmd(opts Options) *cobra.Command {
 	return &cobra.Command{
 		Use:   "deny [dir]",
 		Short: "Stop the shell hook from applying this project's environment",
-		Args:  cobra.MaximumNArgs(1),
+		Args:  maxArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return setAllowed(cmd, opts, args, false)
 		},

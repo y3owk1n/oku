@@ -30,7 +30,7 @@ For each package, oku asks its version source for two versions. The newest is
 the newest that the version in oku.toml allows, and oku update takes it. The
 latest is the newest release. To take a latest beyond the newest, change the
 version in oku.toml. oku downloads no package and changes nothing.`,
-		Args: cobra.NoArgs,
+		Args: noArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			e, err := scopedEnv(cmd, opts)
 			if err != nil {
@@ -253,6 +253,10 @@ func printStale(cmd *cobra.Command, stale []staleness, checked, all int) error {
 
 	switch {
 	case len(stale) > 0:
+	case all == 0:
+		hint(out, "oku.lock holds no packages, `oku add <ref>` installs one")
+
+		return nil
 	case checked == all:
 		fmt.Fprintln(out, s.Done(fmt.Sprintf("all %d packages are at their newest version", all)))
 
