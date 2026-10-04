@@ -235,6 +235,8 @@ only to a host that `[forge] hosts` in `config.toml` lists, since a manifest
 names the host oku reads. When `GITHUB_TOKEN` or
 `GH_ENTERPRISE_TOKEN` is not set and `gh` is on `PATH`, oku runs
 `gh auth token --hostname <host>` and sends that login to the same host only.
+For a GitHub Enterprise Server, oku asks `gh` only when `[forge] hosts` lists
+the host, since `gh` answers with `GH_ENTERPRISE_TOKEN` for any host.
 The variables and their hosts are in [tokens per host](refs.md#tokens-per-host).
 
 ## Downloads
@@ -245,7 +247,9 @@ The variables and their hosts are in [tokens per host](refs.md#tokens-per-host).
   machine, such as `http://127.0.0.1`. `oku manifest lint` refuses an
   `http://` download without a `sha256`.
 - Only a manifest that is a file on this machine, or in a `git+file://` repo,
-  may name a `file://` URL or a local repo as `source.git`. A manifest from
+  may name a `file://` URL or a local repo as `source.git`. A manifest file
+  inside a project came with the project, so it may name only files and repos
+  inside that project. A manifest from
   anywhere else could otherwise read a file such as `~/.aws/credentials`, or
   clone a repo such as a password store, into the store or into a build.
 - A URL of this machine, such as `http://127.0.0.1:8080` or `localhost`, works

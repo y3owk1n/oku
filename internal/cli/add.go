@@ -302,7 +302,7 @@ func runAdd(
 
 	// oku only pins a package that has nothing for this machine, so the current
 	// generation stays.
-	c := change{to: prof.Current(), system: system}
+	c := change{to: prof.Current(), system: system, yes: flags.yes}
 	if !got.lockOnly {
 		if c.to, err = prof.Add(got.profile, hostOf(got.profile.Name, got), lockData); err != nil {
 			return false, err

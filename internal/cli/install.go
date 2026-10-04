@@ -9,6 +9,7 @@ import (
 	"maps"
 	"net/url"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"sync"
@@ -931,7 +932,7 @@ func (e env) pickRelease(
 	}
 
 	if !opts.FileDownloads {
-		if err := localURLs(r, m); err != nil {
+		if err := localURLs(r, m, e.project); err != nil {
 			return nil, resolve.Release{}, false, nil, err
 		}
 	}
@@ -2406,6 +2407,45 @@ func (set depSet) buildOnly(first int) []string {
 	return only
 }
 
+// within reports whether path is dir or below it, after both follow their
+// links. A path that does not exist yet follows the links of its folder.
+func within(dir, path string) bool {
+	resolve := func(p string) string {
+		if real, err := filepath.EvalSymlinks(p); err == nil {
+			return real
+		}
+
+		if real, err := filepath.EvalSymlinks(filepath.Dir(p)); err == nil {
+			return filepath.Join(real, filepath.Base(p))
+		}
+
+		return filepath.Clean(p)
+	}
+
+	rel, err := filepath.Rel(resolve(dir), resolve(path))
+
+	return err == nil && (rel == "." || filepath.IsLocal(rel))
+}
+
+// gitPath returns the folder that a local source.git value names. A relative
+// one starts from the folder of the manifest at manifestPath. A home path
+// stays as written, so it is in no project.
+func gitPath(git, manifestPath string) string {
+	git = strings.TrimSpace(git)
+
+	if u, err := url.Parse(git); err == nil && strings.EqualFold(u.Scheme, "file") {
+		if path, err := store.LocalPath(u, runtime.GOOS); err == nil {
+			return path
+		}
+	}
+
+	if filepath.IsAbs(git) || strings.HasPrefix(git, "~") {
+		return git
+	}
+
+	return filepath.Join(filepath.Dir(manifestPath), git)
+}
+
 // localGit reports whether the git source url names a repo on this machine: a
 // file: URL, an absolute, relative or home path, or a Windows drive. A remote
 // one has a scheme such as https:// or ssh://, or is host:path as scp writes it.
@@ -2431,12 +2471,15 @@ func localGit(url string) bool {
 // its local services, and a version a page source reads from one can carry
 // their answer to another host. A manifest from a file or a git repo on this
 // machine may name both, and one served from this machine may name its URLs.
-func localURLs(r ref.Ref, m *manifest.Manifest) error {
-	if r.Kind == ref.File || r.Kind == ref.Git && strings.HasPrefix(r.Location, "file://") {
+// A manifest file in project, which came with the project, may name files and
+// a local repo of the project only.
+func localURLs(r ref.Ref, m *manifest.Manifest, project string) error {
+	inProject := r.Kind == ref.File && project != "" && within(project, r.Location)
+	if !inProject && (r.Kind == ref.File || r.Kind == ref.Git && strings.HasPrefix(r.Location, "file://")) {
 		return nil
 	}
 
-	served := false
+	served := inProject
 	if u, err := url.Parse(r.Location); err == nil && r.Kind == ref.HTTP {
 		served = netpolicy.Local(u.Hostname())
 	}
@@ -2458,7 +2501,11 @@ func localURLs(r ref.Ref, m *manifest.Manifest) error {
 
 		// oku clones the source outside the sandbox, so a local repo, such as a
 		// password store, would reach the build.
-		if git := m.Build.Source.Git; localGit(git) {
+		if git := m.Build.Source.Git; localGit(git) && (!inProject || !within(project, gitPath(git, r.Location))) {
+			if inProject {
+				return fmt.Errorf("%s clones %s, and a manifest in a project may clone only a repo in the project", r, git)
+			}
+
 			return fmt.Errorf("%s clones %s, and only a manifest on this machine may name a local repo", r, git)
 		}
 
@@ -2471,7 +2518,20 @@ func localURLs(r ref.Ref, m *manifest.Manifest) error {
 
 	for _, u := range urls {
 		if strings.HasPrefix(strings.ToLower(strings.TrimSpace(u)), "file:") {
-			return fmt.Errorf("%s names %s, and only a manifest on this machine may read a local file", r, u)
+			if !inProject {
+				return fmt.Errorf("%s names %s, and only a manifest on this machine may read a local file", r, u)
+			}
+
+			parsed, err := url.Parse(strings.TrimSpace(u))
+			if err != nil {
+				return fmt.Errorf("%s names %s: %w", r, u, err)
+			}
+
+			if path, err := store.LocalPath(parsed, runtime.GOOS); err != nil || !within(project, path) {
+				return fmt.Errorf("%s names %s, and a manifest in a project may read only files of the project", r, u)
+			}
+
+			continue
 		}
 
 		if parsed, err := url.Parse(strings.TrimSpace(u)); err == nil && !served && netpolicy.Local(parsed.Hostname()) {

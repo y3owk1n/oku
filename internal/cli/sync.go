@@ -558,7 +558,7 @@ func reconcile(
 	system, _ := cmd.Flags().GetBool(systemFlag)
 
 	c := change{
-		to: staged, staged: true, system: system, before: before, dryRun: dryRun,
+		to: staged, staged: true, system: system, yes: flags.yes, before: before, dryRun: dryRun,
 		commit: func() error {
 			for _, j := range narrowed {
 				entry := all.own.Packages[j.name]

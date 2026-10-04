@@ -61,7 +61,7 @@ Installs the package that a [ref](refs.md) points at, and writes it to
 
 | Flag | Effect |
 |---|---|
-| `--system` | Puts the package's apps, fonts and services in [system scope](../how-oku-works.md#system-scope), and writes `system = true` to `oku.toml`. oku lists the files, asks, and uses `sudo`. |
+| `--system` | Puts the package's apps, fonts and services in [system scope](../how-oku-works.md#system-scope), and writes `system = true` to `oku.toml`. oku lists the files, asks unless you pass `--yes`, and uses `sudo`. |
 | `--service` | Runs the package's services now and at every login, and writes `service = true` to `oku.toml`. |
 | `--from-source` | Builds from source even when a prebuilt download fits. `oku.lock` records the choice, so `oku sync` builds too. |
 | `--asset <glob>` | For a repo with no manifest, the release asset to use. A glob that names one asset takes it for this machine. One that names more takes the best of them on every platform. Other platforms take the asset of the same program. |
@@ -223,7 +223,7 @@ With no names it updates every package of the list.
 | Flag | Effect |
 |---|---|
 | `--dry-run` | Checks everything and prints what would change. It changes only the store and the cache. See [A dry run](#a-dry-run). |
-| `--system` | Also applies system-scope apps, fonts and services, which needs administrator rights. |
+| `--system` | Also applies system-scope apps, fonts and services, which needs administrator rights. oku lists them and asks first, and `--yes` answers yes. |
 | `--yes`, `-y` | Approves a manifest's commands and `[env]` without asking, takes a changed included list, and in a project trusts the [sources](security.md#trusted-sources) its `oku.toml` installs from. |
 | `--accept-key` | Accepts a changed `signing_key` or `signer_workflow`. |
 | `--accept-weaker-check` | As in `oku add`. |
@@ -292,7 +292,8 @@ ripgrep  14.1.1  14.1.1  15.2.0  github:BurntSushi/ripgrep
   its ref.
 - When every package is at its newest version, oku says so.
 - When a version source cannot answer, oku lists the rest and ends with an
-  error that names the package.
+  error that names the package. It counts only the packages it could look
+  up, as in `3 of 4 packages are at their newest version`.
 - oku looks up 16 packages at once, or the number in
   [`OKU_PARALLEL`](paths.md#environment-variables).
 
@@ -521,7 +522,7 @@ tables.
 | `--dry-run` | Checks everything and prints what would change. It changes only the store and the cache. See [A dry run](#a-dry-run). |
 | `--locked` | Fails when `oku.lock` would change. For CI. |
 | `--rebuild <name>` | Builds the package again even though the store holds its build. Repeat the flag, or separate names with commas. |
-| `--system` | Also applies system-scope apps, fonts and services, which needs administrator rights. |
+| `--system` | Also applies system-scope apps, fonts and services, which needs administrator rights. oku lists them and asks first, and `--yes` answers yes. |
 | `--yes`, `-y` | Approves a manifest's commands and `[env]` without asking, and in a project trusts the [sources](security.md#trusted-sources) its `oku.toml` installs from. |
 | `--accept-key` | Accepts a changed `signing_key` or `signer_workflow`. |
 | `--accept-weaker-check` | As in `oku add`. |
@@ -547,7 +548,7 @@ What it does:
   finishes the sync, then prints a `!` note for each missing entry with the
   package manager's command or the entry's `install` text.
 - Changes files in system scope only with `--system`, after it lists them and
-  you agree. Without the flag it lists them and leaves them.
+  you agree, or with `--yes`. Without the flag it lists them and leaves them.
 - With `--system`, refuses to remove a system-scope app while its macOS
   system extension is on, since the extension keeps running once the app is
   gone. An update that replaces the app goes ahead.

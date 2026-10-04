@@ -138,14 +138,15 @@ type exposePlan struct {
 // visible to the whole user account, not to one directory.
 //
 // Items in system scope change only with system set, after oku has listed them
-// and the user has agreed. Otherwise oku leaves them as they are and says so.
+// and the user has agreed, or with yes. Otherwise oku leaves them as they are
+// and says so.
 func (e env) planExposed(
 	cmd *cobra.Command,
 	opts Options,
 	pkgs []profile.Package,
 	files []profile.File,
 	wantedSettings []profile.Setting,
-	system bool,
+	system, yes bool,
 ) (exposePlan, error) {
 	notice := cmd.ErrOrStderr()
 
@@ -192,7 +193,7 @@ func (e env) planExposed(
 
 		fmt.Fprint(notice, strings.Join(pending, ""))
 
-		if system {
+		if system && !yes {
 			system = confirm(cmd.InOrStdin(), notice, "continue?")
 		}
 

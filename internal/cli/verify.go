@@ -74,7 +74,7 @@ func runVerify(cmd *cobra.Command, opts Options, repair, record bool) error {
 	}
 
 	var (
-		results []verified
+		results = []verified{}
 		changed []verified
 	)
 

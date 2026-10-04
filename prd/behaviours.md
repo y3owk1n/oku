@@ -160,12 +160,16 @@ order step in `prd/product.md`.
 
 - B418 [2] oku sends `GH_ENTERPRISE_TOKEN`, `GITEA_TOKEN` and
   `GITLAB_SERVER_TOKEN` only to a host that `[forge] hosts` in `config.toml`
-  lists with that kind. Any other host gets no token.
+  lists with that kind. Any other host gets no token, and oku does not ask
+  `gh` for one, since `gh` answers with `GH_ENTERPRISE_TOKEN`.
 - B419 [2] A download follows no redirect to a `file://` URL and none from
   https to another scheme, and fails naming both URLs.
 - B420 [2] Only a manifest that is a file on this machine, or in a
   `git+file://` repo, may name a `file://` URL, a local repo as `source.git`,
   or a local signature or provenance file. Any other fails before a download.
+- B540 [2] A manifest file inside a project may name a `file://` URL or a
+  local `source.git` only inside that project, after oku follows links. One
+  that names anything else fails before a download.
 - B538 [2] A manifest from a ref of another machine fails before a download
   when a download, a checksum or signature file, or a `page`, `redirect` or
   `sparkle` version source names `localhost` or a loopback address. A
@@ -198,7 +202,8 @@ order step in `prd/product.md`.
   `gitlab:`, `npm:` and `git+` refs. An `@` inside the file name of an https
   ref, as in `tool@2.toml`, is part of the URL.
 - B114 [2] `github:host/owner/repo` reads a GitHub Enterprise Server at `host`.
-  oku sends it `GH_ENTERPRISE_TOKEN` and never `GITHUB_TOKEN`.
+  oku sends it `GH_ENTERPRISE_TOKEN` when `[forge] hosts` lists it, and never
+  `GITHUB_TOKEN`.
 - B254 [2] Without `GITHUB_TOKEN`, oku sends GitHub the token that
   `gh auth token --hostname github.com` prints, when `gh` is on `PATH`. An
   Enterprise Server gets the one gh holds for its host.
@@ -433,7 +438,8 @@ order step in `prd/product.md`.
   version that its `version` in the list allows, or whose latest release,
   differs from the locked one, with the three versions and its ref, and
   `--json` gives `name`, `version`, `newest`, `latest` and `ref`. It changes no
-  lock, no profile and no store path.
+  lock, no profile and no store path. oku names a package whose lookup fails
+  with its error, and does not count it as at its newest version.
 - B268 [3] With `version.from = "github-releases"`, `add` and `update` check a
   file of the repo's release that has no `sha256` or `sha256_url` against the
   sha256 GitHub reports for it, and do not trust it on first use. The same
@@ -1290,8 +1296,9 @@ order step in `prd/product.md`.
   someone other than root, Administrators or the user, or is a link, before it
   elevates.
 - B75 [8] System scope needs `--system`. oku names what it will write and
-  prompts before elevating. Without the flag oku never elevates. It leaves
-  system scope unchanged and lists what is pending.
+  prompts before elevating, and `--yes` answers the prompt. Without the flag
+  oku never elevates. It leaves system scope unchanged and lists what is
+  pending.
 - B76 [8] Rolling back to a generation restores which services are enabled.
 
 ## Windows
@@ -1777,5 +1784,5 @@ order step in `prd/product.md`.
   every OS. A hunk that does not fit fails the build and names the file.
 - B103 [11] With `--json`, `list`, `info`, `why`, `generations`, `search`,
   `source list`, `cache list`, `key list`, `service list`, `service status`,
-  `du` and `doctor` print JSON on stdout. An empty result is `[]`, and exit codes do not
+  `du`, `doctor`, `verify` and `outdated` print JSON on stdout. An empty result is `[]`, and exit codes do not
   change.

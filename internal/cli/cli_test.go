@@ -2465,6 +2465,12 @@ func TestB114AddReadsAGitHubEnterpriseHostFromTheRef(t *testing.T) {
 	t.Setenv("GITHUB_TOKEN", "for-github-com")
 	t.Setenv("GH_ENTERPRISE_TOKEN", "for-the-server")
 
+	// gh prints GH_ENTERPRISE_TOKEN for any host but github.com.
+	gh := filepath.Join(m.fixtures, "gh-bin")
+	must(t, os.MkdirAll(gh, 0o755))
+	must(t, os.WriteFile(filepath.Join(gh, "gh"), []byte("#!/bin/sh\necho \"$GH_ENTERPRISE_TOKEN\"\n"), 0o755))
+	t.Setenv("PATH", gh+string(os.PathListSeparator)+os.Getenv("PATH"))
+
 	var tokens []string
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -2489,7 +2495,25 @@ func TestB114AddReadsAGitHubEnterpriseHostFromTheRef(t *testing.T) {
 
 	t.Cleanup(func() { http.DefaultClient.Transport = client })
 
+	// A host the user did not list gets no token, from the variable or from gh.
 	out, err := m.run(t, "", "add", "github:ghe.example.com/owner/tool")
+	if err != nil {
+		t.Fatalf("add: %v\n%s", err, out)
+	}
+
+	if slices.ContainsFunc(tokens, func(token string) bool { return token != "" }) {
+		t.Fatalf("a host the user did not list got the tokens %q", tokens)
+	}
+
+	_, err = m.run(t, "", "remove", "tool")
+	must(t, err)
+
+	must(t, os.WriteFile(filepath.Join(m.config, "config.toml"),
+		[]byte("[forge.hosts]\n\"ghe.example.com\" = \"github\"\n"), 0o644))
+
+	tokens = nil
+
+	out, err = m.run(t, "", "add", "github:ghe.example.com/owner/tool")
 	if err != nil {
 		t.Fatalf("add: %v\n%s", err, out)
 	}
@@ -6764,11 +6788,12 @@ func TestB75SystemScopeItemsChangeOnlyWithTheFlagAndAfterAQuestion(t *testing.T)
 		t.Fatalf("answering no still elevated:\n%s", out)
 	}
 
-	_, err = m.run(t, "y\n", "sync", "--system")
+	// --yes answers the question, as a script without a terminal needs.
+	_, err = m.run(t, "", "sync", "--system", "--yes")
 	must(t, err)
 
 	if exists(font) {
-		t.Fatal("sync --system left the font behind")
+		t.Fatal("sync --system --yes left the font behind")
 	}
 }
 
@@ -7457,6 +7482,7 @@ func TestB103DataCommandsPrintJSON(t *testing.T) {
 
 	for _, args := range [][]string{
 		{"list"}, {"generations"}, {"source", "list"}, {"cache", "list"}, {"service", "list"},
+		{"verify"}, {"outdated"},
 	} {
 		if list, ok := decode(args...).([]any); !ok || len(list) != 0 {
 			t.Fatalf("%v --json on an empty machine should be [], got %v", args, list)

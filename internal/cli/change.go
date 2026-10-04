@@ -60,6 +60,8 @@ type change struct {
 	to     int
 	staged bool
 	system bool
+	// yes takes system scope without asking, as --yes does.
+	yes bool
 	// before replaces the list files read at the start of the apply. "oku sync
 	// <list-ref>" sets it, because it writes the list before it reconciles.
 	before *savedLists
@@ -198,7 +200,7 @@ func (e env) plan(cmd *cobra.Command, opts Options, c change) (pending, exposePl
 		return pending{}, exposePlan{}, err
 	}
 
-	plan, err := e.planExposed(cmd, opts, pkgs, files, wantedSettings, c.system)
+	plan, err := e.planExposed(cmd, opts, pkgs, files, wantedSettings, c.system, c.yes)
 	if err != nil {
 		return pending{}, exposePlan{}, err
 	}

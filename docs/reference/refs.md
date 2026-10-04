@@ -202,7 +202,8 @@ there were none.
 
 When `GITHUB_TOKEN` or `GH_ENTERPRISE_TOKEN` is not set and the `gh` CLI is on
 `PATH`, oku runs `gh auth token --hostname <host>` once per run and sends that
-login to the same host only.
+login to the same host only. For a GitHub Enterprise Server it asks `gh` only
+when `[forge] hosts` lists the host.
 
 Without a token GitHub allows 60 API requests an hour. Set `GITHUB_TOKEN`, or
 log in with `gh`, to raise the limit.
