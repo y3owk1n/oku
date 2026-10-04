@@ -372,6 +372,8 @@ order step in `prd/product.md`.
   is an error, and a list at a URL with `[files]` or `[secrets]` is an error.
   Only a `link` may start with `{{pkg.<name>}}`, and it must stay inside that
   package.
+- B529 [1] When `oku.toml` or `oku.lock` is a symlink, oku writes the file it
+  points at, keeps that file's mode, and leaves the link.
 - B524 [1] oku refuses a list with a table or key it does not know, at the
   top or in a package's entry, or a value of the wrong type, names the line,
   and changes nothing.

@@ -780,8 +780,27 @@ func edit(path, name, line string) error {
 }
 
 // WriteFile replaces path in one rename, so a crash or a power loss leaves the
-// old file or the new one.
+// old file or the new one. A symlink at path stays, and the file it points at
+// gets the data, as for an oku.toml that lives in a dotfiles repo. The file
+// keeps its mode, and a new one gets 0644.
 func WriteFile(path string, data []byte) error {
+	mode := fs.FileMode(0o644)
+
+	if target, err := filepath.EvalSymlinks(path); err == nil {
+		path = target
+	} else if link, linkErr := os.Readlink(path); linkErr == nil {
+		// A link to a file that does not exist yet.
+		if !filepath.IsAbs(link) {
+			link = filepath.Join(filepath.Dir(path), link)
+		}
+
+		path = link
+	}
+
+	if info, err := os.Stat(path); err == nil {
+		mode = info.Mode().Perm()
+	}
+
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
@@ -805,7 +824,7 @@ func WriteFile(path string, data []byte) error {
 		return err
 	}
 
-	if err := os.Chmod(tmp.Name(), 0o644); err != nil {
+	if err := os.Chmod(tmp.Name(), mode); err != nil {
 		return err
 	}
 

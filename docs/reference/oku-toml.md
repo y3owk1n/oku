@@ -68,6 +68,9 @@ they do not know too.
   settings tables over unchanged. Only `oku sync` and `oku update` read them
   again.
 - You can edit the file by hand and run `oku sync`.
+- `oku.toml` and `oku.lock` may be symlinks, such as into a dotfiles repo. oku
+  writes the file a link points at, keeps its mode, and leaves the link as it
+  is.
 
 ### [packages]
 
