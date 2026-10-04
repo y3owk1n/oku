@@ -286,6 +286,7 @@ func reconcile(
 				wantManifest:    wantManifest,
 				acceptDigest:    fresh,
 				acceptKey:       flags.acceptKey,
+				acceptWeaker:    flags.acceptWeaker,
 				releaseAge:      age,
 				keepVersion:     !fresh && previous.Ref == r.String(),
 				service:         entry.Service,

@@ -259,6 +259,20 @@ if the developer announced this change, run the command again with --accept-key
 A new key is what someone who took over the repo would publish. Check with the
 developer first. See [Security](reference/security.md).
 
+## The download has a weaker check
+
+```
+oku: tool: oku.lock checked the download for darwin-arm64 against the digest that its source publishes, and nothing states a digest for the new one, so oku would trust its first download
+if the developer announced this change, run the command again with --accept-weaker-check
+```
+
+oku checked the version you had against something the new one lacks, such as a
+checksum file the project stopped publishing or a `sha256` the manifest
+dropped. Someone who replaced the release would remove it too.
+Check the project's release notes or ask the developer, then run
+`oku update tool --accept-weaker-check`. See
+[weaker checks](reference/security.md#weaker-checks).
+
 ## oku sync --locked fails
 
 `--locked` never changes `oku.lock`, for CI that cannot commit it back.

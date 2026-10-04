@@ -123,6 +123,35 @@ The first download is the one you trusted. Prefer manifests that publish
 - `oku manifest hash` trusts the download it gets. Compare its output with a
   checksum the project publishes.
 
+## Weaker checks
+
+`oku.lock` records what oku checked each download against, such as a signature,
+the manifest's `sha256`, a checksum file, or nothing. See
+[What oku checked](lock.md#what-oku-checked). When `oku update` or `oku add`
+would pin a new download that oku checks more weakly, it stops and names both
+checks:
+
+```
+oku: tool: oku.lock checked the download for darwin-arm64 against the digest that its source publishes, and nothing states a digest for the new one, so oku would trust its first download
+if the developer announced this change, run the command again with --accept-weaker-check
+```
+
+A project can stop publishing checksums for good reasons. Someone who replaced
+a release would remove them too, so check before you pass
+`--accept-weaker-check`.
+
+- A signature by a `signing_key` is the strongest check, then a digest in the
+  manifest, then a checksum file or a digest the source publishes, which rank
+  the same, then nothing.
+- oku compares the check for each platform it pins, your own and those of
+  `[lock]`.
+- `oku sync` installs the pins of `oku.lock`, so it never stops for this.
+- oku does not compare a package whose ref you changed, since you chose the
+  new source.
+- `oku add --plan` stops the same way.
+- A lock written before oku recorded the check has nothing to compare. The
+  first `oku update` records the check without comparing it.
+
 ## Inferred manifests
 
 For a repo with no manifest, oku writes one from the release and says so.

@@ -67,6 +67,7 @@ Installs the package that a [ref](refs.md) points at, and writes it to
 | `--bin <name>` | For a repo with no manifest, or a URL of the download itself, the file name of a program inside it. Give it once per program. oku records `--asset` and `--bin` in `oku.toml` and `oku.lock`, and `oku update` infers the next version with them. |
 | `--yes`, `-y` | Approves the manifest's build commands, the command that generates an artifact's completions, and the variables its `[env]` sets, without asking. See [approvals](security.md#approve-build-commands). In a project it also trusts the [sources](security.md#trusted-sources) of the project's other entries. |
 | `--accept-key` | Accepts a manifest whose `signing_key` differs from the one in `oku.lock`. See [signing keys](security.md#signing-keys-of-a-manifest). |
+| `--accept-weaker-check` | Accepts a download that oku checks more weakly than the one in `oku.lock`. See [weaker checks](security.md#weaker-checks). |
 | `--min-release-age AGE` | Takes only a version that came out at least AGE ago, such as `3d`, in place of the list's. `0` takes the newest. See [Minimum release age](security.md#minimum-release-age). |
 | `--accept-unknown-age` | Takes a version whose source gives no release time without asking, whatever `[lock]` `unknown_release_age` says. See [Minimum release age](security.md#minimum-release-age). |
 | `--verbose`, `-v` | Shows the output of build commands as they run, and prints a manifest that oku inferred. |
@@ -153,7 +154,11 @@ plan: nothing was changed
 - `install` is `download`, `build from source`, or `pin in oku.lock only`
   when nothing fits this machine but a `[lock]` platform does.
 - `verify` says how oku checks the download. `none` means oku
-  [trusts the first download](security.md#trust-on-first-use).
+  [trusts the first download](security.md#trust-on-first-use). `--json`
+  also gives `verified`, the value `oku.lock` records, see
+  [What oku checked](lock.md#what-oku-checked). The plan stops as `add` does
+  when the check is [weaker](security.md#weaker-checks) than the one in
+  `oku.lock`.
 - `commands` appears when the manifest runs commands, in a build or to
   generate completions. oku [asks you to approve](security.md#approve-build-commands)
   them before it runs them.
@@ -219,6 +224,7 @@ With no names it updates every package of the list.
 | `--system` | Also applies system-scope apps, fonts and services, which needs administrator rights. |
 | `--yes`, `-y` | Approves a manifest's commands and `[env]` without asking, takes a changed included list, and in a project trusts the [sources](security.md#trusted-sources) its `oku.toml` installs from. |
 | `--accept-key` | Accepts a changed `signing_key`. |
+| `--accept-weaker-check` | As in `oku add`. |
 | `--min-release-age AGE` | As in `oku add`. `0` takes a version that waits now. |
 | `--accept-unknown-age` | As in `oku add`. |
 | `--verbose`, `-v` | Shows build output, and a manifest that oku inferred. |
@@ -334,6 +340,7 @@ commit     3fce3b5bb0236da2df6d99672afb8a719642eca7
 installed  artifact
 store      /home/you/.local/share/oku/store/ripgrep-14.1.1-77da99cdceeb3140
 manifest   inferred by oku from the repo's releases
+verified   the digest that its source publishes
 programs   rg
 ```
 
@@ -342,6 +349,7 @@ programs   rg
 | `installed` | `artifact` or `build`. On a terminal it reads `from a release download` or `built from source`. |
 | `commit` | The commit oku read the manifest at. A terminal shows its first 12 characters. |
 | `manifest` | Present when oku inferred the manifest. |
+| `verified` | What oku checked the download against when it pinned it, from `verified` in `oku.lock`. See [What oku checked](lock.md#what-oku-checked). Absent for a lock written before oku recorded it. |
 | `vendored` | The digest of what a build's vendor steps downloaded. |
 | `impure` | Present for a build that used `network = true`, which is not reproducible. |
 | `deps` | The packages in its closure. |
@@ -408,6 +416,7 @@ profile. For one program, or for an app, use [oku run](#oku-run).
 | `--from-source` | As in `oku add`. |
 | `--yes`, `-y` | As in `oku add`. |
 | `--accept-key` | As in `oku add`. |
+| `--accept-weaker-check` | As in `oku add`. |
 | `--min-release-age AGE` | As in `oku add`. |
 | `--accept-unknown-age` | As in `oku add`. |
 | `--verbose`, `-v` | As in `oku add`. |
@@ -455,6 +464,7 @@ and no copy of an app.
 | `--from-source` | As in `oku add`. |
 | `--yes`, `-y` | As in `oku add`. |
 | `--accept-key` | As in `oku add`. |
+| `--accept-weaker-check` | As in `oku add`. |
 | `--min-release-age AGE` | As in `oku add`. |
 | `--accept-unknown-age` | As in `oku add`. |
 | `--verbose`, `-v` | As in `oku add`. |
@@ -507,6 +517,7 @@ tables.
 | `--system` | Also applies system-scope apps, fonts and services, which needs administrator rights. |
 | `--yes`, `-y` | Approves a manifest's commands and `[env]` without asking, and in a project trusts the [sources](security.md#trusted-sources) its `oku.toml` installs from. |
 | `--accept-key` | Accepts a changed `signing_key`. |
+| `--accept-weaker-check` | As in `oku add`. |
 | `--min-release-age AGE` | As in `oku add`, for the packages that sync picks a version for. |
 | `--accept-unknown-age` | As in `oku add`. |
 | `--verbose`, `-v` | Shows build output, and a manifest that oku inferred. |
@@ -1175,6 +1186,7 @@ machine. Without a file it tests `oku.pkg.toml`.
 | `--verbose`, `-v` | Shows the output of build commands as they run, and a manifest that oku inferred. |
 | `--keep` | Keeps the throwaway store and prints the package's path. |
 | `--accept-key` | Accepts a signing key that differs from the one in `oku.lock`. |
+| `--accept-weaker-check` | As in `oku add`. |
 | `--min-release-age AGE` | As in `oku add`. |
 | `--accept-unknown-age` | As in `oku add`. |
 
@@ -1585,6 +1597,7 @@ message, see [Troubleshooting](../troubleshooting.md).
 | `<name>: the manifest changed since oku.lock was written` | A file or URL manifest has other bytes than the lock pinned. `oku update <name>` accepts it. |
 | `<name>: checksum changed: upstream publishes sha256 <new>, oku.lock pinned <old>` | The checksum file now holds another digest. `oku update <name>` accepts it. |
 | `<name>: oku.lock pinned the signing key ..., and the manifest now has the signing key ...` | The manifest's `signing_key` changed. `--accept-key` accepts it. |
+| `<name>: oku.lock checked the download for <platform> against ...` | The new download has a weaker check than the one in the lock. `--accept-weaker-check` accepts it. See [weaker checks](security.md#weaker-checks). |
 | `<app> has the system extension <id> turned on, and it keeps running when oku deletes the app` | `sync --system` or `self uninstall` would remove a system-scope app while macOS runs its extension. The next line says `turn the extension off from the app, then run this again`. |
 | `<name> has no artifact or build for <platform>, so sync did not install it` | A package of the list has nothing for that platform. The next lines give the `when` to write. |
 

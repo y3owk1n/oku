@@ -83,6 +83,7 @@ A platform name is `os-arch`, plus `-glibc` or `-musl` on Linux:
 | `strategy` | `artifact` for a download, `build` for a build from source. |
 | `url` | The artifact's URL, or the source archive of a build. |
 | `sha256` | The digest of that file. |
+| `verified` | What oku checked that file against when it pinned `sha256`, see [What oku checked](#what-oku-checked). |
 | `commands` | `true` when the manifest runs the download to generate its completions. |
 | `vendor_sha256` | A build's digest of what its vendor steps downloaded. |
 | `impure` | `true` when a `run` step of the build used `network = true`. |
@@ -91,6 +92,27 @@ A platform name is `os-arch`, plus `-glibc` or `-musl` on Linux:
 
 oku keeps `vendor_sha256` and `impure` beside the build in the store, so
 `oku update` of a build that did not change writes the same lock.
+
+### What oku checked
+
+`verified` names what oku checked the file against when it pinned its
+`sha256`. The table lists them strongest first.
+
+| `verified` | oku checked the file against |
+|---|---|
+| `minisign` | a signature by the manifest's [`signing_key`](manifest.md#signatures) |
+| `manifest` | the `sha256` or `integrity` in the manifest |
+| `checksum-file` | the file at the manifest's `sha256_url` |
+| `published` | the digest that the version source publishes, such as GitHub for a release file or the npm registry for a package |
+| `first-use` | nothing. oku [trusted the first download](security.md#trust-on-first-use) |
+
+A checksum file and a published digest rank the same, since both come from the
+same place as the file. A build records how it checked its source archive. A
+build from git has no `verified`, since its commit pins the source.
+
+`oku sync` keeps the `verified` of a pin it reuses, so it writes the same lock.
+A lock written before oku recorded it has none, and `oku update` adds it when
+it resolves the package again.
 
 ### Pins for other platforms
 
@@ -165,6 +187,7 @@ resolves them again with their parent.
 | `manifest_sha256` | `oku sync` stops when the manifest content changed. |
 | `sha256` per platform | A download with other bytes fails. |
 | `signing_key` | oku refuses a manifest with another `signing_key`, or none, until you pass `--accept-key`. |
+| `verified` per platform | `oku update` and `oku add` refuse a new download that oku would check more weakly, until you pass `--accept-weaker-check`. See [Security](security.md#weaker-checks). |
 | `vendor_sha256` per platform | A build whose vendor steps download something else fails, and nothing is kept. |
 | `tag_commit` | oku refuses to download once upstream moved the tag off that commit. |
 | include `commit` and `sha256` | `oku sync` reads the list at that commit and stops when its content changed. |

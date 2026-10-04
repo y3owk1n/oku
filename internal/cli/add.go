@@ -72,7 +72,8 @@ nothing. --manifest prints the manifest add would use, ready to save as a file.`
 			if plan || printed {
 				return runPlan(cmd, opts, args, planFlags{
 					manifest: printed, fromSource: fromSource, asset: asset, bins: bins,
-					verbose: flags.verbose, acceptKey: flags.acceptKey, when: when,
+					verbose: flags.verbose, acceptKey: flags.acceptKey, acceptWeaker: flags.acceptWeaker,
+					when: when,
 				})
 			}
 
@@ -279,6 +280,7 @@ func runAdd(
 	r := req.ref
 	req.fromSource, req.bins = fromSource, bins
 	req.service, req.acceptKey, req.system = enable, flags.acceptKey, system
+	req.acceptWeaker = flags.acceptWeaker
 	req.verbose, req.approve, req.log = flags.verbose, e.approver(cmd, opts, flags), buildLog(cmd, flags)
 	req.checkAge = e.ageChecker(cmd, opts, flags)
 

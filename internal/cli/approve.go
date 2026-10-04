@@ -31,6 +31,9 @@ type buildFlags struct {
 	verbose bool
 	// acceptKey accepts a signing key that differs from the one in oku.lock.
 	acceptKey bool
+	// acceptWeaker accepts a download that oku checks more weakly than the one
+	// in oku.lock.
+	acceptWeaker bool
 	// minReleaseAge replaces the list's minimum release age for this command.
 	minReleaseAge string
 	// acceptUnknownAge takes a version whose source gives no release time,
@@ -45,6 +48,8 @@ func (f *buildFlags) register(cmd *cobra.Command) {
 		BoolVarP(&f.verbose, "verbose", "v", false, "show the output of build commands, and a manifest that oku inferred")
 	cmd.Flags().
 		BoolVar(&f.acceptKey, "accept-key", false, "accept a signing key that differs from the one in oku.lock")
+	cmd.Flags().BoolVar(&f.acceptWeaker, "accept-weaker-check", false,
+		"accept a download that oku checks more weakly than the one in oku.lock")
 	cmd.Flags().StringVar(&f.minReleaseAge, minReleaseAgeFlag, "",
 		"take only versions released at least this long ago, such as 3d, or 0 for the newest")
 	cmd.Flags().BoolVar(&f.acceptUnknownAge, "accept-unknown-age", false,
