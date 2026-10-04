@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+
+	"github.com/y3owk1n/oku/internal/durable"
 )
 
 // point makes "current" name the generation directory gen. Rename replaces the
@@ -21,6 +23,8 @@ func (p *Profile) point(gen string) error {
 	if err := os.Rename(tmp, filepath.Join(p.dir, current)); err != nil {
 		return fmt.Errorf("activate generation: %w", err)
 	}
+
+	durable.SyncDir(p.dir)
 
 	return nil
 }

@@ -70,7 +70,9 @@ var (
 	artifactVars = []string{"version", "tag", "os", "arch", "libc"}
 	wrapVars     = append([]string{"prefix", "pkg"}, artifactVars...)
 	buildVars    = append([]string{"prefix", "src", "jobs"}, artifactVars...)
-	generateVars = []string{"shell"}
+	// A build's files are at the top of its prefix, so {{pkg}} is the prefix.
+	buildWrapVars = append([]string{"pkg"}, buildVars...)
+	generateVars  = []string{"shell"}
 )
 
 // Report is what Lint found. A manifest with Errors must not be published.
@@ -126,6 +128,13 @@ func Lint(data []byte) Report {
 
 	// A wrapper may also name the package's own directories and its deps.
 	for i, a := range m.Artifacts {
+		for _, key := range a.Completions.Unknown {
+			report.Errors = append(report.Errors, fmt.Sprintf(
+				"artifact[%d]: completions: unknown key %s, a shell is %s",
+				i, key, strings.Join(Shells, ", "),
+			))
+		}
+
 		for _, name := range unknownVars(a.Completions.Generate, generateVars) {
 			report.Errors = append(report.Errors, fmt.Sprintf(
 				"artifact[%d]: completions.generate: unknown template variable {{%s}}", i, name,
@@ -230,6 +239,27 @@ func Lint(data []byte) Report {
 
 	if m.Build != nil {
 		for i, s := range m.Build.Steps {
+			if s.Install == nil {
+				continue
+			}
+
+			for _, w := range s.Install.Wrap {
+				for _, text := range append([]string{w.Run}, w.Args...) {
+					for _, name := range unknownVars(text, buildWrapVars) {
+						report.Errors = append(report.Errors, fmt.Sprintf(
+							"build.step[%d]: install.bin %q: unknown template variable {{%s}}", i, w.Name, name,
+						))
+					}
+				}
+			}
+
+			for _, key := range s.Install.Completions.Unknown {
+				report.Errors = append(report.Errors, fmt.Sprintf(
+					"build.step[%d]: install.completions: unknown key %s, a shell is %s",
+					i, key, strings.Join(Shells, ", "),
+				))
+			}
+
 			if !s.Generates() {
 				continue
 			}

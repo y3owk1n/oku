@@ -2,6 +2,7 @@
 package trust
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/pelletier/go-toml/v2"
 
+	"github.com/y3owk1n/oku/internal/busy"
 	"github.com/y3owk1n/oku/internal/list"
 )
 
@@ -126,9 +128,21 @@ func (a *Allowed) Get(dir string) (Allow, bool) {
 }
 
 // Set records the allow of dir, or removes it when allow is nil, and saves the
-// file.
+// file. The shell hook saves while another oku may allow or deny a project, so
+// Set reads the file again under a lock and changes only dir.
 func (a *Allowed) Set(dir string, allow *Allow) error {
-	a.Items = slices.DeleteFunc(a.Items, func(item Allow) bool { return item.Dir == dir })
+	release, err := busy.Lock(context.Background(), filepath.Dir(a.path), func(int) {})
+	if err != nil {
+		return fmt.Errorf("write %s: %w", a.path, err)
+	}
+	defer release()
+
+	now, err := ReadAllowed(filepath.Dir(filepath.Dir(a.path)))
+	if err != nil {
+		return err
+	}
+
+	a.Items = slices.DeleteFunc(now.Items, func(item Allow) bool { return item.Dir == dir })
 
 	if allow != nil {
 		allow.Dir = dir

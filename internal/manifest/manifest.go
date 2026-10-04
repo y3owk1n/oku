@@ -331,6 +331,13 @@ func Parse(data []byte, origin string) (*Manifest, error) {
 		return nil, fmt.Errorf("invalid manifest %s: %w", origin, err)
 	}
 
+	// A completions table maps shells, so its keys are no part of the schema.
+	for _, a := range m.Artifacts {
+		for _, key := range a.Completions.Unknown {
+			m.Unknown = append(m.Unknown, "unknown key artifact.completions."+key)
+		}
+	}
+
 	// git on Windows may check a manifest out with CRLF line endings. The digest
 	// reads them as LF, so oku.lock holds one digest on every platform.
 	sum := sha256.Sum256(bytes.ReplaceAll(data, []byte("\r\n"), []byte("\n")))
@@ -412,6 +419,12 @@ func (m *Manifest) validate() error {
 				if !crates.ValidName(step.Package) {
 					errs = append(errs, fmt.Errorf(
 						`build.step[%d]: package must be a crate name such as "ripgrep"`, i,
+					))
+				}
+
+				if len(step.Scripts) > 0 {
+					errs = append(errs, fmt.Errorf(
+						`build.step[%d]: scripts needs vendor = "npm" with package`, i,
 					))
 				}
 			case step.Package != "" && step.Vendor != nil && *step.Vendor == "go":
@@ -606,17 +619,7 @@ func (m *Manifest) validate() error {
 		))
 	}
 
-	if m.Version.Regex != "" && m.Version.From != FromRedirect && m.Version.From != FromPage {
-		errs = append(errs, errors.New(`version.regex needs version.from = "redirect" or "page"`))
-	}
-
-	if m.Version.Join != "" && m.Version.Regex == "" && len(m.Version.JSON) == 0 && m.Version.From != FromSparkle {
-		errs = append(errs, errors.New("version.join needs version.regex or version.json, whose parts it joins"))
-	}
-
-	if len(m.Version.JSON) > 0 && m.Version.From != FromPage {
-		errs = append(errs, errors.New(`version.json needs version.from = "page"`))
-	}
+	errs = append(errs, readErrors(m.Version, "version")...)
 
 	if m.Version.Branch != "" && m.Version.From != FromGitBranch {
 		errs = append(errs, errors.New(`version.branch needs version.from = "git-branch"`))
@@ -803,6 +806,30 @@ func perArtifactErrors(m *Manifest) []error {
 		default:
 			errs = append(errs, releaseErrors(*v, key)...)
 		}
+
+		if a.Version != nil {
+			errs = append(errs, readErrors(*a.Version, key)...)
+		}
+	}
+
+	return errs
+}
+
+// readErrors checks that regex, json and join of v fit its source. key names
+// v in the errors.
+func readErrors(v Version, key string) []error {
+	var errs []error
+
+	if v.Regex != "" && v.From != FromRedirect && v.From != FromPage {
+		errs = append(errs, fmt.Errorf(`%s.regex needs %s.from = "redirect" or "page"`, key, key))
+	}
+
+	if v.Join != "" && v.Regex == "" && len(v.JSON) == 0 && v.From != FromSparkle {
+		errs = append(errs, fmt.Errorf("%s.join needs %s.regex or %s.json, whose parts it joins", key, key, key))
+	}
+
+	if len(v.JSON) > 0 && v.From != FromPage {
+		errs = append(errs, fmt.Errorf(`%s.json needs %s.from = "page"`, key, key))
 	}
 
 	return errs

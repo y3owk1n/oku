@@ -27,6 +27,9 @@ type Completions struct {
 	// Name names the program the files are for. Parse fills it from the first
 	// bin entry unless the table sets name.
 	Name string
+	// Unknown are the keys of the table that name no shell. Install leaves them
+	// out, as it does any key a newer oku may know, and lint fails on them.
+	Unknown []string
 }
 
 // Empty reports whether the key was absent.
@@ -81,9 +84,17 @@ func parseCompletions(raw any, bins []string) (Completions, error) {
 			case "name":
 				c.Name = text
 			default:
+				if !slices.Contains(Shells, key) {
+					c.Unknown = append(c.Unknown, key)
+
+					continue
+				}
+
 				paths[key] = text
 			}
 		}
+
+		slices.Sort(c.Unknown)
 
 		switch {
 		case c.Generate != "" && len(paths) > 0:

@@ -95,7 +95,7 @@ finds, for a version a recipe pins, and for a version in `oku.lock`.
 | `latest` | no | `true` makes the release that GitHub, Gitea or GitLab marks as latest the newest. oku then passes over a higher version, such as one left behind when a project restarted its numbering. A pinned version or a range still picks from every release. It works only with `github-releases`, `gitea-releases` or `gitlab-releases`, and not with `tag`. |
 | `tag` | no | One tag that upstream moves, such as `"nightly"`. Only with `github-releases`, `gitea-releases` or `gitlab-releases`, and not with `strip_prefix`. See [Follow a moving tag](#follow-a-moving-tag). |
 | `branch` | with `git-branch` | The branch to follow, such as `"main"`. See [Follow a branch](#follow-a-branch). |
-| `regex` | with `redirect` or `page` | Finds the version, see [Follow a download URL](#follow-a-download-url). Not with `sparkle`. |
+| `regex` | with `redirect`, and with `page` unless `json` reads the version | Finds the version, see [Follow a download URL](#follow-a-download-url). Not with `sparkle`. |
 | `json` | no | Paths into the JSON or the property list at `repo`, with `page` only. See [Read fields of a feed](#read-fields-of-a-feed). |
 | `join` | no | What joins the groups of `regex` into the version, `.` by default. `+` keeps the parts apart for [`{{version_part1}}`](#template-variables) and the rest. With `sparkle` it joins the short version and the build. One of `.`, `+`, `-` and `_`. |
 
@@ -843,6 +843,9 @@ A table maps a shell to a file in the package:
 completions = { fish = "complete/rg.fish", zsh = "complete/_rg", bash = "complete/rg.bash" }
 ```
 
+The shells are `fish`, `zsh` and `bash`. `oku manifest lint` fails on any other
+key, such as a misspelt `fsh`, and an install leaves it out and says so.
+
 A string names a directory that holds the conventional file of each shell,
 named after the program in the first `bin` entry: `<name>.fish`, `_<name>` and
 `<name>.bash`. oku links the ones the directory has, and fails when it has none:
@@ -1557,8 +1560,9 @@ platforms, named as `oku.lock` names them: `darwin-amd64`, `darwin-arm64`,
 
 `{{name}}` in a value expands to the variable's value. An unknown variable is an
 error when oku expands the value. `oku manifest lint` reports one in an
-artifact's `url` and `sha256_url`, a `bin` table, `completions.generate`, a
-`run` step and `build.source.sha256_url`.
+artifact's `url` and `sha256_url`, a `bin` table of an artifact or an
+`install` step, `completions.generate`, a `run` step and
+`build.source.sha256_url`.
 
 | Variable | Value |
 |---|---|

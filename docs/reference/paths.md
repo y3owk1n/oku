@@ -84,6 +84,10 @@ covers the deps, and the store root unless the manifest says
 
 - oku unpacks a download in a temporary directory inside the store and renames
   it into place last. A failed install leaves no files in the store.
+- oku flushes `oku-meta.toml`, a generation's state file and the switch of
+  `current` to disk before it relies on them. It does not flush every file of
+  a store path, since that would slow an install. `oku verify` finds a file
+  that a power loss emptied.
 - A build installs straight into its final store path, because build systems
   write that path into their files. oku writes `oku-meta.toml` last. A store
   path without it is a crashed build, and oku deletes it before it builds

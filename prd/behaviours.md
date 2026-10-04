@@ -587,6 +587,9 @@ order step in `prd/product.md`.
 - B23 [3] `oku gc` deletes store paths referenced by no generation of any
   profile, and nothing else. `--keep N` first deletes all but the newest N
   generations and the active one. `--dry-run` deletes nothing.
+- B546 [3] An empty generation state file, which only a crash leaves, stops
+  `gc` and `generations` with its path, and gc deletes nothing. With the file
+  deleted, `sync` builds a new generation from the list.
 - B372 [3] `add`, `update`, `sync` and `oku shell` take the newest version
   that came out at least `min_release_age` ago, 1 day unless `[lock]`
   `min_release_age` or the package's own says otherwise, and `"0"` turns it
@@ -1001,6 +1004,11 @@ order step in `prd/product.md`.
   template variables, an artifact with no output keys, a `fetch` step without
   sha256 or sha256_url, or with both. A missing checksum source and an empty description are warnings and
   do not fail it.
+  It also rejects a `completions` key that names no shell, and an install
+  leaves such a key out and names it. Lint rejects an unknown variable in an
+  `install` step's `bin` table, `regex` or `json` in an artifact's own version
+  whose source cannot read them, and `scripts` beside a vendor kind other than
+  npm.
 - B218 [4] `manifest lint` rejects shell paths together with `generate`, `name`
   without `generate`, and an unknown template variable in `generate`.
 - B29 [4] `oku manifest bump` rewrites a static version and its checksums to
@@ -1138,6 +1146,8 @@ order step in `prd/product.md`.
   nothing.
 - B62 [7] Entering a project that is not allowed changes nothing and prints a
   hint to run `oku allow`, once.
+- B545 [7] When the hook saves an allow while another oku allows or denies a
+  project, the file keeps what that oku wrote.
 - B63 [7] Editing an allowed `oku.toml` revokes the allow until `oku allow`
   runs again.
 - B64 [7] Entering an allowed project whose profile is behind its lock changes

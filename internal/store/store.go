@@ -24,6 +24,7 @@ import (
 
 	"github.com/pelletier/go-toml/v2"
 
+	"github.com/y3owk1n/oku/internal/durable"
 	"github.com/y3owk1n/oku/internal/expose"
 	"github.com/y3owk1n/oku/internal/forge"
 	"github.com/y3owk1n/oku/internal/infer"
@@ -368,9 +369,13 @@ func (s *Store) Realize(
 		return Realized{}, err
 	}
 
-	if err := os.WriteFile(filepath.Join(tmp, metaFile), meta, 0o644); err != nil {
+	// The meta file marks the path complete, so it and the names in the folder
+	// reach the disk before the rename publishes them.
+	if err := durable.WriteFile(filepath.Join(tmp, metaFile), meta, 0o644); err != nil {
 		return Realized{}, fmt.Errorf("write %s: %w", metaFile, err)
 	}
+
+	durable.SyncDir(tmp)
 
 	// What a delete that stopped halfway left is no package.
 	if exists(final) && !complete(final) {
@@ -387,6 +392,8 @@ func (s *Store) Realize(
 
 		return realized, nil
 	}
+
+	durable.SyncDir(s.dir)
 
 	// A store path that shares nothing still works, and gc shares it later.
 	_, _ = s.Share(final)
