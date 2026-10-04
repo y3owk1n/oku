@@ -1361,10 +1361,12 @@ order step in `prd/product.md`.
   asset, when the key made that signature.
 - B509 [10] A `signing_key` on a package's entry in `oku.toml` applies to its
   manifest from the first install. oku checks every download against it, and
-  refuses a manifest that names another key or a key that is not minisign's.
+  refuses a manifest that names another key or a key that is neither
+  minisign's nor cosign's. With a cosign key, an artifact that names no bundle
+  or signature fails.
 - B510 [10] A `signer_workflow` on a package's entry in `oku.toml` must be the
-  manifest's. A manifest that names another workflow, or no Sigstore
-  signature, fails.
+  manifest's. A manifest that names another workflow, or has an artifact with
+  no Sigstore signature and no `attestations`, fails.
 - B511 [10] `oku verify` names each file of an installed package or dep that
   changed, appeared or went away since oku installed it, leaves out
   `__pycache__` folders, and exits with code 1. `--repair` removes those
