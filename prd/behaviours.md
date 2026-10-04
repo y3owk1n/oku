@@ -273,7 +273,8 @@ order step in `prd/product.md`.
   `#{version...}` in the livecheck URL takes the cask's version.
 - B339 [4] `from = "page"` with `json` reads the values at those paths of a
   JSON answer or an XML property list, one candidate per item of a `*`
-  list, and takes the newest. A list value is its items joined with dots.
+  list, and takes the newest. A list value is its items joined with dots, and
+  a number keeps its digits as written.
   Without `regex` the values joined with `join`
   are the version, with it the values one per line are what it reads. `json`
   beside another `from` fails.
@@ -394,7 +395,8 @@ order step in `prd/product.md`.
   `add <ref>@x` picks x. Drafts, prereleases and tags that are not versions
   are never picked, and an unknown x fails naming the newest versions. A number
   in a `-` suffix compares as a number, so 7.1.2-31 is newer than 7.1.2-9. A
-  version that names a prerelease, such as 1.27rc1, is never the newest.
+  version that names a prerelease, such as 1.27rc1, 2.0.0-next.1, 3.0.0-M1 or
+  1.0b1, is never the newest. A missing part is 0, so 1.2 is 1.2.0.
 - B118 [3] `add <ref>@<version>` finds a version that is not on the first page
   of the host's release list.
 - B200 [3] `github-releases`, `gitea-releases` and `gitlab-releases` read the
@@ -447,10 +449,12 @@ order step in `prd/product.md`.
   `^1.4`, `~1.4` or `>=1.2, <2`, or a prefix such as `22` that no release has
   exactly. `add` and `update` take the newest version it allows, and an
   inferred package infers from that version. `sync` keeps the locked version
-  while the list allows it, and picks again when it does not. A manifest dep
+  while the list allows it, and picks again when it does not. An inferred
+  package then infers again from the version `sync` picks. A manifest dep
   and a `[runtimes]` entry read their `version` the same way.
 - B123 [3] With `version.from = "npm"`, `add` picks the newest version of the
-  package in the npm registry that is no prerelease, and `add <ref>@x` picks x.
+  package in the npm registry that is no prerelease and no higher than the
+  version its `latest` tag names, and `add <ref>@x` picks x.
 - B124 [3] oku checks a download against the artifact's `integrity`, or against
   the sha512 the npm registry publishes for it. A download that does not fit is
   rejected and nothing enters the store. oku does not count one that fits as a
@@ -1326,7 +1330,9 @@ order step in `prd/product.md`.
   substituted.
 - B89 [10] A manifest with `signing_key` has its artifacts verified against
   it. The key is pinned in the lock, and a changed or dropped key stops `sync`
-  and `update` until `--accept-key`.
+  and `update` until `--accept-key`. When the manifest drops its last signer
+  and the lock recorded a signature check, the refusal names
+  `--accept-weaker-check` too.
 - B496 [10] Each platform entry of the lock records in `verified` what oku
   checked its download against: `minisign`, `manifest`, `checksum-file`,
   `published` or `first-use`. A sync that reuses the pin writes the same lock.
