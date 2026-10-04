@@ -1372,6 +1372,9 @@ order step in `prd/product.md`.
   bundle or signature it names, of the download or its checksum file, is by
   that key and in the transparency log, and `oku.lock` records
   `verified = "cosign"`.
+- B521 [10] GitHub's own Sigstore signs the attestations of a private repo.
+  oku checks such an attestation against GitHub's trust root, and it passes
+  the checks of B502 only with a timestamp of GitHub's timestamp authority.
 - B520 [4] An `aqua:` entry whose `cosign` check names `--key` becomes a
   manifest whose `signing_key` is that key, which oku reads from its URL at
   the newest release. Its artifacts name the bundle or signature with no

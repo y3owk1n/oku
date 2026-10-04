@@ -220,6 +220,8 @@ needs the token too.
   signed address, and oku never sends the token there. A GitHub Enterprise
   Server's private release still fails to download.
 - For `git+`, use an ssh URL with a loaded key.
+- `attestations = true` works for a private repo on github.com too. The token
+  reads the attestations, and oku checks them against GitHub's own Sigstore.
 
 ## Limits
 

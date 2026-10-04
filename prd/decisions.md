@@ -1923,3 +1923,18 @@ control the key. One line of base64 keeps the key a plain string, so the lock
 and `oku.toml` pins compare it as they compare a minisign key. Requiring the
 log matches cosign's default, so an entry that passes `--insecure-ignore-tlog`
 stays out.
+
+## D117. GitHub's own Sigstore signs the attestations of private repos
+
+A bundle whose certificate names "GitHub, Inc." as its issuer comes from
+GitHub's own CA. oku checks such a bundle against GitHub's trust root and
+requires a timestamp of GitHub's timestamp authority, with no transparency
+log. oku reads that trust root through TUF from `tuf-repo.github.com`,
+starting from the `root.json` that the gh CLI embeds, which oku embeds too.
+oku checks every other bundle against Sigstore's public instance as before.
+
+Why: GitHub keeps the attestations of a private repo out of the public log, so
+it signs them with a Sigstore of its own, and oku failed on every one. The
+gh CLI's `gh attestation verify` picks the trust root by the same issuer and
+requires the same timestamp. The workflow, repo and ref checks stay the same, since
+GitHub's certificates carry the same fields.

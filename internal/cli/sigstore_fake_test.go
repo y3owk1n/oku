@@ -1,6 +1,7 @@
 package cli_test
 
 import (
+	"bytes"
 	"context"
 	"crypto"
 	"crypto/ecdsa"
@@ -26,6 +27,7 @@ import (
 	"time"
 
 	"github.com/cyberphone/json-canonicalization/go/src/webpki.org/jsoncanonicalizer"
+	"github.com/digitorus/timestamp"
 	"github.com/secure-systems-lab/go-securesystemslib/dsse"
 	protobundle "github.com/sigstore/protobuf-specs/gen/pb-go/bundle/v1"
 	protocommon "github.com/sigstore/protobuf-specs/gen/pb-go/common/v1"
@@ -59,6 +61,11 @@ type fakeSigstore struct {
 	// sign.
 	mu     sync.Mutex
 	logged map[string][]*protorekor.TransparencyLogEntry
+
+	// github and tsa are the CA and the timestamp authority of a fake of
+	// GitHub's own Sigstore, once withGitHub made it.
+	github, tsa       *x509.Certificate
+	githubKey, tsaKey *ecdsa.PrivateKey
 }
 
 // run is a GitHub Actions run that signs: the workflow file at the ref it was
@@ -158,6 +165,14 @@ func (f *fakeSigstore) serveRekor(w http.ResponseWriter, r *http.Request) {
 func (f *fakeSigstore) leaf(t *testing.T, r run) (*x509.Certificate, *ecdsa.PrivateKey) {
 	t.Helper()
 
+	return leafFrom(t, r, f.fulcio, f.fulcioKey)
+}
+
+// leafFrom issues a certificate for r from the CA ca, and returns it with its
+// key.
+func leafFrom(t *testing.T, r run, ca *x509.Certificate, caKey *ecdsa.PrivateKey) (*x509.Certificate, *ecdsa.PrivateKey) {
+	t.Helper()
+
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	must(t, err)
 
@@ -184,7 +199,7 @@ func (f *fakeSigstore) leaf(t *testing.T, r run) (*x509.Certificate, *ecdsa.Priv
 			utf8(asn1.ObjectIdentifier{1, 3, 6, 1, 4, 1, 57264, 1, 12}, "https://github.com/"+r.repo),
 			utf8(asn1.ObjectIdentifier{1, 3, 6, 1, 4, 1, 57264, 1, 14}, r.ref),
 		},
-	}, f.fulcio, key.Public(), f.fulcioKey)
+	}, ca, key.Public(), caKey)
 	must(t, err)
 
 	cert, err := x509.ParseCertificate(der)
@@ -415,6 +430,123 @@ func (f *fakeSigstore) bundle(
 	}
 
 	b, err := bundle.NewBundle(pb)
+	must(t, err)
+
+	data, err := b.MarshalJSON()
+	must(t, err)
+
+	return data
+}
+
+// withGitHub makes m also trust a fake of GitHub's own Sigstore: a CA whose
+// certificates name GitHub, Inc., and a timestamp authority in place of a log.
+func (f *fakeSigstore) withGitHub(t *testing.T, m *machine) {
+	t.Helper()
+
+	now := time.Now()
+	newCA := func(name string, parent *x509.Certificate, parentKey *ecdsa.PrivateKey) (*x509.Certificate, *ecdsa.PrivateKey) {
+		key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+		must(t, err)
+
+		template := &x509.Certificate{
+			SerialNumber:          big.NewInt(now.UnixNano()),
+			Subject:               pkix.Name{CommonName: name, Organization: []string{"GitHub, Inc."}},
+			NotBefore:             now.Add(-time.Hour),
+			NotAfter:              now.Add(time.Hour),
+			KeyUsage:              x509.KeyUsageCertSign,
+			BasicConstraintsValid: true,
+			IsCA:                  true,
+		}
+
+		if parent == nil {
+			parent, parentKey = template, key
+		}
+
+		der, err := x509.CreateCertificate(rand.Reader, template, parent, key.Public(), parentKey)
+		must(t, err)
+
+		cert, err := x509.ParseCertificate(der)
+		must(t, err)
+
+		return cert, key
+	}
+
+	rootCert, rootKey := newCA("Fulcio Root", nil, nil)
+	f.github, f.githubKey = newCA("Fulcio Intermediate l2", rootCert, rootKey)
+	tsaRoot, tsaRootKey := newCA("TSA Root", nil, nil)
+
+	var err error
+
+	f.tsaKey, err = ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	must(t, err)
+
+	f.tsa, err = ca.GenerateTSALeafCert(now.Add(-5*time.Minute), f.tsaKey, tsaRoot, tsaRootKey)
+	must(t, err)
+
+	material, err := root.NewTrustedRoot(
+		root.TrustedRootMediaType01,
+		[]root.CertificateAuthority{&root.FulcioCertificateAuthority{
+			Root: rootCert, Intermediates: []*x509.Certificate{f.github}, URI: "https://fulcio.githubapp.com",
+			ValidityPeriodStart: now.Add(-time.Hour), ValidityPeriodEnd: now.Add(time.Hour),
+		}},
+		nil,
+		[]root.TimestampingAuthority{&root.SigstoreTimestampingAuthority{
+			Root: tsaRoot, Leaf: f.tsa, URI: "https://timestamp.githubapp.com",
+			ValidityPeriodStart: now.Add(-time.Hour), ValidityPeriodEnd: now.Add(time.Hour),
+		}},
+		nil,
+	)
+	must(t, err)
+
+	m.opts.Sigstore.WithGitHub(material)
+}
+
+// githubAttest returns a bundle in which r attests, through GitHub's own
+// Sigstore, that it built the file whose sha256 is digest, as GitHub's attest
+// action writes for a private repo. stamped says whether GitHub's timestamp
+// authority stamped the signature.
+func (f *fakeSigstore) githubAttest(t *testing.T, r run, digest string, stamped bool) []byte {
+	t.Helper()
+
+	cert, key := leafFrom(t, r, f.github, f.githubKey)
+
+	statement := []byte(`{"_type": "https://in-toto.io/Statement/v1", ` +
+		`"subject": [{"name": "tool.tar.gz", "digest": {"sha256": "` + digest + `"}}], ` +
+		`"predicateType": "https://slsa.dev/provenance/v1", "predicate": {}}`)
+
+	pae := sha256.Sum256(dsse.PAE(inToto, statement))
+
+	sig, err := ecdsa.SignASN1(rand.Reader, key, pae[:])
+	must(t, err)
+
+	material := &protobundle.VerificationMaterial{
+		Content:                   &protobundle.VerificationMaterial_Certificate{Certificate: &protocommon.X509Certificate{RawBytes: cert.Raw}},
+		TimestampVerificationData: &protobundle.TimestampVerificationData{},
+	}
+
+	if stamped {
+		query, err := timestamp.CreateRequest(bytes.NewReader(sig), &timestamp.RequestOptions{Hash: crypto.SHA256})
+		must(t, err)
+
+		req, err := timestamp.ParseRequest(query)
+		must(t, err)
+
+		stamp, err := (&timestamp.Timestamp{
+			HashAlgorithm: req.HashAlgorithm, HashedMessage: req.HashedMessage, Time: time.Now(),
+			Policy: asn1.ObjectIdentifier{1, 3, 6, 1, 4, 1, 57264, 2},
+		}).CreateResponseWithOpts(f.tsa, f.tsaKey, crypto.SHA256)
+		must(t, err)
+
+		material.TimestampVerificationData.Rfc3161Timestamps = []*protocommon.RFC3161SignedTimestamp{{SignedTimestamp: stamp}}
+	}
+
+	b, err := bundle.NewBundle(&protobundle.Bundle{
+		MediaType:            "application/vnd.dev.sigstore.bundle.v0.3+json",
+		VerificationMaterial: material,
+		Content: &protobundle.Bundle_DsseEnvelope{DsseEnvelope: &protodsse.Envelope{
+			Payload: statement, PayloadType: inToto, Signatures: []*protodsse.Signature{{Sig: sig}},
+		}},
+	})
 	must(t, err)
 
 	data, err := b.MarshalJSON()

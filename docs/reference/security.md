@@ -279,6 +279,7 @@ A release file on GitHub redirects to `release-assets.githubusercontent.com`,
 and a manifest to `raw.githubusercontent.com`, so an allow list for GitHub
 names both. A manifest with [Sigstore signatures](#sigstore-signatures-of-a-manifest)
 also needs `tuf-repo-cdn.sigstore.dev`, where oku reads Sigstore's trust root,
+`tuf-repo.github.com` for the attestations of a private repo,
 `rekor.sigstore.dev` for a cosign signature or a provenance envelope without
 a bundle, and with
 attestations the host where GitHub stores large ones. A new version of an
@@ -499,7 +500,11 @@ oku: tool: signature check failed: the bundle at https://github.com/you/tool/rel
 
 oku reads Sigstore's public trust root through TUF from
 `tuf-repo-cdn.sigstore.dev`, checks it against the root that ships inside
-oku, and keeps it in its cache for a day.
+oku, and keeps it in its cache for a day. GitHub signs the attestations of a
+private repo with a Sigstore of its own. For a bundle whose certificate GitHub
+issued, oku reads GitHub's trust root the same way from `tuf-repo.github.com`.
+It then requires a timestamp of GitHub's timestamp authority in place of the
+transparency log, as `gh attestation verify` does.
 
 `oku.lock` pins `signer_workflow` at the first install. When the manifest
 later names another workflow, or none, `oku sync` and `oku update` stop:

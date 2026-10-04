@@ -4,11 +4,13 @@
 package sigstore
 
 import (
+	_ "embed"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"regexp"
+	"slices"
 	"sync"
 	"time"
 
@@ -22,6 +24,18 @@ import (
 
 // GitHubIssuer issues the identity tokens of GitHub Actions workflows.
 const GitHubIssuer = "https://token.actions.githubusercontent.com"
+
+// GitHub runs a Sigstore of its own, which signs the attestations of private
+// repos. Its CA's certificates name githubOrg as their issuer. oku reads its
+// trust root through TUF from githubTUF, starting from githubRoot, the
+// root.json that the gh CLI embeds.
+const (
+	githubOrg = "GitHub, Inc."
+	githubTUF = "https://tuf-repo.github.com"
+)
+
+//go:embed github-root.json
+var githubRoot []byte
 
 // ErrVerify reports a bundle that does not prove what oku asked of it.
 var ErrVerify = errors.New("sigstore")
@@ -85,6 +99,8 @@ type Verifier struct {
 	// signature that comes without a bundle.
 	rekor  string
 	client *http.Client
+	// github checks a bundle whose certificate GitHub's own Sigstore issued.
+	github *Verifier
 
 	once     sync.Once
 	material root.TrustedMaterial
@@ -104,25 +120,32 @@ func New(material root.TrustedMaterial, rekor string, client *http.Client, optio
 	}
 }
 
-// Public returns a Verifier for Sigstore's public instance. It reads the
-// trust root through TUF with client, and keeps it under cacheDir. A bundle
-// must carry a log entry and the log's timestamp, and a certificate timestamp
-// when it has a certificate.
+// WithGitHub makes v check a bundle whose certificate GitHub's own Sigstore
+// issued against material. Such a bundle must carry a timestamp of GitHub's
+// timestamp authority in place of a log entry.
+func (v *Verifier) WithGitHub(material root.TrustedMaterial) *Verifier {
+	v.github = New(material, "", nil, verify.WithSignedTimestamps(1))
+
+	return v
+}
+
+// Public returns a Verifier for Sigstore's public instance, and for GitHub's
+// own. It reads their trust roots through TUF with client, and keeps them
+// under cacheDir. A bundle of the public instance must carry a log entry and
+// the log's timestamp, and a certificate timestamp when it has a certificate.
 func Public(cacheDir string, client *http.Client) *Verifier {
+	github := &Verifier{
+		load: func() (root.TrustedMaterial, error) {
+			return trustRoot(tuf.DefaultOptions().WithRoot(githubRoot).WithRepositoryBaseURL(githubTUF), cacheDir, client)
+		},
+		options: []verify.VerifierOption{verify.WithSignedTimestamps(1)},
+	}
+
 	return &Verifier{
 		load: func() (root.TrustedMaterial, error) {
-			opts := tuf.DefaultOptions().
-				WithCachePath(cacheDir).
-				WithFetcher(fetcher{client}).
-				WithCacheValidity(1)
-
-			material, err := root.FetchTrustedRootWithOptions(opts)
-			if err != nil {
-				return nil, fmt.Errorf("read the Sigstore trust root from %s: %w", tuf.DefaultMirror, err)
-			}
-
-			return material, nil
+			return trustRoot(tuf.DefaultOptions(), cacheDir, client)
 		},
+		github: github,
 		options: []verify.VerifierOption{
 			verify.WithSignedCertificateTimestamps(1),
 			verify.WithTransparencyLog(1),
@@ -149,9 +172,26 @@ func (v *Verifier) Verify(data, digest []byte, id Identity) error {
 	return v.verify(b, digest, id)
 }
 
+// trustRoot reads the trust root of the TUF repository that opts name with
+// client, and keeps it under cacheDir.
+func trustRoot(opts *tuf.Options, cacheDir string, client *http.Client) (root.TrustedMaterial, error) {
+	material, err := root.FetchTrustedRootWithOptions(
+		opts.WithCachePath(cacheDir).WithFetcher(fetcher{client}).WithCacheValidity(1),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("read the Sigstore trust root from %s: %w", opts.RepositoryBaseURL, err)
+	}
+
+	return material, nil
+}
+
 // verify checks that b signs the file whose sha256 is digest, and that id
 // signed it.
 func (v *Verifier) verify(b *bundle.Bundle, digest []byte, id Identity) error {
+	if v != nil && v.github != nil && issuedByGitHub(b) {
+		return v.github.verify(b, digest, id)
+	}
+
 	if err := v.trust(); err != nil {
 		return err
 	}
@@ -169,6 +209,19 @@ func (v *Verifier) verify(b *bundle.Bundle, digest []byte, id Identity) error {
 	}
 
 	return nil
+}
+
+// issuedByGitHub reports whether GitHub's own Sigstore issued the certificate
+// of b.
+func issuedByGitHub(b *bundle.Bundle) bool {
+	content, err := b.VerificationContent()
+	if err != nil {
+		return false
+	}
+
+	cert := content.Certificate()
+
+	return cert != nil && slices.Equal(cert.Issuer.Organization, []string{githubOrg})
 }
 
 // trust loads the trust root on first use.
