@@ -50,6 +50,13 @@ func (s *Store) Share(path string) (int64, error) {
 		return 0, nil
 	}
 
+	// Sharing replaces files inside the path, which freeze made read-only.
+	if err := thaw(path); err != nil {
+		return 0, err
+	}
+
+	defer func() { _ = freeze(path) }()
+
 	sh := sharer{links: filepath.Join(s.dir, LinksDir)}
 
 	var (

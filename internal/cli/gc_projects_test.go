@@ -53,7 +53,7 @@ func TestB378GCRemovesAProjectThatIsGoneAndFreesItsPackages(t *testing.T) {
 	must(t, err)
 	m.opts.WorkDir = m.fixtures
 
-	must(t, os.RemoveAll(deleted))
+	must(t, removeAll(deleted))
 	must(t, os.Remove(filepath.Join(unlisted, "oku.toml")))
 
 	out, err := m.run(t, "", "gc", "--dry-run")

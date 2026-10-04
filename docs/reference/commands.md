@@ -1448,8 +1448,9 @@ run `oku verify --repair`, then `oku sync`, which downloads them again and check
   package and does not check it. Its next version gets a record, and
   `--record` writes one now. Run `--record` on a machine you trust, since it
   takes the files as they are.
-- Python writes its bytecode into `__pycache__` folders beside the code it
-  runs, so `verify` leaves those folders out.
+- `verify` leaves out `__pycache__` folders. Python writes its bytecode there,
+  beside the code it runs. It can still do so in a package installed before
+  oku made store paths read-only, and in any package on Windows.
 - The record lives beside the files, so a program that runs as you could
   change both. `verify` catches a disk that corrupted a file and an edit by
   mistake, not malware on your account.

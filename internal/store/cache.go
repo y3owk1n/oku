@@ -148,6 +148,10 @@ func (s *Store) substituteFrom(
 	// A store path that shares nothing still works, and gc shares it later.
 	_, _ = s.Share(prefix)
 
+	if err := freeze(prefix); err != nil {
+		return "", fmt.Errorf("make %s read-only: %w", filepath.Base(prefix), err)
+	}
+
 	return "", nil
 }
 

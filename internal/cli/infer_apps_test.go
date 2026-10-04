@@ -220,7 +220,7 @@ func TestB357ACommandOfAnAppBundleRunsTheAppsCopy(t *testing.T) {
 
 	// Without the app's copy, the command runs the store's.
 	bundle := filepath.Dir(filepath.Dir(filepath.Dir(app)))
-	must(t, os.RemoveAll(bundle))
+	must(t, removeAll(bundle))
 
 	if got := m.output(t, "foo"); !strings.Contains(got, "/store/") {
 		t.Fatalf("foo ran %s, want the store's copy", got)

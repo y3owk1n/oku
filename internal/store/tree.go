@@ -44,7 +44,11 @@ func Record(path string) error {
 		return fmt.Errorf("%s has a record of its files already", filepath.Base(path))
 	}
 
-	return writeTree(path)
+	if err := thaw(path); err != nil {
+		return err
+	}
+
+	return errors.Join(writeTree(path), freeze(path))
 }
 
 // readTree returns, for each file and link under dir by its slash path, what

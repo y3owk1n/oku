@@ -360,6 +360,10 @@ func (s *Store) Realize(
 	// A store path that shares nothing still works, and gc shares it later.
 	_, _ = s.Share(final)
 
+	if err := freeze(final); err != nil {
+		return Realized{}, fmt.Errorf("make %s read-only: %w", filepath.Base(final), err)
+	}
+
 	return realized, nil
 }
 

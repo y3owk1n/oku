@@ -179,7 +179,7 @@ func (s *Store) Build(
 	// fails must leave the old one where it was.
 	if opts.Rebuild && exists(filepath.Join(prefix, metaFile)) {
 		old := prefix + ".old"
-		if err := os.RemoveAll(old); err != nil {
+		if err := removeFrozen(old); err != nil {
 			return Realized{}, err
 		}
 
@@ -201,7 +201,7 @@ func (s *Store) Build(
 	}
 
 	// A crashed build may have left the prefix behind without a meta file.
-	if err := os.RemoveAll(prefix); err != nil {
+	if err := removeFrozen(prefix); err != nil {
 		return Realized{}, err
 	}
 
@@ -440,6 +440,10 @@ func (s *Store) Build(
 
 	// A store path that shares nothing still works, and gc shares it later.
 	_, _ = s.Share(prefix)
+
+	if err := freeze(prefix); err != nil {
+		return Realized{}, fmt.Errorf("make %s read-only: %w", filepath.Base(prefix), err)
+	}
 
 	return result, nil
 }

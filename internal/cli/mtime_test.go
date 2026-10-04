@@ -104,8 +104,8 @@ func TestB172ASourceArchiveWithoutAChecksumIsPinnedOnFirstDownload(t *testing.T)
 
 	// The archive changes under the same version, on a machine with an empty store.
 	m.sourceArchive(t, "src", "#!/bin/sh\necho tampered\n")
-	must(t, os.RemoveAll(m.data))
-	must(t, os.RemoveAll(m.cache))
+	must(t, removeAll(m.data))
+	must(t, removeAll(m.cache))
 
 	_, err = m.run(t, "y\n", "sync")
 	if err == nil || !strings.Contains(err.Error(), "checksum mismatch") {

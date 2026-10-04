@@ -696,9 +696,11 @@ that changed, appeared or went away since then. `oku verify --repair` removes
 those packages, and `oku sync` downloads them again and checks them against
 `oku.lock`.
 
-The record is a file in the store path, which you can write to, so a program
-that runs as you could change a package and its record together. `verify`
-finds a corrupted disk or an edit by mistake.
+On macOS and Linux each store path is also read-only, so a program cannot
+write into a package by mistake. [The store](paths.md#the-store) says how. A
+program that runs as you could still make a package writable again and change
+it and its record together. `verify` finds a corrupted disk or an edit by
+mistake, not malware on your account.
 
 ## What oku does not protect against
 
