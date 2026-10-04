@@ -5408,16 +5408,35 @@ func (m *machine) hookProject(t *testing.T) string {
 	return project
 }
 
-// apply feeds the exports of an "oku env" run back into the test's environment,
-// the way a shell would, and returns the text oku printed.
+// shellVars holds, for each test, the variables its shell keeps without
+// exporting them.
+var shellVars sync.Map
+
+// apply runs "oku env" the way the prompt hook does, feeds its exports back into
+// the test's environment and its shell variables into shellVars, the way a
+// shell would, and returns the text oku printed.
 func (m machine) apply(t *testing.T) string {
 	t.Helper()
 
+	held, _ := shellVars.LoadOrStore(t, map[string]string{})
+	vars := held.(map[string]string)
+
+	// The hook passes its shell variable and the marker to oku env alone.
+	must(t, os.Setenv("OKU_HOOK_SAVED_LOCAL", vars["_oku_hook_saved"]))
+	must(t, os.Setenv("OKU_HOOK_LOCAL", "1"))
+
 	out, err := m.run(t, "", "env", "--shell", "bash")
+
+	must(t, os.Unsetenv("OKU_HOOK_LOCAL"))
+	must(t, os.Unsetenv("OKU_HOOK_SAVED_LOCAL"))
 	must(t, err)
 
 	for _, line := range strings.Split(out, "\n") {
 		switch {
+		case strings.HasPrefix(line, "_oku_hook_saved="):
+			vars["_oku_hook_saved"] = strings.Trim(strings.TrimPrefix(line, "_oku_hook_saved="), "'")
+		case line == "unset _oku_hook_saved":
+			delete(vars, "_oku_hook_saved")
 		case strings.HasPrefix(line, "export "):
 			name, value, _ := strings.Cut(strings.TrimPrefix(line, "export "), "=")
 			t.Setenv(name, strings.Trim(value, "'"))

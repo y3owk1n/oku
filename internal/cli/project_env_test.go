@@ -108,8 +108,62 @@ MANPATH = { prepend = ["man"] }`)
 		t.Fatalf("PATH after leaving is %s", got)
 	}
 
-	if got, set := os.LookupEnv("MANPATH"); set && got != "" {
-		t.Fatalf("MANPATH after leaving is %q", got)
+	// MANPATH was not set before, so it is not set after.
+	if got, set := os.LookupEnv("MANPATH"); set {
+		t.Fatalf("MANPATH after leaving is set, to %q", got)
+	}
+}
+
+func TestB531AProgramInAProjectCannotReadAValueTheProjectHid(t *testing.T) {
+	m := newMachine(t)
+	t.Setenv("PATH", "/usr/bin:/bin")
+	t.Setenv("GITHUB_TOKEN", "ghp_secret")
+
+	project := m.envProject(t, "[env]\nGITHUB_TOKEN = false")
+
+	m.apply(t)
+
+	if _, set := os.LookupEnv("GITHUB_TOKEN"); set {
+		t.Fatal("GITHUB_TOKEN = false left GITHUB_TOKEN set")
+	}
+
+	for _, kv := range os.Environ() {
+		if strings.Contains(kv, "ghp_secret") {
+			t.Fatalf("a program in the project can read the hidden value in %s", kv)
+		}
+	}
+
+	m.opts.WorkDir = filepath.Dir(project)
+	m.apply(t)
+
+	if got := os.Getenv("GITHUB_TOKEN"); got != "ghp_secret" {
+		t.Fatalf("leaving the project left GITHUB_TOKEN %q", got)
+	}
+}
+
+func TestB532AnOkuShellKeepsItsPackagesFirstOnPath(t *testing.T) {
+	m := newMachine(t)
+	session := t.TempDir()
+	t.Setenv("PATH", session+":/usr/bin:/bin")
+	t.Setenv("OKU_SHELL_PATH", session)
+
+	// The startup file's hook line.
+	hook, err := m.run(t, "", "hook", "bash")
+	must(t, err)
+
+	out, err := exec.Command("bash", "-c", hook+"\necho \"$PATH\"").Output()
+	must(t, err)
+
+	if !strings.HasPrefix(string(out), session+":") {
+		t.Fatalf("the hook put %s ahead of the oku shell's packages", out)
+	}
+
+	// The prompt hook in a project.
+	m.envProject(t, "[env]\nSTAGE = \"dev\"")
+	m.apply(t)
+
+	if got := os.Getenv("PATH"); !strings.HasPrefix(got, session+":") {
+		t.Fatalf("PATH in a project inside an oku shell is %s", got)
 	}
 }
 

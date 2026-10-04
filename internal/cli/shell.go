@@ -68,7 +68,8 @@ func runShell(
 	}
 	defer held.done()
 
-	environ := append(held.environ, "OKU_SHELL="+strings.Join(refs, " "))
+	environ := append(held.environ,
+		"OKU_SHELL="+strings.Join(refs, " "), shellPathVar+"="+strings.Join(held.bins, string(os.PathListSeparator)))
 
 	if len(command) == 0 {
 		shell := os.Getenv("SHELL")
@@ -113,6 +114,8 @@ type opened struct {
 	// done deletes the record that keeps gc from deleting the packages while
 	// the program runs.
 	done func()
+	// bins are the bin directories of pkgs.
+	bins []string
 	// path is PATH with the packages' bin directories first, and environ holds
 	// it together with the packages' [env].
 	path    string
@@ -223,6 +226,7 @@ func openRefs(
 
 	release()
 
+	held.bins = bins
 	held.path = strings.Join(append(bins, os.Getenv("PATH")), string(os.PathListSeparator))
 	held.environ = append(held.environ, "PATH="+held.path)
 

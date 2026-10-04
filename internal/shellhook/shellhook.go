@@ -32,6 +32,20 @@ const (
 	// StateHint holds the last hint the hook printed, so a hint appears once per
 	// directory and not before every prompt.
 	StateHint = "OKU_HOOK_HINT"
+	// SavedLocal is the shell variable that holds the saved values between
+	// prompts. The shell does not export it, since the values may be secrets
+	// that a project unset, and the prompt hook passes it to oku env alone as
+	// SavedPassed.
+	SavedLocal  = "_oku_hook_saved"
+	SavedPassed = "OKU_HOOK_SAVED_LOCAL"
+	// StateChanged holds, as JSON, the names in StateSaved without their old
+	// values, for oku exec, which a shell starts like any program. It unsets
+	// each that the command does not set.
+	StateChanged = "OKU_HOOK_CHANGED"
+	// LocalMarker tells oku env that the prompt hook keeps the saved values in
+	// SavedLocal. The hook of an older oku, in a shell that started before an
+	// update, does not set it, and oku env then exports StateSaved as before.
+	LocalMarker = "OKU_HOOK_LOCAL"
 )
 
 // Change is what one run of "oku env" asks the shell to do.
@@ -44,6 +58,9 @@ type Change struct {
 	Unset []string
 	// Hint is a line to show the user, or empty.
 	Hint string
+	// Saved is the new value of SavedLocal, empty to remove it, or nil when it
+	// stays.
+	Saved *string
 }
 
 // Render writes change as commands for shell.
@@ -88,11 +105,34 @@ func Render(shell string, change Change) (string, error) {
 		fmt.Fprintf(&b, export, name, quote(change.Set[name]))
 	}
 
+	if change.Saved != nil {
+		b.WriteString(keepLocal(shell, *change.Saved, quote))
+	}
+
 	if change.Hint != "" {
 		fmt.Fprintf(&b, hint, quote(change.Hint))
 	}
 
 	return b.String(), nil
+}
+
+// keepLocal sets SavedLocal to value, or removes it when value is empty, as a
+// variable of the shell that the programs it starts do not get.
+func keepLocal(shell, value string, quote func(string) string) string {
+	switch {
+	case shell == "fish" && value == "":
+		return "set -e " + SavedLocal + "\n"
+	case shell == "fish":
+		return "set -g " + SavedLocal + " " + quote(value) + "\n"
+	case shell == "pwsh" && value == "":
+		return "Remove-Variable -Name " + SavedLocal + " -Scope Global -ErrorAction SilentlyContinue\n"
+	case shell == "pwsh":
+		return "$global:" + SavedLocal + " = " + quote(value) + "\n"
+	case value == "":
+		return "unset " + SavedLocal + "\n"
+	default:
+		return SavedLocal + "=" + quote(value) + "\n"
+	}
 }
 
 // Hook returns the code a shell's startup file loads. It puts dirs on PATH, the
@@ -202,7 +242,8 @@ func promptHook(shell string) (string, error) {
 		return `_oku_hook() {
   local status=$?
   hash -r
-  command -v oku >/dev/null 2>&1 && eval "$(oku env --shell bash)"
+  command -v oku >/dev/null 2>&1 &&
+    eval "$(OKU_HOOK_LOCAL=1 OKU_HOOK_SAVED_LOCAL="${_oku_hook_saved-}" oku env --shell bash)"
   return $status
 }
 case ";${PROMPT_COMMAND:-};" in
@@ -214,7 +255,8 @@ esac
 		return `_oku_hook() {
   _oku_complete
   rehash
-  command -v oku >/dev/null 2>&1 && eval "$(oku env --shell zsh)"
+  command -v oku >/dev/null 2>&1 &&
+    eval "$(OKU_HOOK_LOCAL=1 OKU_HOOK_SAVED_LOCAL="${_oku_hook_saved-}" oku env --shell zsh)"
 }
 typeset -ag precmd_functions
 if (( ! ${precmd_functions[(I)_oku_hook]} )); then
@@ -223,7 +265,7 @@ fi
 `, nil
 	case "fish":
 		return `function _oku_hook --on-event fish_prompt
-    command -q oku; and oku env --shell fish | source
+    command -q oku; and OKU_HOOK_LOCAL=1 OKU_HOOK_SAVED_LOCAL="$_oku_hook_saved" oku env --shell fish | source
 end
 `, nil
 	case "pwsh":
@@ -233,7 +275,10 @@ end
   function global:prompt {
     $okuLast = $global:LASTEXITCODE
     if (Get-Command oku -ErrorAction SilentlyContinue) {
+      $env:OKU_HOOK_SAVED_LOCAL = $global:_oku_hook_saved
+      $env:OKU_HOOK_LOCAL = '1'
       $okuCode = (& oku env --shell pwsh) -join [Environment]::NewLine
+      Remove-Item Env:OKU_HOOK_LOCAL, Env:OKU_HOOK_SAVED_LOCAL -ErrorAction SilentlyContinue
       if ($okuCode) { Invoke-Expression $okuCode }
     }
     $global:LASTEXITCODE = $okuLast
