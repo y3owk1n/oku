@@ -27,8 +27,9 @@ func signer(m *manifest.Manifest) sigstore.Identity {
 }
 
 // verifySigstore checks the download whose sha256 is digest against the
-// Sigstore signatures that m names for a: the bundle at a.SigstoreBundle, and
-// the GitHub attestations of the digest.
+// Sigstore signatures that m names for a: the bundle at a.SigstoreBundle, the
+// cosign signature at a.SigstoreSignature, and the GitHub attestations of the
+// digest.
 func (s *Store) verifySigstore(ctx context.Context, m *manifest.Manifest, a manifest.Artifact, digest string) error {
 	sum, err := hex.DecodeString(digest)
 	if err != nil {
@@ -44,6 +45,13 @@ func (s *Store) verifySigstore(ctx context.Context, m *manifest.Manifest, a mani
 		if err := s.Sigstore.Verify(data, sum, signer(m)); err != nil {
 			return fmt.Errorf("%w: the bundle at %s does not show that %s signed %s: %w",
 				ErrSignature, a.SigstoreBundle, m.Package.SignerWorkflow, path.Base(a.URL), err)
+		}
+	}
+
+	if a.SigstoreSignature != "" {
+		if err := s.verifyCosign(ctx, m, a.SigstoreSignature, a.SigstoreCertificate, sum); err != nil {
+			return fmt.Errorf("%w: the signature at %s does not show that %s signed %s: %w",
+				ErrSignature, a.SigstoreSignature, m.Package.SignerWorkflow, path.Base(a.URL), err)
 		}
 	}
 
@@ -110,14 +118,38 @@ func (s *Store) signedSHA256(ctx context.Context, m *manifest.Manifest, a manife
 		}
 	}
 
+	if a.SHA256URLSignature != "" {
+		sum := sha256.Sum256(data)
+		if err := s.verifyCosign(ctx, m, a.SHA256URLSignature, a.SHA256URLCertificate, sum[:]); err != nil {
+			return "", fmt.Errorf("%w: the signature at %s does not show that %s signed %s: %w",
+				ErrSignature, a.SHA256URLSignature, m.Package.SignerWorkflow, a.SHA256URL, err)
+		}
+	}
+
 	return digestIn(data, a.SHA256URL, path.Base(a.URL))
 }
 
-// bundle downloads the Sigstore bundle at url.
+// verifyCosign checks the cosign signature at signatureURL, with the
+// certificate at certURL, of the file whose sha256 is sum.
+func (s *Store) verifyCosign(ctx context.Context, m *manifest.Manifest, signatureURL, certURL string, sum []byte) error {
+	signature, err := s.bundle(ctx, signatureURL)
+	if err != nil {
+		return err
+	}
+
+	cert, err := s.bundle(ctx, certURL)
+	if err != nil {
+		return err
+	}
+
+	return s.Sigstore.VerifySignature(ctx, signature, cert, sum, signer(m))
+}
+
+// bundle downloads the Sigstore bundle, signature or certificate at url.
 func (s *Store) bundle(ctx context.Context, url string) ([]byte, error) {
 	resp, err := s.get(ctx, url)
 	if err != nil {
-		return nil, fmt.Errorf("%w: the manifest names a Sigstore bundle, and %w", ErrSignature, err)
+		return nil, fmt.Errorf("%w: the manifest names a Sigstore signature, and %w", ErrSignature, err)
 	}
 	defer resp.Body.Close()
 

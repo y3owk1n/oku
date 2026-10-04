@@ -58,17 +58,24 @@ func (id Identity) certificate() (verify.CertificateIdentity, error) {
 type Verifier struct {
 	load    func() (root.TrustedMaterial, error)
 	options []verify.VerifierOption
+	// rekor is the transparency log that client asks for the entry of a
+	// signature that comes without a bundle.
+	rekor  string
+	client *http.Client
 
 	once     sync.Once
 	verifier *verify.Verifier
 	err      error
 }
 
-// New returns a Verifier that trusts material, with the checks of options.
-func New(material root.TrustedMaterial, options ...verify.VerifierOption) *Verifier {
+// New returns a Verifier that trusts material, with the checks of options. It
+// asks the transparency log at rekor with client.
+func New(material root.TrustedMaterial, rekor string, client *http.Client, options ...verify.VerifierOption) *Verifier {
 	return &Verifier{
 		load:    func() (root.TrustedMaterial, error) { return material, nil },
 		options: options,
+		rekor:   rekor,
+		client:  client,
 	}
 }
 
@@ -95,12 +102,26 @@ func Public(cacheDir string, client *http.Client) *Verifier {
 			verify.WithTransparencyLog(1),
 			verify.WithObserverTimestamps(1),
 		},
+		rekor:  PublicRekor,
+		client: client,
 	}
 }
 
 // Verify checks that data, a bundle in JSON, signs the file whose sha256 is
-// digest, and that id signed it.
+// digest, and that id signed it. The bundle may also be in cosign's older
+// format.
 func (v *Verifier) Verify(data, digest []byte, id Identity) error {
+	b, err := readBundle(data, digest)
+	if err != nil {
+		return fmt.Errorf("%w: read the bundle: %w", ErrVerify, err)
+	}
+
+	return v.verify(b, digest, id)
+}
+
+// verify checks that b signs the file whose sha256 is digest, and that id
+// signed it.
+func (v *Verifier) verify(b *bundle.Bundle, digest []byte, id Identity) error {
 	if v == nil {
 		return fmt.Errorf("%w: this oku has no Sigstore trust root here", ErrVerify)
 	}
@@ -120,17 +141,12 @@ func (v *Verifier) Verify(data, digest []byte, id Identity) error {
 		return v.err
 	}
 
-	var b bundle.Bundle
-	if err := b.UnmarshalJSON(data); err != nil {
-		return fmt.Errorf("%w: read the bundle: %w", ErrVerify, err)
-	}
-
 	identity, err := id.certificate()
 	if err != nil {
 		return err
 	}
 
-	if _, err := v.verifier.Verify(&b, verify.NewPolicy(
+	if _, err := v.verifier.Verify(b, verify.NewPolicy(
 		verify.WithArtifactDigest("sha256", digest),
 		verify.WithCertificateIdentity(identity),
 	)); err != nil {

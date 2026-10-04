@@ -407,7 +407,7 @@ func (s *Store) vouched(
 		}
 	}
 
-	signed := a.SigstoreBundle != "" || m.Package.Attestations
+	signed := a.SigstoreBundle != "" || a.SigstoreSignature != "" || m.Package.Attestations
 	if signed {
 		if err := s.verifySigstore(ctx, m, a, digest); err != nil {
 			os.Remove(download)

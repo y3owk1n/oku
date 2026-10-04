@@ -312,9 +312,66 @@ func TestB504AnAquaEntryKeepsItsSigstoreChecks(t *testing.T) {
 		}
 	}
 
-	// A bundle in cosign's older format is not one oku reads.
-	if strings.Contains(out, "sigstore_bundle") {
-		t.Fatalf("the manifest names a bundle of cosign's older format:\n%s", out)
+	// oku reads a bundle in either of cosign's formats, whatever its name.
+	if !strings.Contains(out, "sigstore_bundle = \""+release+"tool_linux_amd64.tar.gz.bundle\"") {
+		t.Fatalf("the manifest lacks the bundle of the download:\n%s", out)
+	}
+}
+
+func TestB504AnAquaSignatureNeedsACertificateNotAKey(t *testing.T) {
+	entry := func(opts string) string {
+		return `packages:
+  - type: github_release
+    repo_owner: owner
+    repo_name: tool
+    asset: tool_{{.OS}}_{{.Arch}}.tar.gz
+    supported_envs: [linux/amd64]
+    checksum:
+      type: github_release
+      asset: checksums.txt
+      algorithm: sha256
+      cosign:
+        opts:
+` + opts
+	}
+
+	signed := `          - --certificate
+          - https://github.com/owner/tool/releases/download/{{.Version}}/checksums.txt.pem
+          - --certificate-identity
+          - https://github.com/owner/tool/.github/workflows/release.yml@refs/tags/{{.Version}}
+          - --certificate-oidc-issuer
+          - https://token.actions.githubusercontent.com
+          - --signature
+          - https://github.com/owner/tool/releases/download/{{.Version}}/checksums.txt.sig
+`
+	keyed := `          - --key
+          - https://github.com/owner/tool/releases/download/{{.Version}}/cosign.pub
+          - --signature
+          - https://github.com/owner/tool/releases/download/{{.Version}}/checksums.txt.sig
+`
+
+	release := "https://github.com/owner/tool/releases/download/{{tag}}/"
+
+	for _, tc := range []struct {
+		name, opts string
+		want       bool
+	}{
+		{"a signature and a certificate", signed, true},
+		{"a key", keyed, false},
+	} {
+		m := newMachine(t)
+		recipeServer{aqua: entry(tc.opts)}.start(t, &m)
+
+		out, err := m.run(t, "", "manifest", "init", "--from", "aqua:owner/tool", "-o", "-")
+		if err != nil {
+			t.Fatalf("%s: init: %v\n%s", tc.name, err, out)
+		}
+
+		got := strings.Contains(out, "sha256_url_signature = \""+release+"checksums.txt.sig\"\n"+
+			"sha256_url_certificate = \""+release+"checksums.txt.pem\"")
+		if got != tc.want {
+			t.Fatalf("%s: want the signature kept %v:\n%s", tc.name, tc.want, out)
+		}
 	}
 }
 
@@ -366,5 +423,91 @@ func TestB504AnAquaPatternOfAWorkflowNeedsTheTagRef(t *testing.T) {
 		if got != tc.want {
 			t.Fatalf("with the ref %s, want the bundle kept %v:\n%s", tc.ref, tc.want, out)
 		}
+	}
+}
+
+func TestB505ACosignSignatureAndCertificateMustBeInRekorAndShowTheWorkflow(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		run     run
+		logged  bool
+		wantErr string
+	}{
+		{"the workflow for the tag", release, true, ""},
+		{"another repo", run{workflow + "@refs/tags/v1.0.0", "owner/other", "refs/tags/v1.0.0"}, true, "does not show that"},
+		{"a signature Rekor does not hold", release, false, "holds no entry"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m := newMachine(t)
+			f := newFakeSigstore(t, &m)
+			r := newSignedRelease(t, &m)
+
+			sig, cert := f.cosign(t, tc.run, r.files["checksums.txt"])
+			if !tc.logged {
+				f.mu.Lock()
+				clear(f.logged)
+				f.mu.Unlock()
+			}
+
+			r.set("checksums.txt.sig", sig)
+			r.set("checksums.txt.pem", cert)
+
+			tool := r.manifest(t, &m, "signer_workflow = \""+workflow+"\"\n",
+				"sha256_url = \""+r.release("checksums.txt")+"\"\n"+
+					"sha256_url_signature = \""+r.release("checksums.txt.sig")+"\"\n"+
+					"sha256_url_certificate = \""+r.release("checksums.txt.pem")+"\"\n")
+
+			out, err := m.run(t, "", "add", tool)
+
+			switch {
+			case tc.wantErr == "" && err != nil:
+				t.Fatalf("add: %v\n%s", err, out)
+			case tc.wantErr != "" && (err == nil || !strings.Contains(err.Error(), tc.wantErr)):
+				t.Fatalf("want a refusal that says %q, got %v", tc.wantErr, err)
+			}
+		})
+	}
+
+	// A signature of the download itself works the same way.
+	m := newMachine(t)
+	f := newFakeSigstore(t, &m)
+	r := newSignedRelease(t, &m)
+	sig, cert := f.cosign(t, release, r.archive)
+	r.set("tool.tar.gz.sig", sig)
+	r.set("tool.tar.gz.pem", cert)
+
+	tool := r.manifest(t, &m, "signer_workflow = \""+workflow+"\"\n",
+		"sigstore_signature = \""+r.release("tool.tar.gz.sig")+"\"\n"+
+			"sigstore_certificate = \""+r.release("tool.tar.gz.pem")+"\"\n")
+
+	out, err := m.run(t, "", "add", tool)
+	if err != nil || strings.Contains(out, "trusted this download") {
+		t.Fatalf("want a signed download installed unchecked by nothing else, got %v\n%s", err, out)
+	}
+}
+
+func TestB506ABundleMayBeInCosignsOlderFormat(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		run     run
+		wantErr bool
+	}{
+		{"the workflow for the tag", release, false},
+		{"another tag", run{workflow + "@refs/tags/v0.9.0", "owner/tool", "refs/tags/v0.9.0"}, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m := newMachine(t)
+			f := newFakeSigstore(t, &m)
+			r := newSignedRelease(t, &m)
+			r.set("tool.tar.gz.bundle", f.legacyBundle(t, tc.run, r.archive))
+
+			tool := r.manifest(t, &m, "signer_workflow = \""+workflow+"\"\n",
+				"sigstore_bundle = \""+r.release("tool.tar.gz.bundle")+"\"\n")
+
+			_, err := m.run(t, "", "add", tool)
+			if (err != nil) != tc.wantErr {
+				t.Fatalf("want a refusal %v, got %v", tc.wantErr, err)
+			}
+		})
 	}
 }

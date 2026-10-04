@@ -55,9 +55,10 @@ type recipeArtifact struct {
 	template string
 	// sha256URL is the checksum file of any version, when the recipe names one.
 	sha256URL string
-	// sigstoreBundle and sha256URLBundle are Sigstore bundles in which signer
-	// signs the download and the checksum file.
-	sigstoreBundle, sha256URLBundle, signer string
+	// sigstore are the signatures of the download and of the checksum file, in
+	// which signer signs them.
+	sigstore sigstoreFiles
+	signer   string
 	// follow is where versions of this artifact come from, when they differ by
 	// platform.
 	follow *follow
@@ -276,13 +277,7 @@ func (r recipe) text() (string, error) {
 				fmt.Fprintf(&b, "sha256_url = %q\n", a.sha256URL)
 			}
 
-			if a.sha256URLBundle != "" {
-				fmt.Fprintf(&b, "sha256_url_bundle = %q\n", a.sha256URLBundle)
-			}
-
-			if a.sigstoreBundle != "" {
-				fmt.Fprintf(&b, "sigstore_bundle = %q\n", a.sigstoreBundle)
-			}
+			b.WriteString(a.sigstore.toml())
 		}
 
 		b.WriteString(a.outputs())
@@ -409,4 +404,31 @@ func (a recipeArtifact) namedAfter(version string) bool {
 
 	return version != "" &&
 		slices.ContainsFunc(paths, func(p string) bool { return strings.Contains(p, version) })
+}
+
+// sigstoreFiles are the URLs of the Sigstore signatures of a download, each
+// with its manifest key.
+type sigstoreFiles struct {
+	sha256URLBundle, sha256URLSignature, sha256URLCertificate string
+	sigstoreBundle, sigstoreSignature, sigstoreCertificate    string
+}
+
+// toml writes the keys of f that have a value.
+func (f sigstoreFiles) toml() string {
+	var b strings.Builder
+
+	for _, kv := range [][2]string{
+		{"sha256_url_bundle", f.sha256URLBundle},
+		{"sha256_url_signature", f.sha256URLSignature},
+		{"sha256_url_certificate", f.sha256URLCertificate},
+		{"sigstore_bundle", f.sigstoreBundle},
+		{"sigstore_signature", f.sigstoreSignature},
+		{"sigstore_certificate", f.sigstoreCertificate},
+	} {
+		if kv[1] != "" {
+			fmt.Fprintf(&b, "%s = %q\n", kv[0], kv[1])
+		}
+	}
+
+	return b.String()
 }
