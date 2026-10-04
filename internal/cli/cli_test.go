@@ -4509,6 +4509,45 @@ func TestB50RunStepCannotReachTheNetworkOrReadHome(t *testing.T) {
 	}
 }
 
+func TestB523RunStepCannotUndoTheSandboxMounts(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("the sandbox mounts are Linux's")
+	}
+
+	m, _, secret := sandboxedMachine(t)
+	home := filepath.Dir(secret)
+
+	path := filepath.Join(m.fixtures, "undo.toml")
+	must(t, os.WriteFile(path, []byte(fmt.Sprintf(`[package]
+name = "undo"
+[version]
+value = "1.0.0"
+[build]
+[[build.step]]
+run = """
+umount -l %[1]s 2>/dev/null || true; umount -l /tmp 2>/dev/null || true
+cat %[2]s >/dev/null 2>&1 && echo home=readable > probe.txt || echo home=hidden > probe.txt
+mount -o remount,rw / 2>/dev/null && echo root=writable >> probe.txt || echo root=readonly >> probe.txt
+echo uid=$(id -u) >> probe.txt
+"""
+shell = "sh"
+[[build.step]]
+install = { share = ["probe.txt"] }
+`, home, secret)), 0o644))
+
+	out, err := m.run(t, "", "add", path, "--yes")
+	if err != nil {
+		t.Fatalf("add: %v\n%s", err, out)
+	}
+
+	got := m.probeResult(t)
+	for _, want := range []string{"home=hidden", "root=readonly", fmt.Sprintf("uid=%d", os.Getuid())} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("the run step saw %q, want %s", got, want)
+		}
+	}
+}
+
 func TestB248RunStepCannotWriteOutsideItsBuild(t *testing.T) {
 	m, _, _ := sandboxedMachine(t)
 

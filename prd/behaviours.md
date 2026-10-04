@@ -1055,6 +1055,9 @@ order step in `prd/product.md`.
 - B407 [6] On a host without a sandbox the approval prompt says so before it
   asks. With `require_sandbox = true` in `config.toml`, oku refuses to run a
   package's commands there, before any change.
+- B523 [6] On Linux a `run` step runs as the user with no capabilities, so it
+  cannot unmount what hides the home directory or make a read-only mount
+  writable.
 - B493 [6] On Linux and macOS a `run` step, with or without
   `network = true`, cannot connect to a unix socket outside its build, such as
   the one `ssh-agent` keeps under `/tmp` or Docker's.

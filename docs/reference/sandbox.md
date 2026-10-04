@@ -87,6 +87,7 @@ sets them up before the command runs:
 | Your processes | The build gets a `/proc` of its pid namespace. It sees only its own processes and cannot signal yours. |
 | Shared memory | `/dev/shm` is the build's own. |
 | Terminals | `/dev/pts` is a new instance, so your terminals are not in it. The build can still open terminals of its own. |
+| Unmounting | The command runs as your user with no capabilities, so it cannot unmount the tmpfs over your home directory or make a read-only mount writable. This holds when you run oku as root too. |
 
 The command runs as you. Files it creates in `{{prefix}}` belong to you.
 

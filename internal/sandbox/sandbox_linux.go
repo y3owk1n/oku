@@ -68,10 +68,13 @@ func namespaces() *syscall.SysProcAttr {
 		// A pid namespace keeps the build from seeing or signalling the user's
 		// processes.
 		Cloneflags: syscall.CLONE_NEWUSER | syscall.CLONE_NEWNS | syscall.CLONE_NEWNET | syscall.CLONE_NEWPID,
-		// Mounting needs root inside the namespace. That root maps to the real user,
-		// so files are still created as that user.
-		UidMappings: []syscall.SysProcIDMap{{ContainerID: 0, HostID: os.Getuid(), Size: 1}},
-		GidMappings: []syscall.SysProcIDMap{{ContainerID: 0, HostID: os.Getgid(), Size: 1}},
+		// The build runs as the user, not as root of the namespace, so the exec of
+		// its command drops every capability. Only the init process keeps the one
+		// that mounting needs, and it clears that before it runs the command, so the
+		// build cannot unmount what hides the user's files.
+		UidMappings: []syscall.SysProcIDMap{{ContainerID: os.Getuid(), HostID: os.Getuid(), Size: 1}},
+		GidMappings: []syscall.SysProcIDMap{{ContainerID: os.Getgid(), HostID: os.Getgid(), Size: 1}},
+		AmbientCaps: []uintptr{unix.CAP_SYS_ADMIN},
 	}
 }
 
@@ -221,6 +224,10 @@ func Init() error {
 		return err
 	}
 
+	if err := dropCapabilities(); err != nil {
+		return err
+	}
+
 	env := make([]string, 0, len(spec.Env))
 	for _, kv := range spec.Env {
 		if !strings.HasPrefix(kv, specEnv+"=") {
@@ -359,6 +366,43 @@ func allowSockets(ruleset int, dir string) error {
 		uintptr(unsafe.Pointer(&rule)), 0, 0, 0,
 	); errno != 0 {
 		return fmt.Errorf("allow the sockets under %s: %w", dir, errno)
+	}
+
+	return nil
+}
+
+// dropCapabilities clears the ambient capability that the init process kept
+// for its mounts, so the build command starts with none, and keeps the command
+// from gaining any through a program with file capabilities. A user who runs
+// oku as root is root in the namespace too, and root gains the bounding set at
+// exec, so that set and the inheritable one empty as well.
+func dropCapabilities() error {
+	if err := unix.Prctl(unix.PR_CAP_AMBIENT, unix.PR_CAP_AMBIENT_CLEAR_ALL, 0, 0, 0); err != nil {
+		return fmt.Errorf("drop capabilities: %w", err)
+	}
+
+	// The kernel answers EINVAL past its last capability, and EPERM to a process
+	// that may not change the set, which is not root and gains nothing at exec.
+	for c := uintptr(0); ; c++ {
+		err := unix.Prctl(unix.PR_CAPBSET_DROP, c, 0, 0, 0)
+		if errors.Is(err, unix.EINVAL) || errors.Is(err, unix.EPERM) {
+			break
+		}
+
+		if err != nil {
+			return fmt.Errorf("drop capabilities: %w", err)
+		}
+	}
+
+	header := unix.CapUserHeader{Version: unix.LINUX_CAPABILITY_VERSION_3}
+
+	var none [2]unix.CapUserData
+	if err := unix.Capset(&header, &none[0]); err != nil {
+		return fmt.Errorf("drop capabilities: %w", err)
+	}
+
+	if err := unix.Prctl(unix.PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0); err != nil {
+		return fmt.Errorf("drop capabilities: %w", err)
 	}
 
 	return nil
