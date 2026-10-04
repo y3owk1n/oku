@@ -5,6 +5,8 @@ import (
 	"bytes"
 	"cmp"
 	"crypto/sha256"
+	"crypto/x509"
+	"encoding/base64"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -70,8 +72,10 @@ type Package struct {
 	// Relocatable declares that the built files contain no store path, so the
 	// result works under any store root.
 	Relocatable bool `toml:"relocatable"`
-	// SigningKey is the minisign public key that signs every artifact. The
-	// signature of an artifact is at its URL with ".minisig" appended.
+	// SigningKey is the developer's public key. A minisign key signs every
+	// artifact, whose signature is at its URL with ".minisig" appended. A cosign
+	// key, the base64 between the lines of its PEM, signs the Sigstore
+	// signatures that the artifacts name.
 	SigningKey string `toml:"signing_key"`
 	// SignerWorkflow is the GitHub Actions workflow whose Sigstore certificate
 	// signs the releases, as owner/repo/.github/workflows/<file>.
@@ -207,14 +211,28 @@ type Artifact struct {
 	Data bool `toml:"data"`
 }
 
-// CheckSigningKey reports an error when text is not a minisign public key.
+// CheckSigningKey reports an error when text is not a minisign public key, or
+// a cosign one as the base64 between the lines of its PEM.
 func CheckSigningKey(text string) error {
 	var key minisign.PublicKey
-	if err := key.UnmarshalText([]byte(text)); err != nil {
-		return fmt.Errorf("is not a minisign public key: %w", err)
+	if key.UnmarshalText([]byte(text)) != nil && !CosignKey(text) {
+		return errors.New("is not a minisign public key, or a cosign one as the base64 between the lines of its PEM")
 	}
 
 	return nil
+}
+
+// CosignKey reports whether text is a cosign public key, as the base64 between
+// the lines of its PEM.
+func CosignKey(text string) bool {
+	der, err := base64.StdEncoding.DecodeString(text)
+	if err != nil {
+		return false
+	}
+
+	_, err = x509.ParsePKIXPublicKey(der)
+
+	return err == nil
 }
 
 // CheckSignerWorkflow reports an error when w is not a workflow file of a
@@ -649,9 +667,12 @@ func (m *Manifest) validate() error {
 			errs = append(errs, fmt.Errorf("artifact[%d]: set sha256 or sha256_url, not both", i))
 		}
 
-		if a.Sigstore() && m.Package.SignerWorkflow == "" {
+		keyed := CosignKey(m.Package.SigningKey)
+
+		if a.Sigstore() && m.Package.SignerWorkflow == "" && !keyed {
 			errs = append(errs, fmt.Errorf(
-				"artifact[%d]: a Sigstore signature needs package.signer_workflow, which signs it", i,
+				"artifact[%d]: a Sigstore signature needs package.signer_workflow or a cosign "+
+					"package.signing_key, which signs it", i,
 			))
 		}
 
@@ -666,8 +687,13 @@ func (m *Manifest) validate() error {
 			))
 		}
 
-		if (a.SigstoreSignature == "") != (a.SigstoreCertificate == "") ||
-			(a.SHA256URLSignature == "") != (a.SHA256URLCertificate == "") {
+		switch {
+		case keyed && (a.SigstoreCertificate != "" || a.SHA256URLCertificate != ""):
+			errs = append(errs, fmt.Errorf(
+				"artifact[%d]: a signature by the cosign package.signing_key has no certificate", i,
+			))
+		case !keyed && ((a.SigstoreSignature == "") != (a.SigstoreCertificate == "") ||
+			(a.SHA256URLSignature == "") != (a.SHA256URLCertificate == "")):
 			errs = append(errs, fmt.Errorf("artifact[%d]: a cosign signature needs its certificate", i))
 		}
 

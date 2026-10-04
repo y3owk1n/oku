@@ -1,5 +1,6 @@
 // Package sigstore checks Sigstore bundles: a signature, the certificate that
-// Sigstore's CA issued for it, and the transparency log's record of both.
+// Sigstore's CA issued for it or the developer's own key, and the transparency
+// log's record of both.
 package sigstore
 
 import (
@@ -77,12 +78,16 @@ func (id Identity) certificate() (verify.CertificateIdentity, error) {
 type Verifier struct {
 	load    func() (root.TrustedMaterial, error)
 	options []verify.VerifierOption
+	// keyOptions are the checks of a signature by a key, which has no
+	// certificate and so no certificate timestamp.
+	keyOptions []verify.VerifierOption
 	// rekor is the transparency log that client asks for the entry of a
 	// signature that comes without a bundle.
 	rekor  string
 	client *http.Client
 
 	once     sync.Once
+	material root.TrustedMaterial
 	verifier *verify.Verifier
 	err      error
 }
@@ -91,16 +96,18 @@ type Verifier struct {
 // asks the transparency log at rekor with client.
 func New(material root.TrustedMaterial, rekor string, client *http.Client, options ...verify.VerifierOption) *Verifier {
 	return &Verifier{
-		load:    func() (root.TrustedMaterial, error) { return material, nil },
-		options: options,
-		rekor:   rekor,
-		client:  client,
+		load:       func() (root.TrustedMaterial, error) { return material, nil },
+		options:    options,
+		keyOptions: options,
+		rekor:      rekor,
+		client:     client,
 	}
 }
 
 // Public returns a Verifier for Sigstore's public instance. It reads the
 // trust root through TUF with client, and keeps it under cacheDir. A bundle
-// must carry a certificate timestamp, a log entry and the log's timestamp.
+// must carry a log entry and the log's timestamp, and a certificate timestamp
+// when it has a certificate.
 func Public(cacheDir string, client *http.Client) *Verifier {
 	return &Verifier{
 		load: func() (root.TrustedMaterial, error) {
@@ -118,6 +125,10 @@ func Public(cacheDir string, client *http.Client) *Verifier {
 		},
 		options: []verify.VerifierOption{
 			verify.WithSignedCertificateTimestamps(1),
+			verify.WithTransparencyLog(1),
+			verify.WithObserverTimestamps(1),
+		},
+		keyOptions: []verify.VerifierOption{
 			verify.WithTransparencyLog(1),
 			verify.WithObserverTimestamps(1),
 		},
@@ -141,23 +152,8 @@ func (v *Verifier) Verify(data, digest []byte, id Identity) error {
 // verify checks that b signs the file whose sha256 is digest, and that id
 // signed it.
 func (v *Verifier) verify(b *bundle.Bundle, digest []byte, id Identity) error {
-	if v == nil {
-		return fmt.Errorf("%w: this oku has no Sigstore trust root here", ErrVerify)
-	}
-
-	v.once.Do(func() {
-		material, err := v.load()
-		if err != nil {
-			v.err = err
-
-			return
-		}
-
-		v.verifier, v.err = verify.NewVerifier(material, v.options...)
-	})
-
-	if v.err != nil {
-		return v.err
+	if err := v.trust(); err != nil {
+		return err
 	}
 
 	identity, err := id.certificate()
@@ -173,6 +169,23 @@ func (v *Verifier) verify(b *bundle.Bundle, digest []byte, id Identity) error {
 	}
 
 	return nil
+}
+
+// trust loads the trust root on first use.
+func (v *Verifier) trust() error {
+	if v == nil {
+		return fmt.Errorf("%w: this oku has no Sigstore trust root here", ErrVerify)
+	}
+
+	v.once.Do(func() {
+		if v.material, v.err = v.load(); v.err != nil {
+			return
+		}
+
+		v.verifier, v.err = verify.NewVerifier(v.material, v.options...)
+	})
+
+	return v.err
 }
 
 // fetcher reads the files of the TUF repository with oku's client, so the

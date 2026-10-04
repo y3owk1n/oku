@@ -36,6 +36,8 @@ type recipeServer struct {
 	// winget maps a version of the winget package Owner.Tool to the text of its
 	// installer manifest.
 	winget map[string]string
+	// served maps a path of the server to the text it answers with.
+	served map[string]string
 }
 
 // start serves s for m and returns the server's URL.
@@ -81,6 +83,10 @@ func (s recipeServer) start(t *testing.T, m *machine) string {
 			}
 
 			_, _ = fmt.Fprintf(w, "[%s]", strings.Join(releases, ","))
+		case r.URL.Path == "/api/repos/owner/tool/releases/latest" && len(s.versions) > 0:
+			_, _ = fmt.Fprintf(w, `{"tag_name": "v%s", "assets": []}`, s.versions[len(s.versions)-1])
+		case s.served[r.URL.Path] != "":
+			_, _ = fmt.Fprint(w, s.served[r.URL.Path])
 		case r.URL.Path == "/api/repos/microsoft/winget-pkgs/contents/manifests/o/Owner/Tool" && s.winget != nil:
 			var entries []string
 			for v := range s.winget {

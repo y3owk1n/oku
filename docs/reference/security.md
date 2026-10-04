@@ -454,7 +454,10 @@ then downloads `<artifact url>.minisig` and installs the artifact only when
 that key signed it, and when the signed comment names that file as
 `file:<name>`, which `minisign -S` writes, or holds the version, as in
 `tool 1.2.3`. The key signs every release, so without that check an older
-signed file served at the new version's URL would pass.
+signed file served at the new version's URL would pass. With a cosign public
+key, oku checks the bundles and signatures that the artifacts name instead,
+and each must be in Sigstore's transparency log.
+[Cosign key](manifest.md#cosign-key) gives the format.
 
 `oku.lock` pins the key at the first install. When the manifest later shows
 another key, or drops it, `oku sync` and `oku update` stop:

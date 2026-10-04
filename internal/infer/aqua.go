@@ -3,6 +3,8 @@ package infer
 import (
 	"cmp"
 	"context"
+	"encoding/base64"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"maps"
@@ -110,15 +112,17 @@ var (
 )
 
 // cosignCheck is a cosign check oku can make: the workflow that signs the
-// file, and a bundle asset of the release, or the URLs of a signature and its
-// certificate.
+// file or the URL of the developer's public key, and a bundle asset of the
+// release, or the URLs of a signature and its certificate.
 type cosignCheck struct {
-	workflow, bundle, signature, certificate string
+	workflow, key, bundle, signature, certificate string
 }
 
 // check returns the check that c names, when oku can make it: a bundle, or a
 // signature with its certificate, by a GitHub Actions workflow of repo for the
-// release's tag.
+// release's tag, or a bundle or signature by a key. oku needs the log to hold
+// a signature by a key, as cosign does by default, so an entry that tells
+// cosign to skip the log stays out.
 func (c *aquaCosign) check(repo string) (cosignCheck, bool) {
 	if c == nil || c.Enabled != nil && !*c.Enabled {
 		return cosignCheck{}, false
@@ -132,8 +136,11 @@ func (c *aquaCosign) check(repo string) (cosignCheck, bool) {
 		}
 	}
 
-	if opts["--certificate-oidc-issuer"] != sigstore.GitHubIssuer ||
-		opts["--certificate-github-workflow-repository"] != "" && opts["--certificate-github-workflow-repository"] != repo {
+	keyed := opts["--key"] != "" && opts["--certificate-oidc-issuer"] == "" &&
+		!slices.Contains(c.Opts, "--insecure-ignore-tlog")
+
+	if !keyed && (opts["--certificate-oidc-issuer"] != sigstore.GitHubIssuer ||
+		opts["--certificate-github-workflow-repository"] != "" && opts["--certificate-github-workflow-repository"] != repo) {
 		return cosignCheck{}, false
 	}
 
@@ -142,10 +149,16 @@ func (c *aquaCosign) check(repo string) (cosignCheck, bool) {
 	switch {
 	case c.Bundle != nil && c.Bundle.Type == "github_release" && c.Bundle.Asset != "":
 		check.bundle = c.Bundle.Asset
-	case opts["--signature"] != "" && opts["--certificate"] != "":
+	case opts["--signature"] != "" && (keyed || opts["--certificate"] != ""):
 		check.signature, check.certificate = opts["--signature"], opts["--certificate"]
 	default:
 		return cosignCheck{}, false
+	}
+
+	if keyed {
+		check.key, check.certificate = opts["--key"], ""
+
+		return check, true
 	}
 
 	// A pattern names the workflow at any ref, so the ref of the run must be
@@ -167,23 +180,31 @@ func (c *aquaCosign) check(repo string) (cosignCheck, bool) {
 }
 
 // urls renders the bundle, signature and certificate of check for one
-// download of p, whose release files are at releases.
-func (check cosignCheck) urls(p aquaPackage, releases string, vars map[string]string) (bundle, signature, certificate string, err error) {
+// download of p, whose release files are at releases, and the URL of its key.
+func (check cosignCheck) urls(
+	p aquaPackage,
+	releases string,
+	vars map[string]string,
+) (bundle, signature, certificate, key string, err error) {
+	if key, err = p.render(check.key, vars); err != nil {
+		return "", "", "", "", err
+	}
+
 	if check.bundle != "" {
 		if bundle, err = p.render(check.bundle, vars); err != nil {
-			return "", "", "", err
+			return "", "", "", "", err
 		}
 
-		return releases + bundle, "", "", nil
+		return releases + bundle, "", "", key, nil
 	}
 
 	if signature, err = p.render(check.signature, vars); err != nil {
-		return "", "", "", err
+		return "", "", "", "", err
 	}
 
 	certificate, err = p.render(check.certificate, vars)
 
-	return "", signature, certificate, err
+	return "", signature, certificate, key, err
 }
 
 // FromAqua returns manifest TOML for the GitHub repo owner/repo, translated
@@ -234,11 +255,57 @@ func (inf *Inferrer) FromAqua(ctx context.Context, repo string) (string, error) 
 				return "", fmt.Errorf("the aqua registry's entry for %s: %w", repo, err)
 			}
 
+			if r.keyURL != "" {
+				inf.signingKey(ctx, &r)
+			}
+
 			return r.text()
 		}
 	}
 
 	return "", fmt.Errorf("the aqua registry's entry for %s names another repo", repo)
+}
+
+// signingKey reads the public key at r.keyURL for the newest release of the
+// repo, and makes it the recipe's signing key. The manifest holds the key and
+// not its URL, so oku.lock pins it, and a later translation that finds another
+// key needs --accept-key. With no key oku can read, the signatures by it stay
+// out.
+func (inf *Inferrer) signingKey(ctx context.Context, r *recipe) {
+	key := ""
+
+	if rel, err := inf.Hosts.GitHub("").Release(ctx, r.follow.repo, ""); err == nil {
+		version := strings.TrimPrefix(strings.TrimPrefix(rel.Tag, r.follow.stripPrefix), "v")
+		if url, err := manifest.Expand(r.keyURL, map[string]string{"tag": rel.Tag, "version": version}); err == nil {
+			if data, err := inf.Download(ctx, url, inf.Hosts.GitHub("").Auth()); err == nil {
+				key = cosignKeyText(data)
+			}
+		}
+	}
+
+	if key == "" {
+		for i := range r.artifacts {
+			r.artifacts[i].sigstore = sigstoreFiles{}
+		}
+	}
+
+	r.signingKey = key
+}
+
+// cosignKeyText returns a cosign public key in PEM as a manifest names it, the
+// base64 between its lines, or "" when data holds none.
+func cosignKeyText(data []byte) string {
+	block, _ := pem.Decode(data)
+	if block == nil {
+		return ""
+	}
+
+	text := base64.StdEncoding.EncodeToString(block.Bytes)
+	if !manifest.CosignKey(text) {
+		return ""
+	}
+
+	return text
 }
 
 // current returns the package as its newest releases have it. The registry
@@ -357,11 +424,20 @@ func (p aquaPackage) recipe() (recipe, error) {
 		}
 	}
 
-	// A manifest names one signer workflow. A bundle that another workflow
-	// signed stays out.
-	for i, a := range r.artifacts {
+	// A manifest names one signer, a workflow or else a key. A signature by
+	// another stays out.
+	for _, a := range r.artifacts {
 		r.signerWorkflow = cmp.Or(r.signerWorkflow, a.signer)
-		if a.signer != r.signerWorkflow {
+	}
+
+	if r.signerWorkflow == "" {
+		for _, a := range r.artifacts {
+			r.keyURL = cmp.Or(r.keyURL, a.keyURL)
+		}
+	}
+
+	for i, a := range r.artifacts {
+		if a.signer != r.signerWorkflow || a.keyURL != r.keyURL {
 			r.artifacts[i].sigstore = sigstoreFiles{}
 		}
 	}
@@ -433,9 +509,9 @@ func (cur aquaPackage) artifact(sel platform.Selector) (recipeArtifact, bool, er
 		a.sha256URL = releases + sums
 
 		if check, ok := c.Cosign.check(repo); ok {
-			if bundle, sig, cert, err := check.urls(p, releases, vars); err == nil {
+			if bundle, sig, cert, key, err := check.urls(p, releases, vars); err == nil {
 				a.sigstore.sha256URLBundle, a.sigstore.sha256URLSignature, a.sigstore.sha256URLCertificate = bundle, sig, cert
-				a.signer = check.workflow
+				a.signer, a.keyURL = check.workflow, key
 			}
 		}
 	}
@@ -450,10 +526,12 @@ func (cur aquaPackage) artifact(sel platform.Selector) (recipeArtifact, bool, er
 		}
 	}
 
-	if check, ok := p.Cosign.check(repo); ok && (a.signer == "" || a.signer == check.workflow) {
-		if bundle, sig, cert, err := check.urls(p, releases, vars); err == nil {
+	// The download and its checksum file must have one signer.
+	if check, ok := p.Cosign.check(repo); ok {
+		if bundle, sig, cert, key, err := check.urls(p, releases, vars); err == nil &&
+			(a.signer == "" && a.keyURL == "" || a.signer == check.workflow && a.keyURL == key) {
 			a.sigstore.sigstoreBundle, a.sigstore.sigstoreSignature, a.sigstore.sigstoreCertificate = bundle, sig, cert
-			a.signer = check.workflow
+			a.signer, a.keyURL = check.workflow, key
 		}
 	}
 

@@ -155,9 +155,14 @@ func Lint(data []byte) Report {
 			}
 		}
 
+		// A cosign key signs only the Sigstore signatures the artifact names.
+		signed := a.SigstoreBundle != "" || a.SHA256URLBundle != "" || a.SigstoreSignature != "" ||
+			a.SHA256URLSignature != ""
+		byKey := full.Package.SigningKey != "" && (signed || !CosignKey(full.Package.SigningKey))
+
 		// Over plain http anyone on the network can change the download, and a
 		// sha256_url that comes the same way with it.
-		if strings.HasPrefix(a.URL, "http://") && a.SHA256 == "" && full.Package.SigningKey == "" {
+		if strings.HasPrefix(a.URL, "http://") && a.SHA256 == "" && !byKey {
 			report.Errors = append(report.Errors, fmt.Sprintf(
 				"artifact[%d]: an http:// url needs sha256 or a signing_key, since the network can change it", i,
 			))
@@ -166,7 +171,7 @@ func Lint(data []byte) Report {
 		switch {
 		case a.SHA256 != "" || a.SHA256URL != "" || a.Integrity != "" || a.SigstoreBundle != "" || a.SigstoreSignature != "" ||
 			a.Provenance != "" ||
-			full.Package.SigningKey != "" || full.Package.Attestations || version.From == FromNPM:
+			byKey || full.Package.Attestations || version.From == FromNPM:
 		case version.From != FromGitHubReleases && version.Tag == "":
 			report.Warnings = append(report.Warnings, fmt.Sprintf(
 				"artifact[%d]: no sha256 or sha256_url, so users trust the first download", i,

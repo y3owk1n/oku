@@ -41,6 +41,9 @@ type recipe struct {
 	// made GitHub artifact attestations of them.
 	signerWorkflow string
 	attestations   bool
+	// keyURL is where the developer's cosign public key is when it signs the
+	// releases in place of a workflow, and signingKey is that key.
+	keyURL, signingKey string
 }
 
 // recipeArtifact is the download of the recipe for one platform.
@@ -59,6 +62,8 @@ type recipeArtifact struct {
 	// which signer signs them.
 	sigstore sigstoreFiles
 	signer   string
+	// keyURL is where the key that signs them is, when a key signs them.
+	keyURL string
 	// provenance is the SLSA provenance of the download.
 	provenance string
 	// follow is where versions of this artifact come from, when they differ by
@@ -246,6 +251,10 @@ func (r recipe) text() (string, error) {
 		if r.attestations {
 			b.WriteString("attestations = true\n")
 		}
+	}
+
+	if r.signingKey != "" && fixed == "" {
+		fmt.Fprintf(&b, "signing_key = %q\n", r.signingKey)
 	}
 
 	if len(r.deps) > 0 {

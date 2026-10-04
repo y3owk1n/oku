@@ -400,7 +400,7 @@ func (s *Store) generateArtifactCompletions(
 }
 
 // vouched checks download, whose sha256 is digest, against the integrity value
-// of a, the signing key of m and the Sigstore signatures m names. It reports
+// of a, the minisign key of m and the Sigstore signatures m names. It reports
 // whether one of them vouched for the download, which then is not a first use.
 func (s *Store) vouched(
 	ctx context.Context,
@@ -416,7 +416,9 @@ func (s *Store) vouched(
 		}
 	}
 
-	if m.Package.SigningKey != "" {
+	// A cosign key signs the Sigstore signatures instead.
+	minisigned := m.Package.SigningKey != "" && !manifest.CosignKey(m.Package.SigningKey)
+	if minisigned {
 		if err := s.verifySignature(ctx, m.Package.SigningKey, a.URL, m.Version.Value, download); err != nil {
 			return false, fmt.Errorf("%s: %w", m.Package.Name, err)
 		}
@@ -431,7 +433,7 @@ func (s *Store) vouched(
 		}
 	}
 
-	return a.Integrity != "" || m.Package.SigningKey != "" || signed, nil
+	return a.Integrity != "" || minisigned || signed, nil
 }
 
 // Pin returns the sha256 that oku.lock holds for artifact a of m, and whether

@@ -63,7 +63,7 @@ One `[[package]]` per package of the list, sorted by name.
 | `commit` | The commit the manifest was read at. Only for `github:`, `codeberg:`, `gitea:`, `gitlab:` and `git+` refs. |
 | `manifest_sha256` | Digest of the manifest file. |
 | `version` | The version installed. When each artifact finds its own version, this is the version of the platform entry whose name sorts first, so every machine writes the same value. |
-| `signing_key` | The manifest's minisign key, when it has one. |
+| `signing_key` | The manifest's minisign or cosign key, when it has one. |
 | `signer_workflow` | The manifest's Sigstore signer, when it has one. |
 | `tag` | The upstream tag of that version, when it differs, such as `v10.2.0`. When each artifact finds its own version, it is the tag of the same platform entry. |
 | `tag_commit` | The full commit a moving tag pointed at for that version. |
@@ -103,12 +103,13 @@ oku keeps `vendor_sha256` and `impure` beside the build in the store, so
 |---|---|
 | `sigstore` | a Sigstore signature by the manifest's [`signer_workflow`](manifest.md#sigstore-signatures), of the file or of its checksum file, or the file's [SLSA provenance](manifest.md#slsa-provenance) |
 | `minisign` | a signature by the manifest's [`signing_key`](manifest.md#signatures) |
+| `cosign` | a cosign signature by the manifest's [`signing_key`](manifest.md#cosign-key), of the file or of its checksum file |
 | `manifest` | the `sha256` or `integrity` in the manifest |
 | `checksum-file` | the file at the manifest's `sha256_url` |
 | `published` | the digest that the version source publishes, such as GitHub for a release file or the npm registry for a package |
 | `first-use` | nothing. oku [trusted the first download](security.md#trust-on-first-use) |
 
-A Sigstore and a minisign signature rank the same. A checksum file and a
+A Sigstore, a minisign and a cosign signature rank the same. A checksum file and a
 published digest rank the same, since both come from the same place as the
 file. A build records how it checked its source archive. A
 build from git has no `verified`, since its commit pins the source.
