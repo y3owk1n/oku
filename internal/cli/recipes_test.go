@@ -1153,6 +1153,8 @@ func TestB339APageSourceReadsFieldsOfAJSONFeedOrAPropertyList(t *testing.T) {
 			fmt.Fprint(w, `{"url": "https://dl.example.com/production/abc123/tool.zip", "name": "2.0.1"}`)
 		case "/host.json":
 			fmt.Fprint(w, `{"full": {"host_version": [0, 0, 413]}}`)
+		case "/date.json":
+			fmt.Fprint(w, `{"version": 20240115}`)
 		case "/update.xml":
 			fmt.Fprint(w, `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -1171,6 +1173,7 @@ func TestB339APageSourceReadsFieldsOfAJSONFeedOrAPropertyList(t *testing.T) {
 		`repo = "SERVER/update.json"` + "\njson = [\"name\", \"url\"]\nregex = '^(\\S+)\\n.*/production/([0-9a-f]+)/'\njoin = \"+\"": "2.0.1+abc123",
 		`repo = "SERVER/update.xml"` + "\njson = [\"version\", \"build\"]\njoin = \"+\"":                                             "5.8.1+2349",
 		`repo = "SERVER/host.json"` + "\njson = [\"full.host_version\"]":                                                             "0.0.413",
+		`repo = "SERVER/date.json"` + "\njson = [\"version\"]":                                                                       "20240115",
 	} {
 		ref := filepath.Join(m.fixtures, "tool.toml")
 		must(t, os.WriteFile(ref, []byte(fmt.Sprintf(`[package]

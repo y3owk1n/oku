@@ -184,6 +184,18 @@ func Weaker(now, was string) bool {
 	return okNow && okWas && rankNow < rankWas
 }
 
+// CheckedSignature reports whether oku checked the download of p for some
+// platform against a signature.
+func (p Package) CheckedSignature() bool {
+	for _, platform := range p.Platforms {
+		if verifiedRank[platform.Verified] == verifiedRank[VerifiedSigstore] {
+			return true
+		}
+	}
+
+	return false
+}
+
 // Read parses the lock at path. A missing file is an empty lock. File refs that
 // Write stored relative to the lock come back absolute.
 func Read(path string) (*Lock, error) {

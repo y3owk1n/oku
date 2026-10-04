@@ -108,7 +108,10 @@ it.
 
 `npm:name` and `npm:@scope/name` install a tool from the npm registry. oku
 reads the package's versions, its download and the programs in its `bin`, and
-checks each download against the sha512 the registry publishes.
+checks each download against the sha512 the registry publishes. The newest
+version is the one the package's `latest` tag names. oku does not pick a
+higher version that the package publishes under another tag, such as `next`.
+`@version` still takes one.
 
 A package with no dependencies, such as prettier, is one download. For a
 package that lists dependencies, oku writes a [build](../how-oku-works.md#build)

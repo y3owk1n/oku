@@ -902,7 +902,7 @@ func (e env) installFrom(
 		unnamedScripts: realized.UnnamedScripts,
 		substituted:    deps.substituted,
 		cacheNotes:     deps.cacheNotes,
-		notes:      deps.notes,
+		notes:          deps.notes,
 		host:           append(hostHere(m.Host), deps.host...),
 	}, nil
 }
@@ -937,6 +937,14 @@ func (e env) pickRelease(
 		return nil, resolve.Release{}, false, nil, err
 	}
 
+	// A manifest without a signer also fails the check of a download that
+	// oku.lock checked against a signature, so the hint names both flags.
+	again := "--accept-key"
+	if m.Package.SigningKey == "" && m.Package.SignerWorkflow == "" && !req.acceptWeaker &&
+		previous.CheckedSignature() {
+		again += " --accept-weaker-check"
+	}
+
 	// A signer that the list pins replaces the one the lock holds.
 	if pinned := previous.SigningKey; pinned != "" && pinned != m.Package.SigningKey &&
 		!req.acceptKey && req.signingKey == "" {
@@ -947,8 +955,8 @@ func (e env) pickRelease(
 
 		return nil, resolve.Release{}, false, nil, fmt.Errorf(
 			"oku.lock pinned the signing key %s, and the manifest now has %s\n"+
-				"if the developer announced this change, run the command again with --accept-key",
-			pinned, now,
+				"if the developer announced this change, run the command again with %s",
+			pinned, now, again,
 		)
 	}
 
@@ -961,8 +969,8 @@ func (e env) pickRelease(
 
 		return nil, resolve.Release{}, false, nil, fmt.Errorf(
 			"oku.lock pinned the signer workflow %s, and the manifest now has %s\n"+
-				"if the developer announced this change, run the command again with --accept-key",
-			pinned, now,
+				"if the developer announced this change, run the command again with %s",
+			pinned, now, again,
 		)
 	}
 
@@ -1484,7 +1492,11 @@ func (e env) manifestData(
 	opts Options,
 	req request,
 ) (ref.Fetched, infer.Inferred, error) {
-	if req.keepVersion && req.previous.Inferred {
+	// The manifest inferred for the locked version holds that release's assets
+	// and signatures, so a list version that leaves out the locked one infers
+	// again.
+	if allowed, _ := resolve.Matches(req.previous.Version, req.ref.Version); req.keepVersion &&
+		req.previous.Inferred && allowed {
 		return ref.Fetched{
 			Data:   []byte(req.previous.Manifest),
 			Commit: req.previous.Commit,
@@ -2188,7 +2200,7 @@ type depSet struct {
 	// installed.
 	substituted []string
 	cacheNotes  []string
-	notes   []string
+	notes       []string
 	host        []host.Requirement
 }
 

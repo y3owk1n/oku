@@ -3108,6 +3108,27 @@ func TestB123VersionsComeFromTheNPMRegistry(t *testing.T) {
 	}
 }
 
+func TestB123TheLatestTagOfNPMBoundsTheNewest(t *testing.T) {
+	m := newMachine(t)
+
+	// 2.0.0 is out, and the "latest" tag still names 1.1.0, the last of the list.
+	ref := npmServer(t, &m, "", "1.0.0", "2.0.0", "1.1.0")
+
+	_, err := m.run(t, "", "add", ref)
+	must(t, err)
+
+	if got := m.toolOutput(t); got != "1.1.0" {
+		t.Fatalf("add installed %s, want 1.1.0, which the latest tag names", got)
+	}
+
+	_, err = m.run(t, "", "add", ref+"@2")
+	must(t, err)
+
+	if got := m.toolOutput(t); got != "2.0.0" {
+		t.Fatalf("add @2 installed %s, want 2.0.0", got)
+	}
+}
+
 func TestB124ADownloadThatDoesNotFitItsIntegrityIsRejected(t *testing.T) {
 	m := newMachine(t)
 	ref := npmServer(t, &m, "1.1.0", "1.0.0", "1.1.0")
@@ -7170,8 +7191,8 @@ func TestB89SigningKeyVerifiesArtifactsAndAChangedKeyStopsUntilAccepted(t *testi
 		"",
 		"update",
 	); err == nil ||
-		!strings.Contains(err.Error(), "--accept-key") {
-		t.Fatalf("want a refusal that names --accept-key for a dropped key, got %v", err)
+		!strings.Contains(err.Error(), "--accept-key --accept-weaker-check") {
+		t.Fatalf("want a refusal that names both flags for a dropped key, got %v", err)
 	}
 
 	m.signedManifest(t, otherPublic.String(), otherSecret, true)
