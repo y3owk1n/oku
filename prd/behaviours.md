@@ -1368,6 +1368,10 @@ order step in `prd/product.md`.
   and the command goes on, naming the advisory.
 - B514 [10] When oku cannot reach OSV, it installs the version and warns that
   it could not check it.
+- B516 [10] A build stops when OSV lists a package that its vendor step
+  installed as malicious, before any install script or build step runs, and
+  names the package and the advisory. When oku cannot reach OSV, the build
+  goes on with a note.
 
 ## Tooling
 
