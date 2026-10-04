@@ -46,7 +46,8 @@ func newHookCmd(opts Options) *cobra.Command {
 
 			prof := e.globalProfile()
 
-			dirs := []string{prof.BinDir()}
+			// A shell that oku shell started keeps the packages it asked for first.
+			dirs := append(filepath.SplitList(os.Getenv(shellPathVar)), prof.BinDir())
 			oku := "oku"
 			if opts.Executable != "" {
 				dirs = append(dirs, filepath.Dir(opts.Executable))
@@ -148,6 +149,11 @@ as null, and a .env file leaves it out.`,
 func (e env) hookChange(project string) shellhook.Change {
 	state := readHookState()
 	final, prepended, active, problems := e.dirEnv(project, state)
+
+	if path := final["PATH"]; path != nil {
+		first := sessionFirst(*path)
+		final["PATH"] = &first
+	}
 	change := shellhook.Change{Set: map[string]string{}}
 	saved := map[string]*string{}
 
@@ -165,8 +171,17 @@ func (e env) hookChange(project string) shellhook.Change {
 	}
 
 	for name, value := range final {
-		if _, only := prepended[name]; !only {
+		_, only := prepended[name]
+		old, wasSaved := state.saved[name]
+		_, isSet := os.LookupEnv(name)
+
+		switch {
+		case !only:
 			saved[name] = orNil(state.base(name))
+		// A list variable that was not set before the hook first put entries in
+		// it is not set again once the hook takes them out.
+		case wasSaved && old == nil, !wasSaved && state.added[name] == nil && !isSet:
+			saved[name] = nil
 		}
 
 		apply(name, value)
@@ -180,6 +195,10 @@ func (e env) hookChange(project string) shellhook.Change {
 	}
 
 	for name := range state.added {
+		if _, alsoSaved := state.saved[name]; alsoSaved {
+			continue
+		}
+
 		if _, still := final[name]; !still {
 			old, _ := state.base(name)
 			apply(name, &old)
@@ -192,7 +211,30 @@ func (e env) hookChange(project string) shellhook.Change {
 			encoded = string(data)
 		}
 
-		keepState(&change, name, encoded)
+		if name != shellhook.StateSaved || os.Getenv(shellhook.LocalMarker) != "1" {
+			keepState(&change, name, encoded)
+
+			continue
+		}
+
+		// The saved values may be secrets that a project unset, so the shell
+		// keeps them where no program it starts sees them, and the prompt hook
+		// passes them to this command alone. Programs see only the names.
+		if _, exported := os.LookupEnv(name); exported {
+			change.Unset = append(change.Unset, name)
+		}
+
+		if encoded != os.Getenv(shellhook.SavedPassed) {
+			change.Saved = &encoded
+		}
+
+		names := ""
+		if len(saved) > 0 {
+			data, _ := json.Marshal(slices.Sorted(maps.Keys(saved)))
+			names = string(data)
+		}
+
+		keepState(&change, shellhook.StateChanged, names)
 	}
 
 	if !active {
@@ -242,6 +284,22 @@ func (e env) dirEnv(
 	final, prepended := want.finalValues(state.base)
 
 	return final, prepended, active, problems
+}
+
+// shellPathVar holds the bin directories of the packages of an oku shell, which
+// stay ahead of the profiles' in that shell.
+const shellPathVar = "OKU_SHELL_PATH"
+
+// sessionFirst moves the directories of shellPathVar to the front of path.
+func sessionFirst(path string) string {
+	first := filepath.SplitList(os.Getenv(shellPathVar))
+	if len(first) == 0 {
+		return path
+	}
+
+	rest := slices.DeleteFunc(filepath.SplitList(path), func(dir string) bool { return slices.Contains(first, dir) })
+
+	return strings.Join(append(first, rest...), string(os.PathListSeparator))
 }
 
 // orNil returns a pointer to value, or nil when ok is false.

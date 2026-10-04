@@ -53,8 +53,25 @@ type hookState struct {
 func readHookState() hookState {
 	state := hookState{saved: map[string]*string{}, added: map[string][]string{}}
 
-	_ = json.Unmarshal([]byte(os.Getenv(shellhook.StateSaved)), &state.saved)
+	// The prompt hook passes the saved values of its shell variable. Before the
+	// first prompt after an update, an older oku's exported ones hold them.
+	saved := os.Getenv(shellhook.StateSaved)
+	if passed := os.Getenv(shellhook.SavedPassed); passed != "" {
+		saved = passed
+	}
+
+	_ = json.Unmarshal([]byte(saved), &state.saved)
 	_ = json.Unmarshal([]byte(os.Getenv(shellhook.StateAdded)), &state.added)
+
+	// A name the hook changed whose old value oku exec cannot see goes unset.
+	var changed []string
+
+	_ = json.Unmarshal([]byte(os.Getenv(shellhook.StateChanged)), &changed)
+	for _, name := range changed {
+		if _, ok := state.saved[name]; !ok {
+			state.saved[name] = nil
+		}
+	}
 
 	if old := os.Getenv(shellhook.StatePath); old != "" && state.added["PATH"] == nil {
 		state.added["PATH"] = []string{old}
@@ -355,7 +372,7 @@ func (e env) execEnviron() ([]string, string, error) {
 func isHookState(name string) bool {
 	return slices.Contains([]string{
 		shellhook.StateSaved, shellhook.StateAdded, shellhook.StatePath, shellhook.StateKeys, shellhook.StateHint,
-		shellhook.Project,
+		shellhook.StateChanged, shellhook.SavedPassed, shellhook.LocalMarker, shellhook.Project,
 	}, name)
 }
 

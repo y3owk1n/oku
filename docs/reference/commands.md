@@ -436,10 +436,12 @@ $ exit
 - After `--` oku runs that command in place of a shell, finds it on the new
   `PATH`, and exits with its exit code.
 - A ref takes `@version` as in `oku add`.
-- Inside, `OKU_SHELL` holds the refs. Your shell's startup files still run,
-  so one that resets `PATH` removes the packages from it.
-- The packages stay in the store and no generation uses them, so `oku gc`
-  deletes them. With a published checksum the next `oku shell` reuses them.
+- Inside, `OKU_SHELL` holds the refs and `OKU_SHELL_PATH` the `bin` folders
+  of the packages. Your shell's startup files still run. The oku hook line
+  keeps those folders first on `PATH`, also inside a project, and a startup
+  file that resets `PATH` removes them.
+- The packages stay in the store and no generation uses them. `oku gc` keeps
+  them while the shell runs, and deletes them after. With a published checksum the next `oku shell` reuses them.
   Without one oku downloads the file again and trusts it again, because
   `shell` writes no lock.
 

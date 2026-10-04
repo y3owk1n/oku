@@ -1118,7 +1118,13 @@ order step in `prd/product.md`.
   variable back the value it had before.
 - B309 [7] `KEY = { prepend = [...] }` puts the entries in front of a list
   variable, a relative one from the directory of the `oku.toml`. The project's
-  entries come before its `bin`. Leaving removes only those entries.
+  entries come before its `bin`. Leaving removes only those entries, and a
+  variable that was not set before is not set after.
+- B531 [7] Inside a project, no exported variable holds a value that the
+  project's `[env]` replaced or unset, such as a `GITHUB_TOKEN`. Leaving the
+  project restores it.
+- B532 [7] Inside an `oku shell`, the hook line in the startup file and the
+  hook in a project keep the shell's packages first on `PATH`.
 - B310 [7] `KEY = { required = "hint" }` prints the variable and the hint once
   while it is unset or empty, and `oku exec` refuses to run until it is set.
 - B311 [7] The global `oku.toml` `[env]` applies in every directory. Inside a

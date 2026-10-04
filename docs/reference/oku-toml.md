@@ -321,9 +321,13 @@ DEPLOY_TOKEN = { required = "ask ops for a token" }
   the project's `[env]`. The project's own `prepend` entries come before its
   `bin`.
 - Leaving a project gives each variable back the value it had before, and
-  removes the entries that `prepend` added. If you change such a variable by
-  hand inside the project, leaving still restores the value from before you
-  entered.
+  removes the entries that `prepend` added. A list variable that was not set
+  before is not set after. If you change such a variable by hand inside the
+  project, leaving still restores the value from before you entered.
+- The shell keeps those old values in a variable it does not export, so a
+  program in the project cannot read a value that `false` or a new value hid,
+  such as a `GITHUB_TOKEN`. `oku exec` sees only which variables the hook
+  changed, and unsets each one it does not set itself.
 - A name holds letters, digits and `_`. oku refuses a list that sets `PATH`
   other than by `prepend`, or a variable that controls the shell or other
   programs: `HOME`, `SHELL`, `USER`, `IFS`, `ENV`, `BASH_ENV`,

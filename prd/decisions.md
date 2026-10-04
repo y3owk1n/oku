@@ -1982,3 +1982,15 @@ only when that file is there, since oku writes it last. Why: a killed oku left
 a generation without its state file, which broke `generations`, `gc` and
 `rollback` for good, and a half deleted store path that a later install reused
 because it existed.
+
+## D121. The hook keeps the old values in an unexported shell variable
+
+The prompt hook keeps the values that a project replaced or unset in a shell
+variable that it does not export, `_oku_hook_saved`, and passes it to
+`oku env` alone with a marker. Programs see only `OKU_HOOK_CHANGED`, the names,
+which `oku exec` unsets when it does not set them itself. A shell whose hook
+text an older oku wrote sends no marker, and `oku env` exports the values for
+it as before. Why: the exported `OKU_HOOK_SAVED` held the value that a line
+such as `GITHUB_TOKEN = false` hid, so every program in the project could read
+it. `oku exec` loses the old value of a variable that a project changed, and
+unsets it, which keeps a secret from an agent that `unless` names.
