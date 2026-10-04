@@ -245,8 +245,9 @@ The variables and their hosts are in [tokens per host](refs.md#tokens-per-host).
   machine, such as `http://127.0.0.1`. `oku manifest lint` refuses an
   `http://` download without a `sha256`.
 - Only a manifest that is a file on this machine, or in a `git+file://` repo,
-  may name a `file://` URL. A manifest from anywhere else could otherwise read
-  a file such as `~/.aws/credentials` into the store or into a build.
+  may name a `file://` URL or a local repo as `source.git`. A manifest from
+  anywhere else could otherwise read a file such as `~/.aws/credentials`, or
+  clone a repo such as a password store, into the store or into a build.
 - A git collection reads its manifests inside the clone. When a manifest file
   is a link out of the repo, oku reads none of the collection, and
   `oku search` skips that source and names the file.
@@ -387,8 +388,9 @@ the included list git+https://example.com/machines#base.toml changed since oku.l
 ## Approve build commands
 
 A manifest with a `[build]` can run commands on your machine. Before the first
-build of such a manifest, oku shows every `run` step that applies to your
-machine and asks:
+build of such a manifest, oku shows every `run` and `vendor` step of the
+manifest, for every platform, and asks. Pinning the lock for another platform
+in `[lock]` can run that platform's `vendor` steps, so the list holds them too:
 
 ```
 tree 2.3.2 builds from source and runs these commands on your machine:

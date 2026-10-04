@@ -2385,6 +2385,25 @@ func (set depSet) buildOnly(first int) []string {
 	return only
 }
 
+// localGit reports whether the git source url names a repo on this machine: a
+// file: URL, an absolute, relative or home path, or a Windows drive. A remote
+// one has a scheme such as https:// or ssh://, or is host:path as scp writes it.
+func localGit(url string) bool {
+	url = strings.TrimSpace(url)
+
+	switch {
+	case url == "":
+		return false
+	case strings.HasPrefix(strings.ToLower(url), "file:"), strings.HasPrefix(url, "/"),
+		strings.HasPrefix(url, "."), strings.HasPrefix(url, "~"), strings.HasPrefix(url, `\`):
+		return true
+	case len(url) > 2 && url[1] == ':' && (url[2] == '\\' || url[2] == '/'):
+		return true
+	}
+
+	return !strings.Contains(url, ":")
+}
+
 // localURLs fails when a manifest from elsewhere names a file:// URL. Such a
 // URL reads a file of this machine, such as a key under ~/.ssh, into the store
 // or into a build. A manifest from a file or a git repo on this machine may.
@@ -2396,11 +2415,18 @@ func localURLs(r ref.Ref, m *manifest.Manifest) error {
 	var urls []string
 
 	for _, a := range m.Artifacts {
-		urls = append(urls, a.URL, a.SHA256URL)
+		urls = append(urls, a.URL, a.SHA256URL, a.SigstoreBundle, a.SHA256URLBundle, a.SigstoreSignature,
+			a.SigstoreCertificate, a.SHA256URLSignature, a.SHA256URLCertificate, a.Provenance)
 	}
 
 	if m.Build != nil {
 		urls = append(urls, m.Build.Source.URL, m.Build.Source.SHA256URL)
+
+		// oku clones the source outside the sandbox, so a local repo, such as a
+		// password store, would reach the build.
+		if git := m.Build.Source.Git; localGit(git) {
+			return fmt.Errorf("%s clones %s, and only a manifest on this machine may name a local repo", r, git)
+		}
 
 		for _, step := range m.Build.Steps {
 			if step.Fetch != nil {

@@ -38,7 +38,17 @@ func TestB420OnlyAManifestOnThisMachineMayNameAFileURL(t *testing.T) {
 	body, err := os.ReadFile(local)
 	must(t, err)
 
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	// A build that clones a repo of this machine, such as a password store.
+	cloning := "[package]\nname = \"tool\"\n[version]\nvalue = \"1.0.0\"\n[build]\n" +
+		"source = { git = \"" + m.fixtures + "\" }\n[[build.step]]\ninstall = { bin = [\"tool\"] }\n"
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/clone.toml") {
+			_, _ = w.Write([]byte(cloning))
+
+			return
+		}
+
 		_, _ = w.Write(body)
 	}))
 	t.Cleanup(server.Close)
@@ -46,6 +56,11 @@ func TestB420OnlyAManifestOnThisMachineMayNameAFileURL(t *testing.T) {
 	if out, err := m.run(t, "", "add", server.URL+"/tool.toml"); err == nil ||
 		!strings.Contains(err.Error(), "only a manifest on this machine may read a local file") {
 		t.Fatalf("want a served manifest with a file:// url refused, got %v:\n%s", err, out)
+	}
+
+	if out, err := m.run(t, "", "add", server.URL+"/clone.toml"); err == nil ||
+		!strings.Contains(err.Error(), "only a manifest on this machine may name a local repo") {
+		t.Fatalf("want a served manifest that clones a local repo refused, got %v:\n%s", err, out)
 	}
 
 	if out, err := m.run(t, "", "add", local); err != nil {
