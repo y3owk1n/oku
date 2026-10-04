@@ -2,8 +2,10 @@
 package platform
 
 import (
+	"debug/elf"
 	"errors"
 	"fmt"
+	"io"
 	"path/filepath"
 	"runtime"
 	"slices"
@@ -149,14 +151,47 @@ func (s Selector) Matches(p Platform) bool {
 		(s.Libc == "" || s.Libc == p.Libc)
 }
 
-// detectLibc reports musl when the musl dynamic loader exists on disk. oku is a
-// static binary with no ELF interpreter to read, so it checks the filesystem.
+// detectLibc reports the libc of the system's own programs. oku is a static
+// binary with no ELF interpreter, so it reads the one of /bin/sh. A glibc
+// system may have the musl loader installed beside its own. When /bin/sh is
+// static, a musl loader on disk means musl.
 func detectLibc() string {
+	if interpreter, ok := elfInterpreter("/bin/sh"); ok {
+		if strings.Contains(interpreter, "musl") {
+			return LibcMusl
+		}
+
+		return LibcGlibc
+	}
+
 	if m, _ := filepath.Glob("/lib/ld-musl-*.so.1"); len(m) > 0 {
 		return LibcMusl
 	}
 
 	return LibcGlibc
+}
+
+// elfInterpreter returns the program interpreter that the ELF file at path
+// names, and false when it names none or is no ELF file.
+func elfInterpreter(path string) (string, bool) {
+	f, err := elf.Open(path)
+	if err != nil {
+		return "", false
+	}
+	defer func() { _ = f.Close() }()
+
+	for _, prog := range f.Progs {
+		if prog.Type == elf.PT_INTERP {
+			data, err := io.ReadAll(prog.Open())
+			if err != nil {
+				return "", false
+			}
+
+			return strings.TrimRight(string(data), "\x00"), true
+		}
+	}
+
+	return "", false
 }
 
 // When limits a package to the platforms that any of its selectors matches.

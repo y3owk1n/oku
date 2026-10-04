@@ -191,7 +191,8 @@ order step in `prd/product.md`.
 - B423 [2] A git collection reads its manifests inside the clone, so a manifest
   file that is a link out of the repo reads nothing outside it.
 - B10 [2] `add` accepts file, https, `github:`, `codeberg:`, `gitea:`,
-  `gitlab:`, `npm:` and `git+` refs.
+  `gitlab:`, `npm:` and `git+` refs. An `@` inside the file name of an https
+  ref, as in `tool@2.toml`, is part of the URL.
 - B114 [2] `github:host/owner/repo` reads a GitHub Enterprise Server at `host`.
   oku sends it `GH_ENTERPRISE_TOKEN` and never `GITHUB_TOKEN`.
 - B254 [2] Without `GITHUB_TOKEN`, oku sends GitHub the token that
@@ -676,7 +677,11 @@ order step in `prd/product.md`.
 - B197 [4] Among shared checksum files, inference takes one that names the
   asset's OS and arch, then one that names its OS or arch alone, then a generic
   one such as `checksums.txt` or `SHA256SUMS`, and never one that names another
-  OS or arch.
+  OS or arch. The `.sha256` or `.sha256sum` file of another asset, such as
+  `tool.deb.sha256sum`, is not a shared checksum file.
+- B536 [4] An inferred URL has `{{tag}}` in place of the release's tag, also
+  where GitHub writes the tag's `+` as `%2B`. A one-number version with a
+  letter before it, such as the `2` of the repo name `tool2`, stays as written.
 - B275 [4] When GitHub reports a digest for an asset, inference skips a
   checksum file that states another digest for it, and oku checks the
   download against GitHub's digest.
@@ -900,6 +905,11 @@ order step in `prd/product.md`.
   file name the entry gives it, `bin` from `files`, and `sha256_url` from the
   checksum. An entry whose template oku cannot translate fails and names the
   template. A `github:` ref never reads the registry.
+- B537 [4] An `aqua:` entry whose rule for the newest releases only sets a
+  lowest version, such as `semver(">= 5.2.1")`, translates. With tags such as
+  `kustomize/v5.4.1` or `knative-v1.23.0`, `strip_prefix` holds what comes
+  before the version in the newest tag, and `{{.SemVer}}` is the tag without
+  `version_prefix`, as aqua reads it.
 - B434 [4] A `winget:` package whose MSI names no command takes the program
   named after the package, else the one its `Moniker` names, as `nvim` of
   `Neovim.Neovim`, else the only program in it.
@@ -1743,7 +1753,9 @@ order step in `prd/product.md`.
 - B201 [1] A `sha256_url` file may be a JSON object that maps file names to
   sha256 digests, or a JSON array of objects with `name` and `sha256` fields.
   oku reads the digest of the download's file name from it, and a download
-  that differs is rejected.
+  that differs is rejected. In a text file, a line gives the digest of the
+  file that one of its fields names, so a line for `kubectl-tool.tar.gz` does
+  not give the digest of `tool.tar.gz`.
 - B172 [5] A `build.source` archive takes `sha256`, or `sha256_url`, or
   neither. With neither, oku pins the digest of the first download in
   `oku.lock`, says so, and refuses another digest for that version until

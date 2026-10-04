@@ -123,7 +123,7 @@ file beside the list there, see [relative paths](refs.md#relative-paths-in-a-rem
 |---|---|
 | `os` | `darwin`, `linux`, `windows` |
 | `arch` | `amd64`, `arm64` |
-| `libc` | `glibc`, `musl`. Linux only. oku reports `musl` when `/lib/ld-musl-*.so.1` exists. |
+| `libc` | `glibc`, `musl`. Linux only. oku reads which loader `/bin/sh` runs on. The musl loader means `musl` and any other means `glibc`, so a glibc system with the musl package installed is `glibc`. When `/bin/sh` is static, oku reports `musl` if `/lib/ld-musl-*.so.1` exists. |
 
 - A missing key matches anything. Any other key is an error, and so is a
   value that is not a string.

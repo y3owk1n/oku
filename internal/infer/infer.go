@@ -1069,7 +1069,8 @@ func checksumAsset(names []string, asset string) string {
 	// another platform does not list the asset, so a generic file such as
 	// "checksums.txt" or "SHA256SUMS" beats it, and a file that names the
 	// asset's own OS and arch wins over both. "SHASUMS256.txt" and
-	// "sha256.txt" are shared files too. A ".shasum" file holds a SHA-1.
+	// "sha256.txt" are shared files too. A ".shasum" file holds a SHA-1, and
+	// "other.deb.sha256sum" holds the digest of another asset alone.
 	best, bestScore := "", 0
 
 	for _, name := range names {
@@ -1077,7 +1078,7 @@ func checksumAsset(names []string, asset string) string {
 		shared := strings.Contains(lower, "checksum") || strings.Contains(lower, "sha256sum") ||
 			strings.Contains(lower, "shasums256") || lower == "sha256.txt"
 
-		if hasAnySuffix(lower, signatures) || !shared {
+		if hasAnySuffix(lower, signatures) || !shared || ownChecksum(names, name) {
 			continue
 		}
 
@@ -1087,6 +1088,18 @@ func checksumAsset(names []string, asset string) string {
 	}
 
 	return best
+}
+
+// ownChecksum reports whether name is the checksum file of one other asset of
+// names, such as "tool.deb.sha256sum" beside "tool.deb".
+func ownChecksum(names []string, name string) bool {
+	for _, suffix := range []string{".sha256", ".sha256sum"} {
+		if asset, ok := strings.CutSuffix(name, suffix); ok && slices.Contains(names, asset) {
+			return true
+		}
+	}
+
+	return false
 }
 
 // platformScore rates how well a checksum file fits asset: 3 when it names the
@@ -1128,18 +1141,26 @@ func wordsOf(name, asset string, groups map[string][]string) int {
 }
 
 // template swaps the tag and the version in a release URL for their variables.
+// GitHub writes the "+" of a tag such as v1.30.0+k3s1 as %2B in its URLs, and
+// serves the URL with either.
 func template(url, tag, version string) string {
-	url = swap(url, tag, "{{tag}}")
+	for _, form := range []string{tag, strings.ReplaceAll(tag, "+", "%2B")} {
+		url = swap(url, form, "{{tag}}")
+	}
 
 	if version != tag {
-		url = swap(url, version, "{{version}}")
+		for _, form := range []string{version, strings.ReplaceAll(version, "+", "%2B")} {
+			url = swap(url, form, "{{version}}")
+		}
 	}
 
 	return url
 }
 
 // swap replaces old in s where no digit is next to it, so that the version "1"
-// becomes a variable in "tool-v1-arm64" and the "1" of "10" does not.
+// becomes a variable in "tool-v1-arm64" and the "1" of "10" does not. A
+// version of one number such as "2" behind a letter is part of a word, as in
+// the repo name "tool2", unless the letter is a "v" that starts the word.
 func swap(s, old, with string) string {
 	var b strings.Builder
 
@@ -1154,13 +1175,27 @@ func swap(s, old, with string) string {
 		start, end := at+i, at+i+len(old)
 		at = end
 
-		if start > 0 && isDigit(s[start-1]) || end < len(s) && isDigit(s[end]) {
+		if start > 0 && isDigit(s[start-1]) || end < len(s) && isDigit(s[end]) ||
+			!strings.Contains(old, ".") && inWord(s, start) {
 			continue
 		}
 
 		b.WriteString(s[from:start] + with)
 		from = end
 	}
+}
+
+// inWord reports whether a letter other than a leading "v" comes before s[at].
+func inWord(s string, at int) bool {
+	if at == 0 || !isLetter(s[at-1]) {
+		return false
+	}
+
+	return s[at-1] != 'v' && s[at-1] != 'V' || at > 1 && isLetter(s[at-2])
+}
+
+func isLetter(c byte) bool {
+	return c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z'
 }
 
 func isDigit(c byte) bool {

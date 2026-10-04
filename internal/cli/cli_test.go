@@ -231,6 +231,15 @@ func newMachine(t *testing.T) machine {
 	t.Setenv("GH_TOKEN", "")
 	t.Setenv("GITHUB_TOKEN", "")
 
+	// The hook of the shell that runs the tests leaves its own state behind,
+	// which a test's hook would read as the project it came from.
+	for _, kv := range os.Environ() {
+		if name, _, _ := strings.Cut(kv, "="); strings.HasPrefix(name, "OKU_") {
+			t.Setenv(name, "")
+			must(t, os.Unsetenv(name))
+		}
+	}
+
 	must(t, os.MkdirAll(m.fixtures, 0o755))
 	must(t, os.WriteFile(m.exe, []byte("binary"), 0o755))
 
@@ -644,7 +653,7 @@ func TestB10AddAcceptsEveryRefKind(t *testing.T) {
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
-		case "/plain/tool.toml",
+		case "/plain/tool.toml", "/plain/tool@2.toml",
 			"/raw/owner/repo/" + commit + "/oku.pkg.toml",
 			"/raw/owner/recipes/" + commit + "/packages/tool.toml":
 			_, _ = w.Write(body)
@@ -662,6 +671,7 @@ func TestB10AddAcceptsEveryRefKind(t *testing.T) {
 	refs := []string{
 		manifestPath,
 		server.URL + "/plain/tool.toml",
+		server.URL + "/plain/tool@2.toml",
 		"github:owner/repo",
 		"github:owner/recipes#tool",
 	}
@@ -704,6 +714,12 @@ func TestB10AddAcceptsEveryRefKind(t *testing.T) {
 
 		_, err = m.run(t, "", "remove", "tool")
 		must(t, err)
+	}
+
+	// After a file name with an extension, "@" starts a version.
+	if _, err := m.run(t, "", "add", server.URL+"/plain/tool.toml@9.9.9"); err == nil ||
+		!strings.Contains(err.Error(), "not 9.9.9") {
+		t.Fatalf("want @9.9.9 read as a version, got %v", err)
 	}
 
 	if _, err := m.run(t, "", "add", "github:owner/missing"); err == nil {
@@ -830,7 +846,7 @@ func TestArtifactChecksumComesFromSHA256URL(t *testing.T) {
 	}
 }
 
-func TestB201SHA256URLReadsAJSONChecksumManifest(t *testing.T) {
+func TestB201SHA256URLReadsTheDigestOfTheFileItNames(t *testing.T) {
 	m := newMachine(t)
 	archive, sum := m.archive(t, "tool", map[string]string{"tool": script})
 	wrong := strings.Repeat("1", 64)
@@ -841,6 +857,9 @@ func TestB201SHA256URLReadsAJSONChecksumManifest(t *testing.T) {
 			`[{"name": "other.tar.gz", "sha256": %q}, {"name": "tool.tar.gz", "sha256": %q}]`,
 			wrong, sum,
 		),
+		// A line for a file whose name holds the download's comes first.
+		"sums.txt": fmt.Sprintf("%s  kubectl-tool.tar.gz\n%s *dist/tool.tar.gz\n", wrong, sum),
+		"bsd.txt":  fmt.Sprintf("SHA256 (my-tool.tar.gz) = %s\nSHA256 (tool.tar.gz) = %s\n", wrong, sum),
 	} {
 		sums := filepath.Join(m.fixtures, name)
 		must(t, os.WriteFile(sums, []byte(data), 0o644))

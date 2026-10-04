@@ -5,6 +5,8 @@ import (
 	"bytes"
 	"compress/gzip"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -93,6 +95,24 @@ func TestB197InferencePrefersTheChecksumsOfTheAssetsPlatformOrAGenericFile(t *te
 
 		if got := hostArtifact(t, out); !strings.Contains(got, `/SHA256SUMS"`) {
 			t.Fatalf("the artifact should read the generic checksum file:\n%s", out)
+		}
+	})
+
+	t.Run("not the checksum file of another asset", func(t *testing.T) {
+		m := newMachine(t)
+		archive, _ := m.archive(t, "release", map[string]string{"tool": script})
+		deb := strings.TrimSuffix(hostAssetName(), ".tar.gz") + ".deb"
+
+		assets := sums(t, m, deb+".sha256sum")
+		assets[hostAssetName()], assets[deb] = archive, archive
+
+		inferServer(t, &m, assets)
+
+		out, err := m.run(t, "", "manifest", "init", "--from", "owner/tool", "-o", "-")
+		must(t, err)
+
+		if got := hostArtifact(t, out); strings.Contains(got, "sha256_url") {
+			t.Fatalf("the artifact should not read the checksum file of the .deb:\n%s", out)
 		}
 	})
 }
@@ -826,7 +846,7 @@ func TestB485LibrariesAndScriptsAreNoPrograms(t *testing.T) {
 func TestB486ADesktopEntryIsAnAppOnLinuxOnly(t *testing.T) {
 	m := newMachine(t)
 	archive, _ := m.archive(t, "release", map[string]string{
-		"tool": script,
+		"tool":                           script,
 		"etc/linux-desktop/tool.desktop": "[Desktop Entry]\nType=Application\nName=Tool\nExec=tool %U\n",
 	})
 
@@ -967,5 +987,62 @@ func TestB491InferencePrefersAnMSVCBuildOnWindows(t *testing.T) {
 
 	if got := artifactURL(out, `os = "windows", arch = "amd64"`); !strings.Contains(got, "windows-msvc") {
 		t.Fatalf("windows should take the msvc build, got %s:\n%s", got, out)
+	}
+}
+
+func TestB536AnInferredURLTurnsTheTagIntoAVariableAndLeavesTheRepoName(t *testing.T) {
+	_, arch, _ := hostWords()
+	platformWords := strings.TrimPrefix(strings.TrimSuffix(hostAssetName(), ".tar.gz"), "tool-v1.4.0-")
+
+	for _, c := range []struct{ repo, tag, folder, asset, want, wrong string }{
+		// GitHub writes the + of the tag as %2B in its download URLs.
+		{"owner/tool", "v1.30.0+k3s1", "v1.30.0+k3s1", "tool-" + platformWords + ".tar.gz", "/{{tag}}/tool-", "k3s1"},
+		// The 2 of tool2 is the repo's name, and the version 2 only where it stands alone.
+		{"owner/tool2", "v2", "tool2/v2", "tool2-v2-" + platformWords + ".tar.gz", "/tool2/{{tag}}/tool2-{{tag}}-", "tool{{version}}"},
+	} {
+		m := newMachine(t)
+		archive, _ := m.archive(t, "release", map[string]string{"tool": script})
+
+		folder := filepath.Join(m.fixtures, filepath.FromSlash(c.folder))
+		must(t, os.MkdirAll(folder, 0o755))
+		must(t, os.Rename(archive, filepath.Join(folder, c.asset)))
+
+		info, err := os.Stat(filepath.Join(folder, c.asset))
+		must(t, err)
+
+		link := "file://" + filepath.ToSlash(m.fixtures) + "/" +
+			strings.ReplaceAll(c.folder, "+", "%2B") + "/" + c.asset
+		release := fmt.Sprintf(`{"tag_name": %q, "assets": [{"name": %q, "browser_download_url": %q, "size": %d}]}`,
+			c.tag, c.asset, link, info.Size())
+
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			switch strings.TrimPrefix(r.URL.Path, "/api/repos/"+c.repo) {
+			case "/commits/HEAD":
+				_, _ = w.Write([]byte("5555555555555555555555555555555555555555"))
+			case "/releases/latest", "/releases/tags/" + c.tag:
+				_, _ = w.Write([]byte(release))
+			case "/releases":
+				_, _ = w.Write([]byte("[" + release + "]"))
+			default:
+				http.NotFound(w, r)
+			}
+		}))
+		t.Cleanup(server.Close)
+
+		m.opts.GitHubAPI = server.URL + "/api"
+		m.opts.GitHubRaw = server.URL + "/raw"
+
+		out, err := m.run(t, "", "manifest", "init", "--from", c.repo, "-o", "-")
+		if err != nil {
+			t.Fatalf("%s: init: %v\n%s", c.tag, err, out)
+		}
+
+		if got := hostArtifact(t, out); !strings.Contains(got, c.want) || strings.Contains(got, c.wrong) {
+			t.Fatalf("%s: the %s url should hold %q and not %q:\n%s", c.tag, arch, c.want, c.wrong, out)
+		}
+
+		if _, err := m.run(t, "", "add", "github:"+c.repo, "--yes"); err != nil {
+			t.Fatalf("%s: add: %v", c.tag, err)
+		}
 	}
 }
