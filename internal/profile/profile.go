@@ -19,6 +19,7 @@ import (
 
 	"github.com/pelletier/go-toml/v2"
 
+	"github.com/y3owk1n/oku/internal/durable"
 	"github.com/y3owk1n/oku/internal/host"
 	"github.com/y3owk1n/oku/internal/trash"
 )
@@ -242,6 +243,14 @@ func (p *Profile) packagesIn(gen string) ([]Package, error) {
 	return s.Packages, err
 }
 
+// emptyState is the error for a state file with nothing in it. oku always
+// writes the time a generation was made, so only a crash leaves one empty, and
+// reading it as a generation of nothing would let gc delete what it holds.
+func emptyState(path string) error {
+	return fmt.Errorf("%s is empty, as a power loss can leave it, so oku cannot tell what that generation holds\n"+
+		"delete that file, then run `oku sync`, which builds a new generation from your list", path)
+}
+
 func (p *Profile) stateIn(gen string) (state, error) {
 	var s state
 
@@ -252,6 +261,10 @@ func (p *Profile) stateIn(gen string) (state, error) {
 
 	if err != nil {
 		return s, fmt.Errorf("read profile: %w", err)
+	}
+
+	if len(data) == 0 {
+		return s, emptyState(filepath.Join(p.dir, gen, stateFile))
 	}
 
 	if err := toml.Unmarshal(data, &s); err != nil {
@@ -524,6 +537,10 @@ func (p *Profile) stage(
 		err = os.Rename(tmp, gen)
 	}
 
+	if err == nil {
+		durable.SyncDir(p.dir)
+	}
+
 	if err != nil {
 		os.RemoveAll(tmp)
 
@@ -602,6 +619,10 @@ func (p *Profile) Generations() ([]Generation, error) {
 
 		if err != nil {
 			return nil, fmt.Errorf("read generation %d: %w", n, err)
+		}
+
+		if len(data) == 0 {
+			return nil, emptyState(filepath.Join(p.dir, entry.Name(), stateFile))
 		}
 
 		var s state
@@ -933,9 +954,11 @@ func build(
 		return fmt.Errorf("write generation: %w", err)
 	}
 
-	if err := os.WriteFile(filepath.Join(gen, stateFile), data, 0o644); err != nil {
+	if err := durable.WriteFile(filepath.Join(gen, stateFile), data, 0o644); err != nil {
 		return fmt.Errorf("write generation: %w", err)
 	}
+
+	durable.SyncDir(gen)
 
 	return nil
 }

@@ -618,6 +618,23 @@ manager refuses, it names the step. `oku doctor` then reports
 `a change from generation 4 to 5 did not finish` until a later command
 succeeds. Fix what it names, then run `oku sync`.
 
+## A generation's state file is empty
+
+```
+oku: ~/.local/share/oku/profiles/global/gen-7/oku-gen.toml is empty, as a power loss can leave it, so oku cannot tell what that generation holds
+delete that file, then run `oku sync`, which builds a new generation from your list
+```
+
+oku writes the time into every generation's state file, so an empty one comes
+from a crash or a power loss before the disk had it. `oku gc`, `oku rollback`
+and `oku generations` stop rather than read it as a generation of nothing,
+since gc would then delete what it holds. Delete the file the error names,
+then run `oku sync`. oku drops that generation and builds a new one from your
+list.
+
+A power loss can also leave files of a store path empty. `oku verify` finds
+them, and `oku verify --repair` with `oku sync` downloads them again.
+
 ## oku waits for another oku process
 
 ```

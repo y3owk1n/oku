@@ -24,6 +24,7 @@ import (
 	"github.com/pelletier/go-toml/v2"
 
 	"github.com/y3owk1n/oku/internal/clone"
+	"github.com/y3owk1n/oku/internal/durable"
 	"github.com/y3owk1n/oku/internal/expose"
 	"github.com/y3owk1n/oku/internal/gitcmd"
 	"github.com/y3owk1n/oku/internal/goproxy"
@@ -427,7 +428,12 @@ func (s *Store) Build(
 	}
 
 	if err == nil {
-		err = os.WriteFile(filepath.Join(prefix, metaFile), meta, 0o644)
+		err = durable.WriteFile(filepath.Join(prefix, metaFile), meta, 0o644)
+	}
+
+	if err == nil {
+		durable.SyncDir(prefix)
+		durable.SyncDir(filepath.Dir(prefix))
 	}
 
 	if err != nil {

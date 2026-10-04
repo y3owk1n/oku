@@ -96,3 +96,37 @@ install = { bin = ["tool"] }
 		t.Fatalf("lint asks a macOS build for a shell: %v\n%s", err, out)
 	}
 }
+
+func TestB28LintChecksAnArtifactsVersionAndAVendorStepsScripts(t *testing.T) {
+	m := newMachine(t)
+
+	for body, want := range map[string]string{
+		// json reads a page, and regex reads a redirect or a page.
+		"[package]\nname = \"tool\"\n[[artifact]]\nurl = \"https://example.com/{{tag}}/tool\"\nbin = [\"tool\"]\n" +
+			"version = { from = \"github-releases\", repo = \"o/tool\", json = [\"version\"] }\n": `artifact[0].version.json needs artifact[0].version.from = "page"`,
+		"[package]\nname = \"tool\"\n[[artifact]]\nurl = \"https://example.com/{{tag}}/tool\"\nbin = [\"tool\"]\n" +
+			"version = { from = \"github-releases\", repo = \"o/tool\", regex = '([0-9.]+)' }\n": `artifact[0].version.regex needs artifact[0].version.from = "redirect" or "page"`,
+		// Only npm runs a package's install scripts.
+		"[package]\nname = \"tool\"\n[version]\nvalue = \"1.0.0\"\n[build]\nneeds = [\"cargo\"]\n" +
+			"[[build.step]]\nvendor = \"cargo\"\npackage = \"ripgrep\"\nscripts = [\"x\"]\n" +
+			"[[build.step]]\ninstall = { bin = [\"tool\"] }\n": `scripts needs vendor = "npm" with package`,
+	} {
+		path := filepath.Join(m.fixtures, "tool.toml")
+		must(t, os.MkdirAll(m.fixtures, 0o755))
+		must(t, os.WriteFile(path, []byte(body), 0o644))
+
+		if out, err := m.run(t, "", "manifest", "lint", path); err == nil || !strings.Contains(out, want) {
+			t.Errorf("lint should say %q, got %v:\n%s", want, err, out)
+		}
+	}
+}
+
+func TestB28AnInstallSaysWhichCompletionsKeyItLeftOut(t *testing.T) {
+	m := newMachine(t)
+	ref := m.manifest(t, "tool", map[string]string{"tool": script, "tool.fish": "complete -c tool"},
+		"bin = [\"tool\"]\ncompletions = { fish = \"tool.fish\", fsh = \"tool.fish\" }")
+
+	if out, err := m.run(t, "", "add", ref); err != nil || !strings.Contains(out, "unknown key artifact.completions.fsh") {
+		t.Fatalf("add should install and name the key it left out: %v\n%s", err, out)
+	}
+}

@@ -3969,6 +3969,16 @@ install = { bin = ["tool"] }
 			"\n[build]",
 			"at least one of bin",
 		},
+		"a completions key that is no shell": {
+			`bin = ["tool"]` + "\n\n[build]",
+			`bin = ["tool"]` + "\ncompletions = { fsh = \"tool.fish\" }\n\n[build]",
+			"completions: unknown key fsh",
+		},
+		"an unknown variable in an install step's bin table": {
+			`install = { bin = ["tool"] }`,
+			`install = { bin = [{ name = "tool", run = "{{prefix}}/{{nope}}/tool" }] }`,
+			`install.bin "tool": unknown template variable {{nope}}`,
+		},
 	}
 
 	write := func(name, body string) string {

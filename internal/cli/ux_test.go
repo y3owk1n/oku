@@ -156,3 +156,34 @@ func TestB544NotesAndQuestionsGoToStderr(t *testing.T) {
 		t.Fatalf("the note about the inferred manifest went to stdout:\n%s", out)
 	}
 }
+
+func TestB546AnEmptyGenerationStateStopsGCAndDeletesNothing(t *testing.T) {
+	m := newMachine(t)
+
+	_, err := m.run(t, "", "add", m.manifest(t, "tool", map[string]string{"tool": script}, `bin = ["tool"]`))
+	must(t, err)
+
+	state := filepath.Join(m.data, "profiles", "global", "gen-1", "oku-gen.toml")
+	must(t, os.Chmod(state, 0o644))
+	must(t, os.WriteFile(state, nil, 0o644))
+
+	for _, args := range [][]string{{"gc"}, {"generations"}} {
+		if _, err := m.run(t, "", args...); err == nil || !strings.Contains(err.Error(), "is empty") {
+			t.Fatalf("%v should stop at an empty state file, got %v", args, err)
+		}
+	}
+
+	if got := m.toolOutput(t); got != "hello from tool" {
+		t.Fatalf("gc deleted what the generation holds, tool printed %q", got)
+	}
+
+	// The error says to delete the file and sync.
+	must(t, os.Remove(state))
+
+	if out, err := m.run(t, "", "sync"); err != nil || m.toolOutput(t) != "hello from tool" {
+		t.Fatalf("sync after deleting the empty state: %v\n%s", err, out)
+	}
+
+	_, err = m.run(t, "", "gc")
+	must(t, err)
+}
