@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
 
+	"github.com/y3owk1n/oku/internal/junction"
 	"github.com/y3owk1n/oku/internal/shim"
 )
 
@@ -32,13 +32,8 @@ func (p *Profile) point(gen string) error {
 
 	target := filepath.Join(p.dir, gen)
 
-	out, err := exec.Command("cmd", "/c", "mklink", "/J", tmp, target).CombinedOutput()
-	if err != nil {
-		return fmt.Errorf(
-			"activate generation: mklink /J: %w: %s",
-			err,
-			strings.TrimSpace(string(out)),
-		)
+	if err := junction.Make(tmp, target); err != nil {
+		return fmt.Errorf("activate generation: %w", err)
 	}
 
 	if err := os.Rename(link, old); err != nil && !os.IsNotExist(err) {
@@ -126,12 +121,7 @@ func linkEntry(target, dest string, pkg Package) error {
 // linkDir makes link a directory junction to target, which every Windows user
 // may create.
 func linkDir(target, link string) error {
-	out, err := exec.Command("cmd", "/c", "mklink", "/J", link, target).CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("mklink /J: %w: %s", err, strings.TrimSpace(string(out)))
-	}
-
-	return nil
+	return junction.Make(link, target)
 }
 
 // linkFolders is false, since a folder link is a junction, and each one takes a

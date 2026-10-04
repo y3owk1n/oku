@@ -9,6 +9,8 @@ import (
 	"strings"
 
 	"golang.org/x/sys/windows"
+
+	"github.com/y3owk1n/oku/internal/junction"
 )
 
 // fontsKey names the registry key that lists fonts. Windows shows a font to
@@ -78,12 +80,7 @@ func reg(args ...string) error {
 // link makes target a junction to the directory source. A normal Windows user
 // may create a junction and may not create a symlink.
 func link(source, target string) error {
-	out, err := exec.Command("cmd", "/c", "mklink", "/J", target, source).CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("mklink /J: %w: %s", err, strings.TrimSpace(string(out)))
-	}
-
-	return nil
+	return junction.Make(target, source)
 }
 
 // regPath is reg.exe of the system directory, so a reg.exe on PATH does not

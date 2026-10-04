@@ -35,7 +35,10 @@ added postgres 16.3
 oku lists every file it will write or remove, asks, and then runs itself
 through `sudo` once per file. `sudo` asks for your password the first time.
 When you run oku as root, it does not call `sudo`. On Windows, see
-[Windows](windows.md#install-for-every-user).
+[Windows](windows.md#install-for-every-user). The step that runs as root writes
+only into the system's directories for apps, fonts and services, and takes
+only a service name that a manifest could have. A process of yours that edits
+oku's ledger cannot make it write or delete anything else.
 
 `--system` writes `system = true` to the package's entry in `oku.toml`:
 

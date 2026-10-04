@@ -572,14 +572,35 @@ func Place(item Item) error {
 }
 
 func desktopEntry(l Launcher, storePath string) string {
-	entry := "[Desktop Entry]\nType=Application\nName=" + l.Name + "\nExec=" +
-		filepath.Join(storePath, filepath.FromSlash(l.Exec)) + "\n"
+	entry := "[Desktop Entry]\nType=Application\nName=" + oneLine(l.Name) + "\nExec=" +
+		desktopArg(filepath.Join(storePath, filepath.FromSlash(l.Exec))) + "\n"
 
 	if l.Icon != "" {
-		entry += "Icon=" + filepath.Join(storePath, filepath.FromSlash(l.Icon)) + "\n"
+		entry += "Icon=" + oneLine(filepath.Join(storePath, filepath.FromSlash(l.Icon))) + "\n"
 	}
 
 	return entry
+}
+
+// oneLine keeps a value of a desktop entry on its line, so a name from a
+// manifest cannot add a key such as Exec.
+func oneLine(s string) string {
+	return strings.NewReplacer("\n", " ", "\r", " ").Replace(s)
+}
+
+// desktopArg quotes path for the Exec key of a desktop entry. The Desktop
+// Entry spec quotes an argument that holds a space or a reserved character,
+// escapes ", `, $ and \ inside the quotes, and then escapes each \ again as a
+// string value, so a literal \ takes four. A literal % is %%.
+func desktopArg(path string) string {
+	path = strings.ReplaceAll(oneLine(path), "%", "%%")
+	if !strings.ContainsAny(path, " \t\"'\\><~|&;$*?#()`") {
+		return path
+	}
+
+	quoted := strings.NewReplacer(`\`, `\\`, `"`, `\"`, "`", "\\`", "$", `\$`).Replace(path)
+
+	return `"` + strings.ReplaceAll(quoted, `\`, `\\`) + `"`
 }
 
 func slug(name string) string {

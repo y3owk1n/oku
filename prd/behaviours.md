@@ -1545,6 +1545,9 @@ order step in `prd/product.md`.
   edited in place, or a `secret` whose link the user replaced, and writes
   nothing. A file with a writable mode gets its own copy in each generation.
   The decrypted copy of a secret goes when its target and its entry are gone.
+- B534 [12] A Linux desktop entry runs a program whose store path holds a space
+  or another character that the Desktop Entry spec reserves. The step that
+  runs as root refuses a service name that a manifest could not have.
 - B530 [12] `oku gc` keeps a store path that an app, font, service or
   launcher in the ledger runs from, with its deps, and one that a running
   `oku shell` or `oku run` uses. It deletes the record of a session that
