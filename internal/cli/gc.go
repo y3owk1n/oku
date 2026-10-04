@@ -143,6 +143,13 @@ func runGC(cmd *cobra.Command, r profile.Retention, retain ages, dryRun, cache b
 		return err
 	}
 
+	// Before any generation goes, since the closure of what the ledger and the
+	// running sessions use comes from the generations.
+	roots, err := e.liveRoots(profiles)
+	if err != nil {
+		return err
+	}
+
 	out := cmd.OutOrStdout()
 	s := ui.For(out)
 	verb := "removed"
@@ -188,7 +195,7 @@ func runGC(cmd *cobra.Command, r profile.Retention, retain ages, dryRun, cache b
 	}
 
 	// A dry run deleted nothing, so skip the generations it would have pruned.
-	holders, err := e.storeHolders(profiles, pruned)
+	holders, err := e.storeHolders(profiles, pruned, roots)
 	if err != nil {
 		return err
 	}
@@ -356,10 +363,10 @@ func runGC(cmd *cobra.Command, r profile.Retention, retain ages, dryRun, cache b
 		saved == 0 && len(goneProjects) == 0 {
 		// After deleted generations, "nothing to delete" would contradict the
 		// lines above it.
-		text := "nothing to delete, every store path is used by a generation"
+		text := "nothing to delete, every store path is in use"
 		for _, gone := range pruned {
 			if len(gone) > 0 {
-				text = "every store path is still used by a generation"
+				text = "every store path is still in use"
 			}
 		}
 

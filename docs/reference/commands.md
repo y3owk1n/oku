@@ -847,8 +847,15 @@ that oku did not write.
 oku gc [--keep N] [--older-than AGE] [--cache] [--cache-older-than AGE] [--dry-run]
 ```
 
-Deletes store paths that no generation of any profile uses, and what a killed
-oku process left in the system's temporary directory. It also shares the
+Deletes store paths that nothing uses, and what a killed oku process left in
+the system's temporary directory. A store path is in use when:
+
+- a generation of any profile holds it
+- an app, font, service or launcher that oku placed runs from it
+- an `oku shell` or `oku run` that has not ended started from it
+
+So a service that a declined `--system` change left in place keeps its package
+and its deps. It also shares the
 identical files of store paths that an older oku installed, see
 [the store](paths.md#the-store).
 
@@ -869,10 +876,9 @@ $ oku gc --keep 2
 
 - Old generations keep their packages, so a plain `oku gc` usually finds
   little. With nothing to delete it prints `nothing to delete, every store
-  path is used by a generation`. When `--keep` deleted generations and no
-  store path became unused, it prints `every store path is still used by a
-  generation`. With `--cache` either message ends with `, and every cached
-  download belongs to one`.
+  path is in use`. When `--keep` deleted generations and no store path became
+  unused, it prints `every store path is still in use`. With `--cache` either
+  message ends with `, and every cached download belongs to one`.
 - It removes the profile of a project that is gone, whose folder no longer
   exists or no longer holds an `oku.toml`. That frees the packages only that
   project used, and it forgets the project's `oku allow`.

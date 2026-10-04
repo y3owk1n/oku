@@ -190,10 +190,9 @@ $ oku gc --keep 2
 - The kept generations keep their numbers, and the next change takes the
   number after the highest.
 
-With nothing to delete it says
-`nothing to delete, every store path is used by a generation`. When it
-deleted generations and no store path became unused, it says
-`every store path is still used by a generation`.
+With nothing to delete it says `nothing to delete, every store path is in use`.
+When it deleted generations and no store path became unused, it says
+`every store path is still in use`.
 
 You cannot roll back to a deleted generation. You can add a deleted package
 again, and oku reuses its download when the cache still has it.

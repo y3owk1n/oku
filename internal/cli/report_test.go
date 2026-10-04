@@ -467,7 +467,7 @@ func TestB346AGenerationWhoseParentGCDeletedSaysSoAndNumbersGoOn(t *testing.T) {
 	out, err := m.run(t, "", "gc", "--keep", "1")
 	must(t, err)
 
-	if !strings.Contains(out, "every store path is still used by a generation") ||
+	if !strings.Contains(out, "every store path is still in use") ||
 		strings.Contains(out, "nothing to delete") {
 		t.Fatalf("B347: gc after deleting generations says:\n%s", out)
 	}

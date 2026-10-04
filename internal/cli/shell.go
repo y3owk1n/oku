@@ -66,6 +66,7 @@ func runShell(
 	if err != nil {
 		return err
 	}
+	defer held.done()
 
 	environ := append(held.environ, "OKU_SHELL="+strings.Join(refs, " "))
 
@@ -109,6 +110,9 @@ func (f *pickFlags) register(cmd *cobra.Command) {
 // and the environment their programs run with.
 type opened struct {
 	pkgs []installed
+	// done deletes the record that keeps gc from deleting the packages while
+	// the program runs.
+	done func()
 	// path is PATH with the packages' bin directories first, and environ holds
 	// it together with the packages' [env].
 	path    string
@@ -144,7 +148,7 @@ func openRefs(
 
 	held := opened{environ: os.Environ()}
 
-	var bins []string
+	var bins, paths []string
 
 	own, err := list.Read(e.listPath())
 	if err != nil {
@@ -205,10 +209,16 @@ func openRefs(
 
 		held.pkgs = append(held.pkgs, got)
 		bins = append(bins, filepath.Join(got.profile.StorePath, "bin"))
+		paths = append(paths, got.closure...)
 
 		for name, value := range got.profile.Env {
 			held.environ = append(held.environ, name+"="+value)
 		}
+	}
+
+	// gc waits for the lock, so it finds the record before it looks at the store.
+	if held.done, err = e.holdSession(paths); err != nil {
+		return opened{}, err
 	}
 
 	release()

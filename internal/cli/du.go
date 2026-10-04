@@ -46,7 +46,12 @@ the apps and fonts it copied out of the store, and the rest of its data.
 				return err
 			}
 
-			holders, err := e.storeHolders(profiles, nil)
+			roots, err := e.liveRoots(profiles)
+			if err != nil {
+				return err
+			}
+
+			holders, err := e.storeHolders(profiles, nil, roots)
 			if err != nil {
 				return err
 			}
@@ -111,10 +116,12 @@ type holders struct {
 }
 
 // storeHolders returns what keeps each store path that a generation uses. It
-// skips the generations in skip.
+// skips the generations in skip. roots are store paths in use outside the
+// generations, such as by a running oku shell, which count as active.
 func (e env) storeHolders(
 	profiles []*profile.Profile,
 	skip map[*profile.Profile][]int,
+	roots []string,
 ) (map[string]*holders, error) {
 	found := map[string]*holders{}
 
@@ -126,6 +133,10 @@ func (e env) storeHolders(
 		}
 
 		return h
+	}
+
+	for _, path := range roots {
+		hold(path).active = true
 	}
 
 	for _, prof := range profiles {

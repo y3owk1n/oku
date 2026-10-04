@@ -1532,6 +1532,11 @@ order step in `prd/product.md`.
 - B528 [12] A generation that a killed oku left without its state file does not
   stop `oku generations`, and `oku gc` deletes it. A store path that a delete
   left half done is replaced, not used.
+||||||| Stash base
+- B530 [12] `oku gc` keeps a store path that an app, font, service or
+  launcher in the ledger runs from, with its deps, and one that a running
+  `oku shell` or `oku run` uses. It deletes the record of a session that
+  ended.
 - B244 [12] `oku gc` deletes a temporary directory that a killed install left
   in the store.
 - B286 [12] `oku gc` deletes the entries in the system's temporary directory
