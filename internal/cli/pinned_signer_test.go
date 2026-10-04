@@ -65,6 +65,7 @@ func TestB510ASignerWorkflowInOkuTomlMustBeTheManifests(t *testing.T) {
 		name, pkg, wantErr string
 	}{
 		{"the same workflow", "signer_workflow = \"" + workflow + "\"\n", ""},
+		{"the same workflow and no signature", "signer_workflow = \"" + workflow + "\"\n", "names no signature"},
 		{"another workflow", "signer_workflow = \"owner/tool/.github/workflows/other.yml\"\n", "oku.toml pins the signer workflow"},
 		{"no Sigstore signature", "", "names no Sigstore signature"},
 	} {
@@ -74,13 +75,51 @@ func TestB510ASignerWorkflowInOkuTomlMustBeTheManifests(t *testing.T) {
 			r := newSignedRelease(t, &m)
 
 			bundle := ""
-			if tc.pkg != "" {
+			if tc.pkg != "" && !strings.Contains(tc.name, "no signature") {
 				r.set("tool.tar.gz.sigstore.json", f.signBlob(t, release, r.archive))
 				bundle = "sigstore_bundle = \"" + r.release("tool.tar.gz.sigstore.json") + "\"\n"
 			}
 
 			tool := r.manifest(t, &m, tc.pkg, bundle)
 			m.writeFilesList(t, fmt.Sprintf("[packages]\ntool = { ref = %q, signer_workflow = %q }\n", tool, workflow))
+
+			_, err := m.run(t, "", "sync")
+
+			switch {
+			case tc.wantErr == "" && err != nil:
+				t.Fatalf("sync: %v", err)
+			case tc.wantErr != "" && (err == nil || !strings.Contains(err.Error(), tc.wantErr)):
+				t.Fatalf("want a refusal that says %q, got %v", tc.wantErr, err)
+			}
+		})
+	}
+}
+
+func TestB509ACosignKeyInOkuTomlNeedsASignatureByIt(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		signed  bool
+		wantErr string
+	}{
+		{"a signature by the key", true, ""},
+		{"no signature", false, "names no signature"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m := newMachine(t)
+			f := newFakeSigstore(t, &m)
+			r := newSignedRelease(t, &m)
+			key, text, _ := cosignKey(t)
+
+			// A manifest that names a signature names its signer too.
+			pkg, artifact := "", ""
+			if tc.signed {
+				r.set("tool.tar.gz.sigstore.json", f.keyBundle(t, key, r.archive))
+				pkg = "signing_key = \"" + text + "\"\n"
+				artifact = "sigstore_bundle = \"" + r.release("tool.tar.gz.sigstore.json") + "\"\n"
+			}
+
+			tool := r.manifest(t, &m, pkg, artifact)
+			m.writeFilesList(t, fmt.Sprintf("[packages]\ntool = { ref = %q, signing_key = %q }\n", tool, text))
 
 			_, err := m.run(t, "", "sync")
 
