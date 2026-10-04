@@ -19,13 +19,13 @@ func TestB431AFileURLNamesTheFileOfEachOS(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		if got, err := localPath(u, tc.goos); err != nil || got != tc.want {
+		if got, err := LocalPath(u, tc.goos); err != nil || got != tc.want {
 			t.Errorf("%s on %s is %q, %v, want %q", tc.url, tc.goos, got, err, tc.want)
 		}
 	}
 
 	u, _ := url.Parse("file://server/share/x.zip")
-	if _, err := localPath(u, "linux"); err == nil {
+	if _, err := LocalPath(u, "linux"); err == nil {
 		t.Error("a file of another machine should fail outside Windows")
 	}
 }

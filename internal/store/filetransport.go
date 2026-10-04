@@ -18,7 +18,7 @@ import (
 type fileTransport struct{}
 
 func (fileTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	path, err := localPath(req.URL, runtime.GOOS)
+	path, err := LocalPath(req.URL, runtime.GOOS)
 	if err != nil {
 		return nil, err
 	}
@@ -50,10 +50,10 @@ func (fileTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	return respond(http.StatusOK, f, info.Size()), nil
 }
 
-// localPath turns a file:// URL into a path on goos. On Windows file:///C:/x
+// LocalPath turns a file:// URL into a path on goos. On Windows file:///C:/x
 // is C:\x, and file://server/share/x is the share \\server\share\x. Elsewhere
 // a URL can only name a file of this machine.
-func localPath(u *url.URL, goos string) (string, error) {
+func LocalPath(u *url.URL, goos string) (string, error) {
 	p, local := u.Path, u.Host == "" || strings.EqualFold(u.Host, "localhost")
 
 	if goos != "windows" {

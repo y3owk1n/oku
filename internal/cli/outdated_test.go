@@ -42,6 +42,13 @@ func TestB262OutdatedListsWhatHasANewerVersionAndChangesNothing(t *testing.T) {
 		t.Fatalf("outdated with nothing newer: %v\n%s", err, out)
 	}
 
+	// oku claims nothing about a package whose lookup fails.
+	server.tags = nil
+
+	if out, err := m.run(t, "", "outdated"); err == nil || strings.Contains(out, "newest version") {
+		t.Fatalf("outdated whose lookup failed: %v\n%s", err, out)
+	}
+
 	server.tags = []string{"v1.1.0", "v1.0.0"}
 
 	lockBefore, err := os.ReadFile(filepath.Join(m.config, "oku.lock"))

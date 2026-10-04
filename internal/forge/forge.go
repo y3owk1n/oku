@@ -265,20 +265,27 @@ type Hosts struct {
 
 // GitHub returns github.com for an empty host, else the GitHub Enterprise
 // Server at host. oku sends GITHUB_TOKEN to github.com only, and
-// GH_ENTERPRISE_TOKEN to an Enterprise Server only. When the variable is not
-// set, oku asks the gh CLI for its login to that host.
+// GH_ENTERPRISE_TOKEN to an Enterprise Server that Trusted lists only. When the
+// variable is not set, oku asks the gh CLI for its login to that host.
 func (h Hosts) GitHub(host string) Forge {
 	return checked{Forge: h.github(host), name: "GitHub"}
 }
 
 func (h Hosts) github(host string) *github {
 	if host != "" {
+		// gh prints GH_ENTERPRISE_TOKEN for any host but github.com, so a host
+		// the user did not list gets neither.
+		token := ""
+		if h.Trusted[host] == KindGitHub {
+			token = tokenFor("GH_ENTERPRISE_TOKEN", host)
+		}
+
 		return &github{
 			http:  h.HTTP,
 			host:  host,
 			web:   "https://" + host,
 			api:   "https://" + host + "/api/v3",
-			token: tokenFor("GH_ENTERPRISE_TOKEN", host, h.Trusted[host] == KindGitHub),
+			token: token,
 			env:   "GH_ENTERPRISE_TOKEN",
 		}
 	}
@@ -288,7 +295,7 @@ func (h Hosts) github(host string) *github {
 		web:   "https://github.com",
 		api:   "https://api.github.com",
 		raw:   "https://raw.githubusercontent.com",
-		token: tokenFor("GITHUB_TOKEN", "github.com", true),
+		token: tokenFor("GITHUB_TOKEN", "github.com"),
 		env:   "GITHUB_TOKEN",
 	}
 
@@ -311,12 +318,12 @@ func (h Hosts) github(host string) *github {
 // runs gh once per host.
 var ghTokens sync.Map
 
-// tokenFor returns the variable env when useEnv, or else the token that the gh
-// CLI holds for host, or "". Many users log in with gh and set no variable, and
-// GitHub counts every request without a token against a limit of 60 an hour. gh
+// tokenFor returns the variable env, or else the token that the gh CLI holds
+// for host, or "". Many users log in with gh and set no variable, and GitHub
+// counts every request without a token against a limit of 60 an hour. gh
 // holds a token only for a host the user logged in to.
-func tokenFor(env, host string, useEnv bool) string {
-	if token := os.Getenv(env); useEnv && token != "" {
+func tokenFor(env, host string) string {
+	if token := os.Getenv(env); token != "" {
 		return token
 	}
 

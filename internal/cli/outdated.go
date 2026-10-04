@@ -116,7 +116,7 @@ func (e env) outdated(cmd *cobra.Command, opts Options) error {
 		}
 	}
 
-	if err := printStale(cmd, stale, len(locked.Packages)); err != nil {
+	if err := printStale(cmd, stale, len(locked.Packages)-len(failed), len(locked.Packages)); err != nil {
 		return err
 	}
 
@@ -214,7 +214,9 @@ func (e env) newestOf(
 	return newest.Version, latest.Version, waiting, nil
 }
 
-func printStale(cmd *cobra.Command, stale []staleness, all int) error {
+// printStale prints the packages in stale. checked of all packages had their
+// versions looked up.
+func printStale(cmd *cobra.Command, stale []staleness, checked, all int) error {
 	if wantJSON(cmd) {
 		type row struct {
 			Name    string `json:"name"`
@@ -249,9 +251,19 @@ func printStale(cmd *cobra.Command, stale []staleness, all int) error {
 	out := cmd.OutOrStdout()
 	s := ui.For(out)
 
-	if len(stale) == 0 {
+	switch {
+	case len(stale) > 0:
+	case checked == all:
 		fmt.Fprintln(out, s.Done(fmt.Sprintf("all %d packages are at their newest version", all)))
 
+		return nil
+	case checked > 0:
+		fmt.Fprintln(out, s.Done(fmt.Sprintf(
+			"%d of %d packages are at their newest version, and oku could not look up the others", checked, all,
+		)))
+
+		return nil
+	default:
 		return nil
 	}
 

@@ -120,6 +120,42 @@ func TestB538OnlyAManifestOnThisMachineMayNameAURLOfThisMachine(t *testing.T) {
 	}
 }
 
+func TestB540AManifestInAProjectReadsOnlyFilesOfTheProject(t *testing.T) {
+	m := newMachine(t)
+	m.opts.FileDownloads = false
+
+	project := filepath.Join(m.fixtures, "proj")
+	must(t, os.MkdirAll(filepath.Join(project, "tools"), 0o755))
+	must(t, os.WriteFile(filepath.Join(project, "oku.toml"), nil, 0o644))
+
+	m.opts.WorkDir = project
+
+	// outside stands for a file such as ~/.aws/credentials.
+	outside, _ := m.archive(t, "tool", map[string]string{"tool": script})
+	inside := filepath.Join(project, "tools", "tool.tar.gz")
+
+	data, err := os.ReadFile(outside)
+	must(t, err)
+	must(t, os.WriteFile(inside, data, 0o644))
+
+	manifest := func(file string) string {
+		path := filepath.Join(project, "tools", "tool.toml")
+		must(t, os.WriteFile(path, []byte("[package]\nname = \"tool\"\n[version]\nvalue = \"1.0.0\"\n"+
+			"[[artifact]]\nurl = \"file://"+filepath.ToSlash(file)+"\"\nbin = [\"tool\"]\n"), 0o644))
+
+		return path
+	}
+
+	if out, err := m.run(t, "", "add", manifest(outside)); err == nil ||
+		!strings.Contains(err.Error(), "a manifest in a project may read only files of the project") {
+		t.Fatalf("want a project's manifest refused a file outside it, got %v:\n%s", err, out)
+	}
+
+	if out, err := m.run(t, "", "add", manifest(inside)); err != nil {
+		t.Fatalf("a project's manifest should read a file of the project: %v\n%s", err, out)
+	}
+}
+
 func TestB421APlainHTTPRefToAnotherMachineIsRefused(t *testing.T) {
 	m := newMachine(t)
 
