@@ -727,6 +727,12 @@ func (e env) installFrom(
 			return installed{}, fmt.Errorf("%s: %w", m.Package.Name, err)
 		}
 
+		if realized.MalwareUnchecked != "" {
+			deps.linkNotes = append(deps.linkNotes, fmt.Sprintf(
+				"%s: oku could not ask OSV about the packages of the %s", m.Package.Name, realized.MalwareUnchecked,
+			))
+		}
+
 		// A manifest of the user's names its scripts itself, so oku only says so.
 		if len(realized.UnnamedScripts) > 0 && req.ref.Kind != ref.NPM {
 			deps.linkNotes = append(deps.linkNotes, fmt.Sprintf(

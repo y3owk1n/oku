@@ -426,6 +426,8 @@ type env struct {
 	net netpolicy.Policy
 	// sigstore checks Sigstore bundles. It loads its trust root once.
 	sigstore *sigstore.Verifier
+	// osvClient asks OSV whether a package is malicious.
+	osvClient osv.Client
 }
 
 func loadEnv() (env, error) {
@@ -455,6 +457,7 @@ func loadEnv() (env, error) {
 	e.hosts.Net = e.net
 	e.hosts.HTTP = e.net.Client(forge.CheckRedirect)
 	e.sigstore = sigstore.Public(filepath.Join(e.cache, "sigstore"), e.hosts.HTTP)
+	e.osvClient = osv.Client{Base: osv.API, HTTP: e.hosts.HTTP}
 
 	e.root = e.data
 	if config.StoreRoot != "" {
@@ -475,6 +478,10 @@ func scopedEnv(cmd *cobra.Command, opts Options) (env, error) {
 	e.hosts.GitHubAPI, e.hosts.GitHubRaw, e.hosts.GitHubWeb = opts.GitHubAPI, opts.GitHubRaw, opts.GitHubWeb
 	if opts.Sigstore != nil {
 		e.sigstore = opts.Sigstore
+	}
+
+	if opts.OSVAPI != "" {
+		e.osvClient.Base = opts.OSVAPI
 	}
 
 	if global, _ := cmd.Flags().GetBool(globalFlag); global {
@@ -558,6 +565,7 @@ func (e env) store() *store.Store {
 	s := store.New(e.root, e.cache, e.net)
 	s.Private = e.hosts.GitHubAsset
 	s.Sigstore, s.Attestations = e.sigstore, e.hosts.GitHubAttestations
+	s.OSV = &e.osvClient
 
 	return s
 }
@@ -602,7 +610,7 @@ func (e env) resolverAged(opts Options, age time.Duration) *resolve.Resolver {
 }
 
 func (e env) osv(opts Options) osv.Client {
-	return osv.Client{Base: cmp.Or(opts.OSVAPI, osv.API), HTTP: e.hosts.HTTP}
+	return osv.Client{Base: cmp.Or(opts.OSVAPI, e.osvClient.Base, osv.API), HTTP: e.hosts.HTTP}
 }
 
 func (e env) inferrer(opts Options) *infer.Inferrer {
