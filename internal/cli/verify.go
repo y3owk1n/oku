@@ -13,7 +13,7 @@ import (
 )
 
 func newVerifyCmd(opts Options) *cobra.Command {
-	var repair bool
+	var repair, record bool
 
 	cmd := &cobra.Command{
 		Use:   "verify",
@@ -24,15 +24,20 @@ verify hashes every file of the packages of the list in use and of their
 deps, and compares them with what oku recorded when it installed them. It
 names each file that changed, appeared or went away, and exits with code 1
 when one did. --repair removes those packages from the store, so that the
-next oku sync downloads them again and checks them against oku.lock.`,
+next oku sync downloads them again and checks them against oku.lock.
+
+A package that an older oku installed has no record. --record writes one from
+its files as they are now, so that later runs check it.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			return runVerify(cmd, opts, repair)
+			return runVerify(cmd, opts, repair, record)
 		},
 	}
 
 	cmd.Flags().BoolVar(&repair, "repair", false,
 		"remove the packages that changed, so the next oku sync installs them again")
+	cmd.Flags().BoolVar(&record, "record", false,
+		"record the files of the packages that have no record, as they are now")
 
 	return cmd
 }
@@ -42,12 +47,12 @@ type verified struct {
 	Name    string `json:"name"`
 	Version string `json:"version"`
 	Path    string `json:"path"`
-	// Status is "ok", "changed" or "unrecorded".
+	// Status is "ok", "changed", "unrecorded", or "recorded" with --record.
 	Status  string         `json:"status"`
 	Changes []store.Change `json:"changes"`
 }
 
-func runVerify(cmd *cobra.Command, opts Options, repair bool) error {
+func runVerify(cmd *cobra.Command, opts Options, repair, record bool) error {
 	e, err := scopedEnv(cmd, opts)
 	if err != nil {
 		return err
@@ -84,6 +89,12 @@ func runVerify(cmd *cobra.Command, opts Options, repair bool) error {
 		changes, err := store.Check(path)
 
 		switch {
+		case errors.Is(err, store.ErrNoTree) && record:
+			if err := store.Record(path); err != nil {
+				return fmt.Errorf("%s %s: %w", meta.Name, meta.Version, err)
+			}
+
+			v.Status = "recorded"
 		case errors.Is(err, store.ErrNoTree):
 			v.Status = "unrecorded"
 		case err != nil:
@@ -139,8 +150,10 @@ func printVerified(cmd *cobra.Command, results []verified) {
 		case "ok":
 			fmt.Fprintf(out, "%s %s\n", s.Check(), name)
 		case "unrecorded":
-			fmt.Fprintf(out, "%s %s: oku installed it before it recorded files, so it cannot check it\n",
+			fmt.Fprintf(out, "%s %s: oku installed it before it recorded files, so it cannot check it, see --record\n",
 				s.Note(), name)
+		case "recorded":
+			fmt.Fprintf(out, "%s %s: recorded its files as they are now\n", s.Note(), name)
 		case "changed":
 			fmt.Fprintf(out, "%s %s\n", s.Bad(s.Pick("✗", "changed")), name)
 
