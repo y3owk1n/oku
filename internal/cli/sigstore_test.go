@@ -511,3 +511,109 @@ func TestB506ABundleMayBeInCosignsOlderFormat(t *testing.T) {
 		})
 	}
 }
+
+// generic is slsa-github-generator's generic builder at a release.
+const generic = "slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@refs/tags/v2.1.0"
+
+func TestB507ProvenanceMustComeFromATrustedBuilderForTheRepoAndTag(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		run     run
+		other   bool
+		wantErr bool
+	}{
+		{"the generic builder for the tag", run{generic, "owner/tool", "refs/tags/v1.0.0"}, false, false},
+		{"a builder at a branch", run{
+			"slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@refs/heads/main",
+			"owner/tool", "refs/tags/v1.0.0",
+		}, false, true},
+		{"the project's own workflow", release, false, true},
+		{"another repo", run{generic, "owner/other", "refs/tags/v1.0.0"}, false, true},
+		{"another tag", run{generic, "owner/tool", "refs/tags/v0.9.0"}, false, true},
+		{"another file", run{generic, "owner/tool", "refs/tags/v1.0.0"}, true, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m := newMachine(t)
+			f := newFakeSigstore(t, &m)
+			r := newSignedRelease(t, &m)
+
+			digest := r.sum
+			if tc.other {
+				digest = digestOf([]byte("other bytes"))
+			}
+
+			// The file holds a bundle for another file first, as one for several
+			// files of the release does.
+			lines := string(f.attest(t, run{generic, "owner/tool", "refs/tags/v1.0.0"}, digestOf([]byte("x")))) + "\n" +
+				string(f.attest(t, tc.run, digest)) + "\n"
+			r.set("multiple.intoto.jsonl", []byte(lines))
+
+			tool := r.manifest(t, &m, "", "provenance = \""+r.release("multiple.intoto.jsonl")+"\"\n")
+
+			out, err := m.run(t, "", "add", tool)
+
+			switch {
+			case tc.wantErr && (err == nil || !strings.Contains(err.Error(), "does not show that slsa-github-generator built")):
+				t.Fatalf("want a refusal, got %v\n%s", err, out)
+			case !tc.wantErr && err != nil:
+				t.Fatalf("add: %v\n%s", err, out)
+			}
+		})
+	}
+}
+
+func TestB507ProvenanceMayBeASignedEnvelopeThatRekorHolds(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		logged  bool
+		run     run
+		wantErr bool
+	}{
+		{"an envelope in Rekor", true, run{generic, "owner/tool", "refs/tags/v1.0.0"}, false},
+		{"an envelope Rekor does not hold", false, run{generic, "owner/tool", "refs/tags/v1.0.0"}, true},
+		{"an envelope for another tag", true, run{generic, "owner/tool", "refs/tags/v0.9.0"}, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m := newMachine(t)
+			f := newFakeSigstore(t, &m)
+			r := newSignedRelease(t, &m)
+
+			r.set("tool.intoto.jsonl", f.envelope(t, tc.run, r.sum))
+
+			if !tc.logged {
+				f.mu.Lock()
+				clear(f.logged)
+				f.mu.Unlock()
+			}
+
+			tool := r.manifest(t, &m, "", "provenance = \""+r.release("tool.intoto.jsonl")+"\"\n")
+
+			if _, err := m.run(t, "", "add", tool); (err != nil) != tc.wantErr {
+				t.Fatalf("want a refusal %v, got %v", tc.wantErr, err)
+			}
+		})
+	}
+}
+
+func TestB507AnAquaEntryKeepsItsProvenance(t *testing.T) {
+	m := newMachine(t)
+	recipeServer{aqua: `packages:
+  - type: github_release
+    repo_owner: owner
+    repo_name: tool
+    asset: tool_{{.OS}}_{{.Arch}}.tar.gz
+    supported_envs: [linux/amd64]
+    slsa_provenance:
+      type: github_release
+      asset: multiple.intoto.jsonl
+`}.start(t, &m)
+
+	out, err := m.run(t, "", "manifest", "init", "--from", "aqua:owner/tool", "-o", "-")
+	if err != nil {
+		t.Fatalf("init: %v\n%s", err, out)
+	}
+
+	if !strings.Contains(out, "provenance = \"https://github.com/owner/tool/releases/download/{{tag}}/multiple.intoto.jsonl\"") {
+		t.Fatalf("the manifest lacks the provenance:\n%s", out)
+	}
+}

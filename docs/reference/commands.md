@@ -1603,7 +1603,7 @@ message, see [Troubleshooting](../troubleshooting.md).
 | `<name>: checksum changed: upstream publishes sha256 <new>, oku.lock pinned <old>` | The checksum file now holds another digest. `oku update <name>` accepts it. |
 | `<name>: oku.lock pinned the signing key ..., and the manifest now has the signing key ...` | The manifest's `signing_key` changed. `--accept-key` accepts it. |
 | `<name>: oku.lock pinned the signer workflow ..., and the manifest now has ...` | The manifest's `signer_workflow` changed. `--accept-key` accepts it. |
-| `<name>: signature check failed: ... does not show that ... signed ...` | A Sigstore signature came from another workflow, repo or tag, or does not cover the file. See [Sigstore signatures](security.md#sigstore-signatures-of-a-manifest). |
+| `<name>: signature check failed: ... does not show that ...` | A Sigstore signature or the SLSA provenance came from another workflow, builder, repo or tag, or does not cover the file. See [Sigstore signatures](security.md#sigstore-signatures-of-a-manifest). |
 | `<name>: oku.lock checked the download for <platform> against ...` | The new download has a weaker check than the one in the lock. `--accept-weaker-check` accepts it. See [weaker checks](security.md#weaker-checks). |
 | `<app> has the system extension <id> turned on, and it keeps running when oku deletes the app` | `sync --system` or `self uninstall` would remove a system-scope app while macOS runs its extension. The next line says `turn the extension off from the app, then run this again`. |
 | `<name> has no artifact or build for <platform>, so sync did not install it` | A package of the list has nothing for that platform. The next lines give the `when` to write. |

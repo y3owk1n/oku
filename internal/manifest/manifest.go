@@ -170,6 +170,9 @@ type Artifact struct {
 	SigstoreCertificate  string `toml:"sigstore_certificate"`
 	SHA256URLSignature   string `toml:"sha256_url_signature"`
 	SHA256URLCertificate string `toml:"sha256_url_certificate"`
+	// Provenance is the SLSA provenance of the download, as slsa-github-generator
+	// writes it: a Sigstore bundle or a signed envelope on each line.
+	Provenance string `toml:"provenance"`
 	// Version finds the version of this artifact alone, for a vendor whose
 	// platforms are at different versions. Only FromRedirect, FromPage and
 	// FromSparkle.
@@ -640,6 +643,13 @@ func (m *Manifest) validate() error {
 			errs = append(errs, fmt.Errorf("artifact[%d]: a signature of sha256_url needs sha256_url", i))
 		}
 
+		if a.Provenance != "" && (m.Version.From != FromGitHubReleases || strings.Count(m.Version.Repo, "/") != 1) {
+			errs = append(errs, fmt.Errorf(
+				"artifact[%d]: provenance names the repo of the releases, so it needs version.from = %q with owner/repo",
+				i, FromGitHubReleases,
+			))
+		}
+
 		if (a.SigstoreSignature == "") != (a.SigstoreCertificate == "") ||
 			(a.SHA256URLSignature == "") != (a.SHA256URLCertificate == "") {
 			errs = append(errs, fmt.Errorf("artifact[%d]: a cosign signature needs its certificate", i))
@@ -902,6 +912,7 @@ func (m *Manifest) Select(p platform.Platform) (Artifact, bool, error) {
 			"sigstore_certificate":   &a.SigstoreCertificate,
 			"sha256_url_signature":   &a.SHA256URLSignature,
 			"sha256_url_certificate": &a.SHA256URLCertificate,
+			"provenance":             &a.Provenance,
 		} {
 			if *field, err = Expand(*field, vars); err != nil {
 				return Artifact{}, false, fmt.Errorf("artifact %s: %w", key, err)

@@ -59,6 +59,8 @@ type recipeArtifact struct {
 	// which signer signs them.
 	sigstore sigstoreFiles
 	signer   string
+	// provenance is the SLSA provenance of the download.
+	provenance string
 	// follow is where versions of this artifact come from, when they differ by
 	// platform.
 	follow *follow
@@ -278,6 +280,10 @@ func (r recipe) text() (string, error) {
 			}
 
 			b.WriteString(a.sigstore.toml())
+
+			if a.provenance != "" {
+				fmt.Fprintf(&b, "provenance = %q\n", a.provenance)
+			}
 		}
 
 		b.WriteString(a.outputs())

@@ -55,6 +55,8 @@ type aquaPackage struct {
 	// attestations of it.
 	Cosign       *aquaCosign       `yaml:"cosign"`
 	Attestations *aquaAttestations `yaml:"github_artifact_attestations"`
+	// Provenance is the SLSA provenance that slsa-github-generator made of it.
+	Provenance *aquaProvenance `yaml:"slsa_provenance"`
 }
 
 type aquaFile struct {
@@ -79,6 +81,14 @@ type aquaCosign struct {
 		Asset string `yaml:"asset"`
 	} `yaml:"bundle"`
 	Opts []string `yaml:"opts"`
+}
+
+type aquaProvenance struct {
+	Enabled   *bool  `yaml:"enabled"`
+	Type      string `yaml:"type"`
+	Asset     string `yaml:"asset"`
+	SourceURI string `yaml:"source_uri"`
+	SourceTag string `yaml:"source_tag"`
 }
 
 type aquaAttestations struct {
@@ -291,6 +301,10 @@ func (o aquaPackage) over(p aquaPackage) aquaPackage {
 		o.Attestations = p.Attestations
 	}
 
+	if o.Provenance == nil {
+		o.Provenance = p.Provenance
+	}
+
 	return o
 }
 
@@ -423,6 +437,16 @@ func (cur aquaPackage) artifact(sel platform.Selector) (recipeArtifact, bool, er
 				a.sigstore.sha256URLBundle, a.sigstore.sha256URLSignature, a.sigstore.sha256URLCertificate = bundle, sig, cert
 				a.signer = check.workflow
 			}
+		}
+	}
+
+	// oku checks provenance for the repo of the releases and the release's
+	// tag, so an entry that names another source or tag stays out.
+	if pr := p.Provenance; pr != nil && (pr.Enabled == nil || *pr.Enabled) && pr.Type == "github_release" &&
+		pr.Asset != "" && (pr.SourceURI == "" || pr.SourceURI == "github.com/"+repo) && pr.SourceTag == "" &&
+		p.Type == "github_release" {
+		if asset, err := p.render(pr.Asset, vars); err == nil {
+			a.provenance = releases + asset
 		}
 	}
 

@@ -41,6 +41,7 @@ type schema struct {
 		SigstoreCertificate  string            `toml:"sigstore_certificate"`
 		SHA256URLSignature   string            `toml:"sha256_url_signature"`
 		SHA256URLCertificate string            `toml:"sha256_url_certificate"`
+		Provenance           string            `toml:"provenance"`
 		Integrity            string            `toml:"integrity"`
 		Strip                int               `toml:"strip"`
 		Bin                  []any             `toml:"bin"`
@@ -145,6 +146,7 @@ func Lint(data []byte) Report {
 		for _, text := range []string{
 			a.URL, a.SHA256URL, a.SigstoreBundle, a.SHA256URLBundle,
 			a.SigstoreSignature, a.SigstoreCertificate, a.SHA256URLSignature, a.SHA256URLCertificate,
+			a.Provenance,
 		} {
 			for _, name := range unknownVars(text, artifactVars) {
 				report.Errors = append(report.Errors, fmt.Sprintf(
@@ -163,6 +165,7 @@ func Lint(data []byte) Report {
 
 		switch {
 		case a.SHA256 != "" || a.SHA256URL != "" || a.Integrity != "" || a.SigstoreBundle != "" || a.SigstoreSignature != "" ||
+			a.Provenance != "" ||
 			full.Package.SigningKey != "" || full.Package.Attestations || version.From == FromNPM:
 		case version.From != FromGitHubReleases && version.Tag == "":
 			report.Warnings = append(report.Warnings, fmt.Sprintf(

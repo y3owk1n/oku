@@ -59,7 +59,7 @@ func artifactVerified(m *manifest.Manifest, a manifest.Artifact, release resolve
 	signature := ""
 
 	switch {
-	case m.Package.Attestations || a.Sigstore():
+	case m.Package.Attestations || a.Sigstore() || a.Provenance != "":
 		signature = lock.VerifiedSigstore
 	case m.Package.SigningKey != "":
 		signature = lock.VerifiedMinisign

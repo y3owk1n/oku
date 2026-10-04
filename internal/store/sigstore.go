@@ -55,6 +55,12 @@ func (s *Store) verifySigstore(ctx context.Context, m *manifest.Manifest, a mani
 		}
 	}
 
+	if a.Provenance != "" {
+		if err := s.verifyProvenance(ctx, m, a, sum); err != nil {
+			return err
+		}
+	}
+
 	if !m.Package.Attestations {
 		return nil
 	}
@@ -82,6 +88,38 @@ func (s *Store) verifySigstore(ctx context.Context, m *manifest.Manifest, a mani
 
 	return fmt.Errorf("%w: no attestation in %s shows that %s built %s: %w",
 		ErrSignature, repo, m.Package.SignerWorkflow, path.Base(a.URL), errors.Join(errs...))
+}
+
+// verifyProvenance checks the download of a, whose sha256 is sum, against
+// its SLSA provenance: a trusted builder of slsa-github-generator built it in a
+// run for the repo of the releases and the release's tag. The file holds a
+// bundle or an envelope on each line, and one that names the download is
+// enough.
+func (s *Store) verifyProvenance(ctx context.Context, m *manifest.Manifest, a manifest.Artifact, sum []byte) error {
+	data, err := s.fetchSmall(ctx, a.Provenance, 16<<20)
+	if err != nil {
+		return err
+	}
+
+	id := sigstore.SLSABuilder(sourceRepo(m), "refs/tags/"+m.Tag)
+
+	var errs []error
+
+	for line := range strings.Lines(string(data)) {
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+
+		err := s.Sigstore.VerifyStatement(ctx, []byte(line), sum, id)
+		if err == nil {
+			return nil
+		}
+
+		errs = append(errs, err)
+	}
+
+	return fmt.Errorf("%w: the provenance at %s does not show that slsa-github-generator built %s for %s at %s: %w",
+		ErrSignature, a.Provenance, path.Base(a.URL), sourceRepo(m), m.Tag, errors.Join(errs...))
 }
 
 // sourceRepo is the GitHub repo that m's files come from, which holds their
@@ -147,13 +185,18 @@ func (s *Store) verifyCosign(ctx context.Context, m *manifest.Manifest, signatur
 
 // bundle downloads the Sigstore bundle, signature or certificate at url.
 func (s *Store) bundle(ctx context.Context, url string) ([]byte, error) {
+	return s.fetchSmall(ctx, url, 1<<20)
+}
+
+// fetchSmall downloads the signature file at url, of at most limit bytes.
+func (s *Store) fetchSmall(ctx context.Context, url string, limit int64) ([]byte, error) {
 	resp, err := s.get(ctx, url)
 	if err != nil {
 		return nil, fmt.Errorf("%w: the manifest names a Sigstore signature, and %w", ErrSignature, err)
 	}
 	defer resp.Body.Close()
 
-	data, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	data, err := io.ReadAll(io.LimitReader(resp.Body, limit))
 	if err != nil {
 		return nil, fmt.Errorf("download %s: %w", url, err)
 	}

@@ -15,6 +15,7 @@ import (
 
 	protobundle "github.com/sigstore/protobuf-specs/gen/pb-go/bundle/v1"
 	protocommon "github.com/sigstore/protobuf-specs/gen/pb-go/common/v1"
+	protodsse "github.com/sigstore/protobuf-specs/gen/pb-go/dsse"
 	protorekor "github.com/sigstore/protobuf-specs/gen/pb-go/rekor/v1"
 	"github.com/sigstore/sigstore-go/pkg/bundle"
 )
@@ -219,8 +220,7 @@ func logEntry(body string, integratedTime, logIndex int64, logID, set string) (*
 }
 
 // signatureBundle puts a signature, in base64, and its certificate, PEM in
-// base64, of the file whose sha256 is digest into a bundle with entry. Version
-// 0.1 of the bundle takes the log's promise in place of a proof.
+// base64, of the file whose sha256 is digest into a bundle with entry.
 func signatureBundle(signature, cert string, digest []byte, entry *protorekor.TransparencyLogEntry) (*bundle.Bundle, error) {
 	sig, err := base64.StdEncoding.DecodeString(signature)
 	if err != nil {
@@ -232,12 +232,24 @@ func signatureBundle(signature, cert string, digest []byte, entry *protorekor.Tr
 		return nil, fmt.Errorf("read the certificate: %w", err)
 	}
 
+	return certificateBundle(certPEM, entry, &protobundle.Bundle_MessageSignature{
+		MessageSignature: &protocommon.MessageSignature{
+			MessageDigest: &protocommon.HashOutput{Algorithm: protocommon.HashAlgorithm_SHA2_256, Digest: digest},
+			Signature:     sig,
+		},
+	})
+}
+
+// certificateBundle puts content, a message signature or an envelope, its
+// certificate in PEM and its log entry into a bundle. Version 0.1 of the
+// bundle takes the log's promise in place of a proof.
+func certificateBundle(certPEM []byte, entry *protorekor.TransparencyLogEntry, content any) (*bundle.Bundle, error) {
 	block, _ := pem.Decode(certPEM)
 	if block == nil {
 		return nil, errors.New("read the certificate: it is not PEM")
 	}
 
-	return bundle.NewBundle(&protobundle.Bundle{
+	pb := &protobundle.Bundle{
 		MediaType: "application/vnd.dev.sigstore.bundle+json;version=0.1",
 		VerificationMaterial: &protobundle.VerificationMaterial{
 			Content: &protobundle.VerificationMaterial_X509CertificateChain{
@@ -247,11 +259,16 @@ func signatureBundle(signature, cert string, digest []byte, entry *protorekor.Tr
 			},
 			TlogEntries: []*protorekor.TransparencyLogEntry{entry},
 		},
-		Content: &protobundle.Bundle_MessageSignature{MessageSignature: &protocommon.MessageSignature{
-			MessageDigest: &protocommon.HashOutput{Algorithm: protocommon.HashAlgorithm_SHA2_256, Digest: digest},
-			Signature:     sig,
-		}},
-	})
+	}
+
+	switch c := content.(type) {
+	case *protobundle.Bundle_MessageSignature:
+		pb.Content = c
+	case *protobundle.Bundle_DsseEnvelope:
+		pb.Content = c
+	}
+
+	return bundle.NewBundle(pb)
 }
 
 // pemOf returns cert as PEM. cosign writes a certificate as PEM, or as PEM in
@@ -268,4 +285,89 @@ func pemOf(cert []byte) []byte {
 	}
 
 	return decoded
+}
+
+// VerifyStatement checks a line of a provenance file, a statement that names
+// the file whose sha256 is digest, and that id signed it. The line is a
+// Sigstore bundle, or a signed envelope as slsa-github-generator wrote before
+// it wrote bundles, whose log entry oku finds in Rekor.
+func (v *Verifier) VerifyStatement(ctx context.Context, line, digest []byte, id Identity) error {
+	var envelope struct {
+		PayloadType string `json:"payloadType"`
+		Payload     string `json:"payload"`
+		Signatures  []struct {
+			KeyID string `json:"keyid"`
+			Sig   string `json:"sig"`
+			Cert  string `json:"cert"`
+		} `json:"signatures"`
+	}
+
+	if json.Unmarshal(line, &envelope) != nil || envelope.PayloadType == "" {
+		return v.Verify(line, digest, id)
+	}
+
+	if v == nil {
+		return fmt.Errorf("%w: this oku has no Sigstore trust root here", ErrVerify)
+	}
+
+	if len(envelope.Signatures) != 1 {
+		return fmt.Errorf("%w: the envelope has %d signatures, not one", ErrVerify, len(envelope.Signatures))
+	}
+
+	signed := envelope.Signatures[0]
+	certPEM := pemOf([]byte(signed.Cert))
+
+	entries, err := v.rekorEntries(ctx, digest)
+	if err != nil {
+		return fmt.Errorf("%w: ask %s for the envelope: %w", ErrVerify, v.rekor, err)
+	}
+
+	for _, e := range entries {
+		var body struct {
+			Spec struct {
+				Signatures []struct {
+					Signature string `json:"signature"`
+					Verifier  string `json:"verifier"`
+				} `json:"signatures"`
+			} `json:"spec"`
+		}
+
+		raw, err := base64.StdEncoding.DecodeString(e.Body)
+		if err != nil || json.Unmarshal(raw, &body) != nil || len(body.Spec.Signatures) != 1 {
+			continue
+		}
+
+		key, err := base64.StdEncoding.DecodeString(body.Spec.Signatures[0].Verifier)
+		if err != nil || body.Spec.Signatures[0].Signature != signed.Sig ||
+			!bytes.Equal(bytes.TrimSpace(key), bytes.TrimSpace(certPEM)) {
+			continue
+		}
+
+		entry, err := logEntry(e.Body, e.IntegratedTime, e.LogIndex, e.LogID, e.Verification.SET)
+		if err != nil {
+			return fmt.Errorf("%w: %w", ErrVerify, err)
+		}
+
+		payload, err := base64.StdEncoding.DecodeString(envelope.Payload)
+		if err != nil {
+			return fmt.Errorf("%w: read the envelope: %w", ErrVerify, err)
+		}
+
+		sig, err := base64.StdEncoding.DecodeString(signed.Sig)
+		if err != nil {
+			return fmt.Errorf("%w: read the envelope: %w", ErrVerify, err)
+		}
+
+		b, err := certificateBundle(certPEM, entry, &protobundle.Bundle_DsseEnvelope{DsseEnvelope: &protodsse.Envelope{
+			Payload: payload, PayloadType: envelope.PayloadType,
+			Signatures: []*protodsse.Signature{{Sig: sig, Keyid: signed.KeyID}},
+		}})
+		if err != nil {
+			return fmt.Errorf("%w: %w", ErrVerify, err)
+		}
+
+		return v.verify(b, digest, id)
+	}
+
+	return fmt.Errorf("%w: %s holds no entry of this envelope", ErrVerify, v.rekor)
 }

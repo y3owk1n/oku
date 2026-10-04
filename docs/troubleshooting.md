@@ -270,6 +270,8 @@ or its attestation, came from another workflow, another repo or another tag,
 or does not cover the file oku downloaded. The end of the line says which.
 When it ends in `rekor.sigstore.dev holds no entry of this signature`, nobody
 recorded the signature in Sigstore's log, which a forged signature also lacks.
+An error that names `the provenance at` comes from the same check for SLSA
+provenance, whose builder must be one that slsa-verifier trusts.
 oku installed nothing. A release that someone replaced looks like this, so ask
 the developer before you work around it.
 
