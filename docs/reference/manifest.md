@@ -626,7 +626,9 @@ bin = ["tool"]
 - With a Sigstore check, an artifact without `sha256` is no longer trust on
   first use.
 - GitHub signs the attestations of a private repo with a Sigstore of its
-  own, and oku fails on them.
+  own, and stamps them with its own timestamp authority in place of the
+  transparency log. oku checks such an attestation against GitHub's trust
+  root, and needs a GitHub token that can read the repo.
 
 ### Cosign key
 
