@@ -267,8 +267,12 @@ func offChannel(item string) bool {
 func jsonVersion(text string, v manifest.Version, re *regexp.Regexp, what string) (Release, error) {
 	var doc any
 
-	// A feed is JSON, or an XML property list, as Apple's feeds are.
-	if err := json.Unmarshal([]byte(text), &doc); err != nil {
+	// A feed is JSON, or an XML property list, as Apple's feeds are. A number
+	// keeps its digits, so 20240115 does not become 2.0240115e+07.
+	decoder := json.NewDecoder(strings.NewReader(text))
+	decoder.UseNumber()
+
+	if err := decoder.Decode(&doc); err != nil {
 		var plistErr error
 		if doc, plistErr = parsePlist(text); plistErr != nil {
 			return Release{}, fmt.Errorf(

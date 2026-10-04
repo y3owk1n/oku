@@ -19,6 +19,7 @@ import (
 	"github.com/y3owk1n/oku/internal/forge"
 	"github.com/y3owk1n/oku/internal/gitcmd"
 	"github.com/y3owk1n/oku/internal/manifest"
+	"github.com/y3owk1n/oku/internal/npm"
 	"github.com/y3owk1n/oku/internal/status"
 	"github.com/y3owk1n/oku/internal/tempdir"
 )
@@ -139,6 +140,17 @@ func (r *Resolver) PickWaiting(
 		}
 
 		return Release{Version: v.Value, Tag: v.Value}, Release{}, nil
+	}
+
+	// npm installs the version its latest tag names, which may be below a newer
+	// version on another tag, and a pin or a range picks from every version.
+	if v.From == manifest.FromNPM && want == "" {
+		pkg, err := npm.Read(ctx, r.Hosts.HTTP, r.NPM, v.Repo)
+		if err != nil {
+			return Release{}, Release{}, fmt.Errorf("list versions of the npm package %s: %w", v.Repo, err)
+		}
+
+		want = "<=" + pkg.Latest
 	}
 
 	// With latest, the release the forge marks as latest bounds the newest, and
@@ -907,8 +919,9 @@ func Compare(a, b string) int {
 
 	partsA, partsB := strings.Split(coreA, "."), strings.Split(coreB, ".")
 
+	// A part that one version lacks is 0, so 1.2 is 1.2.0.
 	for i := range max(len(partsA), len(partsB)) {
-		var x, y string
+		x, y := "0", "0"
 		if i < len(partsA) {
 			x = partsA[i]
 		}
@@ -977,9 +990,10 @@ func tailRank(tail string) int {
 }
 
 // prerelease matches a word that marks a version as a prerelease, such as the
-// rc in 1.26rc1 or 2.0.0-rc.1.
+// rc in 1.26rc1 or 2.0.0-rc.1, the next or canary of npm, a Maven milestone as
+// in 3.0.0-M1, and the a1 or b1 of Python as in 2.0.0b1.
 var prerelease = regexp.MustCompile(
-	`(?i)(^|[^a-z])(rc|alpha|beta|pre|preview|dev|snapshot)([^a-z]|$)`,
+	`(?i)(^|[^a-z])(rc|alpha|beta|pre|preview|dev|snapshot|next|canary|nightly|insiders|m\d|a\d|b\d)([^a-z]|$)`,
 )
 
 // compareSuffix orders two "-" suffixes. It splits each into runs of digits and

@@ -259,6 +259,11 @@ if the developer announced this change, run the command again with --accept-key
 A new key is what someone who took over the repo would publish. Check with the
 developer first. See [Security](reference/security.md).
 
+When the manifest has no signer any more, the hint names both flags,
+`--accept-key --accept-weaker-check`, since the download can no longer pass
+the signature check that the lock recorded. An older release that nobody
+signed does this.
+
 ## A Sigstore signature does not check out
 
 ```

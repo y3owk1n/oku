@@ -94,7 +94,8 @@ oku add github:BurntSushi/ripgrep@14.1.1
 - `oku update` moves the package to the newest version the list allows, so an
   exact version stays where it is.
 - When you change the version in `oku.toml` so that it no longer allows the
-  locked one, `oku sync` picks the newest version it allows.
+  locked one, `oku sync` picks the newest version it allows. For a package
+  without a manifest, oku infers one again from that release.
 - Without a version, `oku add` and `oku update` take the newest version older
   than the [minimum release age](security.md#minimum-release-age). With
   `latest = true` in the manifest's `[version]`, that is the release the forge

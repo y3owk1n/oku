@@ -265,8 +265,10 @@ func reconcile(
 
 		locksManifest := previous.Ref == r.String() && previous.ManifestSHA256 != ""
 
+		// A list version that leaves out the locked one takes the manifest of
+		// the version oku picks, which differs for an inferred package.
 		wantManifest := ""
-		if locksManifest && !fresh {
+		if locksManifest && !fresh && allowed {
 			wantManifest = previous.ManifestSHA256
 		}
 

@@ -106,7 +106,7 @@ finds, for a version a recipe pins, and for a version in `oku.lock`.
 | `gitlab-releases` | `group/project`, or `host/group/project` on a GitLab server of your own | The same on a GitLab server. Skips a release dated in the future, which GitLab calls upcoming. |
 | `git-tags` | a git URL | Every tag, up to 2000. On github.com, gitlab.com and codeberg.org oku reads them from the host's API. On any other host it runs `git ls-remote`, which needs `git` on `PATH`. |
 | `git-branch` | a git URL | The newest commit of `branch`. On github.com, gitlab.com and codeberg.org oku reads it from the host's API. On any other host it clones the branch without files, which needs `git` on `PATH`. |
-| `npm` | a package name, such as `@scope/name` | Every version in `registry.npmjs.org`. Skips a prerelease, which has a `-` in its version. |
+| `npm` | a package name, such as `@scope/name` | Every version in `registry.npmjs.org`. Skips a prerelease, which has a `-` in its version, and a version above the one the package's `latest` tag names. |
 | `pypi` | a package name, such as `black` | Every version in the Python Package Index. |
 | `go` | a module path, such as `golang.org/x/tools/gopls` | The tagged versions of the module from the Go module proxy. A module with no tags has one version, the pseudo-version of its newest commit. |
 | `crates` | a crate name, such as `ripgrep` | Every version of the crate on crates.io. |
@@ -141,13 +141,16 @@ Version pins and ranges are in [Refs](refs.md#pin-a-version).
 ### How oku picks the newest version
 
 - The newest version is the highest by its dot-separated numbers, so `1.10.0` is
-  newer than `1.9.0`.
+  newer than `1.9.0`. A missing number is 0, so `1.2` and `1.2.0` are the same
+  version.
 - A version with a `-` suffix, such as `2.0.0-rc1`, is older than `2.0.0`. A
   number in the suffix counts as a number, so `7.1.2-31` is newer than
   `7.1.2-9`, and `rc10` is newer than `rc9`.
-- A tag list has no prerelease flag, so oku reads the version. A version with
-  the word `rc`, `alpha`, `beta`, `pre`, `preview`, `dev` or `snapshot` in it,
-  such as `1.27rc1` or `2.0.0-rc1`, is a prerelease. Other letters behind a
+- A tag list has no prerelease flag, so oku reads the version. A version is a
+  prerelease when it holds the word `rc`, `alpha`, `beta`, `pre`, `preview`,
+  `dev`, `snapshot`, `next`, `canary`, `nightly` or `insiders`, or a milestone
+  such as `M1`, `a1` or `b1`. So `1.27rc1`, `2.0.0-rc1` and `3.0.0-M1` are
+  prereleases. Other letters behind a
   number make a newer version, so `1.1.1w` is newer than `1.1.1`.
 - With `pypi`, a yanked version and a PEP 440 prerelease are never the newest.
   With `crates`, a yanked version and one with a `-` are never the newest. With
@@ -315,7 +318,8 @@ join = "+"
   through the same list, and oku takes the newest version of the items.
 - Without `regex`, the values of the paths joined with `join` are the version.
   An item that lacks one of them counts for nothing. A value that is a list,
-  such as `[0, 0, 413]`, is its items joined with dots, `0.0.413`.
+  such as `[0, 0, 413]`, is its items joined with dots, `0.0.413`. oku reads
+  a number with all its digits, so `20240115` stays `20240115`.
 - With `regex`, the values, one per line, are the text that `regex` reads, as
   in `regex = '^(\S+)\n.*/production/([0-9a-f]+)/'` over a version and a URL.
 - A property list's dict is read as keys, an array as a list, and a string,

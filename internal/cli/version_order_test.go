@@ -34,3 +34,35 @@ func TestB20APrereleaseWithNoDashIsNeverTheNewest(t *testing.T) {
 		t.Fatalf("oku installed %s, want the newest release 1.26.8:\n%s", got, out)
 	}
 }
+
+func TestB20OtherPrereleaseWordsAreNeverTheNewest(t *testing.T) {
+	m := newMachine(t)
+
+	// npm's next and canary, a Maven milestone and a Python beta.
+	server := newReleaseServer(t, "v1.9.0", "v2.0.0-next.1", "v2.0.0-canary.3", "v3.0.0-M1", "v2.0.0b1")
+	m.opts.GitHubAPI = server.URL + "/api"
+
+	_, err := m.run(t, "", "add", m.discoveredManifest(t, "1.9.0", "2.0.0-next.1", "2.0.0-canary.3", "3.0.0-M1", "2.0.0b1"))
+	must(t, err)
+
+	if got := m.toolOutput(t); got != "1.9.0" {
+		t.Fatalf("oku installed %s, want the newest release 1.9.0", got)
+	}
+}
+
+func TestB20AMissingPartIsZero(t *testing.T) {
+	m := newMachine(t)
+
+	// The tag 1.2 is the version 1.2.0, which the range allows.
+	server := newReleaseServer(t, "v1.1.0", "v1.2")
+	m.opts.GitHubAPI = server.URL + "/api"
+
+	out, err := m.run(t, "", "add", m.discoveredManifest(t, "1.1.0", "1.2")+"@>=1.2.0", "--yes")
+	if err != nil {
+		t.Fatalf("add @>=1.2.0: %v\n%s", err, out)
+	}
+
+	if got := m.toolOutput(t); got != "1.2" {
+		t.Fatalf("oku installed %s, want 1.2", got)
+	}
+}

@@ -3,8 +3,11 @@ package cli_test
 import (
 	"encoding/json"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/y3owk1n/oku/internal/lock"
@@ -123,6 +126,66 @@ func TestB265AnInferredPackageTakesTheNewestVersionInTheRange(t *testing.T) {
 
 	if got := m.lockedVersion(t, "tool"); got != "1.2.0" {
 		t.Fatalf("add @1 took %s, want 1.2.0, the newest 1.x", got)
+	}
+}
+
+func TestB265SyncInfersAgainForAVersionTheListNowAsks(t *testing.T) {
+	m := newMachine(t)
+	newer, _ := m.archive(t, strings.TrimSuffix(hostAssetName(), ".tar.gz"), map[string]string{
+		"tool-1.4.0/tool": "#!/bin/sh\necho 1.4.0\n",
+	})
+	older, _ := m.archive(t, "tool", map[string]string{"tool/tool": "#!/bin/sh\necho 1.3.0\n"})
+
+	// 1.3.0 names its asset without the version, so its inferred manifest
+	// differs from the one of 1.4.0.
+	release := func(tag, asset, file string) string {
+		info, err := os.Stat(file)
+		must(t, err)
+
+		return fmt.Sprintf(`{"tag_name": %q, "assets": [{"name": %q, "browser_download_url": "file://%s", "size": %d}]}`,
+			tag, asset, file, info.Size())
+	}
+	latest := release("v1.4.0", hostAssetName(), newer)
+	previous := release("v1.3.0", strings.Replace(hostAssetName(), "-v1.4.0", "", 1), older)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch strings.TrimPrefix(r.URL.Path, "/api/repos/owner/tool") {
+		case "/commits/HEAD":
+			_, _ = w.Write([]byte("5555555555555555555555555555555555555555"))
+		case "/releases/latest", "/releases/tags/v1.4.0":
+			_, _ = w.Write([]byte(latest))
+		case "/releases/tags/v1.3.0":
+			_, _ = w.Write([]byte(previous))
+		case "/releases":
+			_, _ = w.Write([]byte("[" + latest + "," + previous + "]"))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(server.Close)
+
+	m.opts.GitHubAPI = server.URL + "/api"
+	m.opts.GitHubRaw = server.URL + "/raw"
+
+	out, err := m.run(t, "", "add", "github:owner/tool", "--yes")
+	if err != nil {
+		t.Fatalf("add: %v\n%s", err, out)
+	}
+
+	must(t, os.WriteFile(filepath.Join(m.config, "oku.toml"),
+		[]byte("[packages]\ntool = { ref = \"github:owner/tool\", version = \"1.3\" }\n"), 0o644))
+
+	out, err = m.run(t, "", "sync", "--yes")
+	if err != nil {
+		t.Fatalf("sync with version 1.3: %v\n%s", err, out)
+	}
+
+	if got := m.lockedVersion(t, "tool"); got != "1.3.0" {
+		t.Fatalf("sync with version 1.3 took %s, want 1.3.0", got)
+	}
+
+	if got := m.toolOutput(t); got != "1.3.0" {
+		t.Fatalf("tool printed %q, want the 1.3.0 build", got)
 	}
 }
 
