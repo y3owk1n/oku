@@ -57,6 +57,7 @@ export XDG_CACHE_HOME=/tmp/oku-try/cache
     project-2d27013d8c67/      one per project, same layout
   exposed.toml                 the ledger: every file and setting oku wrote outside these directories
   pending.toml                 exists only while oku applies a change
+  sessions/<pid>               the store paths of a running oku shell or oku run, which gc keeps
   busy                         the pid of the oku that changes the machine now
   secrets/                     decrypted secrets, which only you can read
   services/                    service definitions that are not enabled (macOS), every definition (Windows)

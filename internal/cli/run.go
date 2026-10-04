@@ -74,6 +74,7 @@ func runApp(
 	if err != nil {
 		return err
 	}
+	defer held.done()
 
 	program, err := starts(held.pkgs[0].profile, ref, app)
 	if err != nil {

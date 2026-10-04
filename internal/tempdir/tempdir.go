@@ -129,3 +129,8 @@ func Owner(path string) (pid int, alive bool) {
 
 	return pid, ok && (pid == os.Getpid() || running(pid))
 }
+
+// Running reports whether the process pid runs.
+func Running(pid int) bool {
+	return running(pid)
+}
