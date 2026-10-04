@@ -1356,6 +1356,12 @@ order step in `prd/product.md`.
 - B510 [10] A `signer_workflow` on a package's entry in `oku.toml` must be the
   manifest's. A manifest that names another workflow, or no Sigstore
   signature, fails.
+- B511 [10] `oku verify` names each file of an installed package or dep that
+  changed, appeared or went away since oku installed it, leaves out
+  `__pycache__` folders, and exits with code 1. `--repair` removes those
+  packages, and the next `sync` installs them again.
+- B512 [10] `oku verify` notes a package that oku installed before it recorded
+  files, and does not fail for it.
 
 ## Tooling
 
