@@ -99,14 +99,19 @@ var (
 	tagRefRe = regexp.MustCompile(`^refs/tags/\{\{\s*\.Version\s*\}\}$`)
 )
 
-// bundle returns the workflow that signs the file and the asset of the
-// Sigstore bundle beside it, when c names both in a form oku checks: a bundle
-// in a release, signed by a GitHub Actions workflow of repo for the release's
-// tag.
-func (c *aquaCosign) bundle(repo string) (workflow, asset string, ok bool) {
-	if c == nil || c.Enabled != nil && !*c.Enabled || c.Bundle == nil || c.Bundle.Type != "github_release" ||
-		!strings.HasSuffix(c.Bundle.Asset, ".sigstore.json") {
-		return "", "", false
+// cosignCheck is a cosign check oku can make: the workflow that signs the
+// file, and a bundle asset of the release, or the URLs of a signature and its
+// certificate.
+type cosignCheck struct {
+	workflow, bundle, signature, certificate string
+}
+
+// check returns the check that c names, when oku can make it: a bundle, or a
+// signature with its certificate, by a GitHub Actions workflow of repo for the
+// release's tag.
+func (c *aquaCosign) check(repo string) (cosignCheck, bool) {
+	if c == nil || c.Enabled != nil && !*c.Enabled {
+		return cosignCheck{}, false
 	}
 
 	// A flag takes the next option as its value, unless that is a flag too.
@@ -119,21 +124,56 @@ func (c *aquaCosign) bundle(repo string) (workflow, asset string, ok bool) {
 
 	if opts["--certificate-oidc-issuer"] != sigstore.GitHubIssuer ||
 		opts["--certificate-github-workflow-repository"] != "" && opts["--certificate-github-workflow-repository"] != repo {
-		return "", "", false
+		return cosignCheck{}, false
+	}
+
+	var check cosignCheck
+
+	switch {
+	case c.Bundle != nil && c.Bundle.Type == "github_release" && c.Bundle.Asset != "":
+		check.bundle = c.Bundle.Asset
+	case opts["--signature"] != "" && opts["--certificate"] != "":
+		check.signature, check.certificate = opts["--signature"], opts["--certificate"]
+	default:
+		return cosignCheck{}, false
 	}
 
 	// A pattern names the workflow at any ref, so the ref of the run must be
 	// the tag.
 	if m := githubIdentityPatternRe.FindStringSubmatch(opts["--certificate-identity-regexp"]); m != nil &&
 		tagRefRe.MatchString(opts["--certificate-github-workflow-ref"]) {
-		return strings.ReplaceAll(m[1], `\`, ""), c.Bundle.Asset, true
+		check.workflow = strings.ReplaceAll(m[1], `\`, "")
+
+		return check, true
 	}
 
 	if m := githubIdentityRe.FindStringSubmatch(opts["--certificate-identity"]); m != nil {
-		return m[1], c.Bundle.Asset, true
+		check.workflow = m[1]
+
+		return check, true
 	}
 
-	return "", "", false
+	return cosignCheck{}, false
+}
+
+// urls renders the bundle, signature and certificate of check for one
+// download of p, whose release files are at releases.
+func (check cosignCheck) urls(p aquaPackage, releases string, vars map[string]string) (bundle, signature, certificate string, err error) {
+	if check.bundle != "" {
+		if bundle, err = p.render(check.bundle, vars); err != nil {
+			return "", "", "", err
+		}
+
+		return releases + bundle, "", "", nil
+	}
+
+	if signature, err = p.render(check.signature, vars); err != nil {
+		return "", "", "", err
+	}
+
+	certificate, err = p.render(check.certificate, vars)
+
+	return "", signature, certificate, err
 }
 
 // FromAqua returns manifest TOML for the GitHub repo owner/repo, translated
@@ -308,7 +348,7 @@ func (p aquaPackage) recipe() (recipe, error) {
 	for i, a := range r.artifacts {
 		r.signerWorkflow = cmp.Or(r.signerWorkflow, a.signer)
 		if a.signer != r.signerWorkflow {
-			r.artifacts[i].sigstoreBundle, r.artifacts[i].sha256URLBundle = "", ""
+			r.artifacts[i].sigstore = sigstoreFiles{}
 		}
 	}
 
@@ -378,16 +418,18 @@ func (cur aquaPackage) artifact(sel platform.Selector) (recipeArtifact, bool, er
 
 		a.sha256URL = releases + sums
 
-		if workflow, asset, ok := c.Cosign.bundle(repo); ok {
-			if bundle, err := p.render(asset, vars); err == nil {
-				a.sha256URLBundle, a.signer = releases+bundle, workflow
+		if check, ok := c.Cosign.check(repo); ok {
+			if bundle, sig, cert, err := check.urls(p, releases, vars); err == nil {
+				a.sigstore.sha256URLBundle, a.sigstore.sha256URLSignature, a.sigstore.sha256URLCertificate = bundle, sig, cert
+				a.signer = check.workflow
 			}
 		}
 	}
 
-	if workflow, asset, ok := p.Cosign.bundle(repo); ok && (a.signer == "" || a.signer == workflow) {
-		if bundle, err := p.render(asset, vars); err == nil {
-			a.sigstoreBundle, a.signer = releases+bundle, workflow
+	if check, ok := p.Cosign.check(repo); ok && (a.signer == "" || a.signer == check.workflow) {
+		if bundle, sig, cert, err := check.urls(p, releases, vars); err == nil {
+			a.sigstore.sigstoreBundle, a.sigstore.sigstoreSignature, a.sigstore.sigstoreCertificate = bundle, sig, cert
+			a.signer = check.workflow
 		}
 	}
 

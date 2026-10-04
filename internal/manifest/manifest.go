@@ -163,6 +163,13 @@ type Artifact struct {
 	// download, and SHA256URLBundle one in which it signs the file at SHA256URL.
 	SigstoreBundle  string `toml:"sigstore_bundle"`
 	SHA256URLBundle string `toml:"sha256_url_bundle"`
+	// SigstoreSignature and SigstoreCertificate are a cosign signature of the
+	// download and its certificate, and SHA256URLSignature and
+	// SHA256URLCertificate those of the file at SHA256URL.
+	SigstoreSignature    string `toml:"sigstore_signature"`
+	SigstoreCertificate  string `toml:"sigstore_certificate"`
+	SHA256URLSignature   string `toml:"sha256_url_signature"`
+	SHA256URLCertificate string `toml:"sha256_url_certificate"`
 	// Version finds the version of this artifact alone, for a vendor whose
 	// platforms are at different versions. Only FromRedirect, FromPage and
 	// FromSparkle.
@@ -195,6 +202,13 @@ type Artifact struct {
 	// Data marks a package that only holds files and exposes nothing, such as a
 	// repo of templates. A list reaches them with {{pkg.<name>}}.
 	Data bool `toml:"data"`
+}
+
+// Sigstore reports whether the manifest names a Sigstore signature of a or of
+// its checksum file.
+func (a Artifact) Sigstore() bool {
+	return a.SigstoreBundle != "" || a.SHA256URLBundle != "" || a.SigstoreSignature != "" ||
+		a.SHA256URLSignature != ""
 }
 
 // Service is a long-running program, from a [[service]] table. Command is a
@@ -616,14 +630,19 @@ func (m *Manifest) validate() error {
 			errs = append(errs, fmt.Errorf("artifact[%d]: set sha256 or sha256_url, not both", i))
 		}
 
-		if (a.SigstoreBundle != "" || a.SHA256URLBundle != "") && m.Package.SignerWorkflow == "" {
+		if a.Sigstore() && m.Package.SignerWorkflow == "" {
 			errs = append(errs, fmt.Errorf(
-				"artifact[%d]: a Sigstore bundle needs package.signer_workflow, which signs it", i,
+				"artifact[%d]: a Sigstore signature needs package.signer_workflow, which signs it", i,
 			))
 		}
 
-		if a.SHA256URLBundle != "" && a.SHA256URL == "" {
-			errs = append(errs, fmt.Errorf("artifact[%d]: sha256_url_bundle signs sha256_url, which is missing", i))
+		if (a.SHA256URLBundle != "" || a.SHA256URLSignature != "") && a.SHA256URL == "" {
+			errs = append(errs, fmt.Errorf("artifact[%d]: a signature of sha256_url needs sha256_url", i))
+		}
+
+		if (a.SigstoreSignature == "") != (a.SigstoreCertificate == "") ||
+			(a.SHA256URLSignature == "") != (a.SHA256URLCertificate == "") {
+			errs = append(errs, fmt.Errorf("artifact[%d]: a cosign signature needs its certificate", i))
 		}
 
 		exposes := len(a.Bin)+len(a.Wrap)+len(a.Man)+len(a.App)+len(a.Font)+
@@ -877,8 +896,16 @@ func (m *Manifest) Select(p platform.Platform) (Artifact, bool, error) {
 			return Artifact{}, false, fmt.Errorf("artifact sigstore_bundle: %w", err)
 		}
 
-		if a.SHA256URLBundle, err = Expand(a.SHA256URLBundle, vars); err != nil {
-			return Artifact{}, false, fmt.Errorf("artifact sha256_url_bundle: %w", err)
+		for key, field := range map[string]*string{
+			"sha256_url_bundle":      &a.SHA256URLBundle,
+			"sigstore_signature":     &a.SigstoreSignature,
+			"sigstore_certificate":   &a.SigstoreCertificate,
+			"sha256_url_signature":   &a.SHA256URLSignature,
+			"sha256_url_certificate": &a.SHA256URLCertificate,
+		} {
+			if *field, err = Expand(*field, vars); err != nil {
+				return Artifact{}, false, fmt.Errorf("artifact %s: %w", key, err)
+			}
 		}
 
 		return a, true, nil

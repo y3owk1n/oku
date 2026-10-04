@@ -14,8 +14,14 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
+	"fmt"
 	"math/big"
+	"net/http"
+	"net/http/httptest"
 	"net/url"
+	"strconv"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -48,6 +54,11 @@ type fakeSigstore struct {
 	fulcioKey *ecdsa.PrivateKey
 	rekorKey  *ecdsa.PrivateKey
 	logID     string
+
+	// logged holds the entries of the fake Rekor by the sha256 of the file they
+	// sign.
+	mu     sync.Mutex
+	logged map[string][]*protorekor.TransparencyLogEntry
 }
 
 // run is a GitHub Actions run that signs: the workflow file at the ref it was
@@ -91,9 +102,56 @@ func newFakeSigstore(t *testing.T, m *machine) *fakeSigstore {
 	)
 	must(t, err)
 
-	m.opts.Sigstore = sigstore.New(material, verify.WithTransparencyLog(1), verify.WithObserverTimestamps(1))
+	f := &fakeSigstore{
+		fulcio: fulcio, fulcioKey: fulcioKey, rekorKey: rekorKey, logID: logID,
+		logged: map[string][]*protorekor.TransparencyLogEntry{},
+	}
 
-	return &fakeSigstore{fulcio: fulcio, fulcioKey: fulcioKey, rekorKey: rekorKey, logID: logID}
+	rekor := httptest.NewServer(http.HandlerFunc(f.serveRekor))
+	t.Cleanup(rekor.Close)
+
+	m.opts.Sigstore = sigstore.New(material, rekor.URL, rekor.Client(),
+		verify.WithTransparencyLog(1), verify.WithObserverTimestamps(1))
+
+	return f
+}
+
+// serveRekor answers the two calls of Rekor's API that oku makes: the
+// entries for a file's sha256, and one entry.
+func (f *fakeSigstore) serveRekor(w http.ResponseWriter, r *http.Request) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	switch id, ok := strings.CutPrefix(r.URL.Path, "/api/v1/log/entries/"); {
+	case r.URL.Path == "/api/v1/index/retrieve":
+		var query struct {
+			Hash string `json:"hash"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&query)
+
+		ids := []string{}
+		for i := range f.logged[strings.TrimPrefix(query.Hash, "sha256:")] {
+			ids = append(ids, fmt.Sprintf("%s-%d", strings.TrimPrefix(query.Hash, "sha256:"), i))
+		}
+
+		_ = json.NewEncoder(w).Encode(ids)
+	case ok:
+		digest, index, _ := strings.Cut(id, "-")
+		i, _ := strconv.Atoi(index)
+		e := f.logged[digest][i]
+
+		_ = json.NewEncoder(w).Encode(map[string]any{id: map[string]any{
+			"body":           base64.StdEncoding.EncodeToString(e.CanonicalizedBody),
+			"integratedTime": e.IntegratedTime,
+			"logIndex":       e.LogIndex,
+			"logID":          hex.EncodeToString(e.LogId.KeyId),
+			"verification": map[string]any{
+				"signedEntryTimestamp": base64.StdEncoding.EncodeToString(e.InclusionPromise.SignedEntryTimestamp),
+			},
+		}})
+	default:
+		http.NotFound(w, r)
+	}
 }
 
 // leaf issues a certificate for r and returns it with its key.
@@ -179,8 +237,51 @@ func (f *fakeSigstore) logEntry(t *testing.T, kind, version string, props types.
 	}
 }
 
-// signBlob returns a bundle in which r signs data, as cosign sign-blob writes.
-func (f *fakeSigstore) signBlob(t *testing.T, r run, data []byte) []byte {
+// cosign signs data as r, records the signature in the fake Rekor, and returns
+// the signature and the certificate as cosign writes them beside a file: in
+// base64, and PEM in base64.
+func (f *fakeSigstore) cosign(t *testing.T, r run, data []byte) (signature, cert []byte) {
+	t.Helper()
+
+	c, sig, _, entry := f.sign(t, r, data)
+
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	digest := digestOf(data)
+	f.logged[digest] = append(f.logged[digest], entry)
+
+	return []byte(base64.StdEncoding.EncodeToString(sig)), []byte(base64.StdEncoding.EncodeToString(certPEM(c)))
+}
+
+// legacyBundle returns a bundle in which r signs data, in the format cosign
+// wrote before Sigstore's own.
+func (f *fakeSigstore) legacyBundle(t *testing.T, r run, data []byte) []byte {
+	t.Helper()
+
+	c, sig, _, entry := f.sign(t, r, data)
+
+	out, err := json.Marshal(map[string]any{
+		"base64Signature": base64.StdEncoding.EncodeToString(sig),
+		"cert":            base64.StdEncoding.EncodeToString(certPEM(c)),
+		"rekorBundle": map[string]any{
+			"SignedEntryTimestamp": base64.StdEncoding.EncodeToString(entry.InclusionPromise.SignedEntryTimestamp),
+			"Payload": map[string]any{
+				"body":           base64.StdEncoding.EncodeToString(entry.CanonicalizedBody),
+				"integratedTime": entry.IntegratedTime,
+				"logIndex":       entry.LogIndex,
+				"logID":          hex.EncodeToString(entry.LogId.KeyId),
+			},
+		},
+	})
+	must(t, err)
+
+	return out
+}
+
+// sign signs data as r and returns the certificate, the signature, the
+// sha256 of data and the log's entry.
+func (f *fakeSigstore) sign(t *testing.T, r run, data []byte) (*x509.Certificate, []byte, [32]byte, *protorekor.TransparencyLogEntry) {
 	t.Helper()
 
 	cert, key := f.leaf(t, r)
@@ -195,6 +296,15 @@ func (f *fakeSigstore) signBlob(t *testing.T, r run, data []byte) []byte {
 		PublicKeyBytes: [][]byte{certPEM(cert)},
 		PKIFormat:      string(pki.X509),
 	})
+
+	return cert, sig, digest, entry
+}
+
+// signBlob returns a bundle in which r signs data, as cosign sign-blob writes.
+func (f *fakeSigstore) signBlob(t *testing.T, r run, data []byte) []byte {
+	t.Helper()
+
+	cert, sig, digest, entry := f.sign(t, r, data)
 
 	return f.bundle(t, cert, entry, &protobundle.Bundle_MessageSignature{
 		MessageSignature: &protocommon.MessageSignature{
@@ -280,4 +390,11 @@ func (f *fakeSigstore) bundle(
 
 func certPEM(cert *x509.Certificate) []byte {
 	return pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: cert.Raw})
+}
+
+// digestOf is the sha256 of data in hex.
+func digestOf(data []byte) string {
+	sum := sha256.Sum256(data)
+
+	return hex.EncodeToString(sum[:])
 }

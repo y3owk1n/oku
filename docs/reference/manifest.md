@@ -426,6 +426,8 @@ machine, so put specific entries before general ones.
 | `sha256_url` | no | The URL of a checksum file, see [Checksums](#checksums). Not with `sha256`. |
 | `sigstore_bundle` | no | The URL of a Sigstore bundle in which `signer_workflow` signs the download, see [Sigstore signatures](#sigstore-signatures). |
 | `sha256_url_bundle` | no | The URL of a Sigstore bundle in which `signer_workflow` signs the file at `sha256_url`. |
+| `sigstore_signature`, `sigstore_certificate` | no | The URLs of a cosign signature of the download and of its certificate. Set both. |
+| `sha256_url_signature`, `sha256_url_certificate` | no | The URLs of a cosign signature of the file at `sha256_url` and of its certificate. Set both. |
 | `version` | no | Where this artifact's own version comes from, see [A version for each platform](#a-version-for-each-platform). |
 | `integrity` | no | A sha512 digest the way npm publishes it, `sha512-` and the digest in base64. |
 | `strip` | no | How many leading path components to drop when unpacking. Default 0. |
@@ -601,8 +603,10 @@ bin = ["tool"]
 | Key | oku checks |
 |---|---|
 | `attestations = true` | The download against the GitHub artifact attestations of it in the repo, as `actions/attest-build-provenance` makes them. One that the workflow signed is enough. |
-| `sigstore_bundle` | The download against the bundle, as `cosign sign-blob --bundle` writes it in cosign 2.4 and later. |
+| `sigstore_bundle` | The download against the bundle, as `cosign sign-blob --bundle` writes it. oku reads Sigstore's bundle format and cosign's older one. |
 | `sha256_url_bundle` | The file at `sha256_url` against the bundle, and then the download against the sha256 in that file. |
+| `sigstore_signature` and `sigstore_certificate` | The download against the signature and the certificate, as `cosign sign-blob --output-signature --output-certificate` writes them. oku finds the signature's entry in Sigstore's transparency log, `rekor.sigstore.dev`. |
+| `sha256_url_signature` and `sha256_url_certificate` | The file at `sha256_url` the same way, and then the download against the sha256 in that file. |
 
 - `signer_workflow` names the workflow file at any ref, so a reusable workflow
   in another repo works.
@@ -620,10 +624,9 @@ bin = ["tool"]
   another workflow.
 - With a Sigstore check, an artifact without `sha256` is no longer trust on
   first use.
-- oku does not yet check a cosign signature as a `.sig` and a `.pem` beside
-  the file, a bundle in cosign's older `.bundle` format, or SLSA provenance.
-  GitHub signs the attestations of a private repo with a Sigstore of its own,
-  and oku fails on them.
+- oku does not yet check SLSA provenance, or a cosign signature made with a
+  key of the developer's own. GitHub signs the attestations of a private repo
+  with a Sigstore of its own, and oku fails on them.
 
 ### Prebuilt libraries
 
@@ -1798,8 +1801,8 @@ release file of each platform:
 | `supported_envs`, `rosetta2`, `windows_arm_emulation` | The platforms it covers. Rosetta 2 and Windows emulation run the Intel build on arm64. |
 | `files` with a `src` | `bin`. A folder named after the version at the top becomes `strip`. On Windows a program gets `.exe`. |
 | `checksum` of type `github_release` with sha256 | `sha256_url` |
-| `cosign` of the checksum, with a `.sigstore.json` bundle from the release | `sha256_url_bundle`, and its workflow as `signer_workflow` |
-| `cosign` of the file, with a `.sigstore.json` bundle from the release | `sigstore_bundle`, and its workflow as `signer_workflow` |
+| `cosign` of the checksum, with a bundle from the release, or with `--signature` and `--certificate` | `sha256_url_bundle`, or `sha256_url_signature` and `sha256_url_certificate`, and its workflow as `signer_workflow` |
+| `cosign` of the file, the same way | `sigstore_bundle`, or `sigstore_signature` and `sigstore_certificate`, and its workflow as `signer_workflow` |
 | `github_artifact_attestations` | `attestations = true`, and its `signer_workflow` |
 | `version_prefix` | `strip_prefix` |
 | `type: http` with a `url` | That `url` as the download, and the repo's releases as the version source |
@@ -1849,8 +1852,8 @@ bin = ["obsidian"]
 - oku keeps a `cosign` check only when it names a GitHub Actions workflow and
   the release's tag, either as `--certificate-identity` ending in
   `@refs/tags/{{.Version}}`, or as `--certificate-identity-regexp` with
-  `--certificate-github-workflow-ref refs/tags/{{.Version}}`. A key, a `.sig`
-  with a `.pem`, or a `.bundle` file stays out.
+  `--certificate-github-workflow-ref refs/tags/{{.Version}}`. A check with
+  `--key` stays out.
 - A URL template counts only when it gives back the recipe's own download
   for the recipe's version, on every platform. Other parts of the URL keep
   the value they have in that download, such as `arm64` for `#{arch}`.

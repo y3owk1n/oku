@@ -341,9 +341,12 @@ func (e env) planFrom(
 		urls = append(urls, artifact.URL+".minisig")
 	}
 
-	for _, bundle := range []string{artifact.SigstoreBundle, artifact.SHA256URLBundle} {
-		if bundle != "" {
-			urls = append(urls, bundle)
+	for _, signature := range []string{
+		artifact.SigstoreBundle, artifact.SHA256URLBundle, artifact.SigstoreSignature,
+		artifact.SigstoreCertificate, artifact.SHA256URLSignature, artifact.SHA256URLCertificate,
+	} {
+		if signature != "" {
+			urls = append(urls, signature)
 		}
 	}
 

@@ -268,6 +268,8 @@ oku: tool: signature check failed: the bundle at <url> does not show that you/to
 The manifest names a `signer_workflow`, and the signature beside the release,
 or its attestation, came from another workflow, another repo or another tag,
 or does not cover the file oku downloaded. The end of the line says which.
+When it ends in `rekor.sigstore.dev holds no entry of this signature`, nobody
+recorded the signature in Sigstore's log, which a forged signature also lacks.
 oku installed nothing. A release that someone replaced looks like this, so ask
 the developer before you work around it.
 

@@ -1330,9 +1330,16 @@ order step in `prd/product.md`.
 - B503 [10] The lock pins `signer_workflow`, and a changed or dropped one stops
   `update` until `--accept-key`.
 - B504 [4] An `aqua:` entry keeps a `cosign` check that names a GitHub Actions
-  workflow and the release's tag, with a `.sigstore.json` bundle, and its
-  `github_artifact_attestations`, as `signer_workflow`, `attestations`,
-  `sigstore_bundle` and `sha256_url_bundle`. Other cosign forms stay out.
+  workflow and the release's tag, with a bundle or with a signature and a
+  certificate, and its `github_artifact_attestations`, as `signer_workflow`,
+  `attestations` and the bundle or signature keys. A check with `--key` stays
+  out.
+- B505 [10] An artifact with `sigstore_signature` and `sigstore_certificate`,
+  or the same pair for its checksum file, installs only when Rekor holds an
+  entry of that signature and certificate, and the certificate passes the
+  checks of B501.
+- B506 [10] `sigstore_bundle` and `sha256_url_bundle` also take a bundle in
+  cosign's older format.
 
 ## Tooling
 
