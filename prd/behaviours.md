@@ -166,6 +166,10 @@ order step in `prd/product.md`.
 - B420 [2] Only a manifest that is a file on this machine, or in a
   `git+file://` repo, may name a `file://` URL, a local repo as `source.git`,
   or a local signature or provenance file. Any other fails before a download.
+- B538 [2] A manifest from a ref of another machine fails before a download
+  when a download, a checksum or signature file, or a `page`, `redirect` or
+  `sparkle` version source names `localhost` or a loopback address. A
+  manifest on this machine, or served from this machine, may name one.
 - B421 [2] A manifest or list ref over plain `http://`, or `git+http://`, to
   another machine is an error. `http://127.0.0.1` and `localhost` work.
 - B467 [2] oku connects to no private address: loopback, RFC 1918,
@@ -1010,9 +1014,10 @@ order step in `prd/product.md`.
   `{{prefix}}`. oku writes nothing outside them and copies no file from
   outside into the store. When a build command ends, oku kills what it left
   running.
-- B410 [5] oku refuses an archive that unpacks to more than 32 GiB, and an
-  `.xz` file whose header asks for a dictionary over 128 MiB, before it
-  allocates it.
+- B410 [5] oku refuses a download that unpacks to more than 32 GiB: an
+  archive, a compressed single file, a disk image, or a `.pkg` or `.msi`, whose
+  system tool it stops. It refuses an `.xz` file whose header asks for a
+  dictionary over 128 MiB before it allocates it.
 - B35 [5] With no matching artifact, or with `--from-source`, oku runs
   `[build]` steps in order and installs what `install` steps name. The lock
   records the strategy, so `sync` builds on that platform too.
@@ -1243,7 +1248,8 @@ order step in `prd/product.md`.
   It keeps the modes and the symlinks of the bundle it came from, and the owner
   can write in every directory of it.
 - B72 [8] oku unpacks dmg, pkg, deb, rpm and AppImage downloads without
-  executing anything inside them. `.msi` follows in step 9.
+  executing anything inside them. `.msi` follows in step 9. A FIFO in a disk
+  image is left out, and the copy does not wait on it.
 - B301 [8] When the top of a `.dmg` holds a `.pkg` and no app, oku unpacks
   each package into a folder named after it, so `bin` and `app` name files of
   its payload. oku keeps the packages of an image with an app as files.
@@ -1299,7 +1305,8 @@ order step in `prd/product.md`.
   package's programs in the store, unless the package ships a file of that
   name, so a DLL of the same name in the working directory does not load first.
   The profile leaves these links out of its `bin`, so two packages with one dep
-  install together.
+  install together. A dep at another version gives the package another store
+  path, whose links hold the new DLLs.
 - B288 [9] On Windows, two `.msi` downloads in one sync both unpack, one
   after the other.
 - B269 [9] On Windows, a build step with `shell = "pwsh"`, and oku's own steps
@@ -1343,6 +1350,10 @@ order step in `prd/product.md`.
   and `update` until `--accept-key`. When the manifest drops its last signer
   and the lock recorded a signature check, the refusal names
   `--accept-weaker-check` too.
+- B539 [10] The lock records the time in a download's minisign signature as
+  `signed_at`. `update` to a newer version stops when the new download's
+  signature is older, and neither its signed comment nor its file name names
+  the version. `--accept-weaker-check` takes it.
 - B496 [10] Each platform entry of the lock records in `verified` what oku
   checked its download against: `minisign`, `manifest`, `checksum-file`,
   `published` or `first-use`. A sync that reuses the pin writes the same lock.
