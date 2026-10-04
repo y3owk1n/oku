@@ -221,7 +221,11 @@ An inferred manifest keeps the Sigstore signatures, GitHub attestations and
 SLSA provenance that the release holds, when their certificate names a run
 for the repo itself, see
 [How inference finds signatures](manifest.md#how-inference-finds-signatures).
-oku takes the workflow from the first release you add, and `oku.lock` pins it.
+Without those, it keeps a cosign key that the release holds, when the key
+signed the checksum file or the asset. oku takes the workflow or the key from
+the first release you add, and `oku.lock` pins it. The key comes from the same
+release as the files, so the first install trusts it as a first use. After
+that, a changed key stops `oku update` until `--accept-key`.
 
 ## Tokens
 

@@ -2,6 +2,8 @@ package infer
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"slices"
 	"strings"
@@ -11,12 +13,16 @@ import (
 )
 
 // signing is what a GitHub release holds to check its files with Sigstore:
-// the workflow that signs them, its attestations and cosign signatures, and
-// SLSA provenance from a builder oku trusts.
+// the workflow that signs them, its attestations and cosign signatures, or the
+// developer's cosign key and which files it signed, and SLSA provenance from a
+// builder oku trusts.
 type signing struct {
 	workflow     string
 	attestations bool
 	cosign       bool
+	key          string
+	keySums      bool
+	keyAsset     bool
 	provenance   bool
 }
 
@@ -70,6 +76,10 @@ func (inf *Inferrer) signaturesOf(
 		}
 	}
 
+	if s.workflow == "" {
+		s.key, s.keySums, s.keyAsset = inf.keySignatures(ctx, auth, names, urls, asset, sums, digest)
+	}
+
 	if file := provenanceFile(names, asset); file != "" {
 		if data, err := inf.Download(ctx, urls[file], auth); err == nil {
 			line, _, _ := strings.Cut(strings.TrimSpace(string(data)), "\n")
@@ -82,8 +92,88 @@ func (inf *Inferrer) signaturesOf(
 	return s
 }
 
+// keySignatures returns the cosign public key that the release holds, and
+// whether it signed sums and asset. The release must hold one key, as a file
+// whose name has "cosign" and ends in ".pub". oku checks the signature of sums
+// against the file, and that of asset against digest, the sha256 GitHub
+// reports for it. The install checks the log.
+func (inf *Inferrer) keySignatures(
+	ctx context.Context,
+	auth forge.Auth,
+	names []string,
+	urls map[string]string,
+	asset, sums, digest string,
+) (key string, bySums, byAsset bool) {
+	var pubs []string
+
+	for _, n := range names {
+		if strings.HasSuffix(n, ".pub") && strings.Contains(strings.ToLower(n), "cosign") {
+			pubs = append(pubs, n)
+		}
+	}
+
+	if len(pubs) != 1 {
+		return "", false, false
+	}
+
+	data, err := inf.Download(ctx, urls[pubs[0]], auth)
+	if err != nil {
+		return "", false, false
+	}
+
+	if key = cosignKeyText(data); key == "" {
+		return "", false, false
+	}
+
+	signedBy := func(sig string, sum []byte) bool {
+		data, err := inf.Download(ctx, urls[sig], auth)
+
+		return err == nil && sigstore.SignedBy(data, sum, key)
+	}
+
+	if sig := keyFile(names, sums); sig != "" {
+		if content, err := inf.Download(ctx, urls[sums], auth); err == nil {
+			sum := sha256.Sum256(content)
+			bySums = signedBy(sig, sum[:])
+		}
+	}
+
+	if sig := keyFile(names, asset); sig != "" {
+		if sum, err := hex.DecodeString(digest); err == nil && len(sum) > 0 {
+			byAsset = signedBy(sig, sum)
+		}
+	}
+
+	if !bySums && !byAsset {
+		return "", false, false
+	}
+
+	return key, bySums, byAsset
+}
+
+// keyFile returns the bundle or the signature beside file, or "".
+func keyFile(names []string, file string) string {
+	if file == "" {
+		return ""
+	}
+
+	if files := cosignFiles(names, file); len(files) == 1 {
+		return files[0]
+	}
+
+	if slices.Contains(names, file+".sig") {
+		return file + ".sig"
+	}
+
+	return ""
+}
+
 // packageTOML writes the keys of s for [package].
 func (s signing) packageTOML() string {
+	if s.key != "" {
+		return fmt.Sprintf("signing_key = %q\n", s.key)
+	}
+
 	if s.workflow == "" {
 		return ""
 	}
@@ -118,6 +208,21 @@ func (s signing) artifactTOML(names []string, asset, sums string, url func(strin
 				key(f.prefix+"_signature", files[0])
 				key(f.prefix+"_certificate", files[1])
 			}
+		}
+	}
+
+	// The host's own files show whether the key signs the checksum file, the
+	// download or both.
+	for _, f := range []struct {
+		file, prefix string
+		signed       bool
+	}{{sums, "sha256_url", s.keySums}, {asset, "sigstore", s.keyAsset}} {
+		switch sig := keyFile(names, f.file); {
+		case s.key == "" || !f.signed || sig == "":
+		case strings.HasSuffix(sig, ".sig"):
+			key(f.prefix+"_signature", sig)
+		default:
+			key(f.prefix+"_bundle", sig)
 		}
 	}
 

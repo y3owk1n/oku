@@ -1352,6 +1352,10 @@ order step in `prd/product.md`.
   the GitHub attestations of the asset, when their certificate names a run for
   the repo, with that run's workflow as `signer_workflow`. It keeps the
   release's provenance when a builder oku trusts made it for the repo.
+- B522 [4] With no signature by a workflow of the repo, a manifest inferred
+  from a github.com release that holds exactly one cosign public key keeps it
+  as `signing_key`, with the bundle or signature of the checksum file or the
+  asset, when the key made that signature.
 - B509 [10] A `signing_key` on a package's entry in `oku.toml` applies to its
   manifest from the first install. oku checks every download against it, and
   refuses a manifest that names another key or a key that is not minisign's.

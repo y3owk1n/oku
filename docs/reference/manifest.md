@@ -1776,6 +1776,7 @@ the checksum file and beside the asset:
 |---|---|
 | `<file>.sigstore.json`, `<file>.bundle` or `<file>.cosign.bundle` | `sha256_url_bundle` for the checksum file, `sigstore_bundle` for the asset |
 | `<file>.sig` with `<file>.pem`, `.cert` or `.crt` | `sha256_url_signature` and `sha256_url_certificate`, or `sigstore_signature` and `sigstore_certificate` |
+| A `.pub` file with `cosign` in its name, and a bundle or `<file>.sig` that its key signed | `signing_key`, and `sha256_url_bundle` or `sha256_url_signature` for the checksum file, `sigstore_bundle` or `sigstore_signature` for the asset |
 | GitHub artifact attestations of the asset | `attestations = true` |
 | `<asset>.intoto.jsonl`, or the release's one `.intoto.jsonl` file | `provenance` |
 
@@ -1783,10 +1784,15 @@ the checksum file and beside the asset:
   the first attestation. It keeps them only when the certificate names a
   GitHub Actions run for the repo itself, and takes the run's workflow as
   `signer_workflow`. A signature from another repo stays out.
+- With no signature by a workflow of the repo, oku looks for a cosign public
+  key. The release must hold one `.pub` file with `cosign` in its name. oku
+  keeps the key as a [cosign `signing_key`](#cosign-key) only when the key
+  made the bundle or `.sig` of the checksum file or of your machine's asset. A key from the repo's files, not the release, stays out.
 - oku keeps provenance only when its certificate names a builder that
   slsa-verifier trusts, run for the repo.
-- Reading the certificate checks nothing. oku checks the signatures when it
-  installs, and `oku.lock` pins the workflow from then on. The files of the
+- Reading the certificate, or the signature by a key, does not check the log.
+  oku checks the signatures and the log when it installs, and `oku.lock` pins
+  the workflow or the key from then on. The files of the
   other platforms must come from the same workflow, which oku checks when
   that platform installs.
 

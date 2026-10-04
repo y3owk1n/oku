@@ -128,3 +128,79 @@ func TestB520AnAquaEntryWithAKeyBecomesTheSigningKey(t *testing.T) {
 		}
 	}
 }
+
+func TestB522InferenceKeepsASignatureByTheReleasesCosignKey(t *testing.T) {
+	developer, text, public := cosignKey(t)
+	other, _, otherPublic := cosignKey(t)
+
+	for _, tc := range []struct {
+		name      string
+		files     func(f *fakeSigstore, archive, sums []byte) map[string][]byte
+		want, not []string
+	}{
+		{
+			name: "a bundle of the checksum file",
+			files: func(f *fakeSigstore, _, sums []byte) map[string][]byte {
+				return map[string][]byte{"cosign.pub": public, "checksums.txt.sigstore.json": f.keyBundle(t, developer, sums)}
+			},
+			want: []string{"signing_key = \"" + text + "\"", "sha256_url_bundle = "},
+		},
+		{
+			name: "a signature of the download",
+			files: func(f *fakeSigstore, archive, _ []byte) map[string][]byte {
+				return map[string][]byte{"tool_cosign.pub": public, hostAssetName() + ".sig": f.keySign(t, developer, archive, true)}
+			},
+			want: []string{"signing_key = \"" + text + "\"", "sigstore_signature = "},
+			not:  []string{"certificate"},
+		},
+		{
+			name: "a signature by another key",
+			files: func(f *fakeSigstore, _, sums []byte) map[string][]byte {
+				return map[string][]byte{"cosign.pub": public, "checksums.txt.sig": f.keySign(t, other, sums, true)}
+			},
+			not: []string{"signing_key", "sha256_url_signature"},
+		},
+		{
+			name: "two keys",
+			files: func(f *fakeSigstore, _, sums []byte) map[string][]byte {
+				return map[string][]byte{
+					"cosign.pub": public, "cosign-old.pub": otherPublic,
+					"checksums.txt.sig": f.keySign(t, developer, sums, true),
+				}
+			},
+			not: []string{"signing_key", "sha256_url_signature"},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m := newMachine(t)
+			f := newFakeSigstore(t, &m)
+			inferRelease(t, &m, func(archive, sums []byte) map[string][]byte { return tc.files(f, archive, sums) }, nil)
+
+			out, err := m.run(t, "", "add", "github:owner/tool", "--verbose")
+			if err != nil {
+				t.Fatalf("add: %v\n%s", err, out)
+			}
+
+			for _, want := range tc.want {
+				if !strings.Contains(out, want) {
+					t.Fatalf("the inferred manifest lacks %q:\n%s", want, out)
+				}
+			}
+
+			for _, not := range tc.not {
+				if strings.Contains(out, not) {
+					t.Fatalf("the inferred manifest has %q:\n%s", not, out)
+				}
+			}
+
+			if len(tc.want) > 0 {
+				lock, err := os.ReadFile(filepath.Join(m.config, "oku.lock"))
+				must(t, err)
+
+				if !strings.Contains(string(lock), "verified = 'cosign'") {
+					t.Fatalf("oku.lock does not record the cosign check:\n%s", lock)
+				}
+			}
+		})
+	}
+}
