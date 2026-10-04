@@ -1533,6 +1533,10 @@ order step in `prd/product.md`.
   stop `oku generations`, and `oku gc` deletes it. A store path that a delete
   left half done is replaced, not used.
 ||||||| Stash base
+- B533 [12] A change stops and names a `text` or `render` file that the user
+  edited in place, or a `secret` whose link the user replaced, and writes
+  nothing. A file with a writable mode gets its own copy in each generation.
+  The decrypted copy of a secret goes when its target and its entry are gone.
 - B530 [12] `oku gc` keeps a store path that an app, font, service or
   launcher in the ledger runs from, with its deps, and one that a running
   `oku shell` or `oku run` uses. It deletes the record of a session that
