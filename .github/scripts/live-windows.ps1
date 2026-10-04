@@ -238,7 +238,7 @@ try {
     Set-Content $allHosts $hookLine
     $diagnosis = (& $oku doctor) -join "`n"
     Check 'doctor finds the hook line in profile.ps1, written with the oku.exe name' {
-        ($diagnosis -match 'the shell hook is loaded from') -and
+        ($diagnosis -match 'the shell hook line is in') -and
         ($diagnosis -match [regex]::Escape($allHosts))
     }
 
