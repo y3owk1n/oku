@@ -1335,8 +1335,7 @@ order step in `prd/product.md`.
 - B504 [4] An `aqua:` entry keeps a `cosign` check that names a GitHub Actions
   workflow and the release's tag, with a bundle or with a signature and a
   certificate, and its `github_artifact_attestations`, as `signer_workflow`,
-  `attestations` and the bundle or signature keys. A check with `--key` stays
-  out.
+  `attestations` and the bundle or signature keys.
 - B505 [10] An artifact with `sigstore_signature` and `sigstore_certificate`,
   or the same pair for its checksum file, installs only when Rekor holds an
   entry of that signature and certificate, and the certificate passes the
@@ -1369,6 +1368,15 @@ order step in `prd/product.md`.
   no record, and later runs check it. It never replaces a record.
 - B517 [10] On macOS and Linux a package's store path is read-only once oku
   has made it, so a program cannot write into it, and gc still deletes it.
+- B519 [10] With a cosign `signing_key`, an artifact installs only when the
+  bundle or signature it names, of the download or its checksum file, is by
+  that key and in the transparency log, and `oku.lock` records
+  `verified = "cosign"`.
+- B520 [4] An `aqua:` entry whose `cosign` check names `--key` becomes a
+  manifest whose `signing_key` is that key, which oku reads from its URL at
+  the newest release. Its artifacts name the bundle or signature with no
+  certificate. A check that skips the log, or whose key oku cannot read,
+  stays out.
 - B513 [10] oku does not install a new version of an `npm:`, `pypi:`, `cargo:`
   or `go:` package that OSV lists with a `MAL-` advisory, and `add --plan`
   stops the same way. A package the lock holds stays at its locked version,
