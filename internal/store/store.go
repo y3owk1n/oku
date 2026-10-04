@@ -55,6 +55,9 @@ type Store struct {
 	net netpolicy.Policy
 	// auth is the login for downloads from one host.
 	auth forge.Auth
+	// signedAfter is the unix time that a minisign signature must not be older
+	// than, or zero.
+	signedAfter int64
 	// Private finds where the API serves a download that answered 404, such as
 	// a release asset of a private GitHub repo, and the header it needs. It
 	// returns "" when it knows no other address.
@@ -73,6 +76,16 @@ type Store struct {
 func (s *Store) As(auth forge.Auth) *Store {
 	with := *s
 	with.auth = auth
+
+	return &with
+}
+
+// SignedAfter returns a store that refuses a minisign signature made before the
+// unix time at, unless it names the version or the file name holds it. Zero
+// checks no time.
+func (s *Store) SignedAfter(at int64) *Store {
+	with := *s
+	with.signedAfter = at
 
 	return &with
 }
@@ -136,6 +149,9 @@ type Realized struct {
 	MalwareUnchecked string
 	// MissingDeps are the store packages a build loads that are not runtime deps.
 	MissingDeps []MissingDep
+	// SignedAt is the unix time in the minisign signature of the download, or
+	// zero.
+	SignedAt int64
 }
 
 // Has reports whether artifact a of m with that digest is in the store.
@@ -175,6 +191,12 @@ func (s *Store) artifactPath(
 		// See BuildPath.
 		if len(deps) > 0 {
 			extra = append(extra, "path")
+		}
+	} else if p.OS == "windows" && len(deps) > 0 {
+		// The tree holds links to the DLLs of the deps, see linkDepDLLs.
+		extra = append(extra, "dlls")
+		for _, dep := range deps {
+			extra = append(extra, filepath.Base(dep.Prefix))
 		}
 	}
 
@@ -244,7 +266,7 @@ func (s *Store) Realize(
 		return reuse(realized, a, p.OS)
 	}
 
-	vouched, err := s.vouched(ctx, m, a, download, got)
+	vouched, signedAt, err := s.vouched(ctx, m, a, download, got)
 	if err != nil {
 		return Realized{}, err
 	}
@@ -252,6 +274,8 @@ func (s *Store) Realize(
 	if vouched {
 		realized.FirstUse = false
 	}
+
+	realized.SignedAt = signedAt
 
 	a.SHA256 = got
 	final := realized.Path
@@ -408,26 +432,30 @@ func (s *Store) generateArtifactCompletions(
 
 // vouched checks download, whose sha256 is digest, against the integrity value
 // of a, the minisign key of m and the Sigstore signatures m names. It reports
-// whether one of them vouched for the download, which then is not a first use.
+// whether one of them vouched for the download, which then is not a first use,
+// and the unix time in its minisign signature, or zero.
 func (s *Store) vouched(
 	ctx context.Context,
 	m *manifest.Manifest,
 	a manifest.Artifact,
 	download, digest string,
-) (bool, error) {
+) (bool, int64, error) {
 	if a.Integrity != "" {
 		if err := verifyIntegrity(download, a.Integrity); err != nil {
 			os.Remove(download)
 
-			return false, fmt.Errorf("%s: %s: %w", m.Package.Name, a.URL, err)
+			return false, 0, fmt.Errorf("%s: %s: %w", m.Package.Name, a.URL, err)
 		}
 	}
+
+	var signedAt int64
 
 	// A cosign key signs the Sigstore signatures instead.
 	minisigned := m.Package.SigningKey != "" && !manifest.CosignKey(m.Package.SigningKey)
 	if minisigned {
-		if err := s.verifySignature(ctx, m.Package.SigningKey, a.URL, m.Version.Value, download); err != nil {
-			return false, fmt.Errorf("%s: %w", m.Package.Name, err)
+		var err error
+		if signedAt, err = s.verifySignature(ctx, m.Package.SigningKey, a.URL, m.Version.Value, download); err != nil {
+			return false, 0, fmt.Errorf("%s: %w", m.Package.Name, err)
 		}
 	}
 
@@ -436,41 +464,41 @@ func (s *Store) vouched(
 		if err := s.verifySigstore(ctx, m, a, digest); err != nil {
 			os.Remove(download)
 
-			return false, fmt.Errorf("%s: %w", m.Package.Name, err)
+			return false, 0, fmt.Errorf("%s: %w", m.Package.Name, err)
 		}
 	}
 
-	return a.Integrity != "" || minisigned || signed, nil
+	return a.Integrity != "" || minisigned || signed, signedAt, nil
 }
 
-// Pin returns the sha256 that oku.lock holds for artifact a of m, and whether
-// oku trusted a download for it. It takes the first digest it finds in
-// a.SHA256 and the file at a.SHA256URL. With neither it downloads a and checks
-// it the way Realize does, and it unpacks nothing, so a may be for another
-// platform.
+// Pin returns the sha256 that oku.lock holds for artifact a of m, whether oku
+// trusted a download for it, and the time of its minisign signature. It takes
+// the first digest it finds in a.SHA256 and the file at a.SHA256URL. With
+// neither it downloads a and checks it the way Realize does, and it unpacks
+// nothing, so a may be for another platform. The result has no Path.
 func (s *Store) Pin(
 	ctx context.Context,
 	m *manifest.Manifest,
 	a manifest.Artifact,
-) (string, bool, error) {
+) (Realized, error) {
 	if a.SHA256 != "" {
-		return a.SHA256, false, nil
+		return Realized{SHA256: a.SHA256}, nil
 	}
 
 	if a.SHA256URL != "" {
 		published, err := s.signedSHA256(ctx, m, a)
 
-		return published, false, err
+		return Realized{SHA256: published}, err
 	}
 
 	download, got, err := s.fetch(ctx, a.URL, "")
 	if err != nil {
-		return "", false, err
+		return Realized{}, err
 	}
 
-	vouched, err := s.vouched(ctx, m, a, download, got)
+	vouched, signedAt, err := s.vouched(ctx, m, a, download, got)
 
-	return got, !vouched, err
+	return Realized{SHA256: got, FirstUse: !vouched, SignedAt: signedAt}, err
 }
 
 // pathFor names the store path of m. extra is the artifact digest, or "build"
@@ -549,7 +577,9 @@ func unpack(download, tmp string, a manifest.Artifact) error {
 		return err
 	}
 
-	return writeNew(buffered, filepath.Join(pkg, filepath.FromSlash(name)))
+	var written int64
+
+	return writeNew(&unpackedReader{r: buffered, total: &written}, filepath.Join(pkg, filepath.FromSlash(name)))
 }
 
 // singleFileName names a download that is the program itself after the last

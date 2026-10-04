@@ -468,7 +468,7 @@ oku recognises a download by its content, not by its file name.
 
 | Format | Notes |
 |---|---|
-| tar, tar.gz, tar.bz2, tar.xz, tar.zst | An xz file may use a BCJ filter for x86, ARM, ARM-Thumb, PowerPC, IA-64 or SPARC, or the Delta filter. ARM64 and RISC-V BCJ are not read. oku refuses an archive that unpacks to more than 32 GiB, and an xz file whose dictionary is over 128 MiB. |
+| tar, tar.gz, tar.bz2, tar.xz, tar.zst | An xz file may use a BCJ filter for x86, ARM, ARM-Thumb, PowerPC, IA-64 or SPARC, or the Delta filter. ARM64 and RISC-V BCJ are not read. oku refuses a download of any format that unpacks to more than 32 GiB, and an xz file whose dictionary is over 128 MiB. |
 | zip | |
 | 7z | An archive made on Windows has no unix file modes. Its programs still run, because oku marks every `bin` as executable. |
 | `.deb` | oku unpacks only the data archive. Its files are at `usr/bin/...`. |
@@ -486,8 +486,9 @@ oku recognises a download by its content, not by its file name.
 - In a `.deb` or an `.rpm` a symlink to an absolute path, such as
   `usr/bin/fdfind -> /usr/bin/fd`, names a file of the package and becomes a
   relative link.
-- From a `.dmg` oku leaves out the hidden Finder files and any link that points
-  out of the image, such as the shortcut to `/Applications`.
+- From a `.dmg` oku leaves out the hidden Finder files, any link that points
+  out of the image, such as the shortcut to `/Applications`, and anything that
+  is not a file, folder or link, such as a FIFO.
 - oku unpacks installers and never runs them. It never executes a `.deb`'s
   maintainer scripts, an `.rpm`'s scriptlets, a `.pkg`'s install scripts or an
   `.msi`'s install sequence. A package that depends on its post-install script

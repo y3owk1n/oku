@@ -55,7 +55,7 @@ func (r *Refused) Error() string {
 	var why string
 
 	switch {
-	case local(r.Host):
+	case Local(r.Host):
 		why = fmt.Sprintf(
 			"%s is this machine, and oku follows no redirect there from another host. "+
 				"deny_private = false under [network] in config.toml allows it",
@@ -109,9 +109,9 @@ func matches(patterns []string, host string) bool {
 	return false
 }
 
-// local reports whether host names this machine: "localhost" or a loopback
+// Local reports whether host names this machine: localhost or a loopback
 // address.
-func local(host string) bool {
+func Local(host string) bool {
 	if strings.EqualFold(host, "localhost") {
 		return true
 	}
@@ -133,9 +133,9 @@ func private(addr netip.Addr) bool {
 }
 
 // checkHost refuses a host that Allow does not list. A URL of this machine
-// always passes, since the user named it.
+// passes, since only the user or a manifest on this machine may name one.
 func (p Policy) checkHost(host string) error {
-	if local(host) || p.allowed(host) {
+	if Local(host) || p.allowed(host) {
 		return nil
 	}
 
@@ -280,10 +280,10 @@ func (g guard) RoundTrip(req *http.Request) (*http.Response, error) {
 	var refused *Refused
 
 	switch {
-	case !local(host) && !g.policy.allowed(host):
+	case !Local(host) && !g.policy.allowed(host):
 		refused = &Refused{Host: host}
-	case local(host) && len(chain) > 0 && !g.policy.AllowPrivate:
-		if first, err := url.Parse(chain[0]); err == nil && !local(first.Hostname()) {
+	case Local(host) && len(chain) > 0 && !g.policy.AllowPrivate:
+		if first, err := url.Parse(chain[0]); err == nil && !Local(first.Hostname()) {
 			refused = &Refused{Host: host}
 		}
 	}

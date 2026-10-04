@@ -138,6 +138,9 @@ type Platform struct {
 	Version string `toml:"version,omitempty"`
 	// Tag is the upstream tag of Version when it differs from Version.
 	Tag string `toml:"tag,omitempty"`
+	// SignedAt is the unix time in the minisign signature of the download, so
+	// a newer version whose signature is older stands out.
+	SignedAt int64 `toml:"signed_at,omitempty"`
 }
 
 // What oku checked a download against, strongest first.

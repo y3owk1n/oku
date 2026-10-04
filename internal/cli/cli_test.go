@@ -6284,10 +6284,22 @@ func TestB72UnpacksMacOSDiskImagesAndInstallerPackages(t *testing.T) {
 	)
 	must(t, os.Symlink("/Applications", filepath.Join(payload, "Applications")))
 
+	// Opening a FIFO waits for a writer, so oku leaves it out of the copy.
+	// hdiutil would wait on it too, so it goes into the mounted image.
+	writable, mount := filepath.Join(m.fixtures, "tool-rw.dmg"), filepath.Join(m.fixtures, "mount")
 	dmg := filepath.Join(m.fixtures, "tool.dmg")
-	if out, err := exec.Command("/usr/bin/hdiutil", "create", "-quiet", "-volname", "Tool", "-srcfolder", payload, "-format", "UDZO", dmg).
-		CombinedOutput(); err != nil {
-		t.Skipf("cannot create a disk image here: %v\n%s", err, out)
+
+	for _, args := range [][]string{
+		{"hdiutil", "create", "-quiet", "-volname", "Tool", "-srcfolder", payload, "-format", "UDRW", writable},
+		{"hdiutil", "attach", "-quiet", "-nobrowse", "-mountpoint", mount, writable},
+		{"mkfifo", filepath.Join(mount, "Tool.app", "Contents", "pipe")},
+		{"hdiutil", "detach", "-quiet", mount},
+		{"hdiutil", "convert", "-quiet", writable, "-format", "UDZO", "-o", dmg},
+	} {
+		if out, err := exec.Command(args[0], args[1:]...).CombinedOutput(); err != nil {
+			_ = exec.Command("hdiutil", "detach", "-quiet", "-force", mount).Run()
+			t.Skipf("cannot create a disk image here: %v\n%s", err, out)
+		}
 	}
 
 	image, err := os.ReadFile(dmg)
@@ -7154,6 +7166,75 @@ func TestB424ASignedArtifactMustBeSignedForThisFileOrVersion(t *testing.T) {
 		if !ok && (err == nil || !strings.Contains(err.Error(), "names neither")) {
 			t.Fatalf("a signature with the comment %q should be refused, got %v", comment, err)
 		}
+	}
+}
+
+func TestB539ANewerVersionWhoseSignatureIsOlderStops(t *testing.T) {
+	m := newMachine(t)
+
+	public, secret, err := minisign.GenerateKey(rand.Reader)
+	must(t, err)
+
+	// release writes version's tool.tar.gz, signed at the unix time at with
+	// minisign's own comment, which names the file and not the version.
+	release := func(version string, at int) string {
+		archive, _ := m.archive(t, "tool-"+version, map[string]string{"tool": "#!/bin/sh\necho " + version + "\n"})
+		data, err := os.ReadFile(archive)
+		must(t, err)
+
+		dir := filepath.Join(m.fixtures, "v"+version)
+		must(t, os.MkdirAll(dir, 0o755))
+
+		file := filepath.Join(dir, "tool.tar.gz")
+		must(t, os.WriteFile(file, data, 0o644))
+
+		comment := fmt.Sprintf("timestamp:%d\tfile:tool.tar.gz", at)
+		must(t, os.WriteFile(file+".minisig", minisign.SignWithComments(secret, data, comment, ""), 0o644))
+
+		return file
+	}
+
+	ref := filepath.Join(m.fixtures, "tool.toml")
+	serve := func(version, file string) {
+		must(t, os.WriteFile(ref, fmt.Appendf(nil,
+			"[package]\nname = \"tool\"\nsigning_key = %q\n[version]\nvalue = %q\n"+
+				"[[artifact]]\nurl = \"file://%s\"\nbin = [\"tool\"]\n", public.String(), version, file,
+		), 0o644))
+	}
+
+	old := release("1.0.0", 1_700_000_000)
+	serve("2.0.0", release("2.0.0", 1_800_000_000))
+
+	_, err = m.run(t, "", "add", ref)
+	must(t, err)
+
+	// A manifest that names 3.0.0 but serves the file of 1.0.0, which the same
+	// key signed earlier.
+	serve("3.0.0", old)
+
+	if _, err := m.run(t, "", "update", "tool"); err == nil || !strings.Contains(err.Error(), "--accept-weaker-check") {
+		t.Fatalf("want an older signature for a newer version refused, got %v", err)
+	}
+
+	if got := m.toolOutput(t); got != "2.0.0" {
+		t.Fatalf("tool printed %q, want the locked 2.0.0", got)
+	}
+
+	serve("3.0.0", release("3.0.0", 1_900_000_000))
+
+	if out, err := m.run(t, "", "update", "tool"); err != nil {
+		t.Fatalf("update to a release signed later: %v\n%s", err, out)
+	}
+
+	// A fix to an older line, signed later than the release above it.
+	serve("4.0.0", old)
+
+	if out, err := m.run(t, "", "update", "tool", "--accept-weaker-check"); err != nil {
+		t.Fatalf("--accept-weaker-check should take the older signature: %v\n%s", err, out)
+	}
+
+	if got := m.toolOutput(t); got != "1.0.0" {
+		t.Fatalf("tool printed %q, want the accepted file", got)
 	}
 }
 

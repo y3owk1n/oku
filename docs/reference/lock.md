@@ -90,6 +90,7 @@ A platform name is `os-arch`, plus `-glibc` or `-musl` on Linux:
 | `impure` | `true` when a `run` step of the build used `network = true`. |
 | `version` | The version of this platform, when each artifact of the manifest [finds its own version](manifest.md#a-version-for-each-platform). |
 | `tag` | The upstream tag of that version, when it differs, such as `v2.0.0`. `oku sync` downloads from it. |
+| `signed_at` | The unix time in the minisign signature of the download, when a `signing_key` checked it. |
 
 oku keeps `vendor_sha256` and `impure` beside the build in the store, so
 `oku update` of a build that did not change writes the same lock.
@@ -194,6 +195,7 @@ resolves them again with their parent.
 | `signer_workflow` | oku refuses a manifest with another `signer_workflow`, or none, until you pass `--accept-key`. |
 | `verified` per platform | `oku update` and `oku add` refuse a new download that oku would check more weakly, until you pass `--accept-weaker-check`. See [Security](security.md#weaker-checks). |
 | `vendor_sha256` per platform | A build whose vendor steps download something else fails, and nothing is kept. |
+| `signed_at` per platform | `oku update` refuses a newer version whose minisign signature is older than this one and names no version, until you pass `--accept-weaker-check`. See [Security](security.md#signing-keys-of-a-manifest). |
 | `tag_commit` | oku refuses to download once upstream moved the tag off that commit. |
 | include `commit` and `sha256` | `oku sync` reads the list at that commit and stops when its content changed. |
 

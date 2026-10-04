@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"cmp"
 	"fmt"
 	"strings"
 
@@ -139,6 +140,20 @@ func (req request) checkVerified(p platform.Platform, now string) error {
 			"if the developer announced this change, run the command again with --accept-weaker-check",
 		p, verifiedText(was), how,
 	)
+}
+
+// signedAfter returns the time of the minisign signature that oku.lock holds
+// for p, when the package moves to a newer version of the same ref, or zero. A
+// newer release that is signed earlier could be an older file, so the store
+// refuses it unless req accepts a weaker check.
+func (req request) signedAfter(p platform.Platform, version string) int64 {
+	was := req.previous.Platforms[p.String()]
+	if req.acceptWeaker || req.previous.Ref != req.ref.String() ||
+		resolve.Compare(version, cmp.Or(was.Version, req.previous.Version)) <= 0 {
+		return 0
+	}
+
+	return was.SignedAt
 }
 
 // trust runs req.checkTrust for the first download of version of the package

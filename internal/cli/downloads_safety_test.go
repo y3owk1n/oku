@@ -68,6 +68,58 @@ func TestB420OnlyAManifestOnThisMachineMayNameAFileURL(t *testing.T) {
 	}
 }
 
+func TestB538OnlyAManifestOnThisMachineMayNameAURLOfThisMachine(t *testing.T) {
+	const commit = "0123456789abcdef0123456789abcdef01234567"
+
+	m := newMachine(t)
+	m.opts.FileDownloads = false
+
+	archive, _ := m.archive(t, "tool", map[string]string{"tool": script})
+	data, err := os.ReadFile(archive)
+	must(t, err)
+
+	var server *httptest.Server
+
+	manifest := func(version string) string {
+		return "[package]\nname = \"tool\"\n" + version +
+			"[[artifact]]\nurl = \"" + server.URL + "/tool.tar.gz\"\nbin = [\"tool\"]\n"
+	}
+
+	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/repos/owner/tool/commits/HEAD", "/api/repos/owner/page/commits/HEAD":
+			_, _ = w.Write([]byte(commit))
+		case "/raw/owner/tool/" + commit + "/oku.pkg.toml", "/tool.toml":
+			_, _ = w.Write([]byte(manifest("[version]\nvalue = \"1.0.0\"\n")))
+		case "/raw/owner/page/" + commit + "/oku.pkg.toml":
+			// A version read from a local service could carry its answer away.
+			_, _ = w.Write([]byte(manifest(
+				"[version]\nfrom = \"page\"\nrepo = \"" + server.URL + "/admin\"\nregex = '([0-9.]+)'\n",
+			)))
+		case "/tool.tar.gz":
+			_, _ = w.Write(data)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(server.Close)
+
+	m.opts.GitHubAPI = server.URL + "/api"
+	m.opts.GitHubRaw = server.URL + "/raw"
+
+	for _, ref := range []string{"github:owner/tool", "github:owner/page"} {
+		if out, err := m.run(t, "", "add", ref); err == nil ||
+			!strings.Contains(err.Error(), "only a manifest on this machine may name a URL of this machine") {
+			t.Fatalf("want %s refused, got %v:\n%s", ref, err, out)
+		}
+	}
+
+	// A manifest that this machine serves may name its own URLs.
+	if out, err := m.run(t, "", "add", server.URL+"/tool.toml"); err != nil {
+		t.Fatalf("a manifest served from this machine should download from it: %v\n%s", err, out)
+	}
+}
+
 func TestB421APlainHTTPRefToAnotherMachineIsRefused(t *testing.T) {
 	m := newMachine(t)
 
