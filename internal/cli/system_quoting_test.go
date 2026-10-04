@@ -17,6 +17,7 @@ func TestB534ADesktopEntryQuotesAProgramPathWithASpace(t *testing.T) {
 
 	// A data directory with a space puts one in every store path.
 	data := filepath.Join(t.TempDir(), "my data")
+	t.Cleanup(func() { _ = writable(data) })
 	t.Setenv("XDG_DATA_HOME", data)
 	m.data = filepath.Join(data, "oku")
 
