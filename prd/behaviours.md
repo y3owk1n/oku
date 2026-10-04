@@ -318,7 +318,8 @@ order step in `prd/product.md`.
   `OKU_REQUIRE_SIGNATURE=1` and a minisign it pins by sha256. It splits `args`
   on spaces and never runs it as shell code.
 - B181 [2] `sync --locked` fails before any download when the lock does not pin
-  a package of the list for the host, and names the packages and the platform.
+  a package of the list for the host, or pins it at a version that the list's
+  `version` leaves out, and names the packages and the platform.
   It also fails when the lock would change in any other way. It never writes
   the lock. Line endings do not count, so a lock and a local manifest that git
   checked out with CRLF pass.
