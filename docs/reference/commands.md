@@ -27,7 +27,7 @@ These work on every command.
 Inside a directory tree that has an `oku.toml`, the commands that read or
 change a list act on that project and print `project <dir>` on stderr, once
 per command. These are `add`, `remove`, `list`, `sync`, `update`, `outdated`,
-`info`, `why`, `which`, `generations` and `rollback`. `gc`, `source`, `search`,
+`info`, `why`, `which`, `verify`, `generations` and `rollback`. `gc`, `source`, `search`,
 `manifest` and `self` use no list. See [Projects](../guides/projects.md).
 
 ## Exit codes
@@ -97,14 +97,16 @@ Rules:
   stops the command, and the packages added before it stay.
 - `--asset` and `--bin` describe one download, so they take one ref.
 - Adding a package that is already installed replaces it. Its entry keeps
-  `min_release_age`, and `run_as` while the entry stays in system scope.
+  `min_release_age`, `signing_key` and `signer_workflow`, and `run_as` while
+  the entry stays in system scope.
 - Without `@version`, oku installs the newest version. `@version`, a range or
   a prefix picks one, see [Pin a version](refs.md#pin-a-version). oku writes
   it to `oku.toml` as `{ ref = "...", version = "..." }`.
 - A bare word that is no file here fails with `there is no file named <word>
   here`, and says how to write a ref.
 - When the host cannot give a build a sandbox, oku builds anyway and prints a
-  warning that names the reason.
+  warning that names the reason. With `require_sandbox = true` in
+  `config.toml` it refuses instead.
 
 ```
 $ oku add github:BurntSushi/ripgrep@14.1.1
@@ -738,7 +740,7 @@ postgres: stopped
 - `start` and `restart` look again one second later. When the program has
   exited by then, the command fails and says where to look, such as
   `oku: atuin started and then exited, look at ~/.local/share/oku/logs/atuin.log`.
-  On Linux the hint is a `journalctl` command. Windows has no log to point at.
+  On Linux the hint is a `journalctl` command.
 - `list` and `status` mark a system service with `system scope`.
 
 ### oku setup
@@ -1219,6 +1221,7 @@ machine. Without a file it tests `oku.pkg.toml`.
 | `--accept-weaker-check` | As in `oku add`. |
 | `--min-release-age AGE` | As in `oku add`. |
 | `--accept-unknown-age` | As in `oku add`. |
+| `--accept-unverified` | As in `oku add`. |
 
 ```
 $ oku manifest test
@@ -1365,8 +1368,8 @@ Uses and fills caches of built packages. See
 `push` rules:
 
 - It skips packages that are plain downloads.
-- It refuses a package whose build had network access (`network = true` on a
-  `run` step).
+- It refuses a package whose build asked for network access (`network = true`
+  on a `run` step). It takes a build that ran without the sandbox.
 - It signs with `signing.key`, so it needs `oku key generate` first.
 - It uploads nothing. Copy the directory to any static web host.
 

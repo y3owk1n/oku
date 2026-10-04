@@ -66,6 +66,8 @@ export XDG_CACHE_HOME=/tmp/oku-try/cache
   trust/
     approvals.toml             manifests you allowed to run build commands or set [env]
     allow.toml                 projects the shell hook may apply
+    sources.toml               owners, hosts and npm scopes you trusted to name what oku installs
+    busy                       the lock that the shell hook and allow take to save allow.toml
 
 <cache>/oku/
   downloads/<sha256>           verified downloads, reused on reinstall for two days
@@ -270,7 +272,7 @@ one.
 Only one oku process changes the machine at a time. Before it changes
 anything, each of these commands takes a lock on `busy`:
 
-- `add`, `remove`, `sync`, `update`, `rollback` and `gc`
+- `add`, `remove`, `sync`, `update`, `rollback`, `gc` and `verify`
 - `allow` and `deny`
 - `source add`, `source remove`, `cache add`, `cache remove`, `cache push`,
   `key generate`, `key trust` and `key revoke`

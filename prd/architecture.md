@@ -55,9 +55,12 @@ A ref is read as a manifest or as a list. The kind sets the file names.
 |---|---|---|
 | `github:owner/repo` | `oku.pkg.toml` | `oku.toml` |
 | `github:owner/repo#name` | `name.toml`, else `packages/name.toml` | `name.toml`, else `lists/name.toml` |
+| `codeberg:`, `gitea:`, `gitlab:` refs | as `github:`, through that forge's API | as `github:` |
 | `git+<url>` | `oku.pkg.toml` | `oku.toml` |
 | `git+<url>#path` | that path | that path |
 | file path, `https://` URL | that file | that file |
+| `npm:`, `pypi:`, `go:`, `cargo:` | inferred from the registry | none |
+| `cask:`, `scoop:`, `aqua:`, `winget:` | translated from the recipe | none |
 
 - A `github:` repo with no manifest is inferred from releases (D13).
 - `alias/name` expands the alias from `config.toml`, then as above.
@@ -272,8 +275,31 @@ internal/profile/   generations, links, windows junction and shims
 internal/shim/      what oku.exe does when it starts as a shim
 internal/expose/    ledger of apps, fonts and services
 internal/service/   launchd, systemd and task scheduler managers
-internal/trust/     allow list, approvals
+internal/trust/     allow list, approvals, trusted sources
 internal/shellhook/ hook and env output per shell
+internal/busy/      one change of the machine at a time
+internal/durable/   files that last a power loss
+internal/trash/     deletes folders that may hold a running program
+internal/tempdir/   temporary folders, and the ones a killed oku left
+internal/clone/     cheap copies through filesystem clones
+internal/junction/  Windows directory junctions
+internal/netpolicy/ which hosts and addresses oku connects to
+internal/gitcmd/    git that fails instead of waiting on a prompt
+internal/npm/       npm registry versions
+internal/pypi/      Python Package Index versions
+internal/goproxy/   Go module proxy versions
+internal/crates/    crates.io versions
+internal/osv/       OSV checks of malicious versions
+internal/sigstore/  Sigstore bundles, certificates and the transparency log
+internal/shape/     checks that an outside answer holds what oku needs
+internal/xz/        xz decompression in Go
+internal/desktop/   Linux desktop entries of a download
+internal/host/      what a machine must have that oku does not install
+internal/render/    fills list variables into a text
+internal/secret/    decrypts the secrets of a list with age or sops
+internal/settings/  per-user OS settings
+internal/status/    the lines that say what oku waits for
+internal/ui/        styled terminal output
 ```
 
 ## CLI
@@ -281,17 +307,21 @@ internal/shellhook/ hook and env output per shell
 ```
 oku add <ref>[@version] [--from-source] [--yes] [--verbose] [--plan | --manifest] [--global]
 oku remove <name> [--global]
-oku sync [list-ref]
-oku update [name]
-oku list | info <name> | why <name> | search <term>
-oku generations | rollback [n] | gc [--keep N] [--dry-run]
+oku sync [list-ref] [--dry-run] [--locked] [--system]
+oku update [name] [--dry-run]
+oku outdated
+oku list | info <name> | why <name> | which <program> | search <term>
+oku run <ref> [-- args] | exec <command>
+oku generations | rollback [n] | du
+oku gc [--keep N] [--older-than AGE] [--cache] [--cache-older-than AGE] [--dry-run]
+oku verify [--record] [--repair]
 oku source add|remove|list
 oku hook <bash|zsh|fish|pwsh> | env [--shell] | allow [dir] | deny [dir]
 oku shell <ref>...
 oku service list|start|stop|restart|status|logs <name>
 oku cache add|remove|list <dir-or-url> | push <dir> [name...]
 oku key trust|revoke|list|generate
-oku manifest init --from <repo> [-o file] | lint [file...] | bump [file]
+oku manifest init --from <repo> [-o file] | lint [file...] | bump [file] | hash <url | file>
 oku manifest test [file] [--keep]
 oku setup --system | doctor
 oku self update | self uninstall [--keep-list] [--yes]

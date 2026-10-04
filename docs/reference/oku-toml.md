@@ -127,7 +127,9 @@ file beside the list there, see [relative paths](refs.md#relative-paths-in-a-rem
 
 - A missing key matches anything. Any other key is an error, and so is a
   value that is not a string.
-- A value that names no platform is an error, since it would match nothing.
+- A value that Go knows no platform by, such as `os = "macos"`, is an error,
+  and oku names the one to use. A platform oku does not run on, such as
+  `freebsd`, is accepted and matches no machine of yours.
   `os = "macos"` fails and says to use `darwin`, and `arch = "x86_64"` says to
   use `amd64`.
 - An array of tables matches a machine that any of them matches. An empty
@@ -226,6 +228,7 @@ The value is a ref, or a table:
 |---|---|---|
 | `ref` | string | Required. The package's ref. |
 | `version` | string | A constraint, written like the constraint of a [dep](manifest.md). oku picks the newest version it allows, when it adds a package and at `oku update`. |
+| `when` | table | The platforms where a package gets the runtime, as the `when` of a dep. |
 
 ```toml
 [runtimes]

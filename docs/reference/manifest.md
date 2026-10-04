@@ -1656,7 +1656,9 @@ again. `oku update` infers again.
   `.sha1`, `.shasum`, `.md5sum` and `.sha512sum`.
 - An installer's format names its OS, so `Tool1.2.dmg` is a macOS asset with no
   OS word, and `tool-aarch64.AppImage` is a Linux one. A `.exe` with no OS word
-  is a Windows asset, as `sops-v3.9.0.amd64.exe`.
+  is a Windows asset, as `sops-v3.9.0.amd64.exe`, unless a desktop word such as
+  `gui`, `setup` or `installer` marks it as an app or an installer, which then
+  fits no platform.
 - An asset that names its OS and no arch fits amd64 and arm64 on macOS, where
   such a build is universal, and amd64 elsewhere. An installer that names no
   arch fits amd64 and arm64 of its OS.
@@ -1713,8 +1715,9 @@ manifest does not name them, so its text is the same on every machine. An
 
 - The version starts at the first digit of the tag, and everything before it
   becomes `strip_prefix`. `v1.2.0` gives `"v"` and `jq-1.8.1` gives `"jq-"`.
-- It downloads assets and looks inside. It opens one asset per archive ending,
-  so a Windows zip gets its own layout and the tar archives share one.
+- It downloads assets and looks inside. It opens one asset per archive ending
+  and OS, so a Windows zip gets its own layout, and the tar archives of one OS
+  share one.
 - `oku add` opens assets for your machine and for the `[lock]` platforms only.
   Another platform gets an artifact when its asset has the ending of one oku
   opened anyway, without an app of the other OS. Otherwise oku leaves it out, as it leaves out a platform whose
@@ -1799,8 +1802,8 @@ the checksum file and beside the asset:
 | GitHub artifact attestations of the asset | `attestations = true` |
 | `<asset>.intoto.jsonl`, or the release's one `.intoto.jsonl` file | `provenance` |
 
-- oku reads the certificate of the signature of your machine's asset, and of
-  the first attestation. It keeps them only when the certificate names a
+- oku reads the certificate of the first attestation, then that of the
+  signature of the checksum file, then that of your machine's asset. It keeps them only when the certificate names a
   GitHub Actions run for the repo itself, and takes the run's workflow as
   `signer_workflow`. A signature from another repo stays out.
 - With no signature by a workflow of the repo, oku looks for a cosign public
@@ -2014,8 +2017,10 @@ does not parse as one or is larger than 1 MiB.
   that ran `oku add`. `oku sync` on another kind of machine fails with "no
   artifact".
 - The package name is the file name up to its version, and the version is the
-  first `1.2.3` in the file name. A file name with no version gives the version
-  `0`.
+  first `1.2.3` in the file name. A file name with no version takes it from a
+  folder of the URL, as `.../download/v1.19.0/tool-linux-amd64` gives `1.19.0`,
+  and its name ends before the first OS or arch word. With no version in the
+  folders either, the version is `0`.
 - The version is fixed, so `oku update` never changes it. To get a newer
   version, add that version's URL, or write a manifest that
   [follows a download URL](#follow-a-download-url).
