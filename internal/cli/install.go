@@ -71,9 +71,10 @@ type installed struct {
 	// host holds the [host] requirements of the package and its deps that match
 	// the machine.
 	host []host.Requirement
-	// linkNotes warns for each store package that a build loads without naming
-	// it in runtime.deps, for the deps too.
-	linkNotes []string
+	// notes are warnings about the manifest, for the deps too: a key this oku
+	// does not know, and a store package that a build loads without naming it in
+	// runtime.deps.
+	notes []string
 	// ageUnknown lists the versions that oku picked while their source gives no
 	// release time, so the minimum release age could not check them.
 	ageUnknown []string
@@ -343,7 +344,7 @@ func (e env) installOnce(ctx context.Context, opts Options, req request) (instal
 		// sync keeps what oku.lock pins, installs nothing, and reports the package.
 		return installed{
 			lock: req.previous, lockOnly: true, unsupported: unsupported,
-			when: narrowedWhen(m, req.when),
+			when: narrowedWhen(m, req.when), notes: unknownNotes(m),
 		}, nil
 	}
 
@@ -373,6 +374,7 @@ func (e env) installOnce(ctx context.Context, opts Options, req request) (instal
 
 	got.bins, got.found = inferred.Bins, inferred.Found
 	got.lockOnly = req.lockOnly
+	got.notes = append(unknownNotes(m), got.notes...)
 	got.support = slices.DeleteFunc(platform.All(), func(p platform.Platform) bool {
 		return !m.Supports(p)
 	})
@@ -728,21 +730,21 @@ func (e env) installFrom(
 		}
 
 		if realized.MalwareUnchecked != "" {
-			deps.linkNotes = append(deps.linkNotes, fmt.Sprintf(
+			deps.notes = append(deps.notes, fmt.Sprintf(
 				"%s: oku could not ask OSV about the packages of the %s", m.Package.Name, realized.MalwareUnchecked,
 			))
 		}
 
 		// A manifest of the user's names its scripts itself, so oku only says so.
 		if len(realized.UnnamedScripts) > 0 && req.ref.Kind != ref.NPM {
-			deps.linkNotes = append(deps.linkNotes, fmt.Sprintf(
+			deps.notes = append(deps.notes, fmt.Sprintf(
 				"%s: the install scripts of %s did not run, since the npm step's scripts does not name them",
 				m.Package.Name, strings.Join(realized.UnnamedScripts, ", "),
 			))
 		}
 
 		for _, missing := range realized.MissingDeps {
-			deps.linkNotes = append(deps.linkNotes, fmt.Sprintf(
+			deps.notes = append(deps.notes, fmt.Sprintf(
 				"%s: %s loads %s, which is not in runtime.deps, so it breaks after `oku gc` or on another machine",
 				m.Package.Name,
 				missing.File,
@@ -900,7 +902,7 @@ func (e env) installFrom(
 		unnamedScripts: realized.UnnamedScripts,
 		substituted:    deps.substituted,
 		cacheNotes:     deps.cacheNotes,
-		linkNotes:      deps.linkNotes,
+		notes:      deps.notes,
 		host:           append(hostHere(m.Host), deps.host...),
 	}, nil
 }
@@ -1957,10 +1959,25 @@ func reportUnsandboxed(w io.Writer, got installed) {
 	}
 }
 
-// reportLinks warns for each store package that a build loads and that its
-// manifest does not name in runtime.deps.
-func reportLinks(w io.Writer, got installed) {
-	for _, note := range got.linkNotes {
+// unknownNotes warns of each key of m that this oku does not know and left
+// out. A manifest for a newer oku still installs, and a misspelt key, such as
+// match or sha256, shows.
+func unknownNotes(m *manifest.Manifest) []string {
+	notes := make([]string, 0, len(m.Unknown))
+	for _, key := range m.Unknown {
+		notes = append(notes, fmt.Sprintf(
+			"%s: %s in the manifest, which this oku left out. "+
+				"It is a typo, or the manifest is for a newer oku", m.Package.Name, key,
+		))
+	}
+
+	return notes
+}
+
+// reportNotes prints the warnings about the manifests of a package and its
+// deps.
+func reportNotes(w io.Writer, got installed) {
+	for _, note := range got.notes {
 		warn(w, "%s", note)
 	}
 }
@@ -2167,11 +2184,11 @@ type depSet struct {
 	// runtimes holds, for each dep in the order of prefixes, the dep and the
 	// store paths it needs at run time.
 	runtimes [][]string
-	// substituted, cacheNotes and linkNotes collect what the deps report, see
+	// substituted, cacheNotes and notes collect what the deps report, see
 	// installed.
 	substituted []string
 	cacheNotes  []string
-	linkNotes   []string
+	notes   []string
 	host        []host.Requirement
 }
 
@@ -2326,7 +2343,7 @@ func (e env) installDeps(
 		)
 		set.substituted = append(set.substituted, got.substituted...)
 		set.cacheNotes = append(set.cacheNotes, got.cacheNotes...)
-		set.linkNotes = append(set.linkNotes, got.linkNotes...)
+		set.notes = append(set.notes, got.notes...)
 		set.host = append(set.host, got.host...)
 
 		for _, path := range got.closure {

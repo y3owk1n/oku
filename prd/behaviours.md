@@ -372,6 +372,13 @@ order step in `prd/product.md`.
   is an error, and a list at a URL with `[files]` or `[secrets]` is an error.
   Only a `link` may start with `{{pkg.<name>}}`, and it must stay inside that
   package.
+- B524 [1] oku refuses a list with a table or key it does not know, at the
+  top or in a package's entry, or a value of the wrong type, names the line,
+  and changes nothing.
+- B525 [1] An install of a manifest with a key oku does not know goes ahead
+  and warns of each such key with its line.
+- B526 [1] A ref in `include` or `[packages]` with `@version` fails, and the
+  error for a package names the `version` to write instead.
 
 ## Versions and generations
 

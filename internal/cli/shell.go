@@ -200,7 +200,7 @@ func openRefs(
 		}
 
 		reportUnsandboxed(cmd.ErrOrStderr(), got)
-		reportLinks(cmd.ErrOrStderr(), got)
+		reportNotes(cmd.ErrOrStderr(), got)
 		reportCache(cmd.ErrOrStderr(), got)
 
 		held.pkgs = append(held.pkgs, got)

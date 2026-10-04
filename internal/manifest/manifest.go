@@ -51,6 +51,9 @@ type Manifest struct {
 
 	// SHA256 is the hex digest of the manifest data. The store hash includes it.
 	SHA256 string `toml:"-"`
+	// Unknown names each key of the data, with its line, that this oku does not
+	// know and left out.
+	Unknown []string `toml:"-"`
 	// Tag is the upstream tag of the chosen version. {{tag}} expands to it.
 	Tag string `toml:"-"`
 	// TagCommit is the commit a moving tag pointed at when the version was
@@ -319,6 +322,10 @@ func Parse(data []byte, origin string) (*Manifest, error) {
 	if err := toml.Unmarshal(data, &m); err != nil {
 		return nil, fmt.Errorf("parse manifest %s: %w", origin, err)
 	}
+
+	// A manifest written for a newer oku still installs (D27), and the install
+	// warns of each key it left out.
+	m.Unknown, _ = unknownKeys(data, &schema{})
 
 	if err := m.validate(); err != nil {
 		return nil, fmt.Errorf("invalid manifest %s: %w", origin, err)

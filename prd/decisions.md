@@ -259,7 +259,8 @@ every machine that lacks the same alias, which breaks `oku sync <list-ref>`.
 `oku add` ignores manifest keys it does not know. `oku manifest lint` decodes
 against the whole schema and rejects them. Why: a manifest written for a newer
 oku must still install on an older one. The author is the person who can fix a
-misspelt key, so the strict check is a command the author runs.
+misspelt key, so the strict check is a command the author runs. The install
+warns of each key it left out, so a user sees the typo too (B525).
 
 ## D28. A build installs straight into its final store path
 
@@ -1954,3 +1955,12 @@ the tmpfs that hides the home directory, `/tmp` and `/run/user`, and read the
 real ones, the ssh-agent socket and the user's D-Bus among them. A process
 without capabilities cannot unmount, and a namespace it creates itself sees
 those mounts locked.
+
+## D119. oku.toml is strict
+
+oku refuses a list that has a table or key it does not know, at the top or in
+a package's entry. It also refuses a value of the wrong type and a ref with
+`@version`. A refused list changes nothing. Why: the user writes the list for the oku they run, so the
+newer-oku case of D27 does not apply. A misspelt `[package]` emptied the list,
+so a sync removed every package, and a misspelt or mistyped `version` or
+`signing_key` dropped a pin without a word.

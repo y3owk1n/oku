@@ -450,7 +450,7 @@ func reconcile(
 		e.reportFirstUse(cmd.ErrOrStderr(), got)
 		reportAge(cmd.ErrOrStderr(), got)
 		reportUnsandboxed(cmd.ErrOrStderr(), got)
-		reportLinks(cmd.ErrOrStderr(), got)
+		reportNotes(cmd.ErrOrStderr(), got)
 		reportCache(cmd.ErrOrStderr(), got)
 
 		if got.lock.Name != "" {

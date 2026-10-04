@@ -17,8 +17,9 @@ A repo or directory that holds many manifests is a collection. Users give it a
 short name with `oku source add` and search it, see
 [Refs](refs.md#sources-and-aliases). `oku search` matches each manifest's `description`.
 
-`oku add` ignores a table or key it does not know, so an older oku still
-installs a manifest written for a newer one. A key it does not know inside a
+`oku add` leaves out a table or key it does not know, so an older oku still
+installs a manifest written for a newer one. It warns of each one with its
+line, so a misspelt key such as `sha_256` or `[artifact.matchh]` shows. A key it does not know inside a
 `bin` or `app` entry, a dep table or a `[host]` entry is an error, because oku
 reads those entries itself. `oku manifest lint` knows the whole schema and
 reports every unknown key as an error.
