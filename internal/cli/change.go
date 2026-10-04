@@ -42,6 +42,15 @@ type pending struct {
 	// Elevated reports that the change wrote system scope, so a revert does too.
 	Elevated bool       `toml:"elevated,omitempty"`
 	Before   savedLists `toml:"before"`
+	// Started holds the lists as the change found them, and Committing reports
+	// that the change began to write them. A list that no longer holds what the
+	// change found, while the change had not begun to write it, holds edits made
+	// since, so a revert keeps it.
+	Started    savedLists `toml:"started"`
+	Committing bool       `toml:"committing,omitempty"`
+	// Done reports that the change finished and only pendingFile was left, so
+	// there is nothing to undo.
+	Done bool `toml:"done,omitempty"`
 }
 
 // change is one switch of generation.
@@ -126,6 +135,8 @@ func (e env) apply(cmd *cobra.Command, opts Options, c change) error {
 		return err
 	}
 
+	defer holdInterrupts(cmd.ErrOrStderr())()
+
 	// The generation comes first, because the target of a file with content
 	// points through "current".
 	err = prof.Activate(c.to)
@@ -134,14 +145,24 @@ func (e env) apply(cmd *cobra.Command, opts Options, c change) error {
 	}
 
 	if err == nil {
-		err = c.commit()
+		p.Committing = true
+		if err = e.writePending(p); err == nil {
+			err = c.commit()
+		}
 	}
 
 	if err == nil {
-		return os.Remove(filepath.Join(e.data, pendingFile))
+		path := filepath.Join(e.data, pendingFile)
+		if err := os.Remove(path); err != nil {
+			p.Done = true
+
+			return errors.Join(fmt.Errorf("the change finished, but oku could not delete %s: %w", path, err), e.writePending(p))
+		}
+
+		return nil
 	}
 
-	if undoErr := e.revert(cmd.Context(), opts, p); undoErr != nil {
+	if _, undoErr := e.revert(cmd.Context(), opts, p); undoErr != nil {
 		return fmt.Errorf(
 			"%w\noku could not put the machine back: %w\n"+
 				"the next oku command tries again, and `oku doctor` shows what is left",
@@ -193,10 +214,13 @@ func (e env) plan(cmd *cobra.Command, opts Options, c change) (pending, exposePl
 		Staged: c.staged, Elevated: plan.elevated,
 	}
 
+	if p.Started, err = e.readSavedLists(); err != nil {
+		return pending{}, exposePlan{}, err
+	}
+
+	p.Before = p.Started
 	if c.before != nil {
 		p.Before = *c.before
-	} else if p.Before, err = e.readSavedLists(); err != nil {
-		return pending{}, exposePlan{}, err
 	}
 
 	// A dry run stops after the plan, so nothing is pending.
@@ -204,12 +228,17 @@ func (e env) plan(cmd *cobra.Command, opts Options, c change) (pending, exposePl
 		return p, plan, nil
 	}
 
+	return p, plan, e.writePending(p)
+}
+
+// writePending saves p, so a later command can undo the change.
+func (e env) writePending(p pending) error {
 	data, err := toml.Marshal(p)
 	if err != nil {
-		return pending{}, exposePlan{}, err
+		return err
 	}
 
-	return p, plan, list.WriteFile(filepath.Join(e.data, pendingFile), data)
+	return list.WriteFile(filepath.Join(e.data, pendingFile), data)
 }
 
 // rewritten returns the targets whose content generation to gives other bytes
@@ -314,50 +343,89 @@ func (e env) describe(cmd *cobra.Command, c change, plan exposePlan) error {
 	return nil
 }
 
-// revert puts the machine back to generation p.From.
-func (e env) revert(ctx context.Context, opts Options, p pending) error {
+// restoreLists puts oku.toml and oku.lock back as they were before p, and
+// returns the path of each it kept since it holds edits made since.
+func (e env) restoreLists(p pending) ([]string, error) {
+	var kept []string
+
+	for _, file := range []struct {
+		path, before, started string
+		hadBefore, hadStarted bool
+	}{
+		{e.listPath(), p.Before.List, p.Started.List, p.Before.HadList, p.Started.HadList},
+		{e.lockPath(), p.Before.Lock, p.Started.Lock, p.Before.HadLock, p.Started.HadLock},
+	} {
+		now, has, err := readIfExists(file.path)
+		if err != nil {
+			return kept, err
+		}
+
+		if !p.Committing && (now != file.started || has != file.hadStarted) {
+			kept = append(kept, file.path)
+
+			continue
+		}
+
+		if file.hadBefore {
+			err = list.WriteFile(file.path, []byte(file.before))
+		} else if err = os.Remove(file.path); errors.Is(err, fs.ErrNotExist) {
+			err = nil
+		}
+
+		if err != nil {
+			return kept, fmt.Errorf("restore %s: %w", file.path, err)
+		}
+	}
+
+	return kept, nil
+}
+
+// revert puts the machine back to generation p.From. It returns the lists it
+// kept, as restoreLists does.
+func (e env) revert(ctx context.Context, opts Options, p pending) ([]string, error) {
 	defer status.Start(ctx, "undoing the change")()
 
 	e.project = p.Project
 	prof := e.profile()
 
-	if err := e.restoreSavedLists(p.Before); err != nil {
-		return err
+	kept, err := e.restoreLists(p)
+	if err != nil {
+		return kept, err
 	}
 
 	if err := prof.Activate(p.From); err != nil {
-		return fmt.Errorf("could not activate generation %d again: %w", p.From, err)
+		return kept, fmt.Errorf("could not activate generation %d again: %w", p.From, err)
 	}
 
 	if e.project == "" {
 		pkgs, err := prof.PackagesOf(p.From)
 		if err != nil {
-			return err
+			return kept, err
 		}
 
 		files, err := prof.FilesWithContent(p.From)
 		if err != nil {
-			return err
+			return kept, err
 		}
 
 		secrets, err := e.unseal(ctx, p.From, files)
 		if err != nil {
-			return err
+			return kept, err
 		}
 
 		wantedSettings, err := prof.SettingsOf(p.From)
 		if err != nil {
-			return err
+			return kept, err
 		}
 
 		wanted, defs, err := e.wantedItems(opts, pkgs, files, wantedSettings)
 		if err != nil {
-			return err
+			return kept, err
 		}
 
 		ledger, err := expose.ReadLedger(e.data)
 		if err != nil {
-			return err
+			return kept, err
 		}
 
 		if !p.Elevated {
@@ -366,7 +434,7 @@ func (e env) revert(ctx context.Context, opts Options, p pending) error {
 
 		handlers, err := e.handlers(ctx, opts, defs, secrets)
 		if err != nil {
-			return err
+			return kept, err
 		}
 
 		before := slices.Clone(ledger.Items)
@@ -376,7 +444,7 @@ func (e env) revert(ctx context.Context, opts Options, p pending) error {
 		tellSettings(opts, before, ledger.Items)
 
 		if err != nil {
-			return fmt.Errorf(
+			return kept, fmt.Errorf(
 				"could not restore the apps, fonts and services of generation %d: %w",
 				p.From,
 				err,
@@ -386,11 +454,11 @@ func (e env) revert(ctx context.Context, opts Options, p pending) error {
 
 	if p.Staged {
 		if err := prof.Discard(p.To); err != nil {
-			return err
+			return kept, err
 		}
 	}
 
-	return os.Remove(filepath.Join(e.data, pendingFile))
+	return kept, os.Remove(filepath.Join(e.data, pendingFile))
 }
 
 // readPending returns the change that did not finish, or nil.
@@ -422,11 +490,22 @@ func (e env) recoverPending(cmd *cobra.Command, opts Options) error {
 		return err
 	}
 
-	if err := e.revert(cmd.Context(), opts, *p); err != nil {
+	if p.Done {
+		return os.Remove(filepath.Join(e.data, pendingFile))
+	}
+
+	defer holdInterrupts(cmd.ErrOrStderr())()
+
+	kept, err := e.revert(cmd.Context(), opts, *p)
+	if err != nil {
 		return fmt.Errorf(
 			"the last change did not finish, and oku could not put the machine back: %w",
 			err,
 		)
+	}
+
+	for _, path := range kept {
+		warn(cmd.ErrOrStderr(), "%s changed since the last change started, so oku left it as it is", path)
 	}
 
 	if p.From == 0 {

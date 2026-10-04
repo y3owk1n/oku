@@ -1521,6 +1521,9 @@ order step in `prd/product.md`.
   changes it waits, prints `waiting for oku process <pid> to finish`, and runs
   once the first one ends. A command that only reads, such as `list`, does not
   wait.
+- B527 [12] A command that undoes a change that did not finish keeps an
+  `oku.toml` or `oku.lock` that the user edited since, unless oku was killed
+  while it wrote them, and says so.
 - B244 [12] `oku gc` deletes a temporary directory that a killed install left
   in the store.
 - B286 [12] `oku gc` deletes the entries in the system's temporary directory
