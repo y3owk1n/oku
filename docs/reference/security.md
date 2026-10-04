@@ -679,7 +679,10 @@ installed, they also check its signature against the same key and read the
 signed comment. The comment must be `oku <OKU_VERSION>` when you name a
 release, and any `oku v...` release otherwise. `OKU_REQUIRE_SIGNATURE=1`
 makes them refuse to install without that check, and the GitHub Action always
-sets it.
+sets it. The nightly is published again after each commit on `main`, and for a
+few seconds its files can come from two builds. With `OKU_VERSION=nightly` a
+script whose check fails tries again, up to five times 15 seconds apart. A
+tagged release never changes, so a failed check of one stops at once.
 
 The sha256 alone only guards against a broken download, since `checksums.txt`
 comes from the same release as the binary. The signature is what shows the

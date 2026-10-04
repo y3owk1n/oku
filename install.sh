@@ -48,41 +48,66 @@ main() {
 
 	fetch() {
 		# A redirect may not leave https, whatever the release URL is.
-		curl -fsSL --proto-redir '=https' --tlsv1.2 "$from/$1" -o "$tmp/$1" || fail "could not download $from/$1"
+		curl -fsSL --proto-redir '=https' --tlsv1.2 "$from/$1" -o "$tmp/$1" || {
+			why="could not download $from/$1"
+			return 1
+		}
 	}
 
-	fetch "$name"
-	fetch checksums.txt
+	# checked downloads the binary and checks it, and sets why when that fails.
+	checked() {
+		fetch "$name" && fetch checksums.txt || return 1
 
-	want="$(awk -v file="$name" '$2 == file { print $1 }' "$tmp/checksums.txt")"
-	[ -n "$want" ] || fail "checksums.txt does not list $name"
+		want="$(awk -v file="$name" '$2 == file { print $1 }' "$tmp/checksums.txt")"
+		[ -n "$want" ] || {
+			why="checksums.txt does not list $name"
+			return 1
+		}
 
-	if command -v sha256sum >/dev/null 2>&1; then
-		got="$(sha256sum "$tmp/$name" | awk '{ print $1 }')"
-	else
-		got="$(shasum -a 256 "$tmp/$name" | awk '{ print $1 }')"
-	fi
+		if command -v sha256sum >/dev/null 2>&1; then
+			got="$(sha256sum "$tmp/$name" | awk '{ print $1 }')"
+		else
+			got="$(shasum -a 256 "$tmp/$name" | awk '{ print $1 }')"
+		fi
 
-	[ "$got" = "$want" ] || fail "the sha256 of $name is $got, and checksums.txt says $want"
+		[ "$got" = "$want" ] || {
+			why="the sha256 of $name is $got, and checksums.txt says $want"
+			return 1
+		}
 
-	if command -v minisign >/dev/null 2>&1; then
-		fetch "$name.minisig"
-		comment="$(minisign -Vm "$tmp/$name" -P "$release_key" -Q)" ||
-			fail "the signature of $name is not from oku's release key"
+		if command -v minisign >/dev/null 2>&1; then
+			fetch "$name.minisig" || return 1
+			comment="$(minisign -Vm "$tmp/$name" -P "$release_key" -Q)" || {
+				why="the signature of $name is not from oku's release key"
+				return 1
+			}
 
-		# The release signs its tag into the trusted comment, so an older signed
-		# binary cannot pass for the release asked for.
-		case "${OKU_VERSION:-}" in
-		"") case "$comment" in "oku v"[0-9]*) ;; *) fail "the signature of $name is for \"$comment\", not a release" ;; esac ;;
-		*) [ "$comment" = "oku $OKU_VERSION" ] || fail "the signature of $name is for \"$comment\", not oku $OKU_VERSION" ;;
-		esac
+			# The release signs its tag into the trusted comment, so an older signed
+			# binary cannot pass for the release asked for.
+			case "${OKU_VERSION:-}" in
+			"") case "$comment" in "oku v"[0-9]*) ;; *) fail "the signature of $name is for \"$comment\", not a release" ;; esac ;;
+			*) [ "$comment" = "oku $OKU_VERSION" ] || fail "the signature of $name is for \"$comment\", not oku $OKU_VERSION" ;;
+			esac
 
-		echo "checked the minisign signature of $name"
-	elif [ "${OKU_REQUIRE_SIGNATURE:-}" = 1 ]; then
-		fail "OKU_REQUIRE_SIGNATURE is 1, and minisign is not installed to check the signature of $name"
-	else
-		echo "checked the sha256 of $name. Install minisign to check its signature too, see https://jedisct1.github.io/minisign/"
-	fi
+			echo "checked the minisign signature of $name"
+		elif [ "${OKU_REQUIRE_SIGNATURE:-}" = 1 ]; then
+			fail "OKU_REQUIRE_SIGNATURE is 1, and minisign is not installed to check the signature of $name"
+		else
+			echo "checked the sha256 of $name. Install minisign to check its signature too, see https://jedisct1.github.io/minisign/"
+		fi
+	}
+
+	# The nightly is published again after each commit, one file at a time, so
+	# its files can disagree for a minute. A tagged release never changes.
+	tries=1
+	[ "${OKU_VERSION:-}" = nightly ] && tries=5
+
+	until checked; do
+		tries=$((tries - 1))
+		[ "$tries" -gt 0 ] || fail "$why"
+		echo "$why, the nightly may be changing, trying again in 15s" >&2
+		sleep 15
+	done
 
 	mkdir -p "$dir"
 	chmod +x "$tmp/$name"
