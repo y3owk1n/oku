@@ -1345,6 +1345,11 @@ order step in `prd/product.md`.
   release of the builder, built the download for the repo of the releases and
   the release's tag. A line is a Sigstore bundle, or a signed envelope that
   Rekor holds. An `aqua:` entry keeps its `slsa_provenance` as `provenance`.
+- B508 [4] A manifest inferred from a github.com release keeps the cosign
+  bundle or signature and certificate of the checksum file or the asset, and
+  the GitHub attestations of the asset, when their certificate names a run for
+  the repo, with that run's workflow as `signer_workflow`. It keeps the
+  release's provenance when a builder oku trusts made it for the repo.
 
 ## Tooling
 
