@@ -109,14 +109,19 @@ binary, and without it the script builds one.
 ### Windows in GitHub Actions
 
 There is no Windows machine to test on, so `.github/scripts/live-windows.ps1`
-runs the real `oku.exe` on the `windows-latest` runner, on every pull request.
-It builds oku, sets the XDG variables to a directory under `RUNNER_TEMP`, and
+runs the real `oku.exe` on the `windows-latest` runner, in the `windows-live`
+workflow. It takes about ten minutes, so a pull request runs it only when it
+changes a `_windows.go` file, `internal/shim`, `internal/trash`,
+`internal/service` or the script. Every other change runs it on `main` after
+the merge, and the Actions tab can start it for any branch. It builds oku, sets the XDG variables to a directory under `RUNNER_TEMP`, and
 installs real releases from GitHub, GitLab and gitea.com. Each check throws on
 failure, which fails the job.
 
-To test a Windows change, push it to your branch and read the run:
+To test a Windows change, push it to your branch and read the run. For a
+change that touches none of those paths, start it by hand:
 
 ```sh
+gh workflow run windows-live --ref <branch>
 gh run view --log
 ```
 

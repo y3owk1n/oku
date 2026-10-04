@@ -1,0 +1,45 @@
+# Runs the real oku.exe on Windows against real releases. It takes about ten
+# minutes, so a pull request runs it only when it changes Windows code. Every
+# other change runs it on main after the merge.
+name: windows-live
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - '**/*_windows.go'
+      - '**/*_windows_test.go'
+      - 'internal/shim/**'
+      - 'internal/trash/**'
+      - 'internal/service/**'
+      - '.github/scripts/live-windows.ps1'
+      - '.github/workflows/windows-live.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-live-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  live:
+    if: ${{ !startsWith(github.head_ref, 'release-please--') }}
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # The action installs the tools of oku.toml with the nightly oku, so a
+      # broken commit cannot break the tools that test it.
+      - uses: ./
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        with:
+          version: nightly
+      - name: Live test on Windows
+        shell: pwsh
+        # Anonymous GitHub API calls from a shared runner are rate limited.
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: .github/scripts/live-windows.ps1
