@@ -170,7 +170,7 @@ func (e env) planExposed(
 		return exposePlan{}, err
 	}
 
-	if edited := ledger.Edited(); len(edited) > 0 {
+	if edited := append(ledger.Edited(), e.editedContent()...); len(edited) > 0 {
 		return exposePlan{}, fmt.Errorf(
 			"%s changed since oku wrote it, and a sync would overwrite it\n"+
 				"move the change into its source or into oku.toml, then delete the file",
@@ -313,6 +313,34 @@ func tellExposed(notice io.Writer, before, after []expose.Item, rewritten []stri
 			done("service %s is installed and stopped", item.Name)
 		}
 	}
+}
+
+// editedContent returns the target of each file with content in the active
+// generation whose bytes no longer match what oku wrote, since an edit through
+// the link reaches the generation's copy. A target the user deleted is placed
+// again from the list. A file with secrets holds placeholders under another
+// hash, and stays out.
+func (e env) editedContent() []string {
+	prof := e.profile()
+
+	files, err := prof.FilesOf(prof.Current())
+	if err != nil {
+		return nil
+	}
+
+	var edited []string
+
+	for _, f := range files {
+		if _, err := os.Lstat(f.Target); f.Content == "" || len(f.Secrets) > 0 || err != nil {
+			continue
+		}
+
+		if sum, err := expose.FileHash(prof.ContentPath(f)); err == nil && sum != f.Hash {
+			edited = append(edited, f.Target)
+		}
+	}
+
+	return edited
 }
 
 // pendingSystem describes the system-scope items that differ between have and

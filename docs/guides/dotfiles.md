@@ -77,6 +77,10 @@ Use `link` for a config that you edit all day, such as an editor config. Use
 - Any mode up to `"0777"` works. `"0755"` gives a script you can run.
 - Without `mode` the file is read-only, and a secret is `0600`.
 - A sync that changes only the mode applies it.
+- A mode that lets you write the file lets you edit it in place. Each
+  generation keeps its own copy, so a rollback brings back that generation's
+  content. The next `oku sync` stops and names the file. Move the edit into the
+  list and delete the file, and oku writes it again.
 - `mode` on a `link` is an error, because a link has the permissions of its
   source.
 

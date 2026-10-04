@@ -917,7 +917,7 @@ func build(
 	}
 
 	if lockData != nil {
-		if err := writeOrReuse(gen, prev, LockSnapshot, lockData, 0o644); err != nil {
+		if err := writeOrReuse(gen, prev, LockSnapshot, lockData, 0o444); err != nil {
 			return err
 		}
 	}
@@ -952,7 +952,9 @@ func writeOrReuse(gen, prev, rel string, data []byte, mode fs.FileMode) error {
 		return nil
 	}
 
-	if prev != "" {
+	// A file the list lets the user write gets a copy of its own, so an edit of
+	// one generation's file does not reach another through a shared link.
+	if prev != "" && mode&0o222 == 0 {
 		old := filepath.Join(prev, rel)
 		if info, err := os.Lstat(old); err == nil && info.Mode().IsRegular() &&
 			info.Mode().Perm() == mode {
