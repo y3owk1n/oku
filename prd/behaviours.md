@@ -1340,6 +1340,11 @@ order step in `prd/product.md`.
   checks of B501.
 - B506 [10] `sigstore_bundle` and `sha256_url_bundle` also take a bundle in
   cosign's older format.
+- B507 [10] An artifact with `provenance` installs only when a line of the file
+  shows that a builder of slsa-github-generator that slsa-verifier trusts, at a
+  release of the builder, built the download for the repo of the releases and
+  the release's tag. A line is a Sigstore bundle, or a signed envelope that
+  Rekor holds. An `aqua:` entry keeps its `slsa_provenance` as `provenance`.
 
 ## Tooling
 
