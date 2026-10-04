@@ -679,6 +679,19 @@ dependencies.
 
 See [npm, PyPI, Go and cargo packages](guides/npm-pypi-go-cargo.md).
 
+## A file you edited stops the next change
+
+```
+oku: ~/.ssh/allowed_signers changed since oku wrote it, and a sync would overwrite it
+move the change into its source or into oku.toml, then delete the file
+```
+
+A `text` or `render` file that you edited in place, or a `secret` whose link
+you replaced with a file of your own, stops `oku sync` and every other change,
+so oku never writes over your edit. Move the change into the list, or into the
+file the entry renders, delete the file, and run the command again. oku then
+writes it from the list.
+
 ## Windows
 
 - A home file that oku copied, rather than linked, and that you edited stops

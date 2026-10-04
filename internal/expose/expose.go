@@ -3,6 +3,7 @@
 package expose
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
@@ -331,17 +332,42 @@ func (l *Ledger) Edited() []string {
 	var edited []string
 
 	for _, item := range l.Items {
-		// The hash of a secret is that of its encrypted file, not of the target.
-		if item.Hash == "" || item.Kind != "file" {
-			continue
-		}
-
-		if sum, err := FileHash(item.Target); err == nil && sum != item.Hash {
+		switch {
+		case item.Kind == "secret" && secretEdited(item):
 			edited = append(edited, item.Target)
+		case item.Hash == "" || item.Kind != "file":
+		default:
+			if sum, err := FileHash(item.Target); err == nil && sum != item.Hash {
+				edited = append(edited, item.Target)
+			}
 		}
 	}
 
 	return edited
+}
+
+// secretEdited reports whether the user replaced the target of a secret, which
+// is a link to the decrypted copy oku keeps, or on Windows a copy of it. The
+// hash of a secret is that of its encrypted file, so the copy oku keeps is what
+// the target must match.
+func secretEdited(item Item) bool {
+	info, err := os.Lstat(item.Target)
+	if err != nil || info.Mode()&fs.ModeSymlink != 0 {
+		return false
+	}
+
+	if runtime.GOOS != "windows" {
+		return true
+	}
+
+	ours, err := os.ReadFile(item.Source)
+	if err != nil {
+		return false
+	}
+
+	theirs, err := os.ReadFile(item.Target)
+
+	return err != nil || !bytes.Equal(ours, theirs)
 }
 
 // FileHash returns the sha256 of the file at path.
@@ -360,11 +386,17 @@ func FileHash(path string) (string, error) {
 // longer wanted, adds new ones, and saves the ledger after each change, so a
 // crash never leaves a file the ledger does not know.
 func (l *Ledger) Sync(wanted []Item, handlers map[string]Handler) error {
-	// A file or a secret of the list that someone deleted is placed again.
+	// A file or a secret of the list that someone deleted is placed again. The
+	// decrypted copy of a secret goes too, since the list may no longer have it.
 	l.Items = slices.DeleteFunc(l.Items, func(item Item) bool {
 		_, err := os.Lstat(item.Target)
+		gone := (item.Kind == "file" || item.Kind == "secret") && errors.Is(err, fs.ErrNotExist)
 
-		return (item.Kind == "file" || item.Kind == "secret") && errors.Is(err, fs.ErrNotExist)
+		if gone && item.Kind == "secret" {
+			_ = os.Remove(item.Source)
+		}
+
+		return gone
 	})
 
 	if err := l.Check(wanted); err != nil {
