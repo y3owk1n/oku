@@ -64,9 +64,12 @@ func newInfoCmd(opts Options) *cobra.Command {
 					Verified     string `json:"verified,omitempty"`
 					VendorSHA256 string `json:"vendor_sha256,omitempty"`
 					SigningKey   string `json:"signing_key,omitempty"`
+					// SignerWorkflow signs the releases with Sigstore.
+					SignerWorkflow string `json:"signer_workflow,omitempty"`
 				}{
 					pkg.Name, pkg.Version, pkg.Ref, entry.Commit, at.Strategy, pkg.StorePath,
 					entry.Inferred, at.Impure, at.Verified, at.VendorSHA256, entry.SigningKey,
+					entry.SignerWorkflow,
 				})
 			}
 

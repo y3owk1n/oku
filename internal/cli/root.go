@@ -30,6 +30,7 @@ import (
 	"github.com/y3owk1n/oku/internal/sandbox"
 	"github.com/y3owk1n/oku/internal/service"
 	"github.com/y3owk1n/oku/internal/settings"
+	"github.com/y3owk1n/oku/internal/sigstore"
 	"github.com/y3owk1n/oku/internal/source"
 	"github.com/y3owk1n/oku/internal/status"
 	"github.com/y3owk1n/oku/internal/store"
@@ -78,6 +79,9 @@ type Options struct {
 	// UnknownReleaseAge replaces the default of [lock] unknown_release_age. Tests
 	// set it to allow, since their fake registries give no release times.
 	UnknownReleaseAge string
+	// Sigstore replaces the Sigstore public instance that checks bundles. Tests
+	// set one that trusts their own CA.
+	Sigstore *sigstore.Verifier
 	// GitHubAPI, GitHubRaw and GitHubWeb replace the github.com URLs when set.
 	GitHubAPI string
 	GitHubRaw string
@@ -415,6 +419,8 @@ type env struct {
 	hosts forge.Hosts
 	// net is where oku may connect, from config.toml.
 	net netpolicy.Policy
+	// sigstore checks Sigstore bundles. It loads its trust root once.
+	sigstore *sigstore.Verifier
 }
 
 func loadEnv() (env, error) {
@@ -443,6 +449,7 @@ func loadEnv() (env, error) {
 	e.net = config.Policy()
 	e.hosts.Net = e.net
 	e.hosts.HTTP = e.net.Client(forge.CheckRedirect)
+	e.sigstore = sigstore.Public(filepath.Join(e.cache, "sigstore"), e.hosts.HTTP)
 
 	e.root = e.data
 	if config.StoreRoot != "" {
@@ -461,6 +468,9 @@ func scopedEnv(cmd *cobra.Command, opts Options) (env, error) {
 	}
 
 	e.hosts.GitHubAPI, e.hosts.GitHubRaw, e.hosts.GitHubWeb = opts.GitHubAPI, opts.GitHubRaw, opts.GitHubWeb
+	if opts.Sigstore != nil {
+		e.sigstore = opts.Sigstore
+	}
 
 	if global, _ := cmd.Flags().GetBool(globalFlag); global {
 		return e, nil
@@ -542,6 +552,7 @@ func projectProfile(dir string) string {
 func (e env) store() *store.Store {
 	s := store.New(e.root, e.cache, e.net)
 	s.Private = e.hosts.GitHubAsset
+	s.Sigstore, s.Attestations = e.sigstore, e.hosts.GitHubAttestations
 
 	return s
 }

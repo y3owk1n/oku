@@ -32,6 +32,7 @@ import (
 	"github.com/y3owk1n/oku/internal/platform"
 	"github.com/y3owk1n/oku/internal/sandbox"
 	"github.com/y3owk1n/oku/internal/shim"
+	"github.com/y3owk1n/oku/internal/sigstore"
 	"github.com/y3owk1n/oku/internal/status"
 	"github.com/y3owk1n/oku/internal/tempdir"
 	"github.com/y3owk1n/oku/internal/trash"
@@ -57,6 +58,11 @@ type Store struct {
 	// a release asset of a private GitHub repo, and the header it needs. It
 	// returns "" when it knows no other address.
 	Private func(ctx context.Context, url string) (string, string, error)
+	// Sigstore checks the Sigstore bundles a manifest names.
+	Sigstore *sigstore.Verifier
+	// Attestations returns the Sigstore bundles of the GitHub artifact
+	// attestations of the file whose sha256 is digest, in repo.
+	Attestations func(ctx context.Context, repo, digest string) ([][]byte, error)
 }
 
 // As returns a store that sends auth with the downloads it is for.
@@ -194,9 +200,9 @@ func (s *Store) Realize(
 
 	want := a.SHA256
 	if want == "" && a.SHA256URL != "" {
-		published, err := s.PublishedSHA256(ctx, a.SHA256URL, path.Base(a.URL))
+		published, err := s.signedSHA256(ctx, m, a)
 		if err != nil {
-			return Realized{}, err
+			return Realized{}, fmt.Errorf("%s: %w", m.Package.Name, err)
 		}
 
 		want = published
@@ -231,7 +237,7 @@ func (s *Store) Realize(
 		return reuse(realized, a, p.OS)
 	}
 
-	vouched, err := s.vouched(ctx, m, a, download)
+	vouched, err := s.vouched(ctx, m, a, download, got)
 	if err != nil {
 		return Realized{}, err
 	}
@@ -378,14 +384,14 @@ func (s *Store) generateArtifactCompletions(
 	return generateCompletions(ctx, a.Completions, filepath.Join(tmp, "pkg"), tmp, env, box, nil)
 }
 
-// vouched checks download against the integrity value of a and the signing key
-// of m. It reports whether one of them vouched for the download, which then is
-// not a first use.
+// vouched checks download, whose sha256 is digest, against the integrity value
+// of a, the signing key of m and the Sigstore signatures m names. It reports
+// whether one of them vouched for the download, which then is not a first use.
 func (s *Store) vouched(
 	ctx context.Context,
 	m *manifest.Manifest,
 	a manifest.Artifact,
-	download string,
+	download, digest string,
 ) (bool, error) {
 	if a.Integrity != "" {
 		if err := verifyIntegrity(download, a.Integrity); err != nil {
@@ -401,7 +407,16 @@ func (s *Store) vouched(
 		}
 	}
 
-	return a.Integrity != "" || m.Package.SigningKey != "", nil
+	signed := a.SigstoreBundle != "" || m.Package.Attestations
+	if signed {
+		if err := s.verifySigstore(ctx, m, a, digest); err != nil {
+			os.Remove(download)
+
+			return false, fmt.Errorf("%s: %w", m.Package.Name, err)
+		}
+	}
+
+	return a.Integrity != "" || m.Package.SigningKey != "" || signed, nil
 }
 
 // Pin returns the sha256 that oku.lock holds for artifact a of m, and whether
@@ -419,7 +434,7 @@ func (s *Store) Pin(
 	}
 
 	if a.SHA256URL != "" {
-		published, err := s.PublishedSHA256(ctx, a.SHA256URL, path.Base(a.URL))
+		published, err := s.signedSHA256(ctx, m, a)
 
 		return published, false, err
 	}
@@ -429,7 +444,7 @@ func (s *Store) Pin(
 		return "", false, err
 	}
 
-	vouched, err := s.vouched(ctx, m, a, download)
+	vouched, err := s.vouched(ctx, m, a, download, got)
 
 	return got, !vouched, err
 }

@@ -1319,6 +1319,20 @@ order step in `prd/product.md`.
 - B500 [10] `unverified = "warn"` asks `trust it?` on a terminal, once for
   every platform of the same version, and refuses without one. `"allow"`, the
   default, trusts the download and says so.
+- B501 [10] An artifact with `sigstore_bundle`, or with `sha256_url_bundle`
+  for its checksum file, installs only when the bundle shows that the
+  manifest's `signer_workflow`, at any ref, signed those bytes in a run for
+  the repo of the releases and for the release's tag. The lock records
+  `verified = 'sigstore'`.
+- B502 [10] With `attestations = true`, an artifact installs only when GitHub
+  holds an attestation of its digest that `signer_workflow` signed in a run
+  for the repo of the releases, at any ref.
+- B503 [10] The lock pins `signer_workflow`, and a changed or dropped one stops
+  `update` until `--accept-key`.
+- B504 [4] An `aqua:` entry keeps a `cosign` check that names a GitHub Actions
+  workflow and the release's tag, with a `.sigstore.json` bundle, and its
+  `github_artifact_attestations`, as `signer_workflow`, `attestations`,
+  `sigstore_bundle` and `sha256_url_bundle`. Other cosign forms stay out.
 
 ## Tooling
 

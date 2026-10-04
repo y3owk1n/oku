@@ -17,6 +17,7 @@ import (
 	"github.com/y3owk1n/oku/internal/manifest"
 	"github.com/y3owk1n/oku/internal/platform"
 	"github.com/y3owk1n/oku/internal/shape"
+	"github.com/y3owk1n/oku/internal/sigstore"
 )
 
 // aquaRegistry is the repo of the aqua registry, which records how thousands
@@ -50,6 +51,10 @@ type aquaPackage struct {
 	VersionOverrides    []aquaPackage     `yaml:"version_overrides"`
 	NoAsset             bool              `yaml:"no_asset"`
 	Checksum            *aquaChecksum     `yaml:"checksum"`
+	// Cosign signs the download, and Attestations are GitHub artifact
+	// attestations of it.
+	Cosign       *aquaCosign       `yaml:"cosign"`
+	Attestations *aquaAttestations `yaml:"github_artifact_attestations"`
 }
 
 type aquaFile struct {
@@ -58,10 +63,77 @@ type aquaFile struct {
 }
 
 type aquaChecksum struct {
-	Type      string `yaml:"type"`
-	Asset     string `yaml:"asset"`
-	Algorithm string `yaml:"algorithm"`
-	Enabled   *bool  `yaml:"enabled"`
+	Type      string      `yaml:"type"`
+	Asset     string      `yaml:"asset"`
+	Algorithm string      `yaml:"algorithm"`
+	Enabled   *bool       `yaml:"enabled"`
+	Cosign    *aquaCosign `yaml:"cosign"`
+}
+
+// aquaCosign is how cosign checks a file: a bundle beside it, and the options
+// of cosign verify-blob, which name the certificate's identity.
+type aquaCosign struct {
+	Enabled *bool `yaml:"enabled"`
+	Bundle  *struct {
+		Type  string `yaml:"type"`
+		Asset string `yaml:"asset"`
+	} `yaml:"bundle"`
+	Opts []string `yaml:"opts"`
+}
+
+type aquaAttestations struct {
+	Enabled        *bool  `yaml:"enabled"`
+	SignerWorkflow string `yaml:"signer_workflow"`
+}
+
+// githubIdentityRe is the certificate identity of a GitHub Actions workflow
+// that runs for a release's tag, and githubIdentityPatternRe the pattern of a
+// workflow at any ref, which cosign takes as --certificate-identity-regexp.
+var (
+	githubIdentityRe = regexp.MustCompile(
+		`^https://github\.com/([^/]+/[^/]+/\.github/workflows/[^/@]+)@refs/tags/\{\{\s*\.Version\s*\}\}$`,
+	)
+	githubIdentityPatternRe = regexp.MustCompile(
+		`^\^https://github\\\.com/([A-Za-z0-9_.\\-]+/[A-Za-z0-9_.\\-]+/\\\.github/workflows/[A-Za-z0-9_.\\-]+)@\.\+\$$`,
+	)
+	tagRefRe = regexp.MustCompile(`^refs/tags/\{\{\s*\.Version\s*\}\}$`)
+)
+
+// bundle returns the workflow that signs the file and the asset of the
+// Sigstore bundle beside it, when c names both in a form oku checks: a bundle
+// in a release, signed by a GitHub Actions workflow of repo for the release's
+// tag.
+func (c *aquaCosign) bundle(repo string) (workflow, asset string, ok bool) {
+	if c == nil || c.Enabled != nil && !*c.Enabled || c.Bundle == nil || c.Bundle.Type != "github_release" ||
+		!strings.HasSuffix(c.Bundle.Asset, ".sigstore.json") {
+		return "", "", false
+	}
+
+	// A flag takes the next option as its value, unless that is a flag too.
+	opts := map[string]string{}
+	for i, opt := range c.Opts {
+		if strings.HasPrefix(opt, "--") && i+1 < len(c.Opts) && !strings.HasPrefix(c.Opts[i+1], "--") {
+			opts[opt] = c.Opts[i+1]
+		}
+	}
+
+	if opts["--certificate-oidc-issuer"] != sigstore.GitHubIssuer ||
+		opts["--certificate-github-workflow-repository"] != "" && opts["--certificate-github-workflow-repository"] != repo {
+		return "", "", false
+	}
+
+	// A pattern names the workflow at any ref, so the ref of the run must be
+	// the tag.
+	if m := githubIdentityPatternRe.FindStringSubmatch(opts["--certificate-identity-regexp"]); m != nil &&
+		tagRefRe.MatchString(opts["--certificate-github-workflow-ref"]) {
+		return strings.ReplaceAll(m[1], `\`, ""), c.Bundle.Asset, true
+	}
+
+	if m := githubIdentityRe.FindStringSubmatch(opts["--certificate-identity"]); m != nil {
+		return m[1], c.Bundle.Asset, true
+	}
+
+	return "", "", false
 }
 
 // FromAqua returns manifest TOML for the GitHub repo owner/repo, translated
@@ -171,6 +243,14 @@ func (o aquaPackage) over(p aquaPackage) aquaPackage {
 		o.CompleteWindowsExt = p.CompleteWindowsExt
 	}
 
+	if o.Cosign == nil {
+		o.Cosign = p.Cosign
+	}
+
+	if o.Attestations == nil {
+		o.Attestations = p.Attestations
+	}
+
 	return o
 }
 
@@ -208,6 +288,10 @@ func (p aquaPackage) recipe() (recipe, error) {
 		},
 	}
 
+	if at := cur.Attestations; at != nil && (at.Enabled == nil || *at.Enabled) && at.SignerWorkflow != "" {
+		r.signerWorkflow, r.attestations = at.SignerWorkflow, true
+	}
+
 	for _, sel := range aquaPlatforms {
 		a, ok, err := cur.artifact(sel)
 		if err != nil {
@@ -216,6 +300,15 @@ func (p aquaPackage) recipe() (recipe, error) {
 
 		if ok {
 			r.artifacts = append(r.artifacts, a)
+		}
+	}
+
+	// A manifest names one signer workflow. A bundle that another workflow
+	// signed stays out.
+	for i, a := range r.artifacts {
+		r.signerWorkflow = cmp.Or(r.signerWorkflow, a.signer)
+		if a.signer != r.signerWorkflow {
+			r.artifacts[i].sigstoreBundle, r.artifacts[i].sha256URLBundle = "", ""
 		}
 	}
 
@@ -264,7 +357,8 @@ func (cur aquaPackage) artifact(sel platform.Selector) (recipeArtifact, bool, er
 	vars["Asset"] = asset
 	vars["AssetWithoutExt"] = strings.TrimSuffix(asset, "."+p.Format)
 
-	releases := "https://github.com/" + p.RepoOwner + "/" + p.RepoName + "/releases/download/{{tag}}/"
+	repo := p.RepoOwner + "/" + p.RepoName
+	releases := "https://github.com/" + repo + "/releases/download/{{tag}}/"
 
 	url := releases + asset
 	if p.Type == "http" {
@@ -283,6 +377,18 @@ func (cur aquaPackage) artifact(sel platform.Selector) (recipeArtifact, bool, er
 		}
 
 		a.sha256URL = releases + sums
+
+		if workflow, asset, ok := c.Cosign.bundle(repo); ok {
+			if bundle, err := p.render(asset, vars); err == nil {
+				a.sha256URLBundle, a.signer = releases+bundle, workflow
+			}
+		}
+	}
+
+	if workflow, asset, ok := p.Cosign.bundle(repo); ok && (a.signer == "" || a.signer == workflow) {
+		if bundle, err := p.render(asset, vars); err == nil {
+			a.sigstoreBundle, a.signer = releases+bundle, workflow
+		}
 	}
 
 	if err := a.aquaFiles(p, vars, sel.OS == "windows"); err != nil {

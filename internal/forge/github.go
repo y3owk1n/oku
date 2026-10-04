@@ -3,11 +3,14 @@ package forge
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/klauspost/compress/snappy"
 )
 
 // githubVersion is the version of GitHub's REST API that oku asks github.com
@@ -344,4 +347,55 @@ func (h Hosts) GitHubAsset(ctx context.Context, rawURL string) (string, string, 
 	}
 
 	return "", "", fmt.Errorf("release %s of %s has no asset %s", tag, repo, name)
+}
+
+// GitHubAttestations returns the Sigstore bundles of the artifact attestations
+// that repo, on github.com, holds for the file whose sha256 is digest. GitHub
+// may keep a bundle apart at its bundle_url, compressed with snappy.
+func (h Hosts) GitHubAttestations(ctx context.Context, repo, digest string) ([][]byte, error) {
+	g := h.github("")
+	if g.http == nil {
+		g.http = h.Net.Client(CheckRedirect)
+	}
+
+	var found struct {
+		Attestations []struct {
+			Bundle    json.RawMessage `json:"bundle"`
+			BundleURL string          `json:"bundle_url"`
+		} `json:"attestations"`
+	}
+
+	err := g.json(ctx, "/repos/"+repo+"/attestations/sha256:"+digest+"?per_page=30", &found)
+	if errors.Is(err, ErrNotFound) || err == nil && len(found.Attestations) == 0 {
+		return nil, errors.New("it has none for this file")
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	bundles := make([][]byte, 0, len(found.Attestations))
+
+	for _, a := range found.Attestations {
+		if a.BundleURL == "" {
+			bundles = append(bundles, a.Bundle)
+
+			continue
+		}
+
+		// The address is a storage service's, which takes no GitHub token.
+		packed, err := g.get(ctx, a.BundleURL, "")
+		if err != nil {
+			return nil, fmt.Errorf("read the attestation at %s: %w", a.BundleURL, err)
+		}
+
+		data, err := snappy.Decode(nil, packed)
+		if err != nil {
+			return nil, fmt.Errorf("read the attestation at %s: %w", a.BundleURL, err)
+		}
+
+		bundles = append(bundles, data)
+	}
+
+	return bundles, nil
 }

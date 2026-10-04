@@ -56,6 +56,10 @@ type Package struct {
 	// SigningKey pins the manifest's signing key. oku refuses a manifest that
 	// changes or drops it until the user accepts the change.
 	SigningKey string `toml:"signing_key,omitempty"`
+	// SignerWorkflow pins the GitHub Actions workflow whose Sigstore signature
+	// the manifest asks for. oku refuses a manifest that changes or drops it
+	// until the user accepts the change.
+	SignerWorkflow string `toml:"signer_workflow,omitempty"`
 	// Tag is the upstream tag of Version, kept so sync can expand {{tag}} without
 	// listing versions again.
 	Tag string `toml:"tag,omitempty"`
@@ -138,6 +142,9 @@ type Platform struct {
 
 // What oku checked a download against, strongest first.
 const (
+	// VerifiedSigstore is a Sigstore signature by the manifest's signer
+	// workflow, of the download or of its checksum file.
+	VerifiedSigstore = "sigstore"
 	// VerifiedMinisign is a minisign signature by the manifest's signing key.
 	VerifiedMinisign = "minisign"
 	// VerifiedManifest is a digest that the manifest states.
@@ -155,6 +162,7 @@ const (
 // verifiedRank orders the checks. A checksum file and a published digest come
 // from the same place as the download, so they rank the same.
 var verifiedRank = map[string]int{
+	VerifiedSigstore:     3,
 	VerifiedMinisign:     3,
 	VerifiedManifest:     2,
 	VerifiedChecksumFile: 1,

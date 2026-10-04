@@ -60,20 +60,23 @@ type planned struct {
 	URL      string `json:"url,omitempty"`
 	Verify   string `json:"verify,omitempty"`
 	// Verified is what oku checks the download against, as oku.lock records it.
-	Verified   string   `json:"verified,omitempty"`
-	SigningKey string   `json:"signing_key,omitempty"`
-	Commands   bool     `json:"commands"`
-	Needs      []string `json:"needs"`
-	Deps       []string `json:"deps"`
-	BuildDeps  []string `json:"build_deps"`
-	Programs   []string `json:"programs"`
-	Apps       []string `json:"apps"`
-	Fonts      []string `json:"fonts"`
-	Services   []string `json:"services"`
-	Env        []string `json:"env"`
-	Platforms  []string `json:"platforms"`
-	Installed  string   `json:"installed,omitempty"`
-	List       string   `json:"list"`
+	Verified   string `json:"verified,omitempty"`
+	SigningKey string `json:"signing_key,omitempty"`
+	// SignerWorkflow is the GitHub Actions workflow whose Sigstore signature the
+	// manifest asks for.
+	SignerWorkflow string   `json:"signer_workflow,omitempty"`
+	Commands       bool     `json:"commands"`
+	Needs          []string `json:"needs"`
+	Deps           []string `json:"deps"`
+	BuildDeps      []string `json:"build_deps"`
+	Programs       []string `json:"programs"`
+	Apps           []string `json:"apps"`
+	Fonts          []string `json:"fonts"`
+	Services       []string `json:"services"`
+	Env            []string `json:"env"`
+	Platforms      []string `json:"platforms"`
+	Installed      string   `json:"installed,omitempty"`
+	List           string   `json:"list"`
 }
 
 // runPlan prints, for each ref in args, what add would do, or with
@@ -235,22 +238,23 @@ func (e env) planFrom(
 	}
 
 	p := planned{
-		Ref:           req.ref.String(),
-		Name:          m.Package.Name,
-		Version:       m.Version.Value,
-		Description:   m.Package.Description,
-		Homepage:      m.Package.Homepage,
-		License:       m.Package.License,
-		Manifest:      fetched.Path,
-		Commit:        fetched.Commit,
-		Inferred:      inferred.Text != "",
-		Asset:         inferred.Asset,
-		OtherAssets:   inferred.Others,
-		OtherPrograms: inferred.Found,
-		Platform:      host.String(),
-		SigningKey:    m.Package.SigningKey,
-		Deps:          depNames(m.Runtime.Deps),
-		List:          e.listPath(),
+		Ref:            req.ref.String(),
+		Name:           m.Package.Name,
+		Version:        m.Version.Value,
+		Description:    m.Package.Description,
+		Homepage:       m.Package.Homepage,
+		License:        m.Package.License,
+		Manifest:       fetched.Path,
+		Commit:         fetched.Commit,
+		Inferred:       inferred.Text != "",
+		Asset:          inferred.Asset,
+		OtherAssets:    inferred.Others,
+		OtherPrograms:  inferred.Found,
+		Platform:       host.String(),
+		SigningKey:     m.Package.SigningKey,
+		SignerWorkflow: m.Package.SignerWorkflow,
+		Deps:           depNames(m.Runtime.Deps),
+		List:           e.listPath(),
 	}
 
 	for _, at := range platform.All() {
@@ -337,6 +341,12 @@ func (e env) planFrom(
 		urls = append(urls, artifact.URL+".minisig")
 	}
 
+	for _, bundle := range []string{artifact.SigstoreBundle, artifact.SHA256URLBundle} {
+		if bundle != "" {
+			urls = append(urls, bundle)
+		}
+	}
+
 	auth := e.fetcher(opts).Hosts.AuthFor(m.Version.From, m.Version.Repo)
 	for _, url := range urls {
 		if err := e.store().As(auth).Reachable(ctx, url); err != nil {
@@ -383,6 +393,8 @@ func (e env) planFrom(
 // is the sha512 of a package registry.
 func verifyText(verified, sha256URL string, pinned, registry bool) string {
 	switch {
+	case verified == lock.VerifiedSigstore:
+		return "Sigstore signature by the manifest's signer workflow"
 	case verified == lock.VerifiedMinisign:
 		return "minisign signature by the manifest's signing key"
 	case verified == lock.VerifiedManifest:
@@ -432,7 +444,11 @@ func (p planned) pairs(s ui.Style) [][2]string {
 	}
 
 	signed := ""
-	if p.SigningKey != "" {
+
+	switch {
+	case p.SignerWorkflow != "":
+		signed = "Sigstore, by the workflow " + p.SignerWorkflow
+	case p.SigningKey != "":
 		signed = "minisign key " + p.SigningKey
 	}
 

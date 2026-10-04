@@ -19,31 +19,35 @@ import (
 // section that Parse ignores.
 type schema struct {
 	Package struct {
-		Name        string `toml:"name"`
-		Description string `toml:"description"`
-		Homepage    string `toml:"homepage"`
-		License     string `toml:"license"`
-		Relocatable bool   `toml:"relocatable"`
-		SigningKey  string `toml:"signing_key"`
+		Name           string `toml:"name"`
+		Description    string `toml:"description"`
+		Homepage       string `toml:"homepage"`
+		License        string `toml:"license"`
+		Relocatable    bool   `toml:"relocatable"`
+		SigningKey     string `toml:"signing_key"`
+		SignerWorkflow string `toml:"signer_workflow"`
+		Attestations   bool   `toml:"attestations"`
 	} `toml:"package"`
 	Version   Version `toml:"version"`
 	Artifacts []struct {
-		Match       platform.Selector `toml:"match"`
-		Version     *Version          `toml:"version"`
-		URL         string            `toml:"url"`
-		SHA256      string            `toml:"sha256"`
-		SHA256URL   string            `toml:"sha256_url"`
-		Integrity   string            `toml:"integrity"`
-		Strip       int               `toml:"strip"`
-		Bin         []any             `toml:"bin"`
-		Lib         []string          `toml:"lib"`
-		Include     []string          `toml:"include"`
-		Man         []string          `toml:"man"`
-		Completions any               `toml:"completions"`
-		Share       []string          `toml:"share"`
-		App         []any             `toml:"app"`
-		Font        []string          `toml:"font"`
-		Data        bool              `toml:"data"`
+		Match           platform.Selector `toml:"match"`
+		Version         *Version          `toml:"version"`
+		URL             string            `toml:"url"`
+		SHA256          string            `toml:"sha256"`
+		SHA256URL       string            `toml:"sha256_url"`
+		SigstoreBundle  string            `toml:"sigstore_bundle"`
+		SHA256URLBundle string            `toml:"sha256_url_bundle"`
+		Integrity       string            `toml:"integrity"`
+		Strip           int               `toml:"strip"`
+		Bin             []any             `toml:"bin"`
+		Lib             []string          `toml:"lib"`
+		Include         []string          `toml:"include"`
+		Man             []string          `toml:"man"`
+		Completions     any               `toml:"completions"`
+		Share           []string          `toml:"share"`
+		App             []any             `toml:"app"`
+		Font            []string          `toml:"font"`
+		Data            bool              `toml:"data"`
 	} `toml:"artifact"`
 	Build    Build             `toml:"build"`
 	Runtime  Runtime           `toml:"runtime"`
@@ -134,7 +138,7 @@ func Lint(data []byte) Report {
 
 		fromRelease := releaseDownloads(version.Repo)
 
-		for _, text := range []string{a.URL, a.SHA256URL} {
+		for _, text := range []string{a.URL, a.SHA256URL, a.SigstoreBundle, a.SHA256URLBundle} {
 			for _, name := range unknownVars(text, artifactVars) {
 				report.Errors = append(report.Errors, fmt.Sprintf(
 					"artifact[%d]: unknown template variable {{%s}}", i, name,
@@ -151,8 +155,8 @@ func Lint(data []byte) Report {
 		}
 
 		switch {
-		case a.SHA256 != "" || a.SHA256URL != "" || a.Integrity != "" ||
-			full.Package.SigningKey != "" || version.From == FromNPM:
+		case a.SHA256 != "" || a.SHA256URL != "" || a.Integrity != "" || a.SigstoreBundle != "" ||
+			full.Package.SigningKey != "" || full.Package.Attestations || version.From == FromNPM:
 		case version.From != FromGitHubReleases && version.Tag == "":
 			report.Warnings = append(report.Warnings, fmt.Sprintf(
 				"artifact[%d]: no sha256 or sha256_url, so users trust the first download", i,

@@ -64,6 +64,7 @@ One `[[package]]` per package of the list, sorted by name.
 | `manifest_sha256` | Digest of the manifest file. |
 | `version` | The version installed. When each artifact finds its own version, this is the version of the platform entry whose name sorts first, so every machine writes the same value. |
 | `signing_key` | The manifest's minisign key, when it has one. |
+| `signer_workflow` | The manifest's Sigstore signer, when it has one. |
 | `tag` | The upstream tag of that version, when it differs, such as `v10.2.0`. When each artifact finds its own version, it is the tag of the same platform entry. |
 | `tag_commit` | The full commit a moving tag pointed at for that version. |
 | `inferred` | `true` for a package whose manifest oku inferred. |
@@ -100,14 +101,16 @@ oku keeps `vendor_sha256` and `impure` beside the build in the store, so
 
 | `verified` | oku checked the file against |
 |---|---|
+| `sigstore` | a Sigstore signature by the manifest's [`signer_workflow`](manifest.md#sigstore-signatures), of the file or of its checksum file |
 | `minisign` | a signature by the manifest's [`signing_key`](manifest.md#signatures) |
 | `manifest` | the `sha256` or `integrity` in the manifest |
 | `checksum-file` | the file at the manifest's `sha256_url` |
 | `published` | the digest that the version source publishes, such as GitHub for a release file or the npm registry for a package |
 | `first-use` | nothing. oku [trusted the first download](security.md#trust-on-first-use) |
 
-A checksum file and a published digest rank the same, since both come from the
-same place as the file. A build records how it checked its source archive. A
+A Sigstore and a minisign signature rank the same. A checksum file and a
+published digest rank the same, since both come from the same place as the
+file. A build records how it checked its source archive. A
 build from git has no `verified`, since its commit pins the source.
 
 `oku sync` keeps the `verified` of a pin it reuses, so it writes the same lock.
@@ -187,6 +190,7 @@ resolves them again with their parent.
 | `manifest_sha256` | `oku sync` stops when the manifest content changed. |
 | `sha256` per platform | A download with other bytes fails. |
 | `signing_key` | oku refuses a manifest with another `signing_key`, or none, until you pass `--accept-key`. |
+| `signer_workflow` | oku refuses a manifest with another `signer_workflow`, or none, until you pass `--accept-key`. |
 | `verified` per platform | `oku update` and `oku add` refuse a new download that oku would check more weakly, until you pass `--accept-weaker-check`. See [Security](security.md#weaker-checks). |
 | `vendor_sha256` per platform | A build whose vendor steps download something else fails, and nothing is kept. |
 | `tag_commit` | oku refuses to download once upstream moved the tag off that commit. |
