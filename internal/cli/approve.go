@@ -39,6 +39,8 @@ type buildFlags struct {
 	// acceptUnknownAge takes a version whose source gives no release time,
 	// whatever [lock] unknown_release_age says.
 	acceptUnknownAge bool
+	// acceptUnverified trusts a first download, whatever [lock] unverified says.
+	acceptUnverified bool
 }
 
 func (f *buildFlags) register(cmd *cobra.Command) {
@@ -54,6 +56,8 @@ func (f *buildFlags) register(cmd *cobra.Command) {
 		"take only versions released at least this long ago, such as 3d, or 0 for the newest")
 	cmd.Flags().BoolVar(&f.acceptUnknownAge, "accept-unknown-age", false,
 		"take a version whose source gives no release time without asking")
+	cmd.Flags().BoolVar(&f.acceptUnverified, "accept-unverified", false,
+		"trust a download that nothing states a digest for without asking")
 }
 
 // askAge makes one question about a version's age wait for another, since
@@ -122,6 +126,86 @@ func (e env) ageChecker(
 		}
 
 		return false, nil
+	}
+}
+
+// trustChecker returns the check that install runs before it trusts the first
+// download of a package for a platform, by [lock] unverified: allow trusts it,
+// refuse fails, and warn asks on a terminal and fails without one. One answer
+// covers every platform of the same version. --accept-unverified trusts it.
+func (e env) trustChecker(
+	cmd *cobra.Command,
+	opts Options,
+	flags *buildFlags,
+) func(name, version string, p platform.Platform) error {
+	trusted := map[string]bool{}
+
+	return func(name, version string, p platform.Platform) error {
+		if flags.acceptUnverified {
+			return nil
+		}
+
+		own, err := list.Read(e.listPath())
+		if err != nil {
+			return err
+		}
+
+		why := fmt.Sprintf("nothing states a digest for the download of %s %s for %s", name, version, p)
+
+		switch cmp.Or(own.Unverified, list.UnknownAllow) {
+		case list.UnknownAllow:
+			return nil
+		case list.UnknownRefuse:
+			return firstUseRefused(version, "[lock] unverified refuses it", fmt.Sprintf(
+				"%s, and [lock] unverified refuses to trust a first download\n"+
+					"run the command with --accept-unverified, or ask the developer to publish a checksum",
+				why,
+			))
+		}
+
+		askTrust.Lock()
+		defer askTrust.Unlock()
+
+		if trusted[name+" "+version] {
+			return nil
+		}
+
+		if !interactive(cmd, opts) {
+			return firstUseRefused(version, "oku cannot ask without a terminal", fmt.Sprintf(
+				"%s, so oku asks before it trusts it, and this is not a terminal\n"+
+					"run the command with --accept-unverified, or set [lock] unverified = \"allow\"",
+				why,
+			))
+		}
+
+		// Other packages keep installing, and their waits would redraw over the
+		// question.
+		defer status.Pause(cmd.Context())()
+
+		out := cmd.OutOrStdout()
+		fmt.Fprintf(out, "%s, so oku would trust its first download.\n", why)
+
+		if !confirm(cmd.InOrStdin(), out, "trust it?") {
+			return firstUseRefused(version, "you did not trust it", fmt.Sprintf("%s %s: not trusted", name, version))
+		}
+
+		trusted[name+" "+version] = true
+
+		return nil
+	}
+}
+
+// askTrust makes one question about a first download wait for another.
+var askTrust sync.Mutex
+
+// firstUseRefused is the notApprovedError of a first download that oku did not
+// trust, which keeps a locked version as a declined build does.
+func firstUseRefused(version, why, text string) notApprovedError {
+	return notApprovedError{
+		version: version,
+		text:    text,
+		why:     why,
+		kept:    fmt.Sprintf("oku did not trust the first download of %s, since %s", version, why),
 	}
 }
 
@@ -365,9 +449,10 @@ func (e env) approver(
 // approve, or that oku could not ask about without a terminal.
 var errNotApproved = errors.New("not approved")
 
-// notApprovedError is errNotApproved for one version, and why.
+// notApprovedError is errNotApproved for one version, and why. kept says why
+// the package keeps its locked version, when that is not a declined build.
 type notApprovedError struct {
-	version, text, why string
+	version, text, why, kept string
 }
 
 func (n notApprovedError) Error() string { return n.text }

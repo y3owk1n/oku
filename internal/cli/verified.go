@@ -120,3 +120,13 @@ func (req request) checkVerified(p platform.Platform, now string) error {
 		p, verifiedText(was), how,
 	)
 }
+
+// trust runs req.checkTrust for the first download of version of the package
+// called name for p.
+func (req request) trust(name, version string, p platform.Platform) error {
+	if req.checkTrust == nil {
+		return nil
+	}
+
+	return req.checkTrust(name, version, p)
+}

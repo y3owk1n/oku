@@ -123,6 +123,27 @@ The first download is the one you trusted. Prefer manifests that publish
 - `oku manifest hash` trusts the download it gets. Compare its output with a
   checksum the project publishes.
 
+`[lock]` `unverified` in `oku.toml` says whether oku may trust a first
+download:
+
+| Value | What happens |
+|---|---|
+| `"allow"` | The default. oku trusts the download and says so, as above. |
+| `"warn"` | On a terminal oku asks `trust it?`, once for every platform of the same version. Without one, as in CI, it does not trust it. |
+| `"refuse"` | oku does not trust it. |
+
+```
+oku: nothing states a digest for the download of hello 1.2.0 for darwin-arm64, and [lock] unverified refuses to trust a first download
+run the command with --accept-unverified, or ask the developer to publish a checksum
+```
+
+- When oku does not trust the new version of a package that `oku.lock` holds,
+  the package stays at its locked version, oku says so, and the rest of the
+  command goes on. A package that is new to the lock stops the command.
+- `--accept-unverified` on `add`, `update`, `sync`, `shell` or `run` trusts
+  such downloads for one run without asking.
+- oku never asks about a digest that `oku.lock` already pins.
+
 ## Weaker checks
 
 `oku.lock` records what oku checked each download against, such as a signature,

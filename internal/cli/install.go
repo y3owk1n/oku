@@ -172,6 +172,10 @@ type request struct {
 	// empty. An error that wraps errNotTaken refuses the version. Nil takes it
 	// and says so.
 	checkAge func(name, version, locked string) (note bool, err error)
+	// checkTrust decides whether oku trusts the first download of version of the
+	// package called name for p, which nothing states a digest for. Nil trusts
+	// it. An error that wraps errNotApproved keeps a locked version.
+	checkTrust func(name, version string, p platform.Platform) error
 	// log receives the output of build commands, or is nil.
 	log io.Writer
 	// constraint limits the version of a dep, as a range such as ">=3" or a
@@ -299,9 +303,9 @@ func (e env) install(ctx context.Context, opts Options, req request) (installed,
 	}
 
 	if declined := (notApprovedError{}); errors.As(err, &declined) {
-		got.notApproved = fmt.Sprintf(
+		got.notApproved = cmp.Or(declined.kept, fmt.Sprintf(
 			"the build of %s was not approved, since %s", declined.version, declined.why,
-		)
+		))
 	}
 
 	return got, nil
@@ -594,6 +598,12 @@ func (e env) installFrom(
 			return installed{}, err
 		}
 
+		if sourceCheck == lock.VerifiedFirstUse && pinnedSource == "" {
+			if err := req.trust(m.Package.Name, m.Version.Value, host); err != nil {
+				return installed{}, err
+			}
+		}
+
 		buildMu.Lock()
 		defer buildMu.Unlock()
 
@@ -769,6 +779,12 @@ func (e env) installFrom(
 		verified := pinVerified(stated, pinned != "", previous.Platforms[host.String()])
 		if err := req.checkVerified(host, verified); err != nil {
 			return installed{}, err
+		}
+
+		if verified == lock.VerifiedFirstUse && pinned == "" {
+			if err := req.trust(m.Package.Name, m.Version.Value, host); err != nil {
+				return installed{}, err
+			}
 		}
 
 		auth := e.fetcher(opts).Hosts.AuthFor(m.Version.From, m.Version.Repo)
@@ -1299,6 +1315,10 @@ func (e env) lockOthers(
 		}
 
 		if trusted {
+			if err := req.trust(m.Package.Name, cmp.Or(m.Versions[p.String()], m.Version.Value), p); err != nil {
+				return nil, err
+			}
+
 			firstUse = append(firstUse, p.String())
 		}
 
@@ -2224,6 +2244,7 @@ func (e env) installDeps(
 				lockOnly:        !onHost,
 				approve:         parent.approve,
 				checkAge:        parent.checkAge,
+				checkTrust:      parent.checkTrust,
 				log:             parent.log,
 				constraint:      dep.Version,
 				stack:           stack,
