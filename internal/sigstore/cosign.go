@@ -73,9 +73,27 @@ func (v *Verifier) VerifySignature(ctx context.Context, signature, cert, digest 
 
 	sig, certPEM := strings.TrimSpace(string(signature)), pemOf(cert)
 
+	entry, err := v.logged(ctx, digest, sig, func(key []byte) bool {
+		return bytes.Equal(bytes.TrimSpace(key), bytes.TrimSpace(certPEM))
+	})
+	if err != nil {
+		return err
+	}
+
+	b, err := signatureBundle(sig, base64.StdEncoding.EncodeToString(certPEM), digest, entry)
+	if err != nil {
+		return fmt.Errorf("%w: %w", ErrVerify, err)
+	}
+
+	return v.verify(b, digest, id)
+}
+
+// logged returns the log's entry in which sig, in base64, signs the file whose
+// sha256 is digest with a key or certificate, in PEM, that match accepts.
+func (v *Verifier) logged(ctx context.Context, digest []byte, sig string, match func(key []byte) bool) (*protorekor.TransparencyLogEntry, error) {
 	entries, err := v.rekorEntries(ctx, digest)
 	if err != nil {
-		return fmt.Errorf("%w: ask %s for the signature: %w", ErrVerify, v.rekor, err)
+		return nil, fmt.Errorf("%w: ask %s for the signature: %w", ErrVerify, v.rekor, err)
 	}
 
 	for _, e := range entries {
@@ -96,24 +114,19 @@ func (v *Verifier) VerifySignature(ctx context.Context, signature, cert, digest 
 		}
 
 		key, err := base64.StdEncoding.DecodeString(body.Spec.Signature.PublicKey.Content)
-		if err != nil || body.Spec.Signature.Content != sig || !bytes.Equal(bytes.TrimSpace(key), bytes.TrimSpace(certPEM)) {
+		if err != nil || body.Spec.Signature.Content != sig || !match(key) {
 			continue
 		}
 
 		entry, err := logEntry(e.Body, e.IntegratedTime, e.LogIndex, e.LogID, e.Verification.SET)
 		if err != nil {
-			return fmt.Errorf("%w: %w", ErrVerify, err)
+			return nil, fmt.Errorf("%w: %w", ErrVerify, err)
 		}
 
-		b, err := signatureBundle(sig, base64.StdEncoding.EncodeToString(certPEM), digest, entry)
-		if err != nil {
-			return fmt.Errorf("%w: %w", ErrVerify, err)
-		}
-
-		return v.verify(b, digest, id)
+		return entry, nil
 	}
 
-	return fmt.Errorf("%w: %s holds no entry of this signature", ErrVerify, v.rekor)
+	return nil, fmt.Errorf("%w: %s holds no entry of this signature", ErrVerify, v.rekor)
 }
 
 // rekorEntry is an entry of the log as Rekor's API answers it.

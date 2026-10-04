@@ -147,6 +147,9 @@ const (
 	VerifiedSigstore = "sigstore"
 	// VerifiedMinisign is a minisign signature by the manifest's signing key.
 	VerifiedMinisign = "minisign"
+	// VerifiedCosign is a cosign signature by the manifest's signing key, of
+	// the download or of its checksum file.
+	VerifiedCosign = "cosign"
 	// VerifiedManifest is a digest that the manifest states.
 	VerifiedManifest = "manifest"
 	// VerifiedChecksumFile is the checksum file at the manifest's sha256_url.
@@ -164,6 +167,7 @@ const (
 var verifiedRank = map[string]int{
 	VerifiedSigstore:     3,
 	VerifiedMinisign:     3,
+	VerifiedCosign:       3,
 	VerifiedManifest:     2,
 	VerifiedChecksumFile: 1,
 	VerifiedPublished:    1,

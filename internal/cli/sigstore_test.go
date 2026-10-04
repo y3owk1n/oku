@@ -318,9 +318,9 @@ func TestB504AnAquaEntryKeepsItsSigstoreChecks(t *testing.T) {
 	}
 }
 
-func TestB504AnAquaSignatureNeedsACertificateNotAKey(t *testing.T) {
-	entry := func(opts string) string {
-		return `packages:
+func TestB504AnAquaSignatureKeepsItsCertificate(t *testing.T) {
+	m := newMachine(t)
+	recipeServer{aqua: `packages:
   - type: github_release
     repo_owner: owner
     repo_name: tool
@@ -332,10 +332,7 @@ func TestB504AnAquaSignatureNeedsACertificateNotAKey(t *testing.T) {
       algorithm: sha256
       cosign:
         opts:
-` + opts
-	}
-
-	signed := `          - --certificate
+          - --certificate
           - https://github.com/owner/tool/releases/download/{{.Version}}/checksums.txt.pem
           - --certificate-identity
           - https://github.com/owner/tool/.github/workflows/release.yml@refs/tags/{{.Version}}
@@ -343,35 +340,17 @@ func TestB504AnAquaSignatureNeedsACertificateNotAKey(t *testing.T) {
           - https://token.actions.githubusercontent.com
           - --signature
           - https://github.com/owner/tool/releases/download/{{.Version}}/checksums.txt.sig
-`
-	keyed := `          - --key
-          - https://github.com/owner/tool/releases/download/{{.Version}}/cosign.pub
-          - --signature
-          - https://github.com/owner/tool/releases/download/{{.Version}}/checksums.txt.sig
-`
+`}.start(t, &m)
+
+	out, err := m.run(t, "", "manifest", "init", "--from", "aqua:owner/tool", "-o", "-")
+	if err != nil {
+		t.Fatalf("init: %v\n%s", err, out)
+	}
 
 	release := "https://github.com/owner/tool/releases/download/{{tag}}/"
-
-	for _, tc := range []struct {
-		name, opts string
-		want       bool
-	}{
-		{"a signature and a certificate", signed, true},
-		{"a key", keyed, false},
-	} {
-		m := newMachine(t)
-		recipeServer{aqua: entry(tc.opts)}.start(t, &m)
-
-		out, err := m.run(t, "", "manifest", "init", "--from", "aqua:owner/tool", "-o", "-")
-		if err != nil {
-			t.Fatalf("%s: init: %v\n%s", tc.name, err, out)
-		}
-
-		got := strings.Contains(out, "sha256_url_signature = \""+release+"checksums.txt.sig\"\n"+
-			"sha256_url_certificate = \""+release+"checksums.txt.pem\"")
-		if got != tc.want {
-			t.Fatalf("%s: want the signature kept %v:\n%s", tc.name, tc.want, out)
-		}
+	if !strings.Contains(out, "sha256_url_signature = \""+release+"checksums.txt.sig\"\n"+
+		"sha256_url_certificate = \""+release+"checksums.txt.pem\"") {
+		t.Fatalf("the manifest lacks the signature and its certificate:\n%s", out)
 	}
 }
 

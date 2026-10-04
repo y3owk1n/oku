@@ -69,7 +69,7 @@ A machine gets the package only when an artifact or the build fits it.
 | `description` | no | One line. `oku search` matches it, and `oku manifest lint` warns when it is empty. |
 | `homepage` | no | A URL. |
 | `license` | no | An SPDX identifier. |
-| `signing_key` | no | Your minisign public key. oku then checks every artifact against its signature, see [Signatures](#signatures). |
+| `signing_key` | no | Your minisign public key, see [Signatures](#signatures), or your cosign one, see [Cosign key](#cosign-key). oku then checks every artifact against its signature. |
 | `signer_workflow` | no | The GitHub Actions workflow that signs your releases with Sigstore, as `owner/repo/.github/workflows/<file>`. See [Sigstore signatures](#sigstore-signatures). |
 | `attestations` | no | `true` makes oku check each artifact against the GitHub artifact attestations that `signer_workflow` made of it. Needs `signer_workflow`. |
 | `relocatable` | no | `true` when the built files contain no store path. A [build cache](../guides/build-caches.md) then offers the package to machines with any store root. Default `false`. Only matters for `[build]`. |
@@ -421,7 +421,7 @@ machine, so put specific entries before general ones.
 | Key | Required | Meaning |
 |---|---|---|
 | `match` | no | `{ os, arch, libc }`, see [Match and when](#match-and-when). A missing key matches anything, and a missing `match` matches every machine. |
-| `url` | yes | Where the download is. `https://`, `http://` or `file://`. An `http://` URL needs `sha256` or a `signing_key`, and `oku manifest lint` fails without one. `file://` works only in a manifest on this machine or in a `git+file://` repo. On Windows `file:///C:/tools/x.zip` names a drive and `file://server/share/x.zip` a share. Expands [template variables](#template-variables). |
+| `url` | yes | Where the download is. `https://`, `http://` or `file://`. An `http://` URL needs `sha256` or a `signing_key` that signs it, and `oku manifest lint` fails without one. `file://` works only in a manifest on this machine or in a `git+file://` repo. On Windows `file:///C:/tools/x.zip` names a drive and `file://server/share/x.zip` a share. Expands [template variables](#template-variables). |
 | `sha256` | no | The download's digest, 64 lowercase hex characters. Not with `sha256_url`. |
 | `sha256_url` | no | The URL of a checksum file, see [Checksums](#checksums). Not with `sha256`. |
 | `sigstore_bundle` | no | The URL of a Sigstore bundle in which `signer_workflow` signs the download, see [Sigstore signatures](#sigstore-signatures). |
@@ -625,9 +625,43 @@ bin = ["tool"]
   another workflow.
 - With a Sigstore check, an artifact without `sha256` is no longer trust on
   first use.
-- oku does not check a cosign signature made with a key of the developer's
-  own. GitHub signs the attestations of a private repo with a Sigstore of its
+- GitHub signs the attestations of a private repo with a Sigstore of its
   own, and oku fails on them.
+
+### Cosign key
+
+When you sign releases with `cosign sign-blob --key`, put the public key in
+`signing_key`, and name the signatures with the keys of
+[Sigstore signatures](#sigstore-signatures), without a certificate. Write the
+key as the base64 between the lines of `cosign.pub`, on one line.
+`grep -v -- ----- cosign.pub | tr -d '\n'` prints it:
+
+```toml
+[package]
+name = "tool"
+signing_key = "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEQ8s2amqpcMg3bTcKST/mfm5hhP7xi1QdHTCutS1WRi463h3wiNb1ezTA6CqZkO3kimBN4aocez98LimK55ccbg=="
+
+[version]
+from = "github-releases"
+repo = "you/tool"
+
+[[artifact]]
+url = "https://github.com/you/tool/releases/download/{{tag}}/tool-linux-amd64.tar.gz"
+sha256_url = "https://github.com/you/tool/releases/download/{{tag}}/checksums.txt"
+sha256_url_signature = "https://github.com/you/tool/releases/download/{{tag}}/checksums.txt.sig"
+bin = ["tool"]
+```
+
+- oku checks `sigstore_bundle`, `sha256_url_bundle`, `sigstore_signature` and
+  `sha256_url_signature` against the key, and looks for no `.minisig`.
+- The signature's entry must be in Sigstore's transparency log, as
+  `cosign verify-blob --key` requires by default. oku finds the entry of a
+  signature without a bundle in `rekor.sigstore.dev`, so a signature made with
+  `--tlog-upload=false` fails.
+- A manifest with a cosign key and a `signer_workflow` checks the signatures
+  against the key, and the attestations against the workflow.
+- The user's `oku.lock` pins the key at the first install, as it pins a
+  minisign key, and a changed key needs `--accept-key`.
 
 ### SLSA provenance
 
@@ -1907,11 +1941,16 @@ bin = ["obsidian"]
 - oku reads the Ruby of a cask as text and never runs it.
 - An aqua template that uses a function oku has no match for, such as
   `{{title .OS}}`, fails and names it.
-- oku keeps a `cosign` check only when it names a GitHub Actions workflow and
-  the release's tag, either as `--certificate-identity` ending in
+- oku keeps a `cosign` check that names a GitHub Actions workflow and the
+  release's tag, either as `--certificate-identity` ending in
   `@refs/tags/{{.Version}}`, or as `--certificate-identity-regexp` with
-  `--certificate-github-workflow-ref refs/tags/{{.Version}}`. A check with
-  `--key` stays out.
+  `--certificate-github-workflow-ref refs/tags/{{.Version}}`.
+- A `cosign` check with `--key` becomes a [cosign `signing_key`](#cosign-key).
+  When oku translates the entry, it downloads the key from its URL at the
+  newest release and writes the key into the manifest. `oku.lock` pins that
+  key, so a later translation that finds another key stops until
+  `--accept-key`. A check with `--insecure-ignore-tlog`, or whose key oku
+  cannot read, stays out.
 - A URL template counts only when it gives back the recipe's own download
   for the recipe's version, on every platform. Other parts of the URL keep
   the value they have in that download, such as `arm64` for `#{arch}`.

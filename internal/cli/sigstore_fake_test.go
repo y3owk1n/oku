@@ -423,6 +423,89 @@ func (f *fakeSigstore) bundle(
 	return data
 }
 
+// keySign signs data with key, as cosign sign-blob --key does, records the
+// signature in the fake Rekor when logged, and returns it in base64.
+func (f *fakeSigstore) keySign(t *testing.T, key *ecdsa.PrivateKey, data []byte, logged bool) []byte {
+	t.Helper()
+
+	sig, entry := f.keyEntry(t, key, data)
+
+	if logged {
+		f.mu.Lock()
+		defer f.mu.Unlock()
+
+		digest := digestOf(data)
+		f.logged[digest] = append(f.logged[digest], entry)
+	}
+
+	return []byte(base64.StdEncoding.EncodeToString(sig))
+}
+
+// keyBundle returns a bundle in which key signs data.
+func (f *fakeSigstore) keyBundle(t *testing.T, key *ecdsa.PrivateKey, data []byte) []byte {
+	t.Helper()
+
+	sig, entry := f.keyEntry(t, key, data)
+	digest := sha256.Sum256(data)
+
+	b, err := bundle.NewBundle(&protobundle.Bundle{
+		MediaType: "application/vnd.dev.sigstore.bundle+json;version=0.1",
+		VerificationMaterial: &protobundle.VerificationMaterial{
+			Content:     &protobundle.VerificationMaterial_PublicKey{PublicKey: &protocommon.PublicKeyIdentifier{}},
+			TlogEntries: []*protorekor.TransparencyLogEntry{entry},
+		},
+		Content: &protobundle.Bundle_MessageSignature{
+			MessageSignature: &protocommon.MessageSignature{
+				MessageDigest: &protocommon.HashOutput{Algorithm: protocommon.HashAlgorithm_SHA2_256, Digest: digest[:]},
+				Signature:     sig,
+			},
+		},
+	})
+	must(t, err)
+
+	out, err := b.MarshalJSON()
+	must(t, err)
+
+	return out
+}
+
+// keyEntry signs data with key and returns the signature and the log's entry
+// of it.
+func (f *fakeSigstore) keyEntry(t *testing.T, key *ecdsa.PrivateKey, data []byte) ([]byte, *protorekor.TransparencyLogEntry) {
+	t.Helper()
+
+	digest := sha256.Sum256(data)
+
+	sig, err := ecdsa.SignASN1(rand.Reader, key, digest[:])
+	must(t, err)
+
+	der, err := x509.MarshalPKIXPublicKey(key.Public())
+	must(t, err)
+
+	entry := f.logEntry(t, hashedrekord.KIND, hashedrekord.New().DefaultVersion(), types.ArtifactProperties{
+		ArtifactHash:   hex.EncodeToString(digest[:]),
+		SignatureBytes: sig,
+		PublicKeyBytes: [][]byte{pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: der})},
+		PKIFormat:      string(pki.X509),
+	})
+
+	return sig, entry
+}
+
+// cosignKey returns a new cosign key and its public half as a manifest names
+// it, and as PEM.
+func cosignKey(t *testing.T) (key *ecdsa.PrivateKey, text string, public []byte) {
+	t.Helper()
+
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	must(t, err)
+
+	der, err := x509.MarshalPKIXPublicKey(key.Public())
+	must(t, err)
+
+	return key, base64.StdEncoding.EncodeToString(der), pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: der})
+}
+
 func certPEM(cert *x509.Certificate) []byte {
 	return pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: cert.Raw})
 }

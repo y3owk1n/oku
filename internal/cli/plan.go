@@ -344,7 +344,7 @@ func (e env) planFrom(
 		urls = append(urls, artifact.SHA256URL)
 	}
 
-	if m.Package.SigningKey != "" {
+	if m.Package.SigningKey != "" && !manifest.CosignKey(m.Package.SigningKey) {
 		urls = append(urls, artifact.URL+".minisig")
 	}
 
@@ -459,6 +459,8 @@ func (p planned) pairs(s ui.Style) [][2]string {
 	switch {
 	case p.SignerWorkflow != "":
 		signed = "Sigstore, by the workflow " + p.SignerWorkflow
+	case manifest.CosignKey(p.SigningKey):
+		signed = "cosign key " + p.SigningKey
 	case p.SigningKey != "":
 		signed = "minisign key " + p.SigningKey
 	}

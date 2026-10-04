@@ -37,21 +37,16 @@ func (s *Store) verifySigstore(ctx context.Context, m *manifest.Manifest, a mani
 	}
 
 	if a.SigstoreBundle != "" {
-		data, err := s.bundle(ctx, a.SigstoreBundle)
-		if err != nil {
-			return err
-		}
-
-		if err := s.Sigstore.Verify(data, sum, signer(m)); err != nil {
+		if err := s.verifySigned(ctx, m, a.SigstoreBundle, "", sum); err != nil {
 			return fmt.Errorf("%w: the bundle at %s does not show that %s signed %s: %w",
-				ErrSignature, a.SigstoreBundle, m.Package.SignerWorkflow, path.Base(a.URL), err)
+				ErrSignature, a.SigstoreBundle, signerName(m), path.Base(a.URL), err)
 		}
 	}
 
 	if a.SigstoreSignature != "" {
-		if err := s.verifyCosign(ctx, m, a.SigstoreSignature, a.SigstoreCertificate, sum); err != nil {
+		if err := s.verifySigned(ctx, m, a.SigstoreSignature, a.SigstoreCertificate, sum); err != nil {
 			return fmt.Errorf("%w: the signature at %s does not show that %s signed %s: %w",
-				ErrSignature, a.SigstoreSignature, m.Package.SignerWorkflow, path.Base(a.URL), err)
+				ErrSignature, a.SigstoreSignature, signerName(m), path.Base(a.URL), err)
 		}
 	}
 
@@ -143,36 +138,41 @@ func (s *Store) signedSHA256(ctx context.Context, m *manifest.Manifest, a manife
 		return "", err
 	}
 
-	if a.SHA256URLBundle != "" {
-		bundle, err := s.bundle(ctx, a.SHA256URLBundle)
-		if err != nil {
-			return "", err
-		}
+	sum := sha256.Sum256(data)
 
-		sum := sha256.Sum256(data)
-		if err := s.Sigstore.Verify(bundle, sum[:], signer(m)); err != nil {
+	if a.SHA256URLBundle != "" {
+		if err := s.verifySigned(ctx, m, a.SHA256URLBundle, "", sum[:]); err != nil {
 			return "", fmt.Errorf("%w: the bundle at %s does not show that %s signed %s: %w",
-				ErrSignature, a.SHA256URLBundle, m.Package.SignerWorkflow, a.SHA256URL, err)
+				ErrSignature, a.SHA256URLBundle, signerName(m), a.SHA256URL, err)
 		}
 	}
 
 	if a.SHA256URLSignature != "" {
-		sum := sha256.Sum256(data)
-		if err := s.verifyCosign(ctx, m, a.SHA256URLSignature, a.SHA256URLCertificate, sum[:]); err != nil {
+		if err := s.verifySigned(ctx, m, a.SHA256URLSignature, a.SHA256URLCertificate, sum[:]); err != nil {
 			return "", fmt.Errorf("%w: the signature at %s does not show that %s signed %s: %w",
-				ErrSignature, a.SHA256URLSignature, m.Package.SignerWorkflow, a.SHA256URL, err)
+				ErrSignature, a.SHA256URLSignature, signerName(m), a.SHA256URL, err)
 		}
 	}
 
 	return digestIn(data, a.SHA256URL, path.Base(a.URL))
 }
 
-// verifyCosign checks the cosign signature at signatureURL, with the
-// certificate at certURL, of the file whose sha256 is sum.
-func (s *Store) verifyCosign(ctx context.Context, m *manifest.Manifest, signatureURL, certURL string, sum []byte) error {
-	signature, err := s.bundle(ctx, signatureURL)
+// verifySigned checks the bundle or cosign signature at url, of the file whose
+// sha256 is sum. A cosign signing key of m must have signed it. Otherwise its
+// signer workflow must have, and a signature then comes with the certificate
+// at certURL.
+func (s *Store) verifySigned(ctx context.Context, m *manifest.Manifest, url, certURL string, sum []byte) error {
+	data, err := s.bundle(ctx, url)
 	if err != nil {
 		return err
+	}
+
+	if manifest.CosignKey(m.Package.SigningKey) {
+		return s.Sigstore.VerifyWithKey(ctx, data, sum, m.Package.SigningKey)
+	}
+
+	if certURL == "" {
+		return s.Sigstore.Verify(data, sum, signer(m))
 	}
 
 	cert, err := s.bundle(ctx, certURL)
@@ -180,7 +180,16 @@ func (s *Store) verifyCosign(ctx context.Context, m *manifest.Manifest, signatur
 		return err
 	}
 
-	return s.Sigstore.VerifySignature(ctx, signature, cert, sum, signer(m))
+	return s.Sigstore.VerifySignature(ctx, data, cert, sum, signer(m))
+}
+
+// signerName names who signs the Sigstore signatures of m.
+func signerName(m *manifest.Manifest) string {
+	if manifest.CosignKey(m.Package.SigningKey) {
+		return "the manifest's cosign signing key"
+	}
+
+	return m.Package.SignerWorkflow
 }
 
 // bundle downloads the Sigstore bundle, signature or certificate at url.

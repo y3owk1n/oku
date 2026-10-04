@@ -1899,3 +1899,27 @@ takes an inode, or a 4 KiB block on ext4 when the target path is longer than 60
 bytes. Nix's `buildEnv` links a folder that one package provides the same way.
 On 2026-10-04 one global profile of 75 packages went from 898 entries in its
 tree to 525.
+||||||| parent of b8b6cc9 (feat(sigstore): check cosign signatures made with the developer's key)
+
+
+## D116. A cosign key is a signing key, pinned like a minisign key
+
+A manifest's `signing_key` may be a cosign public key, written as the base64
+between the lines of its PEM. oku then checks the bundles and signatures that
+the artifacts name against the key, through sigstore-go, and requires the
+signature's entry in Sigstore's transparency log, as `cosign verify-blob
+--key` does by default. oku looks up the entry of a signature without a bundle
+in Rekor by the file's sha256. `oku.lock` pins the key like a minisign key
+(D49) and records `verified = "cosign"`, ranked with the other signatures. oku
+translates an `aqua:` entry with `--key` into a manifest that holds the key
+itself, read from its URL at the newest release, and never the URL.
+
+Why: 14 entries of the aqua registry check a signature by the developer's own
+key, and oku dropped those checks. The manifest holds the key as text, so a
+release whose key changed stops `oku update` until `--accept-key`, even when
+the key sits in the same release as the files. oku would read a URL in the
+manifest again at each install, so whoever controls the release would also
+control the key. One line of base64 keeps the key a plain string, so the lock
+and `oku.toml` pins compare it as they compare a minisign key. Requiring the
+log matches cosign's default, so an entry that passes `--insecure-ignore-tlog`
+stays out.

@@ -60,10 +60,14 @@ func artifactVerified(m *manifest.Manifest, a manifest.Artifact, release resolve
 
 	signature := ""
 
+	keyed := manifest.CosignKey(m.Package.SigningKey)
+
 	switch {
+	case keyed && a.Sigstore():
+		signature = lock.VerifiedCosign
 	case m.Package.Attestations || a.Sigstore() || a.Provenance != "":
 		signature = lock.VerifiedSigstore
-	case m.Package.SigningKey != "":
+	case m.Package.SigningKey != "" && !keyed:
 		signature = lock.VerifiedMinisign
 	}
 
@@ -100,6 +104,8 @@ func verifiedText(verified string) string {
 		return "a Sigstore signature by the manifest's signer workflow"
 	case lock.VerifiedMinisign:
 		return "a minisign signature by the manifest's signing key"
+	case lock.VerifiedCosign:
+		return "a cosign signature by the manifest's signing key"
 	case lock.VerifiedManifest:
 		return "the digest in the manifest"
 	case lock.VerifiedChecksumFile:
