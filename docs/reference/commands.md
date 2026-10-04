@@ -1418,7 +1418,7 @@ oku: doctor found 1 problem
 ### oku verify
 
 ```
-oku verify [--repair]
+oku verify [--repair] [--record]
 ```
 
 Checks that the installed packages of the list in use, and their deps, still
@@ -1441,10 +1441,13 @@ run `oku verify --repair`, then `oku sync`, which downloads them again and check
 | Flag | Effect |
 |---|---|
 | `--repair` | Removes the packages that changed from the store. The next `oku sync` installs them again, checked against the pins of `oku.lock`. |
-| `--json` | A list of `name`, `version`, `path`, `status` (`ok`, `changed` or `unrecorded`) and `changes`, each a `path` and a `kind`. |
+| `--record` | Records the files of each package that has no record, as they are now, so that later runs check it. It never replaces a record. |
+| `--json` | A list of `name`, `version`, `path`, `status` (`ok`, `changed`, `unrecorded` or `recorded`) and `changes`, each a `path` and a `kind`. |
 
 - An older oku installed packages without a record. `verify` notes such a
-  package and does not check it. Its next version gets a record.
+  package and does not check it. Its next version gets a record, and
+  `--record` writes one now. Run `--record` on a machine you trust, since it
+  takes the files as they are.
 - Python writes its bytecode into `__pycache__` folders beside the code it
   runs, so `verify` leaves those folders out.
 - The record lives beside the files, so a program that runs as you could

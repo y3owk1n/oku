@@ -97,3 +97,28 @@ func TestB512VerifyNotesAPackageWithoutARecord(t *testing.T) {
 		t.Fatalf("want a note for a package without a record, got %v\n%s", err, out)
 	}
 }
+
+func TestB515VerifyRecordRecordsAPackageWithoutARecord(t *testing.T) {
+	m := newMachine(t)
+	tool := m.manifest(t, "tool", map[string]string{"tool": script}, `bin = ["tool"]`)
+	m.writeFilesList(t, fmt.Sprintf("[packages]\ntool = %q\n", tool))
+
+	_, err := m.run(t, "", "sync")
+	must(t, err)
+
+	record := filepath.Join(m.toolPath(t), "oku-tree.txt")
+	must(t, os.Chmod(record, 0o644))
+	must(t, os.Remove(record))
+
+	out, err := m.run(t, "", "verify", "--record")
+	if err != nil || !strings.Contains(out, "recorded its files") {
+		t.Fatalf("want --record to record the package, got %v\n%s", err, out)
+	}
+
+	// The next run checks it, and a change shows.
+	must(t, os.WriteFile(filepath.Join(m.toolPath(t), "pkg", "extra"), []byte("x"), 0o644))
+
+	if _, err := m.run(t, "", "verify", "--record"); err == nil || !strings.Contains(err.Error(), "changed") {
+		t.Fatalf("want --record to leave a recorded package checked, got %v", err)
+	}
+}

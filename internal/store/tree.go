@@ -37,6 +37,16 @@ func writeTree(dir string) error {
 	return os.WriteFile(filepath.Join(dir, treeFile), []byte(b.String()), 0o444)
 }
 
+// Record writes the record of the store path at path as it is now. It refuses
+// a path that has one, so that it cannot hide a change.
+func Record(path string) error {
+	if exists(filepath.Join(path, treeFile)) {
+		return fmt.Errorf("%s has a record of its files already", filepath.Base(path))
+	}
+
+	return writeTree(path)
+}
+
 // readTree returns, for each file and link under dir by its slash path, what
 // it is: the sha256 of a file with "x" for one that runs, or "link" and its
 // target. A directory is in it through what it holds, and a __pycache__
