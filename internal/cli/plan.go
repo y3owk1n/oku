@@ -29,7 +29,10 @@ type planFlags struct {
 	bins       []string
 	verbose    bool
 	acceptKey  bool
-	when       platform.When
+	// acceptWeaker plans a download that oku checks more weakly than oku.lock
+	// did, as add --accept-weaker-check installs it.
+	acceptWeaker bool
+	when         platform.When
 }
 
 // planned is what add would do for one ref. oku finds it without installing
@@ -52,10 +55,12 @@ type planned struct {
 	OtherPrograms []string `json:"other_programs"`
 	// Install is "download", "build", or "pin" for a package that has nothing
 	// for this machine and goes in oku.lock only.
-	Install    string   `json:"install"`
-	Platform   string   `json:"platform"`
-	URL        string   `json:"url,omitempty"`
-	Verify     string   `json:"verify,omitempty"`
+	Install  string `json:"install"`
+	Platform string `json:"platform"`
+	URL      string `json:"url,omitempty"`
+	Verify   string `json:"verify,omitempty"`
+	// Verified is what oku checks the download against, as oku.lock records it.
+	Verified   string   `json:"verified,omitempty"`
 	SigningKey string   `json:"signing_key,omitempty"`
 	Commands   bool     `json:"commands"`
 	Needs      []string `json:"needs"`
@@ -83,7 +88,7 @@ func runPlan(cmd *cobra.Command, opts Options, args []string, flags planFlags) e
 		}
 
 		req.fromSource, req.bins = flags.fromSource, flags.bins
-		req.acceptKey, req.verbose = flags.acceptKey, flags.verbose
+		req.acceptKey, req.acceptWeaker, req.verbose = flags.acceptKey, flags.acceptWeaker, flags.verbose
 
 		if flags.manifest {
 			// A manifest to keep serves every platform, not only the lock's.
@@ -303,12 +308,15 @@ func (e env) planFrom(
 				return planned{}, err
 			}
 
-			pinned := ""
-			if sameVersion && previous.Strategy == strategyBuild {
-				pinned = previous.SHA256
+			pinned := sameVersion && previous.Strategy == strategyBuild && previous.SHA256 != "" &&
+				!req.acceptDigest
+
+			p.Verified = sourceVerified(m, release, host, pinned, previous)
+			if err := req.checkVerified(host, p.Verified); err != nil {
+				return planned{}, err
 			}
 
-			p.Verify = verifyText(src.SHA256, src.SHA256URL, release.Digests[p.URL], "", pinned)
+			p.Verify = verifyText(p.Verified, src.SHA256URL, pinned, false)
 
 			if err := e.store().Reachable(ctx, p.URL); err != nil {
 				return planned{}, fmt.Errorf("%s: %w", m.Package.Name, err)
@@ -353,37 +361,42 @@ func (e env) planFrom(
 		p.Programs = append(p.Programs, w.Name)
 	}
 
-	pinned := ""
-	if sameVersion && previous.URL == artifact.URL {
-		pinned = previous.SHA256
+	// The same digest that install keeps from oku.lock.
+	stated := artifact.SHA256 != "" || artifact.SHA256URL != "" || release.Digests[artifact.URL] != ""
+	pinned := sameVersion && previous.URL == artifact.URL && previous.SHA256 != "" &&
+		(!req.acceptDigest || !stated)
+
+	p.Verified = pinVerified(artifactVerified(m, artifact, release), pinned, previous)
+	if err := req.checkVerified(host, p.Verified); err != nil {
+		return planned{}, err
 	}
 
-	integrity := artifact.Integrity
-	if integrity == "" {
-		integrity = release.Integrity[artifact.URL]
-	}
-
-	p.Verify = verifyText(
-		artifact.SHA256, artifact.SHA256URL, release.Digests[artifact.URL], integrity, pinned,
-	)
+	registry := artifact.Integrity == "" && release.Digests[artifact.URL] == "" &&
+		release.Integrity[artifact.URL] != ""
+	p.Verify = verifyText(p.Verified, artifact.SHA256URL, pinned, registry)
 
 	return p, nil
 }
 
-// verifyText says how oku checks a download, from the most specific digest it
-// has.
-func verifyText(sha256, sha256URL, published, integrity, pinned string) string {
+// verifyText says in words how oku checks a download, from the check verified.
+// pinned reports that oku.lock holds its digest, and registry that the digest
+// is the sha512 of a package registry.
+func verifyText(verified, sha256URL string, pinned, registry bool) string {
 	switch {
-	case sha256 != "":
-		return "sha256 from the manifest"
-	case sha256URL != "":
+	case verified == lock.VerifiedMinisign:
+		return "minisign signature by the manifest's signing key"
+	case verified == lock.VerifiedManifest:
+		return "digest from the manifest"
+	case verified == lock.VerifiedChecksumFile:
 		return "sha256 from " + sha256URL
-	case pinned != "":
-		return "sha256 pinned in oku.lock"
-	case published != "":
-		return "sha256 the release publishes"
-	case integrity != "":
+	case verified == lock.VerifiedPublished && registry:
 		return "sha512 the registry publishes"
+	case verified == lock.VerifiedPublished:
+		return "sha256 the release publishes"
+	case pinned && verified == lock.VerifiedFirstUse:
+		return "sha256 pinned in oku.lock, where oku trusted the first download"
+	case pinned:
+		return "sha256 pinned in oku.lock"
 	default:
 		return "none, so oku pins the sha256 of the first download in oku.lock"
 	}

@@ -61,11 +61,12 @@ func newInfoCmd(opts Options) *cobra.Command {
 					StorePath    string `json:"store_path"`
 					Inferred     bool   `json:"inferred"`
 					Impure       bool   `json:"impure"`
+					Verified     string `json:"verified,omitempty"`
 					VendorSHA256 string `json:"vendor_sha256,omitempty"`
 					SigningKey   string `json:"signing_key,omitempty"`
 				}{
 					pkg.Name, pkg.Version, pkg.Ref, entry.Commit, at.Strategy, pkg.StorePath,
-					entry.Inferred, at.Impure, at.VendorSHA256, entry.SigningKey,
+					entry.Inferred, at.Impure, at.Verified, at.VendorSHA256, entry.SigningKey,
 				})
 			}
 
@@ -100,6 +101,15 @@ func newInfoCmd(opts Options) *cobra.Command {
 					pairs,
 					[2]string{"manifest", "inferred by oku from the repo's releases"},
 				)
+			}
+
+			if at.Verified != "" {
+				verified := verifiedText(at.Verified)
+				if at.Verified == lock.VerifiedFirstUse {
+					verified = s.Warn(verified)
+				}
+
+				pairs = append(pairs, [2]string{"verified", verified})
 			}
 
 			if at.Impure {

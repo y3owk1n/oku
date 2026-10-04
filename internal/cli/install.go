@@ -120,6 +120,9 @@ type request struct {
 	// acceptKey lets the manifest's signing key differ from the one pinned in
 	// previous. "--accept-key" sets it.
 	acceptKey bool
+	// acceptWeaker lets oku check a download more weakly than it checked the one
+	// pinned in previous. "--accept-weaker-check" sets it.
+	acceptWeaker bool
 	// keepVersion installs the version in previous without listing versions
 	// again. "oku sync" sets it.
 	keepVersion bool
@@ -582,7 +585,15 @@ func (e env) installFrom(
 		)
 	}
 
+	// A build checks its source archive the same way whether it runs here or
+	// comes from a cache.
+	sourceCheck := ""
 	if build {
+		sourceCheck = sourceVerified(m, release, host, pinnedSource != "", previous.Platforms[host.String()])
+		if err := req.checkVerified(host, sourceCheck); err != nil {
+			return installed{}, err
+		}
+
 		buildMu.Lock()
 		defer buildMu.Unlock()
 
@@ -624,6 +635,7 @@ func (e env) installFrom(
 			VendorSHA256: meta.VendorSHA256,
 			URL:          meta.URL,
 			SHA256:       meta.SHA256,
+			Verified:     sourceCheck,
 		}, previous, m, host)
 	case build:
 		// The tree of an npm: package may hold install scripts. oku installs it in
@@ -698,7 +710,7 @@ func (e env) installFrom(
 
 		entry = keepPins(lock.Platform{
 			Strategy: strategyBuild, Impure: realized.Impure, VendorSHA256: realized.VendorSHA256,
-			URL: realized.SourceURL, SHA256: realized.SHA256,
+			URL: realized.SourceURL, SHA256: realized.SHA256, Verified: sourceCheck,
 		}, previous, m, host)
 
 		// A build from before oku recorded the source archive has no pin for it.
@@ -708,7 +720,7 @@ func (e env) installFrom(
 				return installed{}, fmt.Errorf("%s: %w", m.Package.Name, err)
 			}
 
-			entry.URL, entry.SHA256 = pin.SourceURL, pin.SHA256
+			entry.URL, entry.SHA256, entry.Verified = pin.SourceURL, pin.SHA256, sourceCheck
 			realized.FirstUse = realized.FirstUse || pin.FirstUse
 		}
 	default:
@@ -739,6 +751,8 @@ func (e env) installFrom(
 			release.Digests = now.Digests
 		}
 
+		stated := artifactVerified(m, artifact, release)
+
 		if artifact.SHA256 == "" && artifact.SHA256URL == "" {
 			artifact.SHA256 = release.Digests[artifact.URL]
 		}
@@ -750,6 +764,11 @@ func (e env) installFrom(
 
 		if req.acceptDigest && (artifact.SHA256 != "" || artifact.SHA256URL != "") {
 			pinned = ""
+		}
+
+		verified := pinVerified(stated, pinned != "", previous.Platforms[host.String()])
+		if err := req.checkVerified(host, verified); err != nil {
+			return installed{}, err
 		}
 
 		auth := e.fetcher(opts).Hosts.AuthFor(m.Version.From, m.Version.Repo)
@@ -770,6 +789,7 @@ func (e env) installFrom(
 			Strategy: strategyArtifact,
 			URL:      artifact.URL,
 			SHA256:   realized.SHA256,
+			Verified: verified,
 			Commands: artifact.Completions.Generate != "",
 		}
 	}
@@ -996,7 +1016,7 @@ func keepPins(
 	entry.VendorSHA256 = cmp.Or(entry.VendorSHA256, at.VendorSHA256)
 
 	if entry.SHA256 == "" {
-		entry.URL, entry.SHA256 = at.URL, at.SHA256
+		entry.URL, entry.SHA256, entry.Verified = at.URL, at.SHA256, at.Verified
 	}
 
 	return entry
@@ -1274,6 +1294,10 @@ func (e env) lockOthers(
 			continue
 		}
 
+		if err := req.checkVerified(p, entry.Verified); err != nil {
+			return nil, err
+		}
+
 		if trusted {
 			firstUse = append(firstUse, p.String())
 		}
@@ -1318,9 +1342,10 @@ func pinFor(
 			return lock.Platform{}, false, fmt.Errorf("%s for %s: %w", m.Package.Name, p, err)
 		}
 
+		pinned := at.SHA256 != "" && at.URL == pin.SourceURL
 		entry := lock.Platform{
 			Strategy: strategyBuild, Impure: pin.Impure, URL: pin.SourceURL, SHA256: pin.SHA256,
-			VendorSHA256: at.VendorSHA256,
+			Verified: sourceVerified(m, release, p, pinned, at), VendorSHA256: at.VendorSHA256,
 		}
 
 		// Go and cargo vendor the same files on every platform, so the digest of
@@ -1348,6 +1373,8 @@ func pinFor(
 		return lock.Platform{}, false, fmt.Errorf("%s has no artifact for %s", m.Package.Name, p)
 	}
 
+	verified := pinVerified(artifactVerified(m, artifact, release), false, at)
+
 	if artifact.SHA256 == "" && artifact.SHA256URL == "" {
 		artifact.SHA256 = release.Digests[artifact.URL]
 		artifact.Integrity = cmp.Or(artifact.Integrity, release.Integrity[artifact.URL])
@@ -1359,7 +1386,7 @@ func pinFor(
 	}
 
 	return lock.Platform{
-		Strategy: strategyArtifact, URL: artifact.URL, SHA256: sum,
+		Strategy: strategyArtifact, URL: artifact.URL, SHA256: sum, Verified: verified,
 		Commands: artifact.Completions.Generate != "", Version: m.Versions[p.String()],
 		Tag: m.Tags[p.String()],
 	}, trusted, nil
@@ -2189,6 +2216,7 @@ func (e env) installDeps(
 				wantManifest:    wantManifest,
 				acceptDigest:    parent.acceptDigest,
 				acceptKey:       parent.acceptKey,
+				acceptWeaker:    parent.acceptWeaker,
 				releaseAge:      parent.releaseAge,
 				keepVersion:     keep,
 				platforms:       platforms,

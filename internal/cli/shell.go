@@ -174,15 +174,16 @@ func openRefs(
 		}
 
 		got, err := e.install(cmd.Context(), opts, request{
-			ref:        r,
-			releaseAge: age,
-			asset:      chosen.asset,
-			bins:       chosen.bins,
-			fromSource: chosen.fromSource,
-			acceptKey:  flags.acceptKey,
-			approve:    e.approver(cmd, opts, flags),
-			checkAge:   e.ageChecker(cmd, opts, flags),
-			log:        buildLog(cmd, flags),
+			ref:          r,
+			releaseAge:   age,
+			asset:        chosen.asset,
+			bins:         chosen.bins,
+			fromSource:   chosen.fromSource,
+			acceptKey:    flags.acceptKey,
+			acceptWeaker: flags.acceptWeaker,
+			approve:      e.approver(cmd, opts, flags),
+			checkAge:     e.ageChecker(cmd, opts, flags),
+			log:          buildLog(cmd, flags),
 		})
 		if err != nil {
 			return opened{}, err

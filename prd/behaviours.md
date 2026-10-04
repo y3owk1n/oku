@@ -1302,6 +1302,15 @@ order step in `prd/product.md`.
 - B89 [10] A manifest with `signing_key` has its artifacts verified against
   it. The key is pinned in the lock, and a changed or dropped key stops `sync`
   and `update` until `--accept-key`.
+- B496 [10] Each platform entry of the lock records in `verified` what oku
+  checked its download against: `minisign`, `manifest`, `checksum-file`,
+  `published` or `first-use`. A sync that reuses the pin writes the same lock.
+- B497 [10] `update` and `add` stop when they would pin a download of the same
+  ref that oku checks more weakly than the lock recorded, and name the
+  platform and both checks. `--accept-weaker-check` takes it. A checksum file
+  and a published digest rank the same.
+- B498 [10] `add --plan` shows the check, with `verified` in `--json`, and
+  `info` shows the check the lock recorded for the machine.
 
 ## Tooling
 

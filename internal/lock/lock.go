@@ -118,6 +118,10 @@ type Platform struct {
 	Strategy string `toml:"strategy"`
 	URL      string `toml:"url,omitempty"`
 	SHA256   string `toml:"sha256,omitempty"`
+	// Verified says what oku checked the download against when it pinned
+	// SHA256, one of the Verified constants. A lock from before oku recorded it
+	// leaves it empty, and so does a build from git, which its commit pins.
+	Verified string `toml:"verified,omitempty"`
 	// Impure marks a build whose run steps could use the network.
 	Impure bool `toml:"impure,omitempty"`
 	// Commands marks an artifact whose manifest ran the download, to generate
@@ -130,6 +134,42 @@ type Platform struct {
 	Version string `toml:"version,omitempty"`
 	// Tag is the upstream tag of Version when it differs from Version.
 	Tag string `toml:"tag,omitempty"`
+}
+
+// What oku checked a download against, strongest first.
+const (
+	// VerifiedMinisign is a minisign signature by the manifest's signing key.
+	VerifiedMinisign = "minisign"
+	// VerifiedManifest is a digest that the manifest states.
+	VerifiedManifest = "manifest"
+	// VerifiedChecksumFile is the checksum file at the manifest's sha256_url.
+	VerifiedChecksumFile = "checksum-file"
+	// VerifiedPublished is a digest that the version source publishes, such as
+	// GitHub for a release file or the npm registry for a package.
+	VerifiedPublished = "published"
+	// VerifiedFirstUse means nothing stated a digest, so oku trusted the first
+	// download.
+	VerifiedFirstUse = "first-use"
+)
+
+// verifiedRank orders the checks. A checksum file and a published digest come
+// from the same place as the download, so they rank the same.
+var verifiedRank = map[string]int{
+	VerifiedMinisign:     3,
+	VerifiedManifest:     2,
+	VerifiedChecksumFile: 1,
+	VerifiedPublished:    1,
+	VerifiedFirstUse:     0,
+}
+
+// Weaker reports whether the check now is weaker than the check was. An empty
+// check, or one this oku does not know, compares as neither weaker nor
+// stronger.
+func Weaker(now, was string) bool {
+	rankNow, okNow := verifiedRank[now]
+	rankWas, okWas := verifiedRank[was]
+
+	return okNow && okWas && rankNow < rankWas
 }
 
 // Read parses the lock at path. A missing file is an empty lock. File refs that
