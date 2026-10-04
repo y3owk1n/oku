@@ -167,7 +167,7 @@ func TestB181LockedSyncFailsWhenTheLockWouldChange(t *testing.T) {
 	// The lock now looks as if another machine wrote it, on an empty store.
 	foreign := strings.ReplaceAll(string(locked), platform.Host().String(), "plan9-mips")
 	must(t, os.WriteFile(lockPath, []byte(foreign), 0o644))
-	must(t, os.RemoveAll(m.data))
+	must(t, removeAll(m.data))
 
 	_, err = m.run(t, "", "sync", "--locked")
 	if err == nil ||

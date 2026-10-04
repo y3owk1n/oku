@@ -86,8 +86,8 @@ install = { bin = ["tool"] }
 
 	// Another machine has the lock and no store. It builds the locked commit,
 	// although main has a newer one.
-	must(t, os.RemoveAll(filepath.Join(m.data, "store")))
-	must(t, os.RemoveAll(filepath.Join(m.data, "profiles")))
+	must(t, removeAll(filepath.Join(m.data, "store")))
+	must(t, removeAll(filepath.Join(m.data, "profiles")))
 
 	out, err = m.run(t, "", "sync", "--yes")
 	if err != nil {
@@ -193,8 +193,8 @@ exit 255
 			must(t, os.WriteFile(filepath.Join(home, ".gitconfig"), []byte(config+
 				"[url \"ssh://git@example.invalid/upstream\"]\n\tinsteadOf = "+url+"\n"), 0o644))
 
-			must(t, os.RemoveAll(filepath.Join(m.data, "store")))
-			must(t, os.RemoveAll(filepath.Join(m.data, "profiles")))
+			must(t, removeAll(filepath.Join(m.data, "store")))
+			must(t, removeAll(filepath.Join(m.data, "profiles")))
 
 			out, err := m.run(t, "", "sync", "--locked", "--yes")
 			if err == nil || !strings.Contains(out+err.Error(), "Host key verification failed") {

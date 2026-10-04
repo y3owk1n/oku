@@ -117,8 +117,8 @@ func TestB280RedirectVersionFollowsTheLocationUntilUpdate(t *testing.T) {
 
 	// Another machine has the lock and no store. It installs the locked version,
 	// and does not ask where the redirect points now.
-	must(t, os.RemoveAll(filepath.Join(m.data, "store")))
-	must(t, os.RemoveAll(filepath.Join(m.data, "profiles")))
+	must(t, removeAll(filepath.Join(m.data, "store")))
+	must(t, removeAll(filepath.Join(m.data, "profiles")))
 
 	if out, err := m.run(t, "", "sync", "--yes"); err != nil {
 		t.Fatalf("sync: %v\n%s", err, out)
@@ -317,8 +317,8 @@ func TestB283EachArtifactFollowsItsOwnVersion(t *testing.T) {
 
 	before, err := os.ReadFile(lockPath)
 	must(t, err)
-	must(t, os.RemoveAll(filepath.Join(m.data, "store")))
-	must(t, os.RemoveAll(filepath.Join(m.data, "profiles")))
+	must(t, removeAll(filepath.Join(m.data, "store")))
+	must(t, removeAll(filepath.Join(m.data, "profiles")))
 
 	if out, err := m.run(t, "", "sync", "--yes"); err != nil {
 		t.Fatalf("sync: %v\n%s", err, out)

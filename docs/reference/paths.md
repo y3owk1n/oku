@@ -93,12 +93,16 @@ covers the deps, and the store root unless the manifest says
   which shares blocks on disk and keeps its own mode and time, so nothing
   about the file changes. On other filesystems, ext4 and NTFS among them, it
   becomes a hard link to one read-only file, with one mode and time for every
-  store path that has it, so that no store path can change another's. A
-  package that writes to its own files in place then gets permission denied,
-  and can still create new ones. `store/.links/paths/` records what each store
-  path shares.
+  store path that has it, so that no store path can change another's.
+  `store/.links/paths/` records what each store path shares.
 - oku leaves some files apart: a file with extended attributes, the files of a
   repo that `[files]` links into, and on Windows every program and library.
+- On macOS and Linux a store path is read-only once oku has made it. Its files
+  and directories lose their write bits, so a program cannot change its own
+  package, such as by saving a cache beside itself. oku gives its directories
+  the write bit back before gc, `oku verify --repair` or `oku self uninstall`
+  delete it. To delete the store by hand, run `chmod -R u+w` on it first.
+  Windows keeps the files as they are.
 - `oku remove` leaves store paths in place, because older generations use
   them. [`oku gc`](commands.md#oku-gc) deletes the ones no generation uses.
 - After [`oku setup --system`](commands.md#oku-setup) the store is

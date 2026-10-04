@@ -471,7 +471,7 @@ func TestB183TheLockOfAnNPMPackageWorksUnderAnotherConfigDirectory(t *testing.T)
 	elsewhere := filepath.Join(t.TempDir(), "config")
 	must(t, os.MkdirAll(elsewhere, 0o755))
 	must(t, os.Rename(m.config, filepath.Join(elsewhere, "oku")))
-	must(t, os.RemoveAll(m.data))
+	must(t, removeAll(m.data))
 	t.Setenv("XDG_CONFIG_HOME", elsewhere)
 
 	if out, err := m.run(t, "", "sync"); err != nil {

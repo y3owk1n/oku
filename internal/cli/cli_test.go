@@ -191,6 +191,9 @@ func newMachine(t *testing.T) machine {
 	}
 
 	root := t.TempDir()
+	// The store's packages are read-only, which the test's cleanup cannot delete.
+	t.Cleanup(func() { _ = writable(root) })
+
 	m := machine{
 		config:   filepath.Join(root, "config", "oku"),
 		data:     filepath.Join(root, "data", "oku"),
@@ -513,6 +516,7 @@ func TestB7ManAndCompletionsAppearUnderProfileShare(t *testing.T) {
 func TestB8WritesOnlyUnderOkuDirectories(t *testing.T) {
 	m := newMachine(t)
 	home := t.TempDir()
+	t.Cleanup(func() { _ = writable(home) })
 
 	t.Setenv("HOME", home)
 	t.Setenv("XDG_CONFIG_HOME", "")
@@ -786,8 +790,8 @@ func TestB14FirstUseChecksumIsPinnedAndEnforced(t *testing.T) {
 
 	// The same URL now serves different bytes, on a machine with an empty store.
 	m.archive(t, "tool", map[string]string{"tool": script + "# tampered\n"})
-	must(t, os.RemoveAll(m.data))
-	must(t, os.RemoveAll(m.cache))
+	must(t, removeAll(m.data))
+	must(t, removeAll(m.cache))
 
 	_, err = m.run(t, "", "add", ref)
 	if err == nil || !strings.Contains(err.Error(), "checksum mismatch") {
@@ -817,9 +821,9 @@ func TestArtifactChecksumComesFromSHA256URL(t *testing.T) {
 	}
 
 	must(t, os.WriteFile(sums, []byte(strings.Repeat("2", 64)+"  tool.tar.gz\n"), 0o644))
-	must(t, os.RemoveAll(m.data))
-	must(t, os.RemoveAll(m.cache))
-	must(t, os.RemoveAll(m.config))
+	must(t, removeAll(m.data))
+	must(t, removeAll(m.cache))
+	must(t, removeAll(m.config))
 
 	if _, err := m.run(t, "", "add", ref); err == nil {
 		t.Fatal("a download that differs from the published checksum was accepted")
@@ -846,9 +850,9 @@ func TestB201SHA256URLReadsAJSONChecksumManifest(t *testing.T) {
 			archive, sums,
 		))
 
-		must(t, os.RemoveAll(m.data))
-		must(t, os.RemoveAll(m.cache))
-		must(t, os.RemoveAll(m.config))
+		must(t, removeAll(m.data))
+		must(t, removeAll(m.cache))
+		must(t, removeAll(m.config))
 
 		out, err := m.run(t, "", "add", ref)
 		if err != nil || strings.Contains(out, "trusted") {
@@ -856,9 +860,9 @@ func TestB201SHA256URLReadsAJSONChecksumManifest(t *testing.T) {
 		}
 
 		must(t, os.WriteFile(sums, []byte(strings.ReplaceAll(data, sum, wrong)), 0o644))
-		must(t, os.RemoveAll(m.data))
-		must(t, os.RemoveAll(m.cache))
-		must(t, os.RemoveAll(m.config))
+		must(t, removeAll(m.data))
+		must(t, removeAll(m.cache))
+		must(t, removeAll(m.config))
 
 		if _, err := m.run(t, "", "add", ref); err == nil {
 			t.Fatalf("add with %s accepted a download that differs from the published digest", name)
@@ -900,7 +904,7 @@ func TestB178ParallelEnvLimitsHowManyPackagesInstallAtOnce(t *testing.T) {
 		must(t, err)
 	}
 
-	must(t, os.RemoveAll(m.data))
+	must(t, removeAll(m.data))
 
 	out, err := m.run(t, "", "sync")
 	must(t, err)
@@ -971,7 +975,7 @@ func TestB12SyncMakesProfileMatchListAtLockedVersions(t *testing.T) {
 	}
 
 	must(t, os.WriteFile(listPath, []byte(strings.Join(kept, "\n")), 0o644))
-	must(t, os.RemoveAll(m.data))
+	must(t, removeAll(m.data))
 
 	out, err := m.run(t, "", "sync")
 	if err != nil {
@@ -1390,7 +1394,7 @@ func TestB19AddStoresAFileInsideTheProjectRelativeToIt(t *testing.T) {
 	// Another checkout is the same project at another path.
 	moved := filepath.Join(m.fixtures, "elsewhere")
 	must(t, os.Rename(project, moved))
-	must(t, os.RemoveAll(m.data))
+	must(t, removeAll(m.data))
 
 	locked, err := os.ReadFile(filepath.Join(moved, "oku.lock"))
 	must(t, err)
@@ -1775,7 +1779,7 @@ func TestB21VersionsOnlyMoveOnUpdate(t *testing.T) {
 	server.tags = append(server.tags, "v1.1.0")
 	server.hits = 0
 
-	must(t, os.RemoveAll(m.data))
+	must(t, removeAll(m.data))
 
 	_, err = m.run(t, "", "sync")
 	must(t, err)
@@ -1967,7 +1971,7 @@ func TestB108SyncFailsOnceTheLockedMovingTagMoved(t *testing.T) {
 		t.Fatalf("sync asked upstream %d times with the store path present", server.hits)
 	}
 
-	must(t, os.RemoveAll(m.data))
+	must(t, removeAll(m.data))
 
 	_, err = m.run(t, "", "sync")
 	if err == nil || !strings.Contains(err.Error(), "oku update tool") {
@@ -2295,7 +2299,7 @@ func TestB25AddInfersAManifestForARepoWithoutOne(t *testing.T) {
 	}
 
 	// A new machine installs from the manifest text in the lock.
-	must(t, os.RemoveAll(m.data))
+	must(t, removeAll(m.data))
 
 	out, err = m.run(t, "", "sync")
 	if err != nil || strings.Contains(out, "has no manifest") {
@@ -2724,7 +2728,7 @@ func TestSyncAfterAStoppedRunReusesItsDownloads(t *testing.T) {
 
 	// A run that stops early has written no lock and may have no store path.
 	must(t, os.Remove(filepath.Join(m.config, "oku.lock")))
-	must(t, os.RemoveAll(m.data))
+	must(t, removeAll(m.data))
 
 	out, err = m.run(t, "", "sync")
 	if err != nil || strings.Contains(out, "downloading") {
@@ -3272,7 +3276,7 @@ func TestB129AnNPMPackageThatListsDependenciesIsInstalledWithThem(t *testing.T) 
 	}
 
 	// A new machine installs the same tree from the lock.
-	must(t, os.RemoveAll(m.data))
+	must(t, removeAll(m.data))
 
 	if out, err = m.run(t, "", "sync", "--yes"); err != nil {
 		t.Fatalf("sync: %v\n%s", err, out)
@@ -3362,7 +3366,7 @@ install = { bin = [{ name = "scripted", run = "{{dep.interp.prefix}}/bin/node", 
 		t.Fatalf("oku.lock does not mark the build impure:\n%s", lock())
 	}
 
-	must(t, os.RemoveAll(m.data))
+	must(t, removeAll(m.data))
 
 	// A name that is not a package of the installed tree stops the build.
 	out, err = m.run(t, "", "add", write(`scripts = ["right-pad"]`), "--yes")
@@ -4065,7 +4069,7 @@ func TestB35BuildRunsStepsInOrderAndFromSourceForcesIt(t *testing.T) {
 	}
 
 	// The lock remembers the strategy, so a new machine builds too.
-	must(t, os.RemoveAll(m.data))
+	must(t, removeAll(m.data))
 
 	_, err = m.run(t, "", "sync", "--yes")
 	must(t, err)
@@ -4120,8 +4124,8 @@ func TestB41RunStepsNeedApprovalOncePerManifestHash(t *testing.T) {
 		t.Fatalf("add after approving: %v\n%s", err, out)
 	}
 
-	must(t, os.RemoveAll(filepath.Join(m.data, "store")))
-	must(t, os.RemoveAll(filepath.Join(m.data, "profiles")))
+	must(t, removeAll(filepath.Join(m.data, "store")))
+	must(t, removeAll(filepath.Join(m.data, "profiles")))
 
 	out, err = m.run(t, "", "add", ref)
 	if err != nil || strings.Contains(out, "[y/N]") {
@@ -4394,7 +4398,7 @@ func TestB39TwoPackagesUseDifferentVersionsOfOneDep(t *testing.T) {
 	// A new machine gets the same two dep versions from the lock.
 	server.tags = append(server.tags, "v1.5.0", "v3.0.0")
 
-	must(t, os.RemoveAll(m.data))
+	must(t, removeAll(m.data))
 
 	_, err := m.run(t, "", "sync", "--yes")
 	must(t, err)
@@ -5157,8 +5161,8 @@ install = { bin = ["gotool"] }
 	// The same manifest now downloads different code, on a machine with an empty
 	// store.
 	writeLib("something else")
-	must(t, os.RemoveAll(filepath.Join(m.data, "store")))
-	must(t, os.RemoveAll(filepath.Join(m.data, "profiles")))
+	must(t, removeAll(filepath.Join(m.data, "store")))
+	must(t, removeAll(filepath.Join(m.data, "profiles")))
 
 	_, err = m.run(t, "", "sync", "--yes")
 	if err == nil || !strings.Contains(err.Error(), "vendored packages changed") {
@@ -5281,7 +5285,7 @@ func TestB60CommandsActOnTheProjectListUnlessGlobal(t *testing.T) {
 	}
 
 	// A new checkout of the project gets its packages back from list and lock.
-	must(t, os.RemoveAll(m.data))
+	must(t, removeAll(m.data))
 
 	out, err = m.run(t, "", "sync")
 	if err != nil || !strings.Contains(out, "profile now holds 1 package") {
@@ -5513,7 +5517,7 @@ func TestB65HookUsesNoNetworkAndRunsNoManifestCode(t *testing.T) {
 	must(t, err)
 
 	// The manifest the project came from is gone, and so is the cache.
-	must(t, os.RemoveAll(m.cache))
+	must(t, removeAll(m.cache))
 	must(t, os.Remove(filepath.Join(m.fixtures, "ptool.toml")))
 
 	m.opts.WorkDir = project
@@ -6272,7 +6276,7 @@ func TestB73ServiceRunsWhenTheListEnablesItAndIsStoppedOtherwise(t *testing.T) {
 	}
 
 	// A new machine gets the service running from the list alone.
-	must(t, os.RemoveAll(m.data))
+	must(t, removeAll(m.data))
 	m.services.state = map[string]*fakeService{}
 
 	_, err = m.run(t, "", "sync")
@@ -7195,7 +7199,7 @@ func TestB91DoctorReportsTheSetupAndItsProblems(t *testing.T) {
 	t.Setenv("PATH", shadow+string(os.PathListSeparator)+bin)
 
 	for _, entry := range m.storeEntries(t) {
-		must(t, os.RemoveAll(filepath.Join(m.data, "store", entry)))
+		must(t, removeAll(filepath.Join(m.data, "store", entry)))
 	}
 
 	out, err = m.run(t, "", "doctor")
@@ -7832,7 +7836,7 @@ bin = ["tool"]
 	must(t, err)
 	must(t, os.WriteFile(lockPath,
 		[]byte(strings.ReplaceAll(string(locked), "'1.2.3'", "'../../../../escaped'")), 0o644))
-	must(t, os.RemoveAll(filepath.Join(m.data, "store")))
+	must(t, removeAll(filepath.Join(m.data, "store")))
 
 	if out, err := m.run(t, "", "sync"); err == nil || !strings.Contains(err.Error(), "path separator") {
 		t.Fatalf("a locked version with a path separator should be refused, got %v:\n%s", err, out)
@@ -8253,7 +8257,7 @@ func TestB196WhichNamesThePackageOfAProgram(t *testing.T) {
 	// A profile entry whose file in the store is gone says so. It used to call
 	// the program one that oku did not install.
 	for _, entry := range m.storeEntries(t) {
-		must(t, os.RemoveAll(filepath.Join(m.data, "store", entry)))
+		must(t, removeAll(filepath.Join(m.data, "store", entry)))
 	}
 
 	if _, err := m.run(t, "", "which", "tool"); err == nil ||
@@ -8597,4 +8601,25 @@ func TestB436TwoQuestionsReadTheirOwnAnswers(t *testing.T) {
 	if err != nil || !strings.Contains(out, "approved one") || !strings.Contains(out, "approved two") {
 		t.Fatalf("want both approved from one stdin: %v\n%s", err, out)
 	}
+}
+
+// writable lets the owner write to every directory under path, as oku does
+// before it deletes a read-only package of the store.
+func writable(path string) error {
+	return filepath.WalkDir(path, func(p string, d fs.DirEntry, err error) error {
+		if err != nil || !d.IsDir() {
+			return nil
+		}
+
+		return os.Chmod(p, 0o755)
+	})
+}
+
+// removeAll deletes path, which may hold read-only packages of the store.
+func removeAll(path string) error {
+	if err := writable(path); err != nil {
+		return err
+	}
+
+	return os.RemoveAll(path)
 }

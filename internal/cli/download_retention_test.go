@@ -82,7 +82,7 @@ func TestB387AnInstallThatUsesADownloadKeepsItLonger(t *testing.T) {
 	// The store path is gone, as it would be on another machine, so the install
 	// unpacks the download again and that use sets its time.
 	for _, name := range m.storeEntries(t) {
-		must(t, os.RemoveAll(filepath.Join(m.data, "store", name)))
+		must(t, removeAll(filepath.Join(m.data, "store", name)))
 	}
 
 	_, err = m.run(t, "", "sync")

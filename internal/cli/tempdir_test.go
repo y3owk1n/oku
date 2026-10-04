@@ -126,8 +126,8 @@ func TestB287AnImageThatAKilledRunLeftMountedIsDetached(t *testing.T) {
 	}
 
 	leave()
-	must(t, os.RemoveAll(filepath.Join(m.data, "store")))
-	must(t, os.RemoveAll(filepath.Join(m.data, "profiles")))
+	must(t, removeAll(filepath.Join(m.data, "store")))
+	must(t, removeAll(filepath.Join(m.data, "profiles")))
 
 	if out, err := m.run(t, "", "sync"); err != nil {
 		t.Fatalf("sync did not unpack an image that a killed run left mounted: %v\n%s", err, out)

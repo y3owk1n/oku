@@ -154,7 +154,7 @@ func TestB183AProjectLockNamesTheNodeRelativeToTheProject(t *testing.T) {
 	// Another checkout is the same project at another path.
 	moved := filepath.Join(m.fixtures, "elsewhere")
 	must(t, os.Rename(project, moved))
-	must(t, os.RemoveAll(m.data))
+	must(t, removeAll(m.data))
 
 	m.opts.WorkDir = moved
 

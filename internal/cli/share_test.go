@@ -113,12 +113,12 @@ func TestB362StorePathsKeepOneCopyOfAnIdenticalFile(t *testing.T) {
 	must(t, err)
 
 	// A hard link must not let one store path change the other. A clone keeps the
-	// mode the file had.
+	// mode the file had, which the read-only store takes the write bits off.
 	if os.SameFile(infoOne, infoTwo) {
 		if infoOne.Mode().Perm()&0o222 != 0 {
 			t.Fatalf("a shared hard link is writable: %v", infoOne.Mode())
 		}
-	} else if infoOne.Mode().Perm() != 0o755 || infoTwo.Mode().Perm() != 0o755 {
+	} else if infoOne.Mode().Perm() != 0o555 || infoTwo.Mode().Perm() != 0o555 {
 		t.Fatalf("a clone changed mode: %v and %v", infoOne.Mode(), infoTwo.Mode())
 	}
 
@@ -192,9 +192,10 @@ func TestB364GCSharesTheFilesOfOlderStorePaths(t *testing.T) {
 	}
 
 	// A store from before oku shared files holds a copy per store path.
-	must(t, os.RemoveAll(filepath.Join(m.data, "store", ".links")))
+	must(t, removeAll(filepath.Join(m.data, "store", ".links")))
 
 	two := m.blobOf(t, "two")
+	must(t, writable(filepath.Dir(two)))
 	must(t, os.Remove(two))
 	must(t, os.WriteFile(two, []byte(blob), 0o755))
 
