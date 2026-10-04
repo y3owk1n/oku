@@ -171,9 +171,12 @@ func (s *systemd) unitFile(d Definition) []byte {
 
 	fmt.Fprintf(&b, "Restart=%s\n", restart)
 
-	// A system unit runs as root unless it names its user.
+	// A system unit runs as root unless it names its user. systemd unquotes
+	// ExecStart and Environment, not User, which takes the name as it stands.
+	// The name is the account oku runs as, which the system's user database
+	// gave it.
 	if d.User != "" {
-		fmt.Fprintf(&b, "User=%s\n", quoteUnit(d.User))
+		fmt.Fprintf(&b, "User=%s\n", d.User)
 	}
 
 	names := make([]string, 0, len(d.Env))

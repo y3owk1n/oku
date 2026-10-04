@@ -686,8 +686,9 @@ profile now holds 23 packages, generation 1, 41s
 
 - Without a lock beside the list, oku prints a notice and resolves every
   package fresh.
-- It works only when the global `oku.toml` is missing or empty. Otherwise oku
-  refuses and tells you to add the ref to your `include` array. Inside a
+- It works only when the global `oku.toml` is missing or holds nothing, not
+  even `[vars]`, `[files]` or a setting. Otherwise oku refuses and tells you to
+  add the ref to your `include` array. Inside a
   project it refuses too.
 - A list ref takes no `@version`.
 - When the install fails, oku removes the two files again.
