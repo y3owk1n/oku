@@ -320,6 +320,7 @@ func (s *Store) Build(
 			if err == nil {
 				digest, result.Unsandboxed, err = runVendor(
 					ctx, *step.Vendor, step.Package != "", src, prefix, vendorEnv, box, log,
+					func(kind, output string) error { return s.checkVendored(ctx, kind, output, &result) },
 				)
 			}
 
@@ -1114,7 +1115,8 @@ type BuildOptions struct {
 var ErrVendorChanged = errors.New("the vendored packages changed")
 
 // runVendor downloads a language's packages into the source directory, with the
-// network on, and returns the digest of what it downloaded.
+// network on, and returns the digest of what it downloaded. check sees the
+// packages before anything of theirs runs.
 //
 // With pkg, an npm step installs one package from the registry into the
 // prefix, and that is what oku hashes.
@@ -1126,6 +1128,7 @@ func runVendor(
 	env []string,
 	box sandbox.Spec,
 	log io.Writer,
+	check func(kind, output string) error,
 ) (digest, unsandboxed string, err error) {
 	if pkg {
 		kind = map[string]string{
@@ -1185,8 +1188,17 @@ func runVendor(
 		output = filepath.Join(prefix, filepath.FromSlash(vendor.output))
 	}
 
-	if digest, err = hashTree(output); err != nil || after == "" {
+	if digest, err = hashTree(output); err != nil {
 		return digest, unsandboxed, err
+	}
+
+	// oku checks the packages before their install scripts and the build run.
+	if err := check(kind, output); err != nil {
+		return digest, unsandboxed, err
+	}
+
+	if after == "" {
+		return digest, unsandboxed, nil
 	}
 
 	return digest, unsandboxed, run(after)

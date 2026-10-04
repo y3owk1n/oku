@@ -213,11 +213,7 @@ func newMachine(t *testing.T) machine {
 	m.opts.UnknownReleaseAge = "allow"
 
 	// OSV lists nothing as malicious, unless a test serves its own answers.
-	osv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		_, _ = w.Write([]byte("{}"))
-	}))
-	t.Cleanup(osv.Close)
-	m.opts.OSVAPI = osv.URL
+	osvServer(t, &m, nil, false)
 
 	// oku places apps and fonts under HOME, so tests get their own.
 	t.Setenv("HOME", filepath.Join(root, "home"))
@@ -3169,6 +3165,7 @@ mkdir -p "$dir" "$prefix/node_modules/left-pad"
 echo "echo $spec before $before scripts-off=$safe" > "$dir/tool"
 echo "os=$npm_config_os cpu=$npm_config_cpu libc=$npm_config_libc" > "$dir/target"
 echo "module.exports = 1" > "$prefix/node_modules/left-pad/index.js"
+echo '{"name": "left-pad", "version": "1.3.0"}' > "$prefix/node_modules/left-pad/package.json"
 # 1.2.0 depends on a package that builds a native part when npm installs it.
 case "$spec" in *@1.2.0)
   mkdir -p "$prefix/node_modules/@scope/tool/node_modules/native-dep"

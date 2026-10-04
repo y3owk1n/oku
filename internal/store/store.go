@@ -29,6 +29,7 @@ import (
 	"github.com/y3owk1n/oku/internal/infer"
 	"github.com/y3owk1n/oku/internal/manifest"
 	"github.com/y3owk1n/oku/internal/netpolicy"
+	"github.com/y3owk1n/oku/internal/osv"
 	"github.com/y3owk1n/oku/internal/platform"
 	"github.com/y3owk1n/oku/internal/sandbox"
 	"github.com/y3owk1n/oku/internal/shim"
@@ -60,6 +61,9 @@ type Store struct {
 	Private func(ctx context.Context, url string) (string, string, error)
 	// Sigstore checks the Sigstore bundles a manifest names.
 	Sigstore *sigstore.Verifier
+	// OSV asks whether a package that a vendor step installs is malicious. Nil
+	// asks nothing.
+	OSV *osv.Client
 	// Attestations returns the Sigstore bundles of the GitHub artifact
 	// attestations of the file whose sha256 is digest, in repo.
 	Attestations func(ctx context.Context, repo, digest string) ([][]byte, error)
@@ -127,6 +131,9 @@ type Realized struct {
 	// UnnamedScripts are the packages of an npm step whose install scripts did
 	// not run, because its scripts does not name them.
 	UnnamedScripts []string
+	// MalwareUnchecked names the vendor step whose packages oku could not ask
+	// OSV about, and why, or is empty.
+	MalwareUnchecked string
 	// MissingDeps are the store packages a build loads that are not runtime deps.
 	MissingDeps []MissingDep
 }

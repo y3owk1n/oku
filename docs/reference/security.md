@@ -112,13 +112,21 @@ add another version with @<version>
 - A package that `oku.lock` holds stays at its locked version, oku says why,
   and the rest of the command goes on.
 - `oku add --plan` stops the same way.
-- oku asks about the package itself, not its dependencies. The
-  [minimum release age](#minimum-release-age) keeps the dependencies of an npm
-  or a PyPI package to versions from before it, and a cargo or go build takes
-  the versions its own lock file names.
+- A build asks about every package its `vendor` step installs too: the npm
+  tree, the PyPI packages uv or pip got, the crates of `Cargo.lock` and the Go
+  modules. oku asks once the step downloaded them, before any install script
+  or build step runs, and stops the build at a malicious one:
+
+  ```
+  oku: tool: the npm package step installed packages that OSV lists as malicious:
+    left-pad 1.3.0, see https://osv.dev/vulnerability/MAL-2025-2
+  ```
+
+  A build from a [cache](../guides/build-caches.md) runs no vendor step, so
+  oku asks nothing about it.
 - oku does not ask again about a version that `oku.lock` pins.
-- When oku cannot reach OSV, it installs the version and says that it could
-  not check it.
+- When oku cannot reach OSV, it installs the version and says what it could
+  not check.
 - OSV lists other advisories too, such as a known vulnerability. oku refuses
   only the `MAL-` ones, and some older malicious packages have none.
 

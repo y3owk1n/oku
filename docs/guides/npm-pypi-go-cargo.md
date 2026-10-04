@@ -262,7 +262,8 @@ terminal, pass `--yes` after you have read the commands. Builds run in a
 [sandbox](../reference/security.md) on macOS and Linux.
 
 Before it takes a new version, oku also asks OSV whether the version is a
-known malicious package, and refuses it if it is. See
+known malicious package, and refuses it if it is. A build asks the same about
+every package its vendor step installs, before any of their code runs. See
 [Malicious packages](../reference/security.md#malicious-packages).
 
 ## Windows

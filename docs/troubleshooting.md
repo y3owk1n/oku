@@ -288,7 +288,10 @@ add another version with @<version>
 ```
 
 The OpenSSF malicious packages list names that version, which usually means
-someone published it from a stolen account. oku installed nothing. Read the
+someone published it from a stolen account. oku installed nothing. When a
+build stops at a package its vendor step installed, the lines below the error
+name it, and a version of the package you asked for from before or after the
+incident usually avoids it. Read the
 advisory at `https://osv.dev/vulnerability/<id>`, then add a version from
 before or after the incident, such as `oku add npm:nx@21.4.0`. A package that
 `oku.lock` holds stays at its locked version, and `update` says so. See
