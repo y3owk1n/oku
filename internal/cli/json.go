@@ -46,7 +46,7 @@ var jsonCommands = []string{
 	"oku add", "oku cache list", "oku doctor", "oku du", "oku env", "oku generations",
 	"oku info", "oku key list", "oku list", "oku manifest lint", "oku outdated",
 	"oku search", "oku service list", "oku service restart", "oku service start",
-	"oku service status", "oku service stop", "oku source list", "oku which", "oku why",
+	"oku service status", "oku service stop", "oku source list", "oku verify", "oku which", "oku why",
 }
 
 // checkJSON refuses --json on a command that has no JSON output. "oku add"

@@ -133,6 +133,14 @@ func (s *Store) substituteFrom(
 		return fmt.Sprintf("ignored %s, it does not hold %s", url, filepath.Base(prefix)), nil
 	}
 
+	// An entry from an oku that recorded no files gets a record of what the
+	// signature covered.
+	if !exists(filepath.Join(inner, treeFile)) {
+		if err := writeTree(inner); err != nil {
+			return "", err
+		}
+	}
+
 	if err := os.Rename(inner, prefix); err != nil {
 		return "", err
 	}

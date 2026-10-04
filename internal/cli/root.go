@@ -162,6 +162,7 @@ func NewRootCmd(opts Options) *cobra.Command {
 		newRunCmd(opts),
 		newExecCmd(opts),
 		newDoctorCmd(opts),
+		newVerifyCmd(opts),
 		newSetupCmd(opts),
 		newSystemApplyCmd(opts),
 		newSelfCmd(opts),
@@ -204,7 +205,7 @@ func groupCommands(root *cobra.Command) {
 			"Packages",
 			[]string{
 				"add", "remove", "sync", "update", "outdated", "list", "info", "why",
-				"which", "shell", "run",
+				"which", "verify", "shell", "run",
 			},
 		},
 		{"Finding packages", []string{"search", "source"}},

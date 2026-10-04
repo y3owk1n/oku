@@ -1,0 +1,99 @@
+package cli_test
+
+import (
+	"encoding/json"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+)
+
+// toolPath returns the store path of the package tool.
+func (m machine) toolPath(t *testing.T) string {
+	t.Helper()
+
+	paths, err := filepath.Glob(filepath.Join(m.data, "store", "tool-*"))
+	must(t, err)
+
+	if len(paths) != 1 {
+		t.Fatalf("want one store path of tool, got %v", paths)
+	}
+
+	return paths[0]
+}
+
+func TestB511VerifyNamesTheFilesThatChangedAndRepairRemovesThem(t *testing.T) {
+	m := newMachine(t)
+	tool := m.manifest(t, "tool", map[string]string{"tool": script, "doc/readme": "hi"}, `bin = ["tool"]`)
+	m.writeFilesList(t, fmt.Sprintf("[packages]\ntool = %q\n", tool))
+
+	_, err := m.run(t, "", "sync")
+	must(t, err)
+
+	out, err := m.run(t, "", "verify")
+	if err != nil || !strings.Contains(out, "tool 1.2.3") {
+		t.Fatalf("want an unchanged package to pass, got %v\n%s", err, out)
+	}
+
+	pkg := filepath.Join(m.toolPath(t), "pkg")
+	must(t, os.WriteFile(filepath.Join(pkg, "doc", "readme"), []byte("changed"), 0o644))
+	must(t, os.WriteFile(filepath.Join(pkg, "extra"), []byte("x"), 0o644))
+
+	out, err = m.run(t, "", "verify", "--json")
+	if err == nil || !strings.Contains(err.Error(), "--repair") {
+		t.Fatalf("want verify to fail and name --repair, got %v", err)
+	}
+
+	var results []struct {
+		Name    string `json:"name"`
+		Status  string `json:"status"`
+		Changes []struct {
+			Path string `json:"path"`
+			Kind string `json:"kind"`
+		} `json:"changes"`
+	}
+	must(t, json.Unmarshal([]byte(out[strings.Index(out, "["):]), &results))
+
+	if len(results) != 1 || results[0].Status != "changed" || len(results[0].Changes) != 2 ||
+		results[0].Changes[0] != (struct {
+			Path string `json:"path"`
+			Kind string `json:"kind"`
+		}{"pkg/doc/readme", "changed"}) || results[0].Changes[1].Path != "pkg/extra" ||
+		results[0].Changes[1].Kind != "added" {
+		t.Fatalf("want the changed and the added file named, got %+v", results)
+	}
+
+	_, err = m.run(t, "", "verify", "--repair")
+	must(t, err)
+
+	if left, _ := filepath.Glob(filepath.Join(m.data, "store", "tool-*")); len(left) != 0 {
+		t.Fatalf("--repair left the changed package in the store: %v", left)
+	}
+
+	_, err = m.run(t, "", "sync")
+	must(t, err)
+
+	if out, err := m.run(t, "", "verify"); err != nil {
+		t.Fatalf("want the package installed again to pass, got %v\n%s", err, out)
+	}
+}
+
+func TestB512VerifyNotesAPackageWithoutARecord(t *testing.T) {
+	m := newMachine(t)
+	tool := m.manifest(t, "tool", map[string]string{"tool": script}, `bin = ["tool"]`)
+	m.writeFilesList(t, fmt.Sprintf("[packages]\ntool = %q\n", tool))
+
+	_, err := m.run(t, "", "sync")
+	must(t, err)
+
+	// oku writes the record read-only, which Windows will not delete.
+	record := filepath.Join(m.toolPath(t), "oku-tree.txt")
+	must(t, os.Chmod(record, 0o644))
+	must(t, os.Remove(record))
+
+	out, err := m.run(t, "", "verify")
+	if err != nil || !strings.Contains(out, "cannot check it") {
+		t.Fatalf("want a note for a package without a record, got %v\n%s", err, out)
+	}
+}

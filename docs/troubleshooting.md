@@ -280,6 +280,18 @@ When the manifest names a new workflow, `oku sync` and `oku update` stop with
 `--accept-key`. See
 [Sigstore signatures](reference/security.md#sigstore-signatures-of-a-manifest).
 
+## A package changed since oku installed it
+
+```
+oku: the files of 1 package changed since oku installed them
+run `oku verify --repair`, then `oku sync`, which downloads them again and checks them against oku.lock
+```
+
+`oku verify` found a file in the store that differs from the one oku
+installed. The lines above it name the file. Something wrote to the store, or
+the disk corrupted it. Run `oku verify --repair`, then `oku sync`. See
+[oku verify](reference/commands.md#oku-verify).
+
 ## The download has a weaker check
 
 ```
