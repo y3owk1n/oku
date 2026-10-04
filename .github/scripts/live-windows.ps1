@@ -962,8 +962,7 @@ Set-Content (Join-Path $sources 'nvim\init.lua') 'first'
 Set-Content (Join-Path $sources 'gitconfig') 'linked file'
 # cmd reads & as the start of another command.
 New-Item -ItemType Directory -Force (Join-Path $sources 'r&d') | Out-Null
-Set-Content (Join-Path $sources 'r&d
-otes.txt') 'research'
+Set-Content (Join-Path $sources 'r&d\notes.txt') 'research'
 [IO.File]::WriteAllText((Join-Path $sources 'greeting.tmpl'), "say {{ greeting }}`r`n\{{kept}}")
 
 $nvim = Join-Path $env:XDG_CONFIG_HOME 'nvim'
