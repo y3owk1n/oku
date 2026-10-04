@@ -1362,6 +1362,12 @@ order step in `prd/product.md`.
   packages, and the next `sync` installs them again.
 - B512 [10] `oku verify` notes a package that oku installed before it recorded
   files, and does not fail for it.
+- B513 [10] oku does not install a new version of an `npm:`, `pypi:`, `cargo:`
+  or `go:` package that OSV lists with a `MAL-` advisory, and `add --plan`
+  stops the same way. A package the lock holds stays at its locked version,
+  and the command goes on, naming the advisory.
+- B514 [10] When oku cannot reach OSV, it installs the version and warns that
+  it could not check it.
 
 ## Tooling
 

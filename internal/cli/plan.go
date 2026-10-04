@@ -237,6 +237,13 @@ func (e env) planFrom(
 		return planned{}, err
 	}
 
+	// The plan stops where add would, at a version that OSV lists as malicious.
+	if ecosystem := osvEcosystems[req.ref.Kind]; ecosystem != "" {
+		if ids, err := e.osv(opts).Malicious(ctx, ecosystem, req.ref.Location, release.Version); err == nil && len(ids) > 0 {
+			return planned{}, maliciousError(req.ref, release.Version, ids)
+		}
+	}
+
 	p := planned{
 		Ref:            req.ref.String(),
 		Name:           m.Package.Name,

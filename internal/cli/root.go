@@ -2,6 +2,7 @@
 package cli
 
 import (
+	"cmp"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -24,6 +25,7 @@ import (
 	"github.com/y3owk1n/oku/internal/lock"
 	"github.com/y3owk1n/oku/internal/manifest"
 	"github.com/y3owk1n/oku/internal/netpolicy"
+	"github.com/y3owk1n/oku/internal/osv"
 	"github.com/y3owk1n/oku/internal/profile"
 	"github.com/y3owk1n/oku/internal/ref"
 	"github.com/y3owk1n/oku/internal/resolve"
@@ -82,6 +84,8 @@ type Options struct {
 	// Sigstore replaces the Sigstore public instance that checks bundles. Tests
 	// set one that trusts their own CA.
 	Sigstore *sigstore.Verifier
+	// OSVAPI replaces the address of the OSV database when set.
+	OSVAPI string
 	// GitHubAPI, GitHubRaw and GitHubWeb replace the github.com URLs when set.
 	GitHubAPI string
 	GitHubRaw string
@@ -595,6 +599,10 @@ func (e env) resolverAged(opts Options, age time.Duration) *resolve.Resolver {
 		GoProxy: opts.GoProxy, Crates: opts.CratesAPI, CrateDownloads: opts.CrateDownloads,
 		MinAge: age, Now: opts.Now,
 	}
+}
+
+func (e env) osv(opts Options) osv.Client {
+	return osv.Client{Base: cmp.Or(opts.OSVAPI, osv.API), HTTP: e.hosts.HTTP}
 }
 
 func (e env) inferrer(opts Options) *infer.Inferrer {

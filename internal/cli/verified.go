@@ -2,10 +2,12 @@ package cli
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/y3owk1n/oku/internal/lock"
 	"github.com/y3owk1n/oku/internal/manifest"
 	"github.com/y3owk1n/oku/internal/platform"
+	"github.com/y3owk1n/oku/internal/ref"
 	"github.com/y3owk1n/oku/internal/resolve"
 )
 
@@ -164,4 +166,23 @@ func (req request) pinSigner(m *manifest.Manifest) error {
 	}
 
 	return nil
+}
+
+// osvEcosystems are OSV's names for the registries of the refs it knows.
+var osvEcosystems = map[ref.Kind]string{
+	ref.NPM: "npm", ref.PyPI: "PyPI", ref.Cargo: "crates.io", ref.Go: "Go",
+}
+
+// maliciousError refuses version of r, which OSV lists as malicious in ids. A
+// package that oku.lock holds keeps its locked version, as for a declined build.
+func maliciousError(r ref.Ref, version string, ids []string) notApprovedError {
+	why := fmt.Sprintf("OSV lists it as malicious, see https://osv.dev/vulnerability/%s", ids[0])
+
+	return notApprovedError{
+		version: version,
+		text: fmt.Sprintf("%s %s: OSV lists it as malicious in %s\nadd another version with @<version>",
+			r, version, strings.Join(ids, ", ")),
+		why:  why,
+		kept: fmt.Sprintf("%s was not taken, since %s", version, why),
+	}
 }
