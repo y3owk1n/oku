@@ -653,6 +653,18 @@ An installed oku trusts exactly one key, the one built into it.
 How the maintainer rotates the key is in
 [CONTRIBUTING](../../CONTRIBUTING.md#rotate-the-signing-key).
 
+## Check the store
+
+oku records the sha256 of every file of a package when it installs it.
+[`oku verify`](commands.md#oku-verify) hashes them again and names each file
+that changed, appeared or went away since then. `oku verify --repair` removes
+those packages, and `oku sync` downloads them again and checks them against
+`oku.lock`.
+
+The record is a file in the store path, which you can write to, so a program
+that runs as you could change a package and its record together. `verify`
+finds a corrupted disk or an edit by mistake.
+
 ## What oku does not protect against
 
 - A manifest that was malicious the first time you added it. Read manifests

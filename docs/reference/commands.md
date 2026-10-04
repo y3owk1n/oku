@@ -11,7 +11,7 @@ behind the commands, see the [guides](../README.md).
 | [Projects](#projects) | [`allow`, `deny`](#oku-allow-oku-deny), [`hook`](#oku-hook), [`env`](#oku-env), [`exec`](#oku-exec) |
 | [Manifests](#manifests) | [`manifest init`](#oku-manifest-init), [`lint`](#oku-manifest-lint), [`test`](#oku-manifest-test), [`bump`](#oku-manifest-bump), [`hash`](#oku-manifest-hash) |
 | [Sources, caches and keys](#sources-caches-and-keys) | [`source`](#oku-source), [`search`](#oku-search), [`cache`](#oku-cache), [`key`](#oku-key) |
-| [Self and diagnostics](#self-and-diagnostics) | [`doctor`](#oku-doctor), [`self update`](#oku-self-update), [`self uninstall`](#oku-self-uninstall), [`--version`, `--help`, `completion`](#oku---version-oku---help-oku-completion) |
+| [Self and diagnostics](#self-and-diagnostics) | [`doctor`](#oku-doctor), [`verify`](#oku-verify), [`self update`](#oku-self-update), [`self uninstall`](#oku-self-uninstall), [`--version`, `--help`, `completion`](#oku---version-oku---help-oku-completion) |
 | Reading the output | [Global flags](#global-flags), [Exit codes](#exit-codes), [JSON output](#json-output), [Error messages](#error-messages), [Output](#output) |
 
 ## Global flags
@@ -38,7 +38,8 @@ per command. These are `add`, `remove`, `list`, `sync`, `update`, `outdated`,
 | `1` | The command failed. oku prints `oku: <reason>` on stderr, and the lines after it say what to do when there is something to do. |
 | the command's code | `oku exec`, `oku run` and `oku shell -- <command>` exit with the code of the program they ran, and add no message. |
 
-`oku doctor` and `oku manifest lint` exit with `1` when they find a problem.
+`oku doctor`, `oku verify` and `oku manifest lint` exit with `1` when they
+find a problem.
 `--json` does not change an exit code. A command that gets the wrong number of
 arguments prints its usage line and exits with `1`.
 
@@ -1414,6 +1415,42 @@ oku: doctor found 1 problem
 | Unfinished change | A change stopped halfway and oku has not put the machine back. `oku sync` does that first. |
 | Host requirements | The machine lacks an entry of [`[host]`](oku-toml.md#host) in the active generation. An entry oku cannot check here is a `note`. |
 
+### oku verify
+
+```
+oku verify [--repair]
+```
+
+Checks that the installed packages of the list in use, and their deps, still
+hold the files that oku put there. When oku makes a store path it records the
+sha256 of every file and the target of every link in `oku-tree.txt` inside
+it. `verify` hashes the files again and names each one that changed, appeared
+or went away. It exits with `1` when one did.
+
+```
+$ oku verify
+ok fd 10.5.0
+✗ tool 1.2.3
+    changed pkg/doc/readme
+    added pkg/extra
+ok python 3.13.15
+oku: the files of 1 package changed since oku installed them
+run `oku verify --repair`, then `oku sync`, which downloads them again and checks them against oku.lock
+```
+
+| Flag | Effect |
+|---|---|
+| `--repair` | Removes the packages that changed from the store. The next `oku sync` installs them again, checked against the pins of `oku.lock`. |
+| `--json` | A list of `name`, `version`, `path`, `status` (`ok`, `changed` or `unrecorded`) and `changes`, each a `path` and a `kind`. |
+
+- An older oku installed packages without a record. `verify` notes such a
+  package and does not check it. Its next version gets a record.
+- Python writes its bytecode into `__pycache__` folders beside the code it
+  runs, so `verify` leaves those folders out.
+- The record lives beside the files, so a program that runs as you could
+  change both. `verify` catches a disk that corrupted a file and an edit by
+  mistake, not malware on your account.
+
 ### oku self update
 
 ```
@@ -1553,6 +1590,7 @@ command fails with `oku <command> has no --json output` and does nothing.
 | `oku key list` | `yours` and `trusted`. |
 | `oku service list` | A list of `name`, `package`, `installed`, `enabled`, `running`, `system`, `detail`. |
 | `oku service status <name>` | One such object. `start`, `stop` and `restart` print it too. |
+| `oku verify` | A list of `name`, `version`, `path`, `status` and `changes`. |
 | `oku add --plan` | A list with one object per ref, with fields such as `ref`, `name`, `version`, `inferred`, `asset`, `install`, `platform`, `commands`, `needs`, `deps` and `build_deps`. |
 | `oku env` | Every variable the directory sets, with `null` for one it unsets. |
 | `oku manifest lint` | A list of `file`, `errors`, `warnings`. It still exits with `1` when a file has an error. |

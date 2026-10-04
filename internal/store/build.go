@@ -420,6 +420,11 @@ func (s *Store) Build(
 		err = inside(prefix, metaFile)
 	}
 
+	// The meta file marks a finished build, so the record comes first.
+	if err == nil {
+		err = writeTree(prefix)
+	}
+
 	if err == nil {
 		err = os.WriteFile(filepath.Join(prefix, metaFile), meta, 0o644)
 	}

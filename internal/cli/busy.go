@@ -21,6 +21,7 @@ var exclusive = [][]string{
 	{"update"},
 	{"rollback"},
 	{"gc"},
+	{"verify"},
 	{"allow"},
 	{"deny"},
 	{"source", "add"},

@@ -333,6 +333,10 @@ func (s *Store) Realize(
 		return Realized{}, fmt.Errorf("write %s: %w", metaFile, err)
 	}
 
+	if err := writeTree(tmp); err != nil {
+		return Realized{}, err
+	}
+
 	if err := os.WriteFile(filepath.Join(tmp, metaFile), meta, 0o644); err != nil {
 		return Realized{}, fmt.Errorf("write %s: %w", metaFile, err)
 	}
