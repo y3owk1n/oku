@@ -152,8 +152,11 @@ func (req request) trust(name, version string, p platform.Platform) error {
 }
 
 // pinSigner applies to m the signer that the list pins for the package. A
-// manifest that names another signer fails, and so does one that names no
-// Sigstore signature for a pinned workflow, since oku has nothing to check.
+// manifest that names another signer fails. So does one with an artifact that
+// names no signature for a pinned workflow or cosign key to check, since a
+// manifest could otherwise keep the signer's name and drop its signatures. A
+// minisign key needs no such check, since every artifact's signature is at its
+// URL with ".minisig" appended.
 func (req request) pinSigner(m *manifest.Manifest) error {
 	if key := req.signingKey; key != "" {
 		if m.Package.SigningKey != "" && m.Package.SigningKey != key {
@@ -169,6 +172,25 @@ func (req request) pinSigner(m *manifest.Manifest) error {
 		return fmt.Errorf("oku.toml pins the signer workflow %s, and the manifest names no Sigstore signature", w)
 	case m.Package.SignerWorkflow != w:
 		return fmt.Errorf("oku.toml pins the signer workflow %s, and the manifest names %s", w, m.Package.SignerWorkflow)
+	}
+
+	who := ""
+
+	switch {
+	case req.signerWorkflow != "":
+		who = "the signer workflow " + req.signerWorkflow
+	case manifest.CosignKey(req.signingKey):
+		who = "the signing key " + req.signingKey
+	default:
+		return nil
+	}
+
+	for i, a := range m.Artifacts {
+		if !a.Sigstore() && (req.signerWorkflow == "" || !m.Package.Attestations) {
+			return fmt.Errorf(
+				"oku.toml pins %s, and artifact[%d] of the manifest names no signature for it to check", who, i,
+			)
+		}
 	}
 
 	return nil

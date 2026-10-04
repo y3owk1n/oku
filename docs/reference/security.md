@@ -538,17 +538,20 @@ bar = { ref = "github:acme/bar", signer_workflow = "acme/bar/.github/workflows/r
 Then run `oku sync`. oku checks the first download against your pin, so
 nothing is trusted on first use.
 
-- `signing_key` applies to the manifest whether it names a key or not, so oku
-  checks the `.minisig` files of a release even when its manifest says
-  nothing of them. A manifest that names another key fails:
+- A minisign `signing_key` applies to the manifest whether it names a key or
+  not, so oku checks the `.minisig` files of a release even when its manifest
+  says nothing of them. A manifest that names another key fails:
 
   ```
   oku: foo: oku.toml pins the signing key RWTr8ko..., and the manifest names RWSwtYz...
   ```
 
 - `signer_workflow` must be the manifest's own, since the manifest says where
-  the signatures are. A manifest that names another workflow, or no Sigstore
-  signature, fails.
+  the signatures are. A manifest that names another workflow fails, and so
+  does one with an artifact that names no Sigstore signature and no
+  `attestations`.
+- A [cosign](manifest.md#cosign-key) `signing_key` works the same way. Each
+  artifact must name a bundle or signature for the key to check.
 - Your pin takes the place of the lock's. When you change it in `oku.toml`,
   `oku sync` takes the new one without `--accept-key`.
 - `oku add` and `oku update` keep the pins on the entry.
