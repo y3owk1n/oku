@@ -18,6 +18,7 @@ import (
 	"github.com/sigstore/sigstore-go/pkg/root"
 	"github.com/sigstore/sigstore-go/pkg/verify"
 	"github.com/sigstore/sigstore/pkg/signature"
+	"github.com/sigstore/sigstore/pkg/signature/options"
 )
 
 // VerifyWithKey checks data, a bundle or a cosign signature in base64, of the
@@ -30,17 +31,7 @@ func (v *Verifier) VerifyWithKey(ctx context.Context, data, digest []byte, key s
 		return err
 	}
 
-	der, err := base64.StdEncoding.DecodeString(key)
-	if err != nil {
-		return fmt.Errorf("%w: read the signing key: %w", ErrVerify, err)
-	}
-
-	public, err := x509.ParsePKIXPublicKey(der)
-	if err != nil {
-		return fmt.Errorf("%w: read the signing key: %w", ErrVerify, err)
-	}
-
-	keyVerifier, err := signature.LoadVerifier(public, crypto.SHA256)
+	der, keyVerifier, err := loadKey(key)
 	if err != nil {
 		return fmt.Errorf("%w: read the signing key: %w", ErrVerify, err)
 	}
@@ -75,6 +66,55 @@ func (v *Verifier) VerifyWithKey(ctx context.Context, data, digest []byte, key s
 	}
 
 	return nil
+}
+
+// SignedBy reports whether data, a bundle or a cosign signature in base64,
+// holds a signature by key of the file whose sha256 is digest. It does not ask
+// the log, so it only tells which key signed, and VerifyWithKey checks the
+// rest.
+func SignedBy(data, digest []byte, key string) bool {
+	_, keyVerifier, err := loadKey(key)
+	if err != nil {
+		return false
+	}
+
+	var sig []byte
+
+	if data = bytes.TrimSpace(data); bytes.HasPrefix(data, []byte("{")) {
+		var b bundle.Bundle
+		if b.UnmarshalJSON(data) != nil {
+			return false
+		}
+
+		content, err := b.SignatureContent()
+		if err != nil || content.MessageSignatureContent() == nil {
+			return false
+		}
+
+		sig = content.Signature()
+	} else if sig, err = base64.StdEncoding.DecodeString(string(data)); err != nil {
+		return false
+	}
+
+	return keyVerifier.VerifySignature(bytes.NewReader(sig), nil, options.WithDigest(digest)) == nil
+}
+
+// loadKey reads key, a public key as a manifest names it, and returns its DER
+// and a verifier of its signatures.
+func loadKey(key string) ([]byte, signature.Verifier, error) {
+	der, err := base64.StdEncoding.DecodeString(key)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	public, err := x509.ParsePKIXPublicKey(der)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	keyVerifier, err := signature.LoadVerifier(public, crypto.SHA256)
+
+	return der, keyVerifier, err
 }
 
 // keySignature puts sig, a signature in base64 by the key whose DER is der, of
