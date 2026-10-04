@@ -142,3 +142,26 @@ func (req request) trust(name, version string, p platform.Platform) error {
 
 	return req.checkTrust(name, version, p)
 }
+
+// pinSigner applies to m the signer that the list pins for the package. A
+// manifest that names another signer fails, and so does one that names no
+// Sigstore signature for a pinned workflow, since oku has nothing to check.
+func (req request) pinSigner(m *manifest.Manifest) error {
+	if key := req.signingKey; key != "" {
+		if m.Package.SigningKey != "" && m.Package.SigningKey != key {
+			return fmt.Errorf("oku.toml pins the signing key %s, and the manifest names %s", key, m.Package.SigningKey)
+		}
+
+		m.Package.SigningKey = key
+	}
+
+	switch w := req.signerWorkflow; {
+	case w == "":
+	case m.Package.SignerWorkflow == "":
+		return fmt.Errorf("oku.toml pins the signer workflow %s, and the manifest names no Sigstore signature", w)
+	case m.Package.SignerWorkflow != w:
+		return fmt.Errorf("oku.toml pins the signer workflow %s, and the manifest names %s", w, m.Package.SignerWorkflow)
+	}
+
+	return nil
+}

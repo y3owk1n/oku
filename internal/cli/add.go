@@ -210,6 +210,8 @@ func addRequest(
 		when:            when,
 		lockOnly:        lockOnly,
 		releaseAge:      age,
+		signingKey:      own.Packages[previous.Name].SigningKey,
+		signerWorkflow:  own.Packages[previous.Name].SignerWorkflow,
 	}, locked, nil
 }
 
@@ -332,15 +334,17 @@ func runAdd(
 			e.listPath(),
 			got.lock.Name,
 			list.Entry{
-				Ref:           ref.InDir(filepath.Dir(e.listPath()), r.String()),
-				Version:       r.Version,
-				Service:       enable,
-				System:        system,
-				RunAs:         runAs,
-				When:          entryWhen,
-				Asset:         got.lock.Asset,
-				Bins:          got.lock.Bins,
-				MinReleaseAge: own.Packages[got.lock.Name].MinReleaseAge,
+				Ref:            ref.InDir(filepath.Dir(e.listPath()), r.String()),
+				Version:        r.Version,
+				Service:        enable,
+				System:         system,
+				RunAs:          runAs,
+				When:           entryWhen,
+				Asset:          got.lock.Asset,
+				Bins:           got.lock.Bins,
+				MinReleaseAge:  own.Packages[got.lock.Name].MinReleaseAge,
+				SigningKey:     own.Packages[got.lock.Name].SigningKey,
+				SignerWorkflow: own.Packages[got.lock.Name].SignerWorkflow,
 			},
 		)
 		if err != nil {

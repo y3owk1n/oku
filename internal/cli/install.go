@@ -123,6 +123,9 @@ type request struct {
 	// acceptWeaker lets oku check a download more weakly than it checked the one
 	// pinned in previous. "--accept-weaker-check" sets it.
 	acceptWeaker bool
+	// signingKey and signerWorkflow are the signer that the list pins for the
+	// package, in place of the manifest's at the first install.
+	signingKey, signerWorkflow string
 	// keepVersion installs the version in previous without listing versions
 	// again. "oku sync" sets it.
 	keepVersion bool
@@ -899,31 +902,36 @@ func (e env) pickRelease(
 		return nil, resolve.Release{}, false, nil, errManifestChanged
 	}
 
+	if err := req.pinSigner(m); err != nil {
+		return nil, resolve.Release{}, false, nil, err
+	}
+
+	// A signer that the list pins replaces the one the lock holds.
 	if pinned := previous.SigningKey; pinned != "" && pinned != m.Package.SigningKey &&
-		!req.acceptKey {
+		!req.acceptKey && req.signingKey == "" {
 		now := "no signing key"
 		if m.Package.SigningKey != "" {
 			now = "the signing key " + m.Package.SigningKey
 		}
 
 		return nil, resolve.Release{}, false, nil, fmt.Errorf(
-			"%s: oku.lock pinned the signing key %s, and the manifest now has %s\n"+
+			"oku.lock pinned the signing key %s, and the manifest now has %s\n"+
 				"if the developer announced this change, run the command again with --accept-key",
-			m.Package.Name, pinned, now,
+			pinned, now,
 		)
 	}
 
 	if pinned := previous.SignerWorkflow; pinned != "" && pinned != m.Package.SignerWorkflow &&
-		!req.acceptKey {
+		!req.acceptKey && req.signerWorkflow == "" {
 		now := "no signer workflow"
 		if m.Package.SignerWorkflow != "" {
 			now = "the signer workflow " + m.Package.SignerWorkflow
 		}
 
 		return nil, resolve.Release{}, false, nil, fmt.Errorf(
-			"%s: oku.lock pinned the signer workflow %s, and the manifest now has %s\n"+
+			"oku.lock pinned the signer workflow %s, and the manifest now has %s\n"+
 				"if the developer announced this change, run the command again with --accept-key",
-			m.Package.Name, pinned, now,
+			pinned, now,
 		)
 	}
 
