@@ -1970,3 +1970,15 @@ a package's entry. It also refuses a value of the wrong type and a ref with
 newer-oku case of D27 does not apply. A misspelt `[package]` emptied the list,
 so a sync removed every package, and a misspelt or mistyped `version` or
 `signing_key` dropped a pin without a word.
+
+## D120. Nothing half done keeps a name oku would use
+
+oku builds a generation under `.tmp-gen-<n>` and renames it into place when its
+state file is written. It deletes a store path, a generation or a tree of links
+by renaming it to a `.tmp-` name in the same directory first, and `oku gc`
+deletes such names. Where the rename fails, as on Windows for a store path
+whose program runs, oku deletes `oku-meta.toml` first, and it uses a store path
+only when that file is there, since oku writes it last. Why: a killed oku left
+a generation without its state file, which broke `generations`, `gc` and
+`rollback` for good, and a half deleted store path that a later install reused
+because it existed.

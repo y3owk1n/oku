@@ -252,6 +252,14 @@ for example because the service manager refuses, it says which one and keeps
 No OS offers one atomic step that covers files, services and the list
 together, so oku does not promise one. It checks first and undoes on failure.
 
+oku builds a generation under `.tmp-gen-<n>` and renames it when it is
+complete. To delete a store path, a generation or the links of a set of
+packages, oku first renames it to a `.tmp-` name. A killed oku therefore leaves
+nothing half done under a name that oku would use. `oku gc` deletes what it
+left. On Windows a running program can keep a store path from moving aside.
+oku then deletes its `oku-meta.toml` first, and never uses a store path without
+one.
+
 ## One change at a time
 
 Only one oku process changes the machine at a time. Before it changes

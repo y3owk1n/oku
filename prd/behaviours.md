@@ -1526,6 +1526,10 @@ order step in `prd/product.md`.
 - B527 [12] A command that undoes a change that did not finish keeps an
   `oku.toml` or `oku.lock` that the user edited since, unless oku was killed
   while it wrote them, and says so.
+||||||| Stash base
+- B528 [12] A generation that a killed oku left without its state file does not
+  stop `oku generations`, and `oku gc` deletes it. A store path that a delete
+  left half done is replaced, not used.
 - B244 [12] `oku gc` deletes a temporary directory that a killed install left
   in the store.
 - B286 [12] `oku gc` deletes the entries in the system's temporary directory
