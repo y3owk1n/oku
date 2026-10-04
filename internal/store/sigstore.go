@@ -96,7 +96,7 @@ func (s *Store) verifySigstore(ctx context.Context, m *manifest.Manifest, a mani
 // bundle or an envelope on each line, and one that names the download is
 // enough.
 func (s *Store) verifyProvenance(ctx context.Context, m *manifest.Manifest, a manifest.Artifact, sum []byte) error {
-	data, err := s.fetchSmall(ctx, a.Provenance, 16<<20)
+	data, err := s.ReadSmall(ctx, a.Provenance)
 	if err != nil {
 		return err
 	}
@@ -186,6 +186,12 @@ func (s *Store) verifyCosign(ctx context.Context, m *manifest.Manifest, signatur
 // bundle downloads the Sigstore bundle, signature or certificate at url.
 func (s *Store) bundle(ctx context.Context, url string) ([]byte, error) {
 	return s.fetchSmall(ctx, url, 1<<20)
+}
+
+// ReadSmall downloads a signature file at url, such as a bundle or a
+// provenance file, of at most 16 MiB.
+func (s *Store) ReadSmall(ctx context.Context, url string) ([]byte, error) {
+	return s.fetchSmall(ctx, url, 16<<20)
 }
 
 // fetchSmall downloads the signature file at url, of at most limit bytes.

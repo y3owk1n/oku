@@ -605,6 +605,9 @@ func (e env) inferrer(opts Options) *infer.Inferrer {
 		Checksum: func(ctx context.Context, url, fileName string, auth forge.Auth) (string, error) {
 			return e.store().As(auth).PublishedSHA256(ctx, url, fileName)
 		},
+		Download: func(ctx context.Context, url string, auth forge.Auth) ([]byte, error) {
+			return e.store().As(auth).ReadSmall(ctx, url)
+		},
 	}
 }
 
