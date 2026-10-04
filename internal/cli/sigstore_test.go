@@ -617,3 +617,157 @@ func TestB507AnAquaEntryKeepsItsProvenance(t *testing.T) {
 		t.Fatalf("the manifest lacks the provenance:\n%s", out)
 	}
 }
+
+// inferRelease fakes GitHub for owner/tool with release v1.4.0, which holds
+// the host's archive, checksums.txt, and files, and lists attestations for
+// the archive's digest. GitHub reports the digest of each file.
+func inferRelease(t *testing.T, m *machine, files func(archive, sums []byte) map[string][]byte, attestations func(digest string) [][]byte) {
+	t.Helper()
+
+	path, sum := m.archive(t, strings.TrimSuffix(hostAssetName(), ".tar.gz"), map[string]string{"tool-1.4.0/tool": script})
+
+	archive, err := os.ReadFile(path)
+	must(t, err)
+
+	sums := []byte(sum + "  " + hostAssetName() + "\n")
+	all := map[string][]byte{hostAssetName(): archive, "checksums.txt": sums}
+
+	for name, data := range files(archive, sums) {
+		all[name] = data
+	}
+
+	var items []string
+
+	for name, data := range all {
+		file := filepath.Join(m.fixtures, "release", name)
+		must(t, os.MkdirAll(filepath.Dir(file), 0o755))
+		must(t, os.WriteFile(file, data, 0o644))
+
+		items = append(items, fmt.Sprintf(`{"name": %q, "browser_download_url": "file://%s", "size": %d, "digest": "sha256:%s"}`,
+			name, filepath.ToSlash(file), len(data), digestOf(data)))
+	}
+
+	latest := `{"tag_name": "v1.4.0", "assets": [` + strings.Join(items, ",") + `]}`
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch rest := strings.TrimPrefix(r.URL.Path, "/api/repos/owner/tool"); {
+		case rest == "/commits/HEAD":
+			_, _ = w.Write([]byte("5555555555555555555555555555555555555555"))
+		case rest == "/releases/latest", rest == "/releases/tags/v1.4.0":
+			_, _ = w.Write([]byte(latest))
+		case rest == "/releases":
+			_, _ = w.Write([]byte(`[` + latest + `]`))
+		case rest == "/attestations/sha256:"+sum && attestations != nil:
+			var listed []string
+			for _, b := range attestations(sum) {
+				listed = append(listed, `{"bundle": `+string(b)+`}`)
+			}
+
+			fmt.Fprintf(w, `{"attestations": [%s]}`, strings.Join(listed, ","))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(server.Close)
+
+	m.opts.GitHubAPI = server.URL + "/api"
+	m.opts.GitHubRaw = server.URL + "/raw"
+}
+
+func TestB508InferenceKeepsTheSignaturesOfTheReposOwnWorkflow(t *testing.T) {
+	tagged := run{workflow + "@refs/tags/v1.4.0", "owner/tool", "refs/tags/v1.4.0"}
+	builder := run{generic, "owner/tool", "refs/tags/v1.4.0"}
+
+	for _, tc := range []struct {
+		name      string
+		files     func(f *fakeSigstore, archive, sums []byte) map[string][]byte
+		attest    func(f *fakeSigstore, digest string) [][]byte
+		want, not []string
+	}{
+		{
+			name: "a bundle of the checksum file",
+			files: func(f *fakeSigstore, _, sums []byte) map[string][]byte {
+				return map[string][]byte{"checksums.txt.sigstore.json": f.signBlob(t, tagged, sums)}
+			},
+			want: []string{"signer_workflow = \"" + workflow + "\"", "sha256_url_bundle = "},
+		},
+		{
+			name: "a signature and certificate of the download",
+			files: func(f *fakeSigstore, archive, _ []byte) map[string][]byte {
+				sig, cert := f.cosign(t, tagged, archive)
+
+				return map[string][]byte{hostAssetName() + ".sig": sig, hostAssetName() + ".pem": cert}
+			},
+			want: []string{"signer_workflow = \"" + workflow + "\"", "sigstore_signature = ", "sigstore_certificate = "},
+		},
+		{
+			name: "a bundle for another repo",
+			files: func(f *fakeSigstore, _, sums []byte) map[string][]byte {
+				return map[string][]byte{"checksums.txt.sigstore.json": f.signBlob(t,
+					run{"other/repo/.github/workflows/release.yml@refs/tags/v1.4.0", "other/repo", "refs/tags/v1.4.0"}, sums)}
+			},
+			not: []string{"signer_workflow", "sha256_url_bundle"},
+		},
+		{
+			name:  "attestations",
+			files: func(*fakeSigstore, []byte, []byte) map[string][]byte { return nil },
+			attest: func(f *fakeSigstore, digest string) [][]byte {
+				return [][]byte{f.attest(t, run{workflow + "@refs/heads/main", "owner/tool", "refs/heads/main"}, digest)}
+			},
+			want: []string{"signer_workflow = \"" + workflow + "\"", "attestations = true"},
+		},
+		{
+			name: "provenance from a trusted builder",
+			files: func(f *fakeSigstore, archive, _ []byte) map[string][]byte {
+				return map[string][]byte{"multiple.intoto.jsonl": f.attest(t, builder, digestOf(archive))}
+			},
+			want: []string{"provenance = "},
+			not:  []string{"signer_workflow"},
+		},
+		{
+			name: "provenance from the project's own workflow",
+			files: func(f *fakeSigstore, archive, _ []byte) map[string][]byte {
+				return map[string][]byte{"multiple.intoto.jsonl": f.attest(t, tagged, digestOf(archive))}
+			},
+			not: []string{"provenance"},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m := newMachine(t)
+			f := newFakeSigstore(t, &m)
+
+			var attest func(string) [][]byte
+			if tc.attest != nil {
+				attest = func(digest string) [][]byte { return tc.attest(f, digest) }
+			}
+
+			inferRelease(t, &m, func(archive, sums []byte) map[string][]byte { return tc.files(f, archive, sums) }, attest)
+
+			out, err := m.run(t, "", "add", "github:owner/tool", "--verbose")
+			if err != nil {
+				t.Fatalf("add: %v\n%s", err, out)
+			}
+
+			for _, want := range tc.want {
+				if !strings.Contains(out, want) {
+					t.Fatalf("the inferred manifest lacks %q:\n%s", want, out)
+				}
+			}
+
+			for _, not := range tc.not {
+				if strings.Contains(out, not) {
+					t.Fatalf("the inferred manifest has %q:\n%s", not, out)
+				}
+			}
+
+			if len(tc.want) > 0 {
+				text, err := os.ReadFile(filepath.Join(m.config, "oku.lock"))
+				must(t, err)
+
+				if !strings.Contains(string(text), "verified = 'sigstore'") {
+					t.Fatalf("want the lock to record the Sigstore check:\n%s", text)
+				}
+			}
+		})
+	}
+}

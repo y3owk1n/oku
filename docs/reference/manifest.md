@@ -1730,6 +1730,30 @@ manifest does not name them, so its text is the same on every machine. An
 - With no checksum file and no digest, oku trusts the package on first use, see
   [Security](security.md).
 
+### How inference finds signatures
+
+A release on github.com may carry [Sigstore signatures](#sigstore-signatures)
+and [SLSA provenance](#slsa-provenance) of its files. oku looks for them beside
+the checksum file and beside the asset:
+
+| The release holds | The manifest gets |
+|---|---|
+| `<file>.sigstore.json`, `<file>.bundle` or `<file>.cosign.bundle` | `sha256_url_bundle` for the checksum file, `sigstore_bundle` for the asset |
+| `<file>.sig` with `<file>.pem`, `.cert` or `.crt` | `sha256_url_signature` and `sha256_url_certificate`, or `sigstore_signature` and `sigstore_certificate` |
+| GitHub artifact attestations of the asset | `attestations = true` |
+| `<asset>.intoto.jsonl`, or the release's one `.intoto.jsonl` file | `provenance` |
+
+- oku reads the certificate of the signature of your machine's asset, and of
+  the first attestation. It keeps them only when the certificate names a
+  GitHub Actions run for the repo itself, and takes the run's workflow as
+  `signer_workflow`. A signature from another repo stays out.
+- oku keeps provenance only when its certificate names a builder that
+  slsa-verifier trusts, run for the repo.
+- Reading the certificate checks nothing. oku checks the signatures when it
+  installs, and `oku.lock` pins the workflow from then on. The files of the
+  other platforms must come from the same workflow, which oku checks when
+  that platform installs.
+
 ### A release for some platforms
 
 A release for one OS, such as a macOS app shipped as a `.dmg`, cannot pin the

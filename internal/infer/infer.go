@@ -56,6 +56,8 @@ type Inferrer struct {
 	Inspect Inspector
 	// Checksum reads the sha256 of fileName from the checksum file at url.
 	Checksum func(ctx context.Context, url, fileName string, auth forge.Auth) (string, error)
+	// Download reads a small file at url, such as a signature.
+	Download func(ctx context.Context, url string, auth forge.Auth) ([]byte, error)
 }
 
 // Options set the release, the asset and the program Manifest uses. With the
@@ -131,7 +133,7 @@ var (
 	skipped = []string{
 		".sha256", ".sha256sum", ".sha256sums", ".sha512", ".sha512sum", ".sha1", ".shasum", ".md5", ".md5sum",
 		".sig", ".asc", ".pem", ".sbom", ".json",
-		".txt", ".apk", ".minisig", ".crt", ".intoto.jsonl", ".vsix", ".delta",
+		".txt", ".apk", ".minisig", ".crt", ".cert", ".bundle", ".intoto.jsonl", ".vsix", ".delta",
 	}
 	// signatures are endings of files that sign or describe a checksum file.
 	signatures = []string{".sig", ".asc", ".pem", ".minisig", ".crt", ".sbom", ".json"}
@@ -333,7 +335,26 @@ func (inf *Inferrer) Manifest(
 		versionRepo = server.Host() + "/" + repo
 	}
 
-	fmt.Fprintf(&b, "[package]\nname = %q\nhomepage = %q\n\n", name, server.Home(repo))
+	// The checksum file of each asset, which oku reads once.
+	sumsOf := map[string]string{}
+	sumsFor := func(asset string) string {
+		if sums, ok := sumsOf[asset]; ok {
+			return sums
+		}
+
+		sumsOf[asset] = inf.checksumFile(ctx, server.Auth(), names, urls, digests[asset], asset)
+
+		return sumsOf[asset]
+	}
+
+	// A release on github.com may carry Sigstore signatures of its files.
+	var sign signing
+	if server.Kind() == forge.KindGitHub && server.Host() == "" {
+		sign = inf.signaturesOf(ctx, server.Auth(), repo, names, urls, result.Asset, sumsFor(result.Asset),
+			digests[result.Asset])
+	}
+
+	fmt.Fprintf(&b, "[package]\nname = %q\nhomepage = %q\n%s\n", name, server.Home(repo), sign.packageTOML())
 	fmt.Fprintf(&b, "[version]\nfrom = %q\nrepo = %q\n", server.Kind()+"-releases", versionRepo)
 
 	if prefix != "" {
@@ -366,9 +387,14 @@ func (inf *Inferrer) Manifest(
 		fmt.Fprintf(&b, "[[artifact]]\nmatch = %s\n", selectorTOML(c.Selector))
 		fmt.Fprintf(&b, "url = %q\n", template(urls[c.asset], rel.Tag, version))
 
-		if sums := inf.checksumFile(ctx, server.Auth(), names, urls, digests[c.asset], c.asset); sums != "" {
+		sums := sumsFor(c.asset)
+		if sums != "" {
 			fmt.Fprintf(&b, "sha256_url = %q\n", template(urls[sums], rel.Tag, version))
 		}
+
+		b.WriteString(sign.artifactTOML(names, c.asset, sums, func(name string) string {
+			return template(urls[name], rel.Tag, version)
+		}))
 
 		b.WriteString(l.toml(c.OS, versionless(c.asset, version)))
 	}

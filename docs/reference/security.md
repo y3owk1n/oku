@@ -183,6 +183,12 @@ infers again.
 A manifest inferred from a URL of the download has no checksum to read, so oku
 always trusts that download on first use.
 
+An inferred manifest keeps the Sigstore signatures, GitHub attestations and
+SLSA provenance that the release holds, when their certificate names a run
+for the repo itself, see
+[How inference finds signatures](manifest.md#how-inference-finds-signatures).
+oku takes the workflow from the first release you add, and `oku.lock` pins it.
+
 ## Tokens
 
 oku sends a forge token to the host it is for and to no other, over https, and
