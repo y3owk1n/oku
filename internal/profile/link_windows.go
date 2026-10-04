@@ -134,6 +134,10 @@ func linkDir(target, link string) error {
 	return nil
 }
 
+// linkFolders is false, since a folder link is a junction, and each one takes a
+// cmd process to make.
+const linkFolders = false
+
 // linkVersion names the running oku.exe, which every shim is a copy of, so a new
 // oku builds new shims.
 func linkVersion() string {

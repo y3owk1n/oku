@@ -52,7 +52,7 @@ export XDG_CACHE_HOME=/tmp/oku-try/cache
       project                  the project's folder, in a project's profile, which gc checks
       trees/<hash>/            the links of one set of packages, which generations share
         bin/rg -> <store path>/bin/rg
-        share/...
+        share/ghostscript -> <store path>/share/ghostscript
       current -> gen-2         the active generation
     project-2d27013d8c67/      one per project, same layout
   exposed.toml                 the ledger: every file and setting oku wrote outside these directories
@@ -121,6 +121,9 @@ a generation's `bin` and `share` link there. A change that adds, removes or
 updates no package, such as a new dotfile or setting, links to the same tree.
 Its `oku.lock` and each file whose content did not change are hard links to
 the copy in the generation it replaced. So such a generation takes a few KiB.
+On macOS and Linux, when only one package has files in a folder under `bin`
+or `share`, such as `share/ghostscript`, the tree links that whole folder once.
+A folder that two packages add files to holds a link to each file instead.
 `oku gc --keep N` deletes the trees that no generation uses.
 
 On Windows a generation holds shims and hard links in place of symlinks, and

@@ -3,10 +3,12 @@ package cli_test
 import (
 	"bytes"
 	"fmt"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"testing"
 	"time"
 )
@@ -160,5 +162,34 @@ func TestB371GCOlderThanKeepsWhatWasActiveThen(t *testing.T) {
 
 	if _, err := exec.Command(m.profile("bin", "one")).Output(); err != nil {
 		t.Fatalf("rollback to what was active 30 days ago does not run one: %v", err)
+	}
+}
+
+func TestB518AFolderOnePackageFillsIsOneLink(t *testing.T) {
+	m := newMachine(t)
+
+	man := m.profile("share", "man")
+
+	for _, name := range []string{"one", "two"} {
+		ref := m.manifest(t, name, map[string]string{
+			name: script, "doc/" + name + ".1": name, "doc/" + name + "-more.1": name,
+		}, fmt.Sprintf("bin = [%q]\nman = [\"doc/*.1\"]", name))
+
+		_, err := m.run(t, "", "add", ref)
+		must(t, err)
+
+		info, err := os.Lstat(man)
+		must(t, err)
+
+		link := info.Mode()&fs.ModeSymlink != 0
+		if want := name == "one" && runtime.GOOS != "windows"; link != want {
+			t.Fatalf("with %s, share/man is a link: %v, want %v", name, link, want)
+		}
+	}
+
+	for _, page := range []string{"one.1", "one-more.1", "two.1", "two-more.1"} {
+		if _, err := os.ReadFile(filepath.Join(man, "man1", page)); err != nil {
+			t.Fatalf("the profile lost %s: %v", page, err)
+		}
 	}
 }

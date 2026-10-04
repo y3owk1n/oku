@@ -36,6 +36,10 @@ func linkDir(target, link string) error {
 	return os.Symlink(rel, link)
 }
 
+// linkFolders lets a tree link a whole folder of a package, since a symlink
+// names a folder as well as a file.
+const linkFolders = true
+
 // linkVersion is empty, since a symlink holds nothing of oku.
 func linkVersion() string {
 	return ""
