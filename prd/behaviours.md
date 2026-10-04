@@ -28,6 +28,7 @@ order step in `prd/product.md`.
   path stays until `gc`.
 - B195 [1] `oku remove` takes several names and drops them in one generation.
   A name that is not installed stops the command before anything changes.
+  A name given twice counts once, and an empty name fails.
 - B227 [1] On a terminal a table fits the width: the last column wraps under
   itself, oku cuts another column that must give room and ends it with an
   ellipsis, and under 60 columns a table whose rows do not fit side by side
@@ -117,7 +118,7 @@ order step in `prd/product.md`.
   words how oku installed the package.
 - B239 [1] When a rollback activates a generation that holds a package the
   list no longer names, it says the next `sync` removes it again and which
-  `oku add` keeps it. A list with includes gets no such note.
+  `oku add <ref>@<version>` keeps it at the version it held. A list with includes gets no such note.
 - B240 [1] A first `sync` of a list with nothing in it writes no generation
   and says there is nothing to sync. A run under a second reports its time in
   milliseconds, not `0s`.
@@ -128,6 +129,7 @@ order step in `prd/product.md`.
   when another program earlier on PATH runs in its place. It fails for a program
   oku did not install, saying what PATH runs. It fails for one in the profile
   whose file it cannot read, saying why.
+  An empty name, `.`, `..` or a path is no program name and fails.
 - B5 [1] `oku list` shows name, version and ref for the active list.
 - B6 [1] A failed install leaves the previous profile active and unchanged.
 - B7 [1] `man` and `completions` entries appear under the profile `share`.
@@ -201,6 +203,8 @@ order step in `prd/product.md`.
 - B10 [2] `add` accepts file, https, `github:`, `codeberg:`, `gitea:`,
   `gitlab:`, `npm:` and `git+` refs. An `@` inside the file name of an https
   ref, as in `tool@2.toml`, is part of the URL.
+  A ref with a scheme oku does not know, such as `gihub:`, fails and names
+  the schemes, unless a file has that name. A `#` with nothing after it fails.
 - B114 [2] `github:host/owner/repo` reads a GitHub Enterprise Server at `host`.
   oku sends it `GH_ENTERPRISE_TOKEN` when `[forge] hosts` lists it, and never
   `GITHUB_TOKEN`.
@@ -369,6 +373,7 @@ order step in `prd/product.md`.
   with identical store hashes. On a machine whose global list holds anything,
   such as `[vars]` or `[files]` alone, it refuses and changes nothing. A list
   with nothing in it, not even an entry under `[packages]`, counts as none.
+  A list file that does not exist fails with `there is no list at`.
 - B19 [2] A relative file ref in a list resolves against that list's
   directory. A list from a URL or a repo that names an absolute path is an
   error.
@@ -440,6 +445,7 @@ order step in `prd/product.md`.
   `--json` gives `name`, `version`, `newest`, `latest` and `ref`. It changes no
   lock, no profile and no store path. oku names a package whose lookup fails
   with its error, and does not count it as at its newest version.
+  With an empty lock it says so.
 - B268 [3] With `version.from = "github-releases"`, `add` and `update` check a
   file of the repo's release that has no `sha256` or `sha256_url` against the
   sha256 GitHub reports for it, and do not trust it on first use. The same
@@ -1002,6 +1008,8 @@ order step in `prd/product.md`.
   comments, and it refuses a manifest that discovers its versions.
 - B125 [4] `oku manifest hash <url | file>` prints the download's `sha256` and
   `integrity` as lines a manifest accepts.
+  A file that does not exist fails with `there is no file at`, and so does
+  `manifest lint` or `manifest bump` of a missing manifest.
 - B119 [4] `oku manifest bump --repo <ref>` reads releases from any forge ref.
 - B30 [4] `oku source add <alias> <ref>` makes `alias/name` resolve to the
   manifest `name` in that collection, and `add` accepts `alias/name` refs.
@@ -1288,6 +1296,8 @@ order step in `prd/product.md`.
   the global profile on its `PATH`, unless its `env` sets `PATH`.
 - B74 [8] `oku service start|stop|restart|status|logs` behave the same on all
   three OSes.
+  `start` of a name that no package ships says so, and says when no package
+  ships any service.
 - B203 [8] `oku service start` and `restart` look at the service again one
   second after starting it. A program that has exited by then is reported as
   `<name> started and then exited` with where its log is, and the command
@@ -1480,6 +1490,7 @@ order step in `prd/product.md`.
 - B395 [11] `--yes`, `--accept-key`, `--min-release-age`, `--accept-unknown-age`
   and `--verbose` work on `oku run` as on `oku shell`, and a download that
   publishes no checksum prints the same warning.
+  A `--min-release-age` that does not parse names the flag.
 - B396 [11] The package `oku run` installed stays in the store and no generation
   holds it, so `oku gc` deletes it.
 - B399 [11] `--from-source` on `oku run` and `oku shell` builds the package even
@@ -1557,6 +1568,7 @@ order step in `prd/product.md`.
 - B167 [12] `sync --dry-run` and `update --dry-run` run every check of a real
   run, print what would change, and change nothing: no generation, no lock, no
   file, no service, no setting. They fail where the real run would fail.
+  In a pipe they print only the `would` lines, and no row of a real change.
 - B132 [12] When a step of the apply fails, oku undoes the steps it made and
   reports the error of the failed step.
 - B133 [12] After an oku process was killed during a change, the next command
@@ -1786,3 +1798,12 @@ order step in `prd/product.md`.
   `source list`, `cache list`, `key list`, `service list`, `service status`,
   `du`, `doctor`, `verify` and `outdated` print JSON on stdout. An empty result is `[]`, and exit codes do not
   change.
+- B541 [11] A command given too few or too many arguments says which, and
+  prints its usage line.
+- B542 [10] `oku cache add` takes an http(s) URL or a directory that exists,
+  and refuses anything else.
+- B543 [11] An `oku.toml` or a manifest that does not parse fails with the
+  line and column of the mistake. `list` prints that error above the packages
+  the profile holds.
+- B544 [11] Notes, the build and `[env]` approval text and its questions go to
+  stderr, so stdout holds only what a command reports.
