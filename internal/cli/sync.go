@@ -292,6 +292,8 @@ func reconcile(
 				service:         entry.Service,
 				system:          entry.System,
 				runAs:           entry.RunAs,
+				signingKey:      entry.SigningKey,
+				signerWorkflow:  entry.SignerWorkflow,
 				verbose:         flags.verbose,
 				approve:         e.approver(cmd, opts, flags),
 				checkAge:        e.ageChecker(cmd, opts, flags),

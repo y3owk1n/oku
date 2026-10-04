@@ -432,7 +432,7 @@ if the developer announced this change, run the command again with --accept-key
 A new key is what an attacker who took over the repo would publish. Check with
 the developer before you run `oku update foo --accept-key`. oku trusts the key
 it sees at the first install, and does not know whether that key belongs to the
-developer.
+developer. To check that too, [pin the key yourself](#pin-a-signer-yourself).
 
 ## Sigstore signatures of a manifest
 
@@ -474,6 +474,37 @@ if the developer announced this change, run the command again with --accept-key
 A Sigstore signature needs no key for the developer to keep safe. It shows
 which workflow built the file, and nothing more. Someone who can push to the
 repo and run that workflow can sign what they like.
+
+## Pin a signer yourself
+
+oku trusts the `signing_key` or `signer_workflow` that a manifest names at the
+first install. When the developer publishes their key or workflow somewhere
+else, such as their website, write it on the package's entry in `oku.toml`
+before you install it:
+
+```toml
+[packages]
+foo = { ref = "github:acme/foo", signing_key = "RWTr8koGkq7wBGTVdGedU8b7CkkiIu+LBp6uQLJ7ltH/7iGXMKNF1b27" }
+bar = { ref = "github:acme/bar", signer_workflow = "acme/bar/.github/workflows/release.yml" }
+```
+
+Then run `oku sync`. oku checks the first download against your pin, so
+nothing is trusted on first use.
+
+- `signing_key` applies to the manifest whether it names a key or not, so oku
+  checks the `.minisig` files of a release even when its manifest says
+  nothing of them. A manifest that names another key fails:
+
+  ```
+  oku: foo: oku.toml pins the signing key RWTr8ko..., and the manifest names RWSwtYz...
+  ```
+
+- `signer_workflow` must be the manifest's own, since the manifest says where
+  the signatures are. A manifest that names another workflow, or no Sigstore
+  signature, fails.
+- Your pin takes the place of the lock's. When you change it in `oku.toml`,
+  `oku sync` takes the new one without `--accept-key`.
+- `oku add` and `oku update` keep the pins on the entry.
 
 ## When oku stops
 
@@ -631,7 +662,8 @@ How the maintainer rotates the key is in
 - A `sha256_url` on the same host as the download. It catches corruption and
   tampering after you locked, not a compromised host on first use.
 - A `signing_key` or `signer_workflow` that was the attacker's at your first
-  install. oku pins the first one it sees.
+  install, unless you [pinned your own](#pin-a-signer-yourself). oku pins the
+  first one it sees.
 - Someone who can push to the repo and run its release workflow. The
   workflow's Sigstore signature covers whatever that run built.
 - An older release file that the workflow attested, served under a newer

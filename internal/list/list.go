@@ -46,6 +46,10 @@ type Entry struct {
 	// MinReleaseAge replaces the list's minimum release age for this package, as
 	// ParseAge reads it. Empty keeps the list's.
 	MinReleaseAge string
+	// SigningKey and SignerWorkflow pin who signs the package, in place of what
+	// its manifest names at the first install.
+	SigningKey     string
+	SignerWorkflow string
 }
 
 // File is one entry of [files]: a path in the home directory that oku writes.
@@ -555,6 +559,20 @@ func toEntry(value any) (Entry, error) {
 
 		e.MinReleaseAge = age
 
+		e.SigningKey, _ = v["signing_key"].(string)
+		if e.SigningKey != "" {
+			if err := manifest.CheckSigningKey(e.SigningKey); err != nil {
+				return e, fmt.Errorf("signing_key %w", err)
+			}
+		}
+
+		e.SignerWorkflow, _ = v["signer_workflow"].(string)
+		if e.SignerWorkflow != "" {
+			if err := manifest.CheckSignerWorkflow(e.SignerWorkflow); err != nil {
+				return e, fmt.Errorf("signer_workflow %w", err)
+			}
+		}
+
 		bins, ok := v["bin"].([]any)
 		if !ok && v["bin"] != nil {
 			return e, errors.New("bin wants an array of program names")
@@ -595,7 +613,8 @@ func Line(name string, entry Entry) string {
 	value := fmt.Sprintf("%q", entry.Ref)
 
 	if entry.Version != "" || entry.Service || entry.System || entry.RunAs != "" ||
-		len(entry.When) > 0 || entry.Asset != "" || len(entry.Bins) > 0 || entry.MinReleaseAge != "" {
+		len(entry.When) > 0 || entry.Asset != "" || len(entry.Bins) > 0 || entry.MinReleaseAge != "" ||
+		entry.SigningKey != "" || entry.SignerWorkflow != "" {
 		fields := []string{fmt.Sprintf("ref = %q", entry.Ref)}
 
 		if entry.Version != "" {
@@ -633,6 +652,14 @@ func Line(name string, entry Entry) string {
 
 		if entry.MinReleaseAge != "" {
 			fields = append(fields, fmt.Sprintf("min_release_age = %q", entry.MinReleaseAge))
+		}
+
+		if entry.SigningKey != "" {
+			fields = append(fields, fmt.Sprintf("signing_key = %q", entry.SigningKey))
+		}
+
+		if entry.SignerWorkflow != "" {
+			fields = append(fields, fmt.Sprintf("signer_workflow = %q", entry.SignerWorkflow))
 		}
 
 		value = "{ " + strings.Join(fields, ", ") + " }"

@@ -207,6 +207,26 @@ type Artifact struct {
 	Data bool `toml:"data"`
 }
 
+// CheckSigningKey reports an error when text is not a minisign public key.
+func CheckSigningKey(text string) error {
+	var key minisign.PublicKey
+	if err := key.UnmarshalText([]byte(text)); err != nil {
+		return fmt.Errorf("is not a minisign public key: %w", err)
+	}
+
+	return nil
+}
+
+// CheckSignerWorkflow reports an error when w is not a workflow file of a
+// GitHub repo.
+func CheckSignerWorkflow(w string) error {
+	if !signerWorkflowRe.MatchString(w) {
+		return fmt.Errorf("%q is not owner/repo/.github/workflows/<file>.yml", w)
+	}
+
+	return nil
+}
+
 // Sigstore reports whether the manifest names a Sigstore signature of a or of
 // its checksum file.
 func (a Artifact) Sigstore() bool {
@@ -298,19 +318,15 @@ func (m *Manifest) validate() error {
 	var errs []error
 
 	if text := m.Package.SigningKey; text != "" {
-		var key minisign.PublicKey
-		if err := key.UnmarshalText([]byte(text)); err != nil {
-			errs = append(
-				errs,
-				fmt.Errorf("package.signing_key is not a minisign public key: %w", err),
-			)
+		if err := CheckSigningKey(text); err != nil {
+			errs = append(errs, fmt.Errorf("package.signing_key %w", err))
 		}
 	}
 
-	if w := m.Package.SignerWorkflow; w != "" && !signerWorkflowRe.MatchString(w) {
-		errs = append(errs, fmt.Errorf(
-			"package.signer_workflow %q is not owner/repo/.github/workflows/<file>.yml", w,
-		))
+	if w := m.Package.SignerWorkflow; w != "" {
+		if err := CheckSignerWorkflow(w); err != nil {
+			errs = append(errs, fmt.Errorf("package.signer_workflow %w", err))
+		}
 	}
 
 	if m.Package.Attestations && m.Package.SignerWorkflow == "" {
