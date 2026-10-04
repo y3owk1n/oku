@@ -1,5 +1,61 @@
 # Changelog
 
+## [0.14.0](https://github.com/y3owk1n/oku/compare/v0.13.0...v0.14.0) (2026-10-04)
+
+
+### Features
+
+* **infer:** keep a cosign key that a GitHub release holds ([#380](https://github.com/y3owk1n/oku/issues/380)) ([963b269](https://github.com/y3owk1n/oku/commit/963b269ba47dcf4408b3df12c8656c452ddc34b7))
+* **infer:** keep the Sigstore signatures of a GitHub release ([#368](https://github.com/y3owk1n/oku/issues/368)) ([40b146a](https://github.com/y3owk1n/oku/commit/40b146a51d93042c77e0cb9225da0e9797f504e3))
+* **list:** pin a package's signer in oku.toml ([#369](https://github.com/y3owk1n/oku/issues/369)) ([237f6ea](https://github.com/y3owk1n/oku/commit/237f6eae761ac728278f3405ca45902cef214439))
+* **lock:** let [lock] unverified ask before or refuse a first download ([#363](https://github.com/y3owk1n/oku/issues/363)) ([0388cfb](https://github.com/y3owk1n/oku/commit/0388cfb13fa0c5a8025e77000979b239a0637133))
+* **lock:** record what each download was checked against and stop on a weaker check ([#361](https://github.com/y3owk1n/oku/issues/361)) ([5a57f8a](https://github.com/y3owk1n/oku/commit/5a57f8acb7a7a29693d852da0a2f1ac15a444c59))
+* **osv:** check the packages a build's vendor step installs ([#375](https://github.com/y3owk1n/oku/issues/375)) ([a2d11c2](https://github.com/y3owk1n/oku/commit/a2d11c2a8905472be8314b070e87ffe68e6e849c))
+* **osv:** refuse a registry version that OSV lists as malicious ([#371](https://github.com/y3owk1n/oku/issues/371)) ([587bf04](https://github.com/y3owk1n/oku/commit/587bf04cc704a6a4c49438667c1759f0ea51a38a))
+* **sigstore:** check cosign signatures made with the developer's key ([#378](https://github.com/y3owk1n/oku/issues/378)) ([1b53cfc](https://github.com/y3owk1n/oku/commit/1b53cfcd2c8f8673b2fb04726dc8b15b7b00821f))
+* **sigstore:** check cosign signatures with certificates and cosign's older bundles ([#365](https://github.com/y3owk1n/oku/issues/365)) ([0c7029b](https://github.com/y3owk1n/oku/commit/0c7029b4cb5bc6a999b42d518a7102956a12898b))
+* **sigstore:** check Sigstore bundles and GitHub attestations of a release ([#364](https://github.com/y3owk1n/oku/issues/364)) ([cfe99fb](https://github.com/y3owk1n/oku/commit/cfe99fb57ab66bc862337e573dfe4e1aaa950f4e))
+* **sigstore:** check the attestations of private repos ([#379](https://github.com/y3owk1n/oku/issues/379)) ([0cd0568](https://github.com/y3owk1n/oku/commit/0cd056813b0b7da394e76852bd086834894da6f1))
+* **sigstore:** check the SLSA provenance of a release ([#367](https://github.com/y3owk1n/oku/issues/367)) ([523bb1a](https://github.com/y3owk1n/oku/commit/523bb1aad6c0ed6e1dc187bda34c6ffa416f4053))
+* **store:** let oku verify record packages that have no record ([#374](https://github.com/y3owk1n/oku/issues/374)) ([d723efe](https://github.com/y3owk1n/oku/commit/d723efe9b8ecad53842fc67d00dfc8d90d61cb1d))
+* **store:** make store paths read-only once oku made them ([#376](https://github.com/y3owk1n/oku/issues/376)) ([f1d8943](https://github.com/y3owk1n/oku/commit/f1d894317b5c922ee47f46de0123940a8f796fc6))
+* **store:** record the files of each package and add oku verify ([#370](https://github.com/y3owk1n/oku/issues/370)) ([f35ed01](https://github.com/y3owk1n/oku/commit/f35ed0177f97055ff60aae1aff2047feed6ad06d))
+
+
+### Bug Fixes
+
+* **approve:** list every platform's commands, refuse a remote local repo ([#395](https://github.com/y3owk1n/oku/issues/395)) ([516d2ae](https://github.com/y3owk1n/oku/commit/516d2aeaa1b622ffc492151a102b2e00cab80bec))
+* **cli:** keep list edits when undoing an unfinished change ([#385](https://github.com/y3owk1n/oku/issues/385)) ([315fb1e](https://github.com/y3owk1n/oku/commit/315fb1ecb99e3e22c6cc54f4bbde904d1494a528))
+* **cli:** name what went wrong, and keep prompts off stdout ([#400](https://github.com/y3owk1n/oku/issues/400)) ([1585418](https://github.com/y3owk1n/oku/commit/1585418dcb905494365c0a955480dbad83568f1e))
+* **cli:** refuse an unsigned artifact under a pinned signer ([#383](https://github.com/y3owk1n/oku/issues/383)) ([616debe](https://github.com/y3owk1n/oku/commit/616debe887766c6bdbd39b739ea2b8e972073799))
+* **cli:** say only what oku checked, and keep tokens and files where they belong ([#399](https://github.com/y3owk1n/oku/issues/399)) ([dab39fd](https://github.com/y3owk1n/oku/commit/dab39fdf255dd1eb691c8e4d430220d3dc9a1de7))
+* **deps:** clear the last vulnerability findings and check for new ones ([#373](https://github.com/y3owk1n/oku/issues/373)) ([5a07535](https://github.com/y3owk1n/oku/commit/5a075354d7baddace54633139bb8946bb8f97b24))
+* **deps:** move grpc, x/crypto and x/mod past their advisories ([#372](https://github.com/y3owk1n/oku/issues/372)) ([2125b95](https://github.com/y3owk1n/oku/commit/2125b95b6b2bdffc9a0252a38624d96c92cf0b2d))
+* **expose:** quote paths for cmd and desktop entries, check root inputs ([#393](https://github.com/y3owk1n/oku/issues/393)) ([6229e3a](https://github.com/y3owk1n/oku/commit/6229e3a6c432ba20240cd0847f84d4b47472c528))
+* **files:** stop before overwriting a file the user edited ([#392](https://github.com/y3owk1n/oku/issues/392)) ([106c199](https://github.com/y3owk1n/oku/commit/106c1992d74b9f1500da04b6e1f8206fd5151101))
+* **gc:** keep what the ledger and running sessions still use ([#389](https://github.com/y3owk1n/oku/issues/389)) ([839ed92](https://github.com/y3owk1n/oku/commit/839ed921dddf1e5189c0e2a335861256f2d488ab))
+* **hook:** keep hidden values out of the environment of programs ([#391](https://github.com/y3owk1n/oku/issues/391)) ([7361c8d](https://github.com/y3owk1n/oku/commit/7361c8d87b7d6e87e130c59dc1e85f1242869c39))
+* **infer:** read tags, checksums and libc the way their sources write them ([#397](https://github.com/y3owk1n/oku/issues/397)) ([9338eac](https://github.com/y3owk1n/oku/commit/9338eaca7bc5c8db98d92fb801aae67b1db6b774))
+* **list:** refuse an oku.toml with an unknown or mistyped key ([#384](https://github.com/y3owk1n/oku/issues/384)) ([ab1dec0](https://github.com/y3owk1n/oku/commit/ab1dec01b06517708c5d4d143ed80b1e97097e9e))
+* **list:** write through a symlinked oku.toml and keep its mode ([#387](https://github.com/y3owk1n/oku/issues/387)) ([d460128](https://github.com/y3owk1n/oku/commit/d460128d8aea98d6bbb7f8c9d58e99e8a0b66d2b))
+* **resolve:** pick the version a user expects, and infer again for a new one ([#396](https://github.com/y3owk1n/oku/issues/396)) ([51d5d27](https://github.com/y3owk1n/oku/commit/51d5d27dfc82d25adb2790294703f57488d87b9a))
+* **sandbox:** run Linux builds as the user with no capabilities ([#382](https://github.com/y3owk1n/oku/issues/382)) ([676c2a3](https://github.com/y3owk1n/oku/commit/676c2a30ca3a852f72bd26d116bd592f4d90c4c7))
+* **service:** name the user of a Linux system unit without quotes ([#390](https://github.com/y3owk1n/oku/issues/390)) ([2f39247](https://github.com/y3owk1n/oku/commit/2f392474ce35420d2d06593b6fcb6e5b4f76abef))
+* **store:** bound what a download may reach, unpack and replay ([#398](https://github.com/y3owk1n/oku/issues/398)) ([3d9edbf](https://github.com/y3owk1n/oku/commit/3d9edbf1d65ec67d2c7b27731ee16f2e9d98b239))
+* **store:** leave nothing half done under a name oku uses ([#386](https://github.com/y3owk1n/oku/issues/386)) ([63f7a8c](https://github.com/y3owk1n/oku/commit/63f7a8cfd88de8e83660ada8864f8f992a104eaf))
+* **store:** lint what installs read, and keep what decides gc across a power loss ([#401](https://github.com/y3owk1n/oku/issues/401)) ([2401c65](https://github.com/y3owk1n/oku/commit/2401c655bcd50f9bd49da167d4398dd133bc4ef7))
+* **sync:** stop --locked before a download when the version changed ([#388](https://github.com/y3owk1n/oku/issues/388)) ([15e1b6b](https://github.com/y3owk1n/oku/commit/15e1b6b3f8dcd7d481bf8f7ebc442b65ad9068e7))
+
+
+### Performance Improvements
+
+* **profile:** link a folder once when one package fills it ([#377](https://github.com/y3owk1n/oku/issues/377)) ([f31b0a2](https://github.com/y3owk1n/oku/commit/f31b0a2d237eaa6a109f976cf8c9a9eaa47276ac))
+
+
+### Documentation
+
+* say what oku does where the docs and the PRD drifted from it ([#403](https://github.com/y3owk1n/oku/issues/403)) ([5978d42](https://github.com/y3owk1n/oku/commit/5978d425ee6e500348c7cd4113b26622fe3e4a67))
+
 ## [0.13.0](https://github.com/y3owk1n/oku/compare/v0.12.0...v0.13.0) (2026-09-30)
 
 
