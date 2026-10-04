@@ -689,10 +689,27 @@ func treeKey(pkgs []Package) string {
 	return hex.EncodeToString(sum.Sum(nil))[:16]
 }
 
-// buildTree links every file under each package's bin, share and man into tree.
+// buildTree links what each package has under bin, share and man into tree.
 // A build that installed its manuals under {{prefix}}/man, as `make install`
 // with a bare prefix does, gets them under share/man like every other package.
 func buildTree(tree string, pkgs []Package) error {
+	var entries []treeEntry
+
+	owners := map[string]string{}
+
+	for _, pkg := range pkgs {
+		for _, sub := range [][2]string{
+			{"bin", "bin"}, {"share", "share"}, {"man", filepath.Join("share", "man")},
+		} {
+			found, err := treeEntries(pkg, sub[0], sub[1], owners)
+			if err != nil {
+				return err
+			}
+
+			entries = append(entries, found...)
+		}
+	}
+
 	if err := os.MkdirAll(filepath.Dir(tree), 0o755); err != nil {
 		return fmt.Errorf("write generation: %w", err)
 	}
@@ -702,18 +719,10 @@ func buildTree(tree string, pkgs []Package) error {
 		return fmt.Errorf("write generation: %w", err)
 	}
 
-	owners := map[string]string{}
+	if err := linkEntries(tmp, entries); err != nil {
+		os.RemoveAll(tmp)
 
-	for _, pkg := range pkgs {
-		for _, sub := range [][2]string{
-			{"bin", "bin"}, {"share", "share"}, {"man", filepath.Join("share", "man")},
-		} {
-			if err := linkTree(tmp, pkg, sub[0], sub[1], owners); err != nil {
-				os.RemoveAll(tmp)
-
-				return err
-			}
-		}
+		return err
 	}
 
 	if err := os.Rename(tmp, tree); err != nil {
@@ -723,6 +732,78 @@ func buildTree(tree string, pkgs []Package) error {
 	}
 
 	return nil
+}
+
+// linkEntries creates the links of entries in tree. A folder below bin or share
+// that one folder of one package fills becomes one link to that folder, as in
+// Nix's buildEnv. A package's share/ghostscript then costs one link, however
+// many files it has.
+func linkEntries(tree string, entries []treeEntry) error {
+	whole := wholeFolders(entries)
+	linked := map[string]bool{}
+
+	for _, entry := range entries {
+		rel, target := entry.rel, entry.path
+
+		// The entry links through the outermost folder that one package fills.
+		for dir := filepath.Dir(entry.rel); strings.ContainsRune(dir, filepath.Separator); dir = filepath.Dir(dir) {
+			if source, ok := whole[dir]; ok {
+				rel, target = dir, source
+			}
+		}
+
+		if linked[rel] {
+			continue
+		}
+
+		linked[rel] = true
+
+		dest := filepath.Join(tree, rel)
+		if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
+			return err
+		}
+
+		if err := linkEntry(target, dest, entry.pkg); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// wholeFolders maps each folder of the tree below bin and share that a single
+// folder of one package fills to that folder.
+func wholeFolders(entries []treeEntry) map[string]string {
+	if !linkFolders {
+		return nil
+	}
+
+	sources := map[string]map[string]bool{}
+
+	for _, entry := range entries {
+		dir, source := filepath.Dir(entry.rel), filepath.Dir(entry.path)
+		for strings.ContainsRune(dir, filepath.Separator) {
+			if sources[dir] == nil {
+				sources[dir] = map[string]bool{}
+			}
+
+			sources[dir][source] = true
+
+			dir, source = filepath.Dir(dir), filepath.Dir(source)
+		}
+	}
+
+	whole := map[string]string{}
+
+	for dir, from := range sources {
+		if len(from) == 1 {
+			for source := range from {
+				whole[dir] = source
+			}
+		}
+	}
+
+	return whole
 }
 
 // dropTrees deletes the links of each set of packages that no generation uses.
@@ -876,9 +957,16 @@ func writeOrReuse(gen, prev, rel string, data []byte, mode fs.FileMode) error {
 	return nil
 }
 
-// linkTree links every file under sub of the package into the directory into
-// of gen.
-func linkTree(gen string, pkg Package, sub, into string, owners map[string]string) error {
+// treeEntry is one file of a package that the profile links, at rel under the
+// tree.
+type treeEntry struct {
+	path, rel string
+	pkg       Package
+}
+
+// treeEntries lists every file under sub of the package for the directory into
+// of the tree, and records in owners which package provides each one.
+func treeEntries(pkg Package, sub, into string, owners map[string]string) ([]treeEntry, error) {
 	root := filepath.Join(pkg.StorePath, sub)
 
 	// On Windows the store puts links to the DLLs of deps beside a package's
@@ -891,6 +979,8 @@ func linkTree(gen string, pkg Package, sub, into string, owners map[string]strin
 	if data, err := os.ReadFile(filepath.Join(pkg.StorePath, "oku-meta.toml")); err == nil {
 		_ = toml.Unmarshal(data, &meta)
 	}
+
+	var entries []treeEntry
 
 	err := filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
 		if err != nil || entry.IsDir() {
@@ -913,19 +1003,15 @@ func linkTree(gen string, pkg Package, sub, into string, owners map[string]strin
 		}
 
 		owners[rel] = pkg.Name
+		entries = append(entries, treeEntry{path: path, rel: rel, pkg: pkg})
 
-		dest := filepath.Join(gen, rel)
-		if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
-			return err
-		}
-
-		return linkEntry(path, dest, pkg)
+		return nil
 	})
 	if errors.Is(err, fs.ErrNotExist) {
-		return nil
+		return nil, nil
 	}
 
-	return err
+	return entries, err
 }
 
 // All returns every profile under dataDir.

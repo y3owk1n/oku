@@ -1885,3 +1885,17 @@ package the lock does not pin gets no line. Resolving it first would move the
 question after inference and version picking, into the parallel install. The
 domain is not what the user trusts, because on a shared host anyone can
 publish, and the manifest still decides the programs, deps and `[env]`.
+
+## D115. A folder that one package fills is one link
+
+On macOS and Linux, when only one package has files in a folder below a
+tree's `bin` or `share`, the tree holds one symlink to that package's folder.
+A folder that two packages have files in gets a link to each file. `bin` and
+`share` themselves stay folders. Windows links every file. A folder link there
+is a junction, and each one takes a `cmd` process to make.
+
+Why: oku builds a new tree whenever a package changes (D96), and each link
+takes an inode, or a 4 KiB block on ext4 when the target path is longer than 60
+bytes. Nix's `buildEnv` links a folder that one package provides the same way.
+On 2026-10-04 one global profile of 75 packages went from 898 entries in its
+tree to 525.
