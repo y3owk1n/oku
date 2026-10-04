@@ -25,34 +25,48 @@ $tmp = Join-Path ([IO.Path]::GetTempPath()) ("oku-install-" + [Guid]::NewGuid())
 New-Item -ItemType Directory $tmp | Out-Null
 
 try {
-    Invoke-WebRequest "$from/$name" -OutFile (Join-Path $tmp $name) -UseBasicParsing
-    Invoke-WebRequest "$from/checksums.txt" -OutFile (Join-Path $tmp 'checksums.txt') -UseBasicParsing
+    # The nightly is published again after each commit, one file at a time, so
+    # its files can disagree for a minute. A tagged release never changes.
+    $tries = if ($env:OKU_VERSION -eq 'nightly') { 5 } else { 1 }
+    while ($true) {
+        try {
+            Invoke-WebRequest "$from/$name" -OutFile (Join-Path $tmp $name) -UseBasicParsing
+            Invoke-WebRequest "$from/checksums.txt" -OutFile (Join-Path $tmp 'checksums.txt') -UseBasicParsing
 
-    $line = Get-Content (Join-Path $tmp 'checksums.txt') | Where-Object { ($_ -split '\s+')[1] -eq $name }
-    if (-not $line) { throw "checksums.txt does not list $name" }
+            $line = Get-Content (Join-Path $tmp 'checksums.txt') | Where-Object { ($_ -split '\s+')[1] -eq $name }
+            if (-not $line) { throw "checksums.txt does not list $name" }
 
-    $want = ($line -split '\s+')[0]
-    $got = (Get-FileHash (Join-Path $tmp $name) -Algorithm SHA256).Hash.ToLower()
-    if ($got -ne $want) { throw "the sha256 of $name is $got, and checksums.txt says $want" }
+            $want = ($line -split '\s+')[0]
+            $got = (Get-FileHash (Join-Path $tmp $name) -Algorithm SHA256).Hash.ToLower()
+            if ($got -ne $want) { throw "the sha256 of $name is $got, and checksums.txt says $want" }
 
-    $checked = 'sha256'
-    $minisign = Get-Command minisign -ErrorAction SilentlyContinue
-    if ($minisign) {
-        Invoke-WebRequest "$from/$name.minisig" -OutFile (Join-Path $tmp "$name.minisig") -UseBasicParsing
-        $comment = & $minisign.Source -Vm (Join-Path $tmp $name) -P $releaseKey -Q
-        if ($LASTEXITCODE -ne 0) { throw "the signature of $name is not from oku's release key" }
+            $checked = 'sha256'
+            $minisign = Get-Command minisign -ErrorAction SilentlyContinue
+            if ($minisign) {
+                Invoke-WebRequest "$from/$name.minisig" -OutFile (Join-Path $tmp "$name.minisig") -UseBasicParsing
+                $comment = & $minisign.Source -Vm (Join-Path $tmp $name) -P $releaseKey -Q
+                if ($LASTEXITCODE -ne 0) { throw "the signature of $name is not from oku's release key" }
 
-        # The release signs its tag into the trusted comment, so an older signed
-        # binary cannot pass for the release asked for.
-        if ($env:OKU_VERSION) {
-            if ($comment -ne "oku $env:OKU_VERSION") { throw "the signature of $name is for `"$comment`", not oku $env:OKU_VERSION" }
+                # The release signs its tag into the trusted comment, so an older signed
+                # binary cannot pass for the release asked for.
+                if ($env:OKU_VERSION) {
+                    if ($comment -ne "oku $env:OKU_VERSION") { throw "the signature of $name is for `"$comment`", not oku $env:OKU_VERSION" }
+                }
+                elseif ($comment -notmatch '^oku v\d') { throw "the signature of $name is for `"$comment`", not a release" }
+
+                $checked = 'minisign signature'
+            }
+            elseif ($env:OKU_REQUIRE_SIGNATURE -eq '1') {
+                throw "OKU_REQUIRE_SIGNATURE is 1, and minisign is not installed to check the signature of $name"
+            }
+            break
         }
-        elseif ($comment -notmatch '^oku v\d') { throw "the signature of $name is for `"$comment`", not a release" }
-
-        $checked = 'minisign signature'
-    }
-    elseif ($env:OKU_REQUIRE_SIGNATURE -eq '1') {
-        throw "OKU_REQUIRE_SIGNATURE is 1, and minisign is not installed to check the signature of $name"
+        catch {
+            $tries--
+            if ($tries -le 0) { throw }
+            Write-Host "$_, the nightly may be changing, trying again in 15s"
+            Start-Sleep -Seconds 15
+        }
     }
 
     New-Item -ItemType Directory -Force $dir | Out-Null
