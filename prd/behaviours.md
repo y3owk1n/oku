@@ -1364,6 +1364,8 @@ order step in `prd/product.md`.
   files, and does not fail for it.
 - B515 [10] `oku verify --record` records the files of each package that has
   no record, and later runs check it. It never replaces a record.
+- B517 [10] On macOS and Linux a package's store path is read-only once oku
+  has made it, so a program cannot write into it, and gc still deletes it.
 - B513 [10] oku does not install a new version of an `npm:`, `pypi:`, `cargo:`
   or `go:` package that OSV lists with a `MAL-` advisory, and `add --plan`
   stops the same way. A package the lock holds stays at its locked version,
