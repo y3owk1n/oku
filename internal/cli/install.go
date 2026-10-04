@@ -83,6 +83,9 @@ type installed struct {
 	// notApproved says why the package kept its locked version, when the build
 	// of the new one was not approved, or is empty.
 	notApproved string
+	// malwareUnchecked is the version that oku could not ask OSV about, and
+	// why, or is empty.
+	malwareUnchecked string
 }
 
 // errNotTaken reports a version whose source gives no release time and that
@@ -530,6 +533,26 @@ func (e env) installFrom(
 			unchecked = append(unchecked, release.Version)
 		}
 	}
+
+	// A new version of a registry package must not be one that OSV lists as
+	// malicious. oku goes on, and says so, when it cannot ask.
+	if ecosystem := osvEcosystems[r.Kind]; ecosystem != "" && !keep && release.Version != previous.Version {
+		ids, osvErr := e.osv(opts).Malicious(ctx, ecosystem, r.Location, release.Version)
+
+		switch {
+		case osvErr != nil:
+			version := release.Version
+
+			defer func() {
+				if err == nil {
+					got.malwareUnchecked = fmt.Sprintf("%s: %v", version, osvErr)
+				}
+			}()
+		case len(ids) > 0:
+			return installed{}, maliciousError(r, release.Version, ids)
+		}
+	}
+
 	ctx = status.Scope(ctx, m.Package.Name+" "+m.Version.Value)
 
 	if req.lockOnly {
@@ -2075,6 +2098,11 @@ func reportAge(w io.Writer, got installed) {
 	if got.notTaken != "" {
 		warn(w, "%s stays at %s: %s was not taken, since its source gives no release time",
 			got.lock.Name, got.lock.Version, got.notTaken)
+	}
+
+	if got.malwareUnchecked != "" {
+		warn(w, "%s %s, so oku could not check whether OSV lists it as malicious",
+			got.lock.Name, got.malwareUnchecked)
 	}
 
 	for _, version := range got.ageUnknown {

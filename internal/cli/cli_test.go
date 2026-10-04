@@ -212,6 +212,13 @@ func newMachine(t *testing.T) machine {
 	// The fake registries give no release times, which the real ones do.
 	m.opts.UnknownReleaseAge = "allow"
 
+	// OSV lists nothing as malicious, unless a test serves its own answers.
+	osv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte("{}"))
+	}))
+	t.Cleanup(osv.Close)
+	m.opts.OSVAPI = osv.URL
+
 	// oku places apps and fonts under HOME, so tests get their own.
 	t.Setenv("HOME", filepath.Join(root, "home"))
 	must(t, os.MkdirAll(filepath.Join(root, "home"), 0o755))

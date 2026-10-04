@@ -96,6 +96,32 @@ The packages that an `npm:` or `pypi:` build installs with it come from before
 that version was published, and a `go:` or `cargo:` build takes the versions
 its own lock file names. So the age of the version you add covers them too.
 
+## Malicious packages
+
+Before oku takes a new version of an `npm:`, `pypi:`, `cargo:` or `go:`
+package, it asks the [OSV](https://osv.dev) database at `api.osv.dev` whether
+the [OpenSSF malicious packages](https://github.com/ossf/malicious-packages)
+list names that version. Those advisories have ids that start with `MAL-`.
+oku does not install a version that one names:
+
+```
+oku: npm:nx 21.5.0: OSV lists it as malicious in MAL-2025-41443
+add another version with @<version>
+```
+
+- A package that `oku.lock` holds stays at its locked version, oku says why,
+  and the rest of the command goes on.
+- `oku add --plan` stops the same way.
+- oku asks about the package itself, not its dependencies. The
+  [minimum release age](#minimum-release-age) keeps the dependencies of an npm
+  or a PyPI package to versions from before it, and a cargo or go build takes
+  the versions its own lock file names.
+- oku does not ask again about a version that `oku.lock` pins.
+- When oku cannot reach OSV, it installs the version and says that it could
+  not check it.
+- OSV lists other advisories too, such as a known vulnerability. oku refuses
+  only the `MAL-` ones, and some older malicious packages have none.
+
 ## Trust on first use
 
 When none of the four exists, oku accepts the download and says so:
@@ -247,8 +273,9 @@ names both. A manifest with [Sigstore signatures](#sigstore-signatures-of-a-mani
 also needs `tuf-repo-cdn.sigstore.dev`, where oku reads Sigstore's trust root,
 `rekor.sigstore.dev` for a cosign signature or a provenance envelope without
 a bundle, and with
-attestations the host where GitHub stores large ones. oku refuses a host and
-names it:
+attestations the host where GitHub stores large ones. A new version of an
+npm, PyPI, crates.io or Go package needs `api.osv.dev`, see
+[Malicious packages](#malicious-packages). oku refuses a host and names it:
 
 ```
 oku: fetch https://example.org/x.toml: Get "https://example.org/x.toml": example.org is not in [network] allow in config.toml, so oku does not connect there
