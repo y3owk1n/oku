@@ -73,6 +73,12 @@ type Package struct {
 	// SigningKey is the minisign public key that signs every artifact. The
 	// signature of an artifact is at its URL with ".minisig" appended.
 	SigningKey string `toml:"signing_key"`
+	// SignerWorkflow is the GitHub Actions workflow whose Sigstore certificate
+	// signs the releases, as owner/repo/.github/workflows/<file>.
+	SignerWorkflow string `toml:"signer_workflow"`
+	// Attestations makes oku check each artifact against the GitHub artifact
+	// attestations that SignerWorkflow made for it.
+	Attestations bool `toml:"attestations"`
 }
 
 // Version is either fixed by Value or discovered from From.
@@ -153,6 +159,10 @@ type Artifact struct {
 	URL       string            `toml:"url"`
 	SHA256    string            `toml:"sha256"`
 	SHA256URL string            `toml:"sha256_url"`
+	// SigstoreBundle is a Sigstore bundle in which SignerWorkflow signs the
+	// download, and SHA256URLBundle one in which it signs the file at SHA256URL.
+	SigstoreBundle  string `toml:"sigstore_bundle"`
+	SHA256URLBundle string `toml:"sha256_url_bundle"`
 	// Version finds the version of this artifact alone, for a vendor whose
 	// platforms are at different versions. Only FromRedirect, FromPage and
 	// FromSparkle.
@@ -243,7 +253,9 @@ var (
 	npmNameRe    = regexp.MustCompile(`^(@[a-z0-9][a-z0-9._~-]*/)?[a-z0-9][a-z0-9._~-]*$`)
 	sha256Re     = regexp.MustCompile(`^[0-9a-f]{64}$`)
 	integrityRe  = regexp.MustCompile(`^sha512-[A-Za-z0-9+/]{86}==$`)
-	templateRe   = regexp.MustCompile(`\{\{\s*([a-zA-Z0-9_.-]+)\s*\}\}`)
+	// signerWorkflowRe is a workflow file of a GitHub repo, with no ref.
+	signerWorkflowRe = regexp.MustCompile(`^[A-Za-z0-9-]+/[A-Za-z0-9._-]+/\.github/workflows/[^/@]+\.ya?ml$`)
+	templateRe       = regexp.MustCompile(`\{\{\s*([a-zA-Z0-9_.-]+)\s*\}\}`)
 )
 
 // Parse validates manifest data. origin names the data in error messages.
@@ -276,6 +288,16 @@ func (m *Manifest) validate() error {
 				fmt.Errorf("package.signing_key is not a minisign public key: %w", err),
 			)
 		}
+	}
+
+	if w := m.Package.SignerWorkflow; w != "" && !signerWorkflowRe.MatchString(w) {
+		errs = append(errs, fmt.Errorf(
+			"package.signer_workflow %q is not owner/repo/.github/workflows/<file>.yml", w,
+		))
+	}
+
+	if m.Package.Attestations && m.Package.SignerWorkflow == "" {
+		errs = append(errs, errors.New("package.attestations needs package.signer_workflow, which signs them"))
 	}
 
 	if m.Build != nil {
@@ -594,6 +616,16 @@ func (m *Manifest) validate() error {
 			errs = append(errs, fmt.Errorf("artifact[%d]: set sha256 or sha256_url, not both", i))
 		}
 
+		if (a.SigstoreBundle != "" || a.SHA256URLBundle != "") && m.Package.SignerWorkflow == "" {
+			errs = append(errs, fmt.Errorf(
+				"artifact[%d]: a Sigstore bundle needs package.signer_workflow, which signs it", i,
+			))
+		}
+
+		if a.SHA256URLBundle != "" && a.SHA256URL == "" {
+			errs = append(errs, fmt.Errorf("artifact[%d]: sha256_url_bundle signs sha256_url, which is missing", i))
+		}
+
 		exposes := len(a.Bin)+len(a.Wrap)+len(a.Man)+len(a.App)+len(a.Font)+
 			len(a.Lib)+len(a.Include)+len(a.Share) > 0 || !a.Completions.Empty()
 
@@ -839,6 +871,14 @@ func (m *Manifest) Select(p platform.Platform) (Artifact, bool, error) {
 
 		if a.SHA256URL, err = Expand(a.SHA256URL, vars); err != nil {
 			return Artifact{}, false, fmt.Errorf("artifact sha256_url: %w", err)
+		}
+
+		if a.SigstoreBundle, err = Expand(a.SigstoreBundle, vars); err != nil {
+			return Artifact{}, false, fmt.Errorf("artifact sigstore_bundle: %w", err)
+		}
+
+		if a.SHA256URLBundle, err = Expand(a.SHA256URLBundle, vars); err != nil {
+			return Artifact{}, false, fmt.Errorf("artifact sha256_url_bundle: %w", err)
 		}
 
 		return a, true, nil

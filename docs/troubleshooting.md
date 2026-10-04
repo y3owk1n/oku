@@ -259,6 +259,23 @@ if the developer announced this change, run the command again with --accept-key
 A new key is what someone who took over the repo would publish. Check with the
 developer first. See [Security](reference/security.md).
 
+## A Sigstore signature does not check out
+
+```
+oku: tool: signature check failed: the bundle at <url> does not show that you/tool/.github/workflows/release.yml signed <file>: ...
+```
+
+The manifest names a `signer_workflow`, and the signature beside the release,
+or its attestation, came from another workflow, another repo or another tag,
+or does not cover the file oku downloaded. The end of the line says which.
+oku installed nothing. A release that someone replaced looks like this, so ask
+the developer before you work around it.
+
+When the manifest names a new workflow, `oku sync` and `oku update` stop with
+`oku.lock pinned the signer workflow ...`. Check with the developer, then pass
+`--accept-key`. See
+[Sigstore signatures](reference/security.md#sigstore-signatures-of-a-manifest).
+
 ## The download has a weaker check
 
 ```

@@ -161,9 +161,9 @@ A project can stop publishing checksums for good reasons. Someone who replaced
 a release would remove them too, so check before you pass
 `--accept-weaker-check`.
 
-- A signature by a `signing_key` is the strongest check, then a digest in the
-  manifest, then a checksum file or a digest the source publishes, which rank
-  the same, then nothing.
+- A signature by a `signer_workflow` or a `signing_key` is the strongest
+  check, then a digest in the manifest, then a checksum file or a digest the
+  source publishes, which rank the same, then nothing.
 - oku compares the check for each platform it pins, your own and those of
   `[lock]`.
 - `oku sync` installs the pins of `oku.lock`, so it never stops for this.
@@ -237,7 +237,9 @@ allow = ['github.com', 'api.github.com', '*.githubusercontent.com', 'git.corp.ex
 
 A release file on GitHub redirects to `release-assets.githubusercontent.com`,
 and a manifest to `raw.githubusercontent.com`, so an allow list for GitHub
-names both. oku refuses a host and names it:
+names both. A manifest with [Sigstore signatures](#sigstore-signatures-of-a-manifest)
+also needs `tuf-repo-cdn.sigstore.dev`, where oku reads Sigstore's trust root,
+and with attestations the host where GitHub stores large ones. oku refuses a host and names it:
 
 ```
 oku: fetch https://example.org/x.toml: Get "https://example.org/x.toml": example.org is not in [network] allow in config.toml, so oku does not connect there
@@ -423,6 +425,45 @@ the developer before you run `oku update foo --accept-key`. oku trusts the key
 it sees at the first install, and does not know whether that key belongs to the
 developer.
 
+## Sigstore signatures of a manifest
+
+A manifest can name the GitHub Actions workflow that signs its releases with
+[Sigstore](https://www.sigstore.dev), as `signer_workflow`, and where its
+signatures are: GitHub artifact attestations, or a bundle beside the download
+or beside its checksum file. See
+[Sigstore signatures](manifest.md#sigstore-signatures). oku installs the
+artifact only when the signature shows that:
+
+- Sigstore's certificate authority issued the certificate to that workflow,
+  run by GitHub Actions, at any ref of the workflow file
+- the run was for the repo of the releases, so a workflow that other repos
+  share cannot sign for this one
+- for a bundle, the run was for the release's tag, so an older signed file
+  cannot pass for a newer release
+- Sigstore's transparency log holds the signature
+- the signature covers the bytes oku downloaded, or the checksum file whose
+  sha256 for the download matched
+
+```
+oku: tool: signature check failed: the bundle at https://github.com/you/tool/releases/download/v1.2.0/checksums.txt.sigstore.json does not show that you/tool/.github/workflows/release.yml signed https://github.com/you/tool/releases/download/v1.2.0/checksums.txt: ...
+```
+
+oku reads Sigstore's public trust root through TUF from
+`tuf-repo-cdn.sigstore.dev`, checks it against the root that ships inside
+oku, and keeps it in its cache for a day.
+
+`oku.lock` pins `signer_workflow` at the first install. When the manifest
+later names another workflow, or none, `oku sync` and `oku update` stop:
+
+```
+oku: tool: oku.lock pinned the signer workflow you/tool/.github/workflows/release.yml, and the manifest now has the signer workflow you/tool/.github/workflows/other.yml
+if the developer announced this change, run the command again with --accept-key
+```
+
+A Sigstore signature needs no key for the developer to keep safe. It shows
+which workflow built the file, and nothing more. Someone who can push to the
+repo and run that workflow can sign what they like.
+
 ## When oku stops
 
 `oku update` is the only command that accepts a change upstream. `oku sync`
@@ -578,8 +619,12 @@ How the maintainer rotates the key is in
   release time that the source reports wrong.
 - A `sha256_url` on the same host as the download. It catches corruption and
   tampering after you locked, not a compromised host on first use.
-- A `signing_key` that was the attacker's at your first install. oku pins the
-  first key it sees.
+- A `signing_key` or `signer_workflow` that was the attacker's at your first
+  install. oku pins the first one it sees.
+- Someone who can push to the repo and run its release workflow. The
+  workflow's Sigstore signature covers whatever that run built.
+- An older release file that the workflow attested, served under a newer
+  release's address. An attestation names no tag, so oku cannot tell.
 - The sources of a `[build]`. `signing_key` covers artifacts only, and `fetch`
   steps rely on their `sha256`.
 - A build command you approved, on a host where the sandbox is not available.

@@ -10,12 +10,13 @@ import (
 )
 
 // verifiedBy returns the strongest check that states a digest for a download:
-// a signing key, a digest in the manifest, a checksum file, or a digest the
-// version source publishes. It returns "" when none does.
-func verifiedBy(signed bool, stated, sha256URL, published string) string {
+// a signature, which is a Verified constant or "", a digest in the manifest, a
+// checksum file, or a digest the version source publishes. It returns "" when
+// none does.
+func verifiedBy(signature, stated, sha256URL, published string) string {
 	switch {
-	case signed:
-		return lock.VerifiedMinisign
+	case signature != "":
+		return signature
 	case stated != "":
 		return lock.VerifiedManifest
 	case sha256URL != "":
@@ -55,7 +56,16 @@ func artifactVerified(m *manifest.Manifest, a manifest.Artifact, release resolve
 		stated = a.Integrity
 	}
 
-	return verifiedBy(m.Package.SigningKey != "", stated, a.SHA256URL, published)
+	signature := ""
+
+	switch {
+	case m.Package.Attestations || a.SigstoreBundle != "" || a.SHA256URLBundle != "":
+		signature = lock.VerifiedSigstore
+	case m.Package.SigningKey != "":
+		signature = lock.VerifiedMinisign
+	}
+
+	return verifiedBy(signature, stated, a.SHA256URL, published)
 }
 
 // sourceVerified returns the check that oku.lock records for the source of the
@@ -78,12 +88,14 @@ func sourceVerified(
 		"version": m.Version.Value, "tag": m.Tag, "os": p.OS, "arch": p.Arch, "libc": p.Libc,
 	})
 
-	return pinVerified(verifiedBy(false, src.SHA256, src.SHA256URL, release.Digests[url]), pinned, at)
+	return pinVerified(verifiedBy("", src.SHA256, src.SHA256URL, release.Digests[url]), pinned, at)
 }
 
 // verifiedText says in words what oku checked a download against.
 func verifiedText(verified string) string {
 	switch verified {
+	case lock.VerifiedSigstore:
+		return "a Sigstore signature by the manifest's signer workflow"
 	case lock.VerifiedMinisign:
 		return "a minisign signature by the manifest's signing key"
 	case lock.VerifiedManifest:

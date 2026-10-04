@@ -913,6 +913,20 @@ func (e env) pickRelease(
 		)
 	}
 
+	if pinned := previous.SignerWorkflow; pinned != "" && pinned != m.Package.SignerWorkflow &&
+		!req.acceptKey {
+		now := "no signer workflow"
+		if m.Package.SignerWorkflow != "" {
+			now = "the signer workflow " + m.Package.SignerWorkflow
+		}
+
+		return nil, resolve.Release{}, false, nil, fmt.Errorf(
+			"%s: oku.lock pinned the signer workflow %s, and the manifest now has %s\n"+
+				"if the developer announced this change, run the command again with --accept-key",
+			m.Package.Name, pinned, now,
+		)
+	}
+
 	// A version in the list limits the versions oku may pick. sync stays on the
 	// locked version while the list allows it, and add and update take the
 	// newest that it allows.
@@ -1214,6 +1228,7 @@ func lockEntry(
 		ManifestSHA256: m.SHA256,
 		Version:        lockedVersion(m, platforms),
 		SigningKey:     m.Package.SigningKey,
+		SignerWorkflow: m.Package.SignerWorkflow,
 		Tag:            tagFor(m, platforms),
 		TagCommit:      m.TagCommit,
 		Inferred:       inferred != "" || req.previous.Inferred && req.keepVersion,

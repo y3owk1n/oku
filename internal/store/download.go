@@ -297,19 +297,34 @@ var hexDigestRe = regexp.MustCompile(`\b[0-9a-fA-F]{64}\b`)
 // file holds one digest, "digest  name" lines such as sha256sum writes, or a JSON
 // document that maps file names to digests.
 func (s *Store) PublishedSHA256(ctx context.Context, url, fileName string) (string, error) {
+	data, err := s.checksums(ctx, url)
+	if err != nil {
+		return "", err
+	}
+
+	return digestIn(data, url, fileName)
+}
+
+// checksums downloads the checksum file at url.
+func (s *Store) checksums(ctx context.Context, url string) ([]byte, error) {
 	defer status.Start(ctx, "reading the checksums at %s", url)()
 
 	resp, err := s.get(ctx, url)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	defer resp.Body.Close()
 
 	data, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	if err != nil {
-		return "", fmt.Errorf("download %s: %w", url, err)
+		return nil, fmt.Errorf("download %s: %w", url, err)
 	}
 
+	return data, nil
+}
+
+// digestIn returns the sha256 of fileName from data, the checksum file at url.
+func digestIn(data []byte, url, fileName string) (string, error) {
 	if digest := jsonSHA256(data, fileName); digest != "" {
 		return digest, nil
 	}

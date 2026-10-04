@@ -37,6 +37,10 @@ type recipe struct {
 	leftOut []string
 	// deps are refs of the packages the recipe needs beside it.
 	deps []string
+	// signerWorkflow signs the releases with Sigstore, and attestations says it
+	// made GitHub artifact attestations of them.
+	signerWorkflow string
+	attestations   bool
 }
 
 // recipeArtifact is the download of the recipe for one platform.
@@ -51,6 +55,9 @@ type recipeArtifact struct {
 	template string
 	// sha256URL is the checksum file of any version, when the recipe names one.
 	sha256URL string
+	// sigstoreBundle and sha256URLBundle are Sigstore bundles in which signer
+	// signs the download and the checksum file.
+	sigstoreBundle, sha256URLBundle, signer string
 	// follow is where versions of this artifact come from, when they differ by
 	// platform.
 	follow *follow
@@ -230,6 +237,14 @@ func (r recipe) text() (string, error) {
 		fmt.Fprintf(&b, "homepage = %q\n", r.homepage)
 	}
 
+	if r.signerWorkflow != "" && fixed == "" {
+		fmt.Fprintf(&b, "signer_workflow = %q\n", r.signerWorkflow)
+
+		if r.attestations {
+			b.WriteString("attestations = true\n")
+		}
+	}
+
 	if len(r.deps) > 0 {
 		fmt.Fprintf(&b, "\n[runtime]\ndeps = [%s]\n", quoteAll(r.deps))
 	}
@@ -259,6 +274,14 @@ func (r recipe) text() (string, error) {
 
 			if a.sha256URL != "" {
 				fmt.Fprintf(&b, "sha256_url = %q\n", a.sha256URL)
+			}
+
+			if a.sha256URLBundle != "" {
+				fmt.Fprintf(&b, "sha256_url_bundle = %q\n", a.sha256URLBundle)
+			}
+
+			if a.sigstoreBundle != "" {
+				fmt.Fprintf(&b, "sigstore_bundle = %q\n", a.sigstoreBundle)
 			}
 		}
 

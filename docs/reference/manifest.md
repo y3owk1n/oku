@@ -70,6 +70,8 @@ A machine gets the package only when an artifact or the build fits it.
 | `homepage` | no | A URL. |
 | `license` | no | An SPDX identifier. |
 | `signing_key` | no | Your minisign public key. oku then checks every artifact against its signature, see [Signatures](#signatures). |
+| `signer_workflow` | no | The GitHub Actions workflow that signs your releases with Sigstore, as `owner/repo/.github/workflows/<file>`. See [Sigstore signatures](#sigstore-signatures). |
+| `attestations` | no | `true` makes oku check each artifact against the GitHub artifact attestations that `signer_workflow` made of it. Needs `signer_workflow`. |
 | `relocatable` | no | `true` when the built files contain no store path. A [build cache](../guides/build-caches.md) then offers the package to machines with any store root. Default `false`. Only matters for `[build]`. |
 
 ## [version]
@@ -422,6 +424,8 @@ machine, so put specific entries before general ones.
 | `url` | yes | Where the download is. `https://`, `http://` or `file://`. An `http://` URL needs `sha256` or a `signing_key`, and `oku manifest lint` fails without one. `file://` works only in a manifest on this machine or in a `git+file://` repo. On Windows `file:///C:/tools/x.zip` names a drive and `file://server/share/x.zip` a share. Expands [template variables](#template-variables). |
 | `sha256` | no | The download's digest, 64 lowercase hex characters. Not with `sha256_url`. |
 | `sha256_url` | no | The URL of a checksum file, see [Checksums](#checksums). Not with `sha256`. |
+| `sigstore_bundle` | no | The URL of a Sigstore bundle in which `signer_workflow` signs the download, see [Sigstore signatures](#sigstore-signatures). |
+| `sha256_url_bundle` | no | The URL of a Sigstore bundle in which `signer_workflow` signs the file at `sha256_url`. |
 | `version` | no | Where this artifact's own version comes from, see [A version for each platform](#a-version-for-each-platform). |
 | `integrity` | no | A sha512 digest the way npm publishes it, `sha512-` and the digest in base64. |
 | `strip` | no | How many leading path components to drop when unpacking. Default 0. |
@@ -570,6 +574,56 @@ minisign -S -m foo-1.2.0-linux.tar.gz # writes foo-1.2.0-linux.tar.gz.minisig
   refuses a manifest with another key, or with none, until the user passes
   `--accept-key`. Tell your users before you change the key.
 - `signing_key` covers artifacts. It does not sign the sources of a `[build]`.
+
+### Sigstore signatures
+
+A release that a GitHub Actions workflow signs with
+[Sigstore](https://www.sigstore.dev) needs no key of yours. Name the workflow,
+and where its signatures are:
+
+```toml
+[package]
+name = "tool"
+signer_workflow = "you/tool/.github/workflows/release.yml"
+attestations = true
+
+[version]
+from = "github-releases"
+repo = "you/tool"
+
+[[artifact]]
+url = "https://github.com/you/tool/releases/download/{{tag}}/tool-linux-amd64.tar.gz"
+sha256_url = "https://github.com/you/tool/releases/download/{{tag}}/checksums.txt"
+sha256_url_bundle = "https://github.com/you/tool/releases/download/{{tag}}/checksums.txt.sigstore.json"
+bin = ["tool"]
+```
+
+| Key | oku checks |
+|---|---|
+| `attestations = true` | The download against the GitHub artifact attestations of it in the repo, as `actions/attest-build-provenance` makes them. One that the workflow signed is enough. |
+| `sigstore_bundle` | The download against the bundle, as `cosign sign-blob --bundle` writes it in cosign 2.4 and later. |
+| `sha256_url_bundle` | The file at `sha256_url` against the bundle, and then the download against the sha256 in that file. |
+
+- `signer_workflow` names the workflow file at any ref, so a reusable workflow
+  in another repo works.
+- The certificate must say that the run was for the repo of your releases:
+  `repo` of `[version]` with `github-releases`, else the workflow's own repo.
+  A shared workflow that signs for other repos cannot sign for yours.
+- A bundle must come from a run for the release's tag, `refs/tags/{{tag}}`, so
+  an older signed file cannot pass for a newer release. An attestation names
+  no tag, since the build may run before the tag exists.
+- oku checks the certificate against Sigstore's public trust root and requires
+  the signature's entry in Sigstore's transparency log.
+- The user's `oku.lock` pins `signer_workflow` at the first install. After
+  that, oku refuses a manifest with another one, or none, until the user
+  passes `--accept-key`. Tell your users before you move the signing to
+  another workflow.
+- With a Sigstore check, an artifact without `sha256` is no longer trust on
+  first use.
+- oku does not yet check a cosign signature as a `.sig` and a `.pem` beside
+  the file, a bundle in cosign's older `.bundle` format, or SLSA provenance.
+  GitHub signs the attestations of a private repo with a Sigstore of its own,
+  and oku fails on them.
 
 ### Prebuilt libraries
 
@@ -1744,6 +1798,9 @@ release file of each platform:
 | `supported_envs`, `rosetta2`, `windows_arm_emulation` | The platforms it covers. Rosetta 2 and Windows emulation run the Intel build on arm64. |
 | `files` with a `src` | `bin`. A folder named after the version at the top becomes `strip`. On Windows a program gets `.exe`. |
 | `checksum` of type `github_release` with sha256 | `sha256_url` |
+| `cosign` of the checksum, with a `.sigstore.json` bundle from the release | `sha256_url_bundle`, and its workflow as `signer_workflow` |
+| `cosign` of the file, with a `.sigstore.json` bundle from the release | `sigstore_bundle`, and its workflow as `signer_workflow` |
+| `github_artifact_attestations` | `attestations = true`, and its `signer_workflow` |
 | `version_prefix` | `strip_prefix` |
 | `type: http` with a `url` | That `url` as the download, and the repo's releases as the version source |
 
@@ -1789,6 +1846,11 @@ bin = ["obsidian"]
 - oku reads the Ruby of a cask as text and never runs it.
 - An aqua template that uses a function oku has no match for, such as
   `{{title .OS}}`, fails and names it.
+- oku keeps a `cosign` check only when it names a GitHub Actions workflow and
+  the release's tag, either as `--certificate-identity` ending in
+  `@refs/tags/{{.Version}}`, or as `--certificate-identity-regexp` with
+  `--certificate-github-workflow-ref refs/tags/{{.Version}}`. A key, a `.sig`
+  with a `.pem`, or a `.bundle` file stays out.
 - A URL template counts only when it gives back the recipe's own download
   for the recipe's version, on every platform. Other parts of the URL keep
   the value they have in that download, such as `arm64` for `#{arch}`.
