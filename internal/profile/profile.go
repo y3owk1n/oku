@@ -498,8 +498,16 @@ func (p *Profile) stage(
 		return 0, err
 	}
 
+	// The generation is built beside its final name and renamed when complete,
+	// so a crash leaves no generation without its state file.
 	gen := filepath.Join(p.dir, genPrefix+strconv.Itoa(next))
-	if err := os.MkdirAll(gen, 0o755); err != nil {
+	tmp := filepath.Join(p.dir, ".tmp-"+filepath.Base(gen))
+
+	if err := os.RemoveAll(tmp); err != nil {
+		return 0, fmt.Errorf("create generation: %w", err)
+	}
+
+	if err := os.MkdirAll(tmp, 0o755); err != nil {
 		return 0, fmt.Errorf("create generation: %w", err)
 	}
 
@@ -507,13 +515,17 @@ func (p *Profile) stage(
 		p.recordProject()
 	}
 
-	err = p.linkPackages(gen, pkgs)
+	err = p.linkPackages(tmp, pkgs)
 	if err == nil {
-		err = build(gen, p.Current(), pkgs, files, settings, reqs, lockData)
+		err = build(tmp, p.Current(), pkgs, files, settings, reqs, lockData)
+	}
+
+	if err == nil {
+		err = os.Rename(tmp, gen)
 	}
 
 	if err != nil {
-		os.RemoveAll(gen)
+		os.RemoveAll(tmp)
 
 		return 0, err
 	}
@@ -552,7 +564,7 @@ func (p *Profile) Activate(n int) error {
 
 // Discard deletes generation n.
 func (p *Profile) Discard(n int) error {
-	if err := trash.Remove(filepath.Join(p.dir, genPrefix+strconv.Itoa(n)), p.trash()); err != nil {
+	if err := trash.RemoveAside(filepath.Join(p.dir, genPrefix+strconv.Itoa(n)), p.trash()); err != nil {
 		return fmt.Errorf("delete generation %d: %w", n, err)
 	}
 
@@ -581,7 +593,13 @@ func (p *Profile) Generations() ([]Generation, error) {
 			continue
 		}
 
+		// A generation an older oku left without its state file was never
+		// activated, and Prune deletes it.
 		data, err := os.ReadFile(filepath.Join(p.dir, entry.Name(), stateFile))
+		if errors.Is(err, fs.ErrNotExist) {
+			continue
+		}
+
 		if err != nil {
 			return nil, fmt.Errorf("read generation %d: %w", n, err)
 		}
@@ -845,7 +863,7 @@ func (p *Profile) dropTrees() error {
 		}
 
 		// A shim in it may still run.
-		if err := trash.Remove(filepath.Join(trees, entry.Name()), p.trash()); err != nil {
+		if err := trash.RemoveAside(filepath.Join(trees, entry.Name()), p.trash()); err != nil {
 			return fmt.Errorf("delete %s: %w", entry.Name(), err)
 		}
 	}
@@ -1034,6 +1052,40 @@ func All(dataDir string) ([]*Profile, error) {
 	return profiles, nil
 }
 
+// DropUnfinished deletes what a killed oku left in the profile: a generation
+// it was building or deleting, under a name that starts with ".tmp-", and a
+// generation that an older oku left without its state file.
+func (p *Profile) DropUnfinished() error {
+	entries, err := os.ReadDir(p.dir)
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil
+		}
+
+		return fmt.Errorf("read profile: %w", err)
+	}
+
+	for _, entry := range entries {
+		name := entry.Name()
+
+		unfinished := strings.HasPrefix(name, ".tmp-")
+		if strings.HasPrefix(name, genPrefix) {
+			_, err := os.Stat(filepath.Join(p.dir, name, stateFile))
+			unfinished = errors.Is(err, fs.ErrNotExist)
+		}
+
+		if !entry.IsDir() || !unfinished {
+			continue
+		}
+
+		if err := trash.Remove(filepath.Join(p.dir, name), p.trash()); err != nil {
+			return fmt.Errorf("delete %s: %w", name, err)
+		}
+	}
+
+	return nil
+}
+
 // Retention says which generations Prune keeps. A generation stays when any
 // rule that is set keeps it.
 type Retention struct {
@@ -1073,7 +1125,7 @@ func (p *Profile) Prune(r Retention, dryRun bool) ([]int, error) {
 
 		if !dryRun {
 			dir := filepath.Join(p.dir, genPrefix+strconv.Itoa(gen.Number))
-			if err := trash.Remove(dir, p.trash()); err != nil {
+			if err := trash.RemoveAside(dir, p.trash()); err != nil {
 				return removed, fmt.Errorf("delete generation %d: %w", gen.Number, err)
 			}
 		}

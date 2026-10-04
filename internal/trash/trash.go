@@ -3,9 +3,11 @@ package trash
 
 import (
 	"errors"
+	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
+	"time"
 )
 
 // Remove deletes path. On Windows a file that cannot be deleted, such as a
@@ -21,6 +23,26 @@ func Remove(path, dir string) error {
 	}
 
 	return remove(path, dir)
+}
+
+// RemoveAside is Remove for a path that a later reader would reuse because it
+// exists. It first renames path to a name in the same directory that starts
+// with ".tmp-", so a delete that stops halfway leaves no part of it under its
+// own name. Where the rename fails, as on Windows for a directory that holds a
+// running program, it deletes path in place.
+func RemoveAside(path, dir string) error {
+	aside := filepath.Join(filepath.Dir(path), fmt.Sprintf(".tmp-removing-%s-%d", filepath.Base(path), time.Now().UnixNano()))
+
+	err := os.Rename(path, aside)
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil
+	}
+
+	if err == nil {
+		path = aside
+	}
+
+	return Remove(path, dir)
 }
 
 // writable lets the owner write to every directory under path, which deleting

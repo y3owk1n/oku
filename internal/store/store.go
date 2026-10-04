@@ -146,7 +146,7 @@ func (s *Store) Has(
 	sha256 string,
 	deps []Dep,
 ) bool {
-	return sha256 != "" && exists(s.artifactPath(m, a, p, sha256, deps))
+	return sha256 != "" && complete(s.artifactPath(m, a, p, sha256, deps))
 }
 
 // artifactPath returns the store path of artifact a with that digest. A wrapper
@@ -200,7 +200,7 @@ func (s *Store) Realize(
 	// The build oku.lock pinned was verified when it entered the store, so it
 	// needs no second look at the published checksum.
 	if pinned != "" && (a.SHA256 == "" || a.SHA256 == pinned) {
-		if final := s.artifactPath(m, a, p, pinned, deps); exists(final) {
+		if final := s.artifactPath(m, a, p, pinned, deps); complete(final) {
 			return reuse(Realized{Path: final, SHA256: pinned}, a, p.OS)
 		}
 	}
@@ -227,7 +227,7 @@ func (s *Store) Realize(
 	}
 
 	if want != "" {
-		if final := s.artifactPath(m, a, p, want, deps); exists(final) {
+		if final := s.artifactPath(m, a, p, want, deps); complete(final) {
 			return reuse(Realized{Path: final, SHA256: want}, a, p.OS)
 		}
 	}
@@ -240,7 +240,7 @@ func (s *Store) Realize(
 	realized := Realized{
 		Path: s.artifactPath(m, a, p, got, deps), SHA256: got, FirstUse: want == "",
 	}
-	if exists(realized.Path) {
+	if complete(realized.Path) {
 		return reuse(realized, a, p.OS)
 	}
 
@@ -348,9 +348,16 @@ func (s *Store) Realize(
 		return Realized{}, fmt.Errorf("write %s: %w", metaFile, err)
 	}
 
+	// What a delete that stopped halfway left is no package.
+	if exists(final) && !complete(final) {
+		if err := s.Remove(final); err != nil {
+			return Realized{}, err
+		}
+	}
+
 	// Another install of the same package may have put it there first.
 	if err := os.Rename(tmp, final); err != nil {
-		if !exists(final) {
+		if !complete(final) {
 			return Realized{}, fmt.Errorf("move package into store: %w", err)
 		}
 
@@ -476,6 +483,12 @@ func (s *Store) pathFor(m *manifest.Manifest, p platform.Platform, extra ...stri
 	return filepath.Join(s.dir, fmt.Sprintf(
 		"%s-%s-%s", m.Package.Name, m.Version.Value, hex.EncodeToString(sum[:])[:16],
 	))
+}
+
+// complete reports whether the store path at path holds a whole package. oku
+// writes its meta file last, and deletes it first.
+func complete(path string) bool {
+	return exists(filepath.Join(path, metaFile))
 }
 
 func exists(path string) bool {
@@ -1072,8 +1085,13 @@ func (s *Store) Remove(path string) error {
 		return fmt.Errorf("%s is not a store path", path)
 	}
 
+	// Where a running program keeps the path from moving aside, as on Windows,
+	// the meta file goes first, so a delete that stops halfway leaves a path
+	// that complete refuses. A read-only path keeps it, and moves aside.
+	_ = os.Remove(filepath.Join(path, metaFile))
+
 	// A program of the path may still run, from a generation that is gone.
-	if err := trash.Remove(path, filepath.Join(filepath.Dir(s.dir), "trash")); err != nil {
+	if err := trash.RemoveAside(path, filepath.Join(filepath.Dir(s.dir), "trash")); err != nil {
 		return err
 	}
 

@@ -167,6 +167,14 @@ func runGC(cmd *cobra.Command, r profile.Retention, retain ages, dryRun, cache b
 
 	pruned := map[*profile.Profile][]int{}
 
+	if !dryRun {
+		for _, prof := range profiles {
+			if err := prof.DropUnfinished(); err != nil {
+				return err
+			}
+		}
+	}
+
 	if r.Keep > 0 || !r.Since.IsZero() {
 		for _, prof := range profiles {
 			if pruned[prof], err = prof.Prune(r, dryRun); err != nil {
