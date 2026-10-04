@@ -18,6 +18,7 @@ import (
 	"github.com/y3owk1n/oku/internal/infer"
 	"github.com/y3owk1n/oku/internal/lock"
 	"github.com/y3owk1n/oku/internal/manifest"
+	"github.com/y3owk1n/oku/internal/netpolicy"
 	"github.com/y3owk1n/oku/internal/platform"
 	"github.com/y3owk1n/oku/internal/profile"
 	"github.com/y3owk1n/oku/internal/ref"
@@ -829,7 +830,7 @@ func (e env) installFrom(
 			}
 		}
 
-		if realized, err = e.store().As(auth).Realize(
+		if realized, err = e.store().As(auth).SignedAfter(req.signedAfter(host, m.Version.Value)).Realize(
 			ctx, m, artifact, host, pinned, deps.prefixes,
 		); err != nil {
 			return installed{}, err
@@ -841,6 +842,12 @@ func (e env) installFrom(
 			SHA256:   realized.SHA256,
 			Verified: verified,
 			Commands: artifact.Completions.Generate != "",
+			SignedAt: realized.SignedAt,
+		}
+
+		// A download that the lock pins, which the store had, keeps its time.
+		if was := previous.Platforms[host.String()]; entry.SignedAt == 0 && was.SHA256 == entry.SHA256 {
+			entry.SignedAt = was.SignedAt
 		}
 	}
 
@@ -1363,7 +1370,9 @@ func (e env) lockOthers(
 			scoped = status.Scope(ctx, m.Package.Name+" "+m.Versions[p.String()])
 		}
 
-		entry, trusted, err := pinFor(scoped, e.store().As(auth), m, release, p, host, at)
+		version := cmp.Or(m.Versions[p.String()], m.Version.Value)
+
+		entry, trusted, err := pinFor(scoped, e.store().As(auth).SignedAfter(req.signedAfter(p, version)), m, release, p, host, at)
 		if err != nil && req.strictPlatforms {
 			return nil, err
 		}
@@ -1462,16 +1471,16 @@ func pinFor(
 		artifact.Integrity = cmp.Or(artifact.Integrity, release.Integrity[artifact.URL])
 	}
 
-	sum, trusted, err := s.Pin(ctx, m, artifact)
+	pin, err := s.Pin(ctx, m, artifact)
 	if err != nil {
 		return lock.Platform{}, false, fmt.Errorf("%s for %s: %w", m.Package.Name, p, err)
 	}
 
 	return lock.Platform{
-		Strategy: strategyArtifact, URL: artifact.URL, SHA256: sum, Verified: verified,
+		Strategy: strategyArtifact, URL: artifact.URL, SHA256: pin.SHA256, Verified: verified,
 		Commands: artifact.Completions.Generate != "", Version: m.Versions[p.String()],
-		Tag: m.Tags[p.String()],
-	}, trusted, nil
+		Tag: m.Tags[p.String()], SignedAt: pin.SignedAt,
+	}, pin.FirstUse, nil
 }
 
 // target returns the platform that an inferred manifest must fit. That is the
@@ -2416,15 +2425,28 @@ func localGit(url string) bool {
 	return !strings.Contains(url, ":")
 }
 
-// localURLs fails when a manifest from elsewhere names a file:// URL. Such a
-// URL reads a file of this machine, such as a key under ~/.ssh, into the store
-// or into a build. A manifest from a file or a git repo on this machine may.
+// localURLs fails when a manifest from elsewhere names a file:// URL or a URL
+// of this machine. A file:// URL reads a file of this machine, such as a key
+// under ~/.ssh, into the store or into a build. A URL of this machine reaches
+// its local services, and a version a page source reads from one can carry
+// their answer to another host. A manifest from a file or a git repo on this
+// machine may name both, and one served from this machine may name its URLs.
 func localURLs(r ref.Ref, m *manifest.Manifest) error {
 	if r.Kind == ref.File || r.Kind == ref.Git && strings.HasPrefix(r.Location, "file://") {
 		return nil
 	}
 
+	served := false
+	if u, err := url.Parse(r.Location); err == nil && r.Kind == ref.HTTP {
+		served = netpolicy.Local(u.Hostname())
+	}
+
 	var urls []string
+
+	switch m.Version.From {
+	case manifest.FromPage, manifest.FromRedirect, manifest.FromSparkle:
+		urls = append(urls, m.Version.Repo)
+	}
 
 	for _, a := range m.Artifacts {
 		urls = append(urls, a.URL, a.SHA256URL, a.SigstoreBundle, a.SHA256URLBundle, a.SigstoreSignature,
@@ -2450,6 +2472,10 @@ func localURLs(r ref.Ref, m *manifest.Manifest) error {
 	for _, u := range urls {
 		if strings.HasPrefix(strings.ToLower(strings.TrimSpace(u)), "file:") {
 			return fmt.Errorf("%s names %s, and only a manifest on this machine may read a local file", r, u)
+		}
+
+		if parsed, err := url.Parse(strings.TrimSpace(u)); err == nil && !served && netpolicy.Local(parsed.Hostname()) {
+			return fmt.Errorf("%s names %s, and only a manifest on this machine may name a URL of this machine", r, u)
 		}
 	}
 

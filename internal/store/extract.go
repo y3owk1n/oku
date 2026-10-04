@@ -292,10 +292,28 @@ type fileWriter struct {
 	written int64
 }
 
-// maxUnpacked is how many bytes one archive may unpack to. The digest pins what
+// maxUnpacked is how many bytes one download may unpack to. The digest pins what
 // a package downloads, and this stops a small download that expands without
 // end from filling the disk.
 const maxUnpacked = 32 << 30
+
+var errUnpackedTooLarge = fmt.Errorf("the download unpacks to more than %d GiB", maxUnpacked>>30)
+
+// unpackedReader reads r and adds what it reads to total, which the files of
+// one download share. It fails once total passes maxUnpacked.
+type unpackedReader struct {
+	r     io.Reader
+	total *int64
+}
+
+func (u *unpackedReader) Read(p []byte) (int, error) {
+	n, err := u.r.Read(p)
+	if *u.total += int64(n); *u.total > maxUnpacked {
+		return n, errUnpackedTooLarge
+	}
+
+	return n, err
+}
 
 // write keeps the time the archive gives the file. make compares the times of a
 // source tree, and a release tarball relies on its generated files, such as
@@ -325,10 +343,7 @@ func (w *fileWriter) write(name string, mode fs.FileMode, modified time.Time, r 
 		return err
 	}
 
-	n, err := io.Copy(f, io.LimitReader(r, maxUnpacked-w.written+1))
-	if w.written += n; err == nil && w.written > maxUnpacked {
-		err = fmt.Errorf("the archive unpacks to more than %d GiB", maxUnpacked>>30)
-	}
+	_, err = io.Copy(f, &unpackedReader{r: r, total: &w.written})
 
 	if closeErr := f.Close(); err == nil {
 		err = closeErr

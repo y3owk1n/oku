@@ -1256,7 +1256,37 @@ $dllUser = [regex]::Match(((Get-Content "$bin\dlluser.shim") -join "`n"), 'path 
 Check 'the DLL of a dep sits beside the program that loads it' {
     Test-Path (Join-Path (Split-Path $dllUser) 'okudep.dll')
 }
+
+# A download gets the same links. When the dep moves to a new version, the
+# package's store path changes with it, so the link holds the new DLL.
+$dllArt = Join-Path $fixtures 'dllart'
+New-Item -ItemType Directory -Force $dllArt | Out-Null
+Copy-Item $dllUser (Join-Path $dllArt 'dllart.exe')
+$dllArtZip = Join-Path $fixtures 'dllart.zip'
+Compress-Archive -Force -Path (Join-Path $dllArt '*') -DestinationPath $dllArtZip
+Set-Content (Join-Path $fixtures 'dllart.toml') @"
+[package]
+name = "dllart"
+[version]
+value = "1.0.0"
+[runtime]
+deps = [{ ref = "$dllKitRef" }]
+[[artifact]]
+url = "file:///$($dllArtZip -replace '\\', '/')"
+bin = ["dllart.exe"]
+"@
 Oku remove dlluser
+Oku add (Join-Path $fixtures 'dllart.toml') --yes
+$artDll = { Get-Content -Raw (Join-Path (Split-Path ([regex]::Match(((Get-Content "$bin\dllart.shim") -join "`n"), 'path = (.+)').Groups[1].Value.Trim())) 'okudep.dll') }
+Check 'a download gets the DLL of its dep beside its program' { (& $artDll).Trim() -eq 'a DLL of the dep' }
+Set-Content (Join-Path $dllKit 'okudep.dll') 'the next DLL of the dep'
+$dllZip2 = Join-Path $fixtures 'dllkit2.zip'
+Compress-Archive -Force -Path (Join-Path $dllKit '*') -DestinationPath $dllZip2
+(Get-Content -Raw (Join-Path $fixtures 'dllkit.toml')).Replace('1.0.0', '2.0.0').Replace('dllkit.zip', 'dllkit2.zip') |
+    Set-Content (Join-Path $fixtures 'dllkit.toml')
+Oku update --yes
+Check 'a new version of the dep replaces the DLL beside the program' { (& $artDll).Trim() -eq 'the next DLL of the dep' }
+Oku remove dllart
 
 # A machine without PowerShell 7 builds registry packages with the Windows
 # PowerShell 5.1 that Windows ships. The runner has PowerShell 7, so its

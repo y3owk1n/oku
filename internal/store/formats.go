@@ -293,6 +293,8 @@ func copyImage(mount, dest string) error {
 	}
 	defer root.Close()
 
+	var written int64
+
 	return filepath.WalkDir(mount, func(path string, entry fs.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -333,6 +335,9 @@ func copyImage(mount, dest string) error {
 			}
 
 			return root.Symlink(link, rel)
+		case !info.Mode().IsRegular():
+			// Opening a FIFO waits for a writer, and a device is no file of the app.
+			return nil
 		default:
 			in, err := os.Open(path)
 			if err != nil {
@@ -345,7 +350,7 @@ func copyImage(mount, dest string) error {
 				return err
 			}
 
-			_, err = io.Copy(out, in)
+			_, err = io.Copy(out, &unpackedReader{r: in, total: &written})
 			if closeErr := out.Close(); err == nil {
 				err = closeErr
 			}
@@ -403,8 +408,7 @@ func administrativeInstall(named, dest string) error {
 	const tries, wait = 60, 3 * time.Second
 
 	for try := 1; ; try++ {
-		out, err := exec.Command("msiexec", "/a", named, "/qn", "/norestart", "TARGETDIR="+dest).
-			CombinedOutput()
+		out, err := runUnpacker(exec.Command("msiexec", "/a", named, "/qn", "/norestart", "TARGETDIR="+dest), dest)
 
 		var exit *exec.ExitError
 		if errors.As(err, &exit) && exit.ExitCode() == errBusyInstaller && try < tries {
@@ -436,7 +440,7 @@ func unpkg(src, dest string) error {
 	// pkgutil requires a directory that does not exist yet.
 	expanded := filepath.Join(dest, "expanded")
 
-	out, err := exec.Command("/usr/sbin/pkgutil", "--expand-full", src, expanded).CombinedOutput()
+	out, err := runUnpacker(exec.Command("/usr/sbin/pkgutil", "--expand-full", src, expanded), dest)
 	if err != nil {
 		return fmt.Errorf(
 			"expand the installer package: %w: %s",
@@ -582,4 +586,57 @@ func expandPackages(dest string) error {
 	}
 
 	return nil
+}
+
+// unpackedSize returns the bytes of the regular files under dir.
+func unpackedSize(dir string) int64 {
+	var size int64
+
+	_ = filepath.WalkDir(dir, func(_ string, entry fs.DirEntry, err error) error {
+		if err == nil && entry.Type().IsRegular() {
+			if info, err := entry.Info(); err == nil {
+				size += info.Size()
+			}
+		}
+
+		return nil
+	})
+
+	return size
+}
+
+// runUnpacker runs a system tool that unpacks a download into dir, and stops
+// it once dir holds more than maxUnpacked bytes. oku cannot count what the
+// tool writes, so it measures dir every second.
+func runUnpacker(cmd *exec.Cmd, dir string) ([]byte, error) {
+	var out bytes.Buffer
+
+	cmd.Stdout, cmd.Stderr = &out, &out
+	if err := cmd.Start(); err != nil {
+		return nil, err
+	}
+
+	done := make(chan error, 1)
+	go func() { done <- cmd.Wait() }()
+
+	tick := time.NewTicker(time.Second)
+	defer tick.Stop()
+
+	for {
+		select {
+		case err := <-done:
+			if err == nil && unpackedSize(dir) > maxUnpacked {
+				err = errUnpackedTooLarge
+			}
+
+			return out.Bytes(), err
+		case <-tick.C:
+			if unpackedSize(dir) > maxUnpacked {
+				_ = cmd.Process.Kill()
+				<-done
+
+				return out.Bytes(), errUnpackedTooLarge
+			}
+		}
+	}
 }

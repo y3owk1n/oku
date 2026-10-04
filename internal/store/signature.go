@@ -8,7 +8,10 @@ import (
 	neturl "net/url"
 	"os"
 	"path"
+	"regexp"
+	"strconv"
 	"strings"
+	"time"
 
 	"aead.dev/minisign"
 )
@@ -17,39 +20,41 @@ import (
 var ErrSignature = errors.New("signature check failed")
 
 // verifySignature checks the file at download against the minisign signature at
-// url + ".minisig". The key signs every release, so the signed trusted comment
-// must also name this file, as minisign's "file:<name>" does, or the version, or
-// an older signed file could pass for this one.
-func (s *Store) verifySignature(ctx context.Context, keyText, url, version, download string) error {
+// url + ".minisig", and returns the unix time in its signed comment, or zero.
+// The key signs every release, so the signed comment must also name this file,
+// as minisign's "file:<name>" does, or the version, or an older signed file
+// could pass for this one. A file name without the version leaves that open,
+// so such a signature must not be older than s.signedAfter.
+func (s *Store) verifySignature(ctx context.Context, keyText, url, version, download string) (int64, error) {
 	var key minisign.PublicKey
 	if err := key.UnmarshalText([]byte(keyText)); err != nil {
-		return fmt.Errorf("signing_key %s: %w", keyText, err)
+		return 0, fmt.Errorf("signing_key %s: %w", keyText, err)
 	}
 
 	resp, err := s.get(ctx, url+signatureSuffix)
 	if err != nil {
-		return fmt.Errorf("%w: the manifest has a signing_key, and %w", ErrSignature, err)
+		return 0, fmt.Errorf("%w: the manifest has a signing_key, and %w", ErrSignature, err)
 	}
 
 	signature, err := io.ReadAll(io.LimitReader(resp.Body, 1<<16))
 	resp.Body.Close()
 
 	if err != nil {
-		return fmt.Errorf("download %s: %w", url+signatureSuffix, err)
+		return 0, fmt.Errorf("download %s: %w", url+signatureSuffix, err)
 	}
 
 	signed, err := verifyFile(key, download, signature)
 	if err != nil {
-		return err
+		return 0, err
 	}
 
 	if !signed {
-		return fmt.Errorf("%w: %s is not signed by %s", ErrSignature, url, keyText)
+		return 0, fmt.Errorf("%w: %s is not signed by %s", ErrSignature, url, keyText)
 	}
 
 	var parsed minisign.Signature
 	if err := parsed.UnmarshalText(signature); err != nil {
-		return err
+		return 0, err
 	}
 
 	name := path.Base(url)
@@ -58,13 +63,45 @@ func (s *Store) verifySignature(ctx context.Context, keyText, url, version, down
 	}
 
 	if !strings.Contains(parsed.TrustedComment, "file:"+name) && !namesVersion(parsed.TrustedComment, version) {
-		return fmt.Errorf(
+		return 0, fmt.Errorf(
 			"%w: the signed comment %q names neither file:%s nor the version %s",
 			ErrSignature, parsed.TrustedComment, name, version,
 		)
 	}
 
-	return nil
+	signedAt := signatureTime(parsed.TrustedComment)
+
+	if !namesVersion(parsed.TrustedComment, version) && !namesVersion(name, version) &&
+		s.signedAfter > 0 && signedAt > 0 && signedAt < s.signedAfter {
+		return 0, fmt.Errorf(
+			"%w: %s was signed on %s, before the file that oku.lock holds, which was signed on %s, "+
+				"and its signed comment does not name the version %s, so it could be the file of an older release\n"+
+				"if the developer signed this release before the locked one, as for a fix to an older line, "+
+				"run the command again with --accept-weaker-check",
+			ErrSignature, name, signedDay(signedAt), signedDay(s.signedAfter), version,
+		)
+	}
+
+	return signedAt, nil
+}
+
+var signatureTimeRe = regexp.MustCompile(`(?:^|\s)timestamp:([0-9]+)`)
+
+// signatureTime returns the unix time that minisign writes into the signed
+// comment as "timestamp:<seconds>", or zero.
+func signatureTime(comment string) int64 {
+	m := signatureTimeRe.FindStringSubmatch(comment)
+	if m == nil {
+		return 0
+	}
+
+	at, _ := strconv.ParseInt(m[1], 10, 64)
+
+	return at
+}
+
+func signedDay(at int64) string {
+	return time.Unix(at, 0).UTC().Format(time.DateOnly)
 }
 
 // namesVersion reports whether comment holds version as a word of its own, so

@@ -248,6 +248,13 @@ The variables and their hosts are in [tokens per host](refs.md#tokens-per-host).
   may name a `file://` URL or a local repo as `source.git`. A manifest from
   anywhere else could otherwise read a file such as `~/.aws/credentials`, or
   clone a repo such as a password store, into the store or into a build.
+- A URL of this machine, such as `http://127.0.0.1:8080` or `localhost`, works
+  in a manifest on this machine and in one served from this machine. A
+  manifest from anywhere else that names one in a download or in a `page`,
+  `redirect` or `sparkle` version source fails before a download. Such a
+  manifest could otherwise make oku send requests to a service on your
+  machine, and a version read from that service could carry part of its
+  answer to another host.
 - A git collection reads its manifests inside the clone. When a manifest file
   is a link out of the repo, oku reads none of the collection, and
   `oku search` skips that source and names the file.
@@ -262,7 +269,8 @@ project `oku.toml` cannot change it, so a repo you clone cannot either.
   cloud metadata address `169.254.169.254`, `fc00::/7`, and multicast. A
   manifest could otherwise make oku read a service on your network.
 - A URL that names this machine, such as `http://127.0.0.1:8080` or
-  `localhost`, still works, since you named it. A public name that resolves to
+  `localhost`, still works where you named it, in a ref or in a manifest on
+  this machine. A public name that resolves to
   loopback does not, and neither does a redirect to this machine from another
   host.
 - oku checks the address it connects to, after DNS, on every redirect. When a
@@ -461,7 +469,16 @@ then downloads `<artifact url>.minisig` and installs the artifact only when
 that key signed it, and when the signed comment names that file as
 `file:<name>`, which `minisign -S` writes, or holds the version, as in
 `tool 1.2.3`. The key signs every release, so without that check an older
-signed file served at the new version's URL would pass. With a cosign public
+signed file served at the new version's URL would pass.
+
+`file:<name>` ties the signature to a version only when the file name holds
+the version, as `tool-1.2.3.tar.gz` does. For a name such as
+`tool-linux-amd64.tar.gz`, `oku.lock` records the time in the signature as
+`signed_at`. `oku update` to a newer version then stops when the new file's
+signature is older than the locked one. That is how a file of an older release
+served as the new version looks. A fix to an older line that the developer
+signs after a newer release, such as 1.9.5 after 2.0.0, stops the same way.
+Once the developer confirms such a release, pass `--accept-weaker-check`. With a cosign public
 key, oku checks the bundles and signatures that the artifacts name instead,
 and each must be in Sigstore's transparency log.
 [Cosign key](manifest.md#cosign-key) gives the format.
@@ -595,10 +612,12 @@ scriptlets of an `.rpm`, and the install scripts of a macOS `.pkg`.
   would, through other links too, and refuses the package when a link leads
   outside it. For example, `x -> .` followed by `x/l -> ../outside` fails, although each
   entry looks safe alone.
-- It refuses an archive that unpacks to more than 32 GiB, and an `.xz` file
-  that asks for a dictionary over 128 MiB, which the decoder would allocate
-  before it reads any data. A small download cannot fill the disk or the
-  memory.
+- It refuses a download that unpacks to more than 32 GiB, whether an archive,
+  a compressed single file or a disk image. It refuses an `.xz` file that asks
+  for a dictionary over 128 MiB, which the decoder would allocate before it
+  reads any data. A small download cannot fill the disk or the memory. `pkgutil` and
+  `msiexec` unpack a `.pkg` and an `.msi`, so oku measures their output every
+  second, stops the tool past 32 GiB and refuses the download.
 
 ## Projects and the shell hook
 
