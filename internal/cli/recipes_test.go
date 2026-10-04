@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"unicode"
 )
 
 // caskHead is the commit of the fake homebrew-cask repo.
@@ -33,6 +34,9 @@ type recipeServer struct {
 	aqua string
 	// aquaTag is the aqua registry's newest release, v4.300.0 when empty.
 	aquaTag string
+	// tagPrefix comes before each version in a tag of owner/tool, "v" when
+	// empty.
+	tagPrefix string
 	// winget maps a version of the winget package Owner.Tool to the text of its
 	// installer manifest.
 	winget map[string]string
@@ -79,12 +83,12 @@ func (s recipeServer) start(t *testing.T, m *machine) string {
 		case r.URL.Path == "/api/repos/owner/tool/releases":
 			var releases []string
 			for _, v := range s.versions {
-				releases = append(releases, fmt.Sprintf(`{"tag_name": "v%s", "assets": []}`, v))
+				releases = append(releases, fmt.Sprintf(`{"tag_name": "%s%s", "assets": []}`, cmp.Or(s.tagPrefix, "v"), v))
 			}
 
 			_, _ = fmt.Fprintf(w, "[%s]", strings.Join(releases, ","))
 		case r.URL.Path == "/api/repos/owner/tool/releases/latest" && len(s.versions) > 0:
-			_, _ = fmt.Fprintf(w, `{"tag_name": "v%s", "assets": []}`, s.versions[len(s.versions)-1])
+			_, _ = fmt.Fprintf(w, `{"tag_name": "%s%s", "assets": []}`, cmp.Or(s.tagPrefix, "v"), s.versions[len(s.versions)-1])
 		case s.served[r.URL.Path] != "":
 			_, _ = fmt.Fprint(w, s.served[r.URL.Path])
 		case r.URL.Path == "/api/repos/microsoft/winget-pkgs/contents/manifests/o/Owner/Tool" && s.winget != nil:
@@ -114,8 +118,9 @@ func (s recipeServer) start(t *testing.T, m *machine) string {
 		case r.URL.Path == "/latest.json":
 			_, _ = fmt.Fprintf(w, `{"name": "tool", "version": %q}`, s.latest)
 		case len(parts) == 5 && parts[1] == "dl":
-			// /dl/<version>/<platform>/tool.tar.gz
-			if file, ok := files[parts[2]]; ok {
+			// /dl/<version>/<platform>/tool.tar.gz, where the version may be a tag.
+			version := strings.TrimLeftFunc(parts[2], func(r rune) bool { return !unicode.IsDigit(r) })
+			if file, ok := files[version]; ok {
 				http.ServeFile(w, r, file)
 
 				return
@@ -588,7 +593,7 @@ func TestB302AddTranslatesAnAquaEntryAndFollowsTheRepo(t *testing.T) {
     repo_owner: owner
     repo_name: tool
     description: A tool
-    url: SERVER/dl/{{.SemVer}}/{{.OS}}-{{.Arch}}/tool.tar.gz
+    url: SERVER/dl/{{trimV .Version}}/{{.OS}}-{{.Arch}}/tool.tar.gz
     files:
       - name: tool
 `,
@@ -605,6 +610,53 @@ func TestB302AddTranslatesAnAquaEntryAndFollowsTheRepo(t *testing.T) {
 
 	if !strings.Contains(out, "aqua:owner/tool is a recipe of another package manager") {
 		t.Fatalf("add did not say that it translated the entry:\n%s", out)
+	}
+}
+
+func TestB537AnAquaEntryWithALowestVersionAndAPrefixedTagTranslates(t *testing.T) {
+	for _, c := range []struct{ name, tagPrefix, entry, want string }{
+		{
+			// As kustomize: tags kustomize/v5.4.1, and SemVer keeps the v.
+			"version_prefix", "tool/v", `    version_prefix: tool/
+    version_constraint: semver(">= 1.0.0")
+    version_overrides:
+      - version_constraint: semver(">= 0.1.0")
+        url: SERVER/old/{{.SemVer}}/tool.tar.gz
+    url: SERVER/dl/{{.SemVer}}/{{.OS}}-{{.Arch}}/tool.tar.gz
+`, "strip_prefix = \"tool/v\"\n|/dl/v{{version}}/",
+		},
+		{
+			// As knative: tags knative-v1.23.0, and no version_prefix.
+			"no version_prefix", "tool-v", `    version_constraint: semverWithVersion(">= 1.0.0", trimPrefix(Version, "tool-")) or semver(">= 0.26.0")
+    url: SERVER/dl/{{trimV .Version}}/{{.OS}}-{{.Arch}}/tool.tar.gz
+`, "strip_prefix = \"tool-v\"\n|/dl/{{tag}}/",
+		},
+	} {
+		m := newMachine(t)
+		recipeServer{
+			versions: []string{"1.2.0", "1.3.0"}, tagPrefix: c.tagPrefix,
+			aqua: "packages:\n  - type: http\n    repo_owner: owner\n    repo_name: tool\n" + c.entry +
+				"    files:\n      - name: tool\n",
+		}.start(t, &m)
+
+		out, err := m.run(t, "", "manifest", "init", "--from", "aqua:owner/tool", "-o", "-")
+		if err != nil {
+			t.Fatalf("%s: init: %v\n%s", c.name, err, out)
+		}
+
+		for want := range strings.SplitSeq(c.want, "|") {
+			if !strings.Contains(out, want) {
+				t.Fatalf("%s: the manifest lacks %q:\n%s", c.name, want, out)
+			}
+		}
+
+		if out, err := m.run(t, "", "add", "aqua:owner/tool", "--yes"); err != nil {
+			t.Fatalf("%s: add: %v\n%s", c.name, err, out)
+		}
+
+		if got := m.toolOutput(t); got != "tool 1.3.0" {
+			t.Fatalf("%s: tool printed %q, want the newest release 1.3.0", c.name, got)
+		}
 	}
 }
 

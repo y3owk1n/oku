@@ -536,8 +536,10 @@ download.
 A `sha256_url` file may hold:
 
 - a single digest
-- `digest  filename` lines, as `sha256sum` writes them. oku picks the line that
-  names the download's file.
+- `digest  filename` lines, as `sha256sum` writes them, or
+  `SHA256 (filename) = digest` lines. oku picks the line that names the
+  download's file. The name may hold a path, and a line for
+  `kubectl-tool.tar.gz` does not name `tool.tar.gz`.
 - JSON, either an object that maps file names to digests or an array of objects
   with `name` and `sha256` fields. A name may hold a path, and oku matches its
   base name against the download's file name.
@@ -1533,7 +1535,7 @@ machines with the same keys:
 |---|---|
 | `os` | `linux`, `darwin`, `windows` |
 | `arch` | `amd64` or `arm64`, Go's names |
-| `libc` | `glibc` or `musl`. Linux only. oku reports `musl` when `/lib/ld-musl-*.so.1` exists. |
+| `libc` | `glibc` or `musl`. Linux only. oku reads which loader `/bin/sh` runs on. The musl loader means `musl` and any other means `glibc`, so a glibc system with the musl package installed is `glibc`. When `/bin/sh` is static, oku reports `musl` if `/lib/ld-musl-*.so.1` exists. |
 
 A missing key matches anything. A value that names no platform, such as
 `os = "macos"`, is an error that names the right one, here `darwin`. oku accepts
@@ -1619,6 +1621,12 @@ $ oku manifest init --from owner/repo
 
 With `@version` oku reads that version's release. It tries the tag `version`,
 then `v<version>`. With any other tag prefix it reads the newest release.
+
+In each URL, oku writes the release's tag as `{{tag}}` and its version as
+`{{version}}`, so the manifest follows later releases. GitHub's URLs write the
+`+` of a tag such as `v1.37.1+k3s1` as `%2B`, and oku turns that form into
+`{{tag}}` too. A version that is one number, such as `2`, stays as written when
+a letter comes before it, so the repo name `tool2` keeps its `2`.
 
 The lock pins an inferred manifest like any other. `oku.lock` stores its full text,
 so `oku sync` on another machine installs from the same text and does not infer
@@ -1757,8 +1765,9 @@ manifest does not name them, so its text is the same on every machine. An
 
 - It uses `<asset>.sha256` or `<asset>.sha256sum` as `sha256_url` when that
   exists. Otherwise it takes a shared file, one with `checksum`, `sha256sum` or
-  `shasums256` in its name, or `sha256.txt`. It skips signatures, and every
-  `.shasum` file, which holds a SHA-1.
+  `shasums256` in its name, or `sha256.txt`. It skips signatures, every
+  `.shasum` file, which holds a SHA-1, and the `.sha256` or `.sha256sum` file
+  of another asset.
 - When a release has one such file for each OS or platform, such as
   `tool-mac-checksums.txt` or `tool-linux-arm64-checksums.txt`, oku takes the
   one that names the asset's OS and arch, then one that names its OS or arch
@@ -1899,8 +1908,8 @@ release file of each platform:
 
 | The entry says | The manifest gets |
 |---|---|
-| The rule for the newest releases, `version_constraint: "true"` | Its asset, format, files and checksum. oku leaves out the rules for older releases. |
-| `asset` with `{{.Version}}`, `{{.SemVer}}` or `{{trimV .Version}}` | `url` with `{{tag}}` or `{{version}}` |
+| The rule for the newest releases, the first whose `version_constraint` is `"true"` or only sets a lowest version, such as `semver(">= 5.2.1")` | Its asset, format, files and checksum. oku leaves out the rules for older releases. |
+| `asset` with `{{.Version}}`, `{{.SemVer}}` or `{{trimV .Version}}` | `url` with `{{tag}}` or `{{version}}`. `{{.SemVer}}` is the tag without `version_prefix`, as aqua reads it, so it keeps a `v` that follows the prefix. |
 | `{{.OS}}` and `{{.Arch}}`, with `replacements` and `overrides` | One `[[artifact]]` per platform, each with its own file name |
 | `supported_envs`, `rosetta2`, `windows_arm_emulation` | The platforms it covers. Rosetta 2 and Windows emulation run the Intel build on arm64. |
 | `files` with a `src` | `bin`. A folder named after the version at the top becomes `strip`. On Windows a program gets `.exe`. |
@@ -1909,7 +1918,7 @@ release file of each platform:
 | `cosign` of the file, the same way | `sigstore_bundle`, or `sigstore_signature` and `sigstore_certificate`, and its workflow as `signer_workflow` |
 | `github_artifact_attestations` | `attestations = true`, and its `signer_workflow` |
 | `slsa_provenance` of type `github_release`, with no other `source_uri` or `source_tag` | `provenance` |
-| `version_prefix` | `strip_prefix` |
+| `version_prefix` | `strip_prefix`, with what comes between it and the version in the newest tag, so tags such as `kustomize/v5.4.1` give `strip_prefix = "kustomize/v"`. With no `version_prefix`, a tag such as `knative-v1.23.0` gives `strip_prefix = "knative-v"`. |
 | `type: http` with a `url` | That `url` as the download, and the repo's releases as the version source |
 
 `oku add winget:Publisher.Package` reads the newest version of a package of

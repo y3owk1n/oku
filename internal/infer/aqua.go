@@ -12,6 +12,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"unicode"
 
 	"go.yaml.in/yaml/v3"
 
@@ -59,6 +60,9 @@ type aquaPackage struct {
 	Attestations *aquaAttestations `yaml:"github_artifact_attestations"`
 	// Provenance is the SLSA provenance that slsa-github-generator made of it.
 	Provenance *aquaProvenance `yaml:"slsa_provenance"`
+	// tag is the tag of the repo's newest release, or empty when oku could not
+	// read it.
+	tag string
 }
 
 type aquaFile struct {
@@ -250,13 +254,18 @@ func (inf *Inferrer) FromAqua(ctx context.Context, repo string) (string, error) 
 		}
 
 		if strings.EqualFold(p.RepoOwner+"/"+p.RepoName, repo) {
+			// The newest tag shows what comes before the version in a tag.
+			if rel, err := inf.Hosts.GitHub("").Release(ctx, repo, ""); err == nil {
+				p.tag = rel.Tag
+			}
+
 			r, err := p.recipe()
 			if err != nil {
 				return "", fmt.Errorf("the aqua registry's entry for %s: %w", repo, err)
 			}
 
 			if r.keyURL != "" {
-				inf.signingKey(ctx, &r)
+				inf.signingKey(ctx, &r, p.tag)
 			}
 
 			return r.text()
@@ -271,12 +280,12 @@ func (inf *Inferrer) FromAqua(ctx context.Context, repo string) (string, error) 
 // not its URL, so oku.lock pins it, and a later translation that finds another
 // key needs --accept-key. With no key oku can read, the signatures by it stay
 // out.
-func (inf *Inferrer) signingKey(ctx context.Context, r *recipe) {
+func (inf *Inferrer) signingKey(ctx context.Context, r *recipe, tag string) {
 	key := ""
 
-	if rel, err := inf.Hosts.GitHub("").Release(ctx, r.follow.repo, ""); err == nil {
-		version := strings.TrimPrefix(strings.TrimPrefix(rel.Tag, r.follow.stripPrefix), "v")
-		if url, err := manifest.Expand(r.keyURL, map[string]string{"tag": rel.Tag, "version": version}); err == nil {
+	if tag != "" {
+		version := strings.TrimPrefix(strings.TrimPrefix(tag, r.follow.stripPrefix), "v")
+		if url, err := manifest.Expand(r.keyURL, map[string]string{"tag": tag, "version": version}); err == nil {
 			if data, err := inf.Download(ctx, url, inf.Hosts.GitHub("").Auth()); err == nil {
 				key = cosignKeyText(data)
 			}
@@ -308,21 +317,39 @@ func cosignKeyText(data []byte) string {
 	return text
 }
 
-// current returns the package as its newest releases have it. The registry
-// keeps old releases apart with version_overrides, and the one whose constraint
-// is "true" covers the rest.
+// current returns the package as its newest releases have it. aqua takes the
+// first rule whose constraint a version meets, the package's own and then
+// each of version_overrides. A constraint of "true", or one that only sets a
+// lowest version, covers the newest releases.
 func (p aquaPackage) current() (aquaPackage, bool) {
-	if p.VersionConstraint == "" || p.VersionConstraint == "true" {
+	if p.VersionConstraint == "" || coversNewest(p.VersionConstraint) {
 		return p, true
 	}
 
-	for _, o := range slices.Backward(p.VersionOverrides) {
-		if o.VersionConstraint == "true" {
+	for _, o := range p.VersionOverrides {
+		if coversNewest(o.VersionConstraint) {
 			return o.over(p), true
 		}
 	}
 
 	return aquaPackage{}, false
+}
+
+// lowestVersionRe matches a constraint that only sets a lowest version, as
+// semver(">= 5.2.1") or semverWithVersion(">= 1.7.0", trimPrefix(Version, "knative-")).
+var lowestVersionRe = regexp.MustCompile(`^semver(WithVersion)?\("\s*>=?\s*[^"<>=|,]+"(,.*)?\)$`)
+
+// coversNewest reports whether the newest releases meet constraint, whose
+// alternatives "or" joins.
+func coversNewest(constraint string) bool {
+	for alternative := range strings.SplitSeq(constraint, " or ") {
+		alternative = strings.TrimSpace(alternative)
+		if alternative == "true" || lowestVersionRe.MatchString(alternative) {
+			return true
+		}
+	}
+
+	return false
 }
 
 // over returns o with what it leaves out taken from p.
@@ -334,6 +361,7 @@ func (o aquaPackage) over(p aquaPackage) aquaPackage {
 	o.URL = cmp.Or(o.URL, p.URL)
 	o.Format = cmp.Or(o.Format, p.Format)
 	o.VersionPrefix = cmp.Or(o.VersionPrefix, p.VersionPrefix)
+	o.tag = p.tag
 
 	if o.Files == nil {
 		o.Files = p.Files
@@ -405,7 +433,7 @@ func (p aquaPackage) recipe() (recipe, error) {
 		homepage:    "https://github.com/" + p.RepoOwner + "/" + p.RepoName,
 		follow: &follow{
 			from: manifest.FromGitHubReleases, repo: p.RepoOwner + "/" + p.RepoName,
-			stripPrefix: cur.VersionPrefix,
+			stripPrefix: cur.stripPrefix(),
 		},
 	}
 
@@ -614,17 +642,25 @@ func (p aquaPackage) render(t string, vars map[string]string) (string, error) {
 	out := aquaTemplateRe.ReplaceAllStringFunc(t, func(m string) string {
 		expr := strings.Join(strings.Fields(aquaTemplateRe.FindStringSubmatch(m)[1]), " ")
 
+		// A tag is version_prefix, then lead, then oku's {{version}}.
+		before := p.VersionPrefix + p.lead()
+
 		switch expr {
 		case ".Version":
 			return "{{tag}}"
 		case ".SemVer":
-			return "{{version}}"
-		case "trimV .Version":
-			// oku reads a leading "v" as optional, so the version is the tag
-			// without it, unless another prefix comes first.
+			// aqua's SemVer is the tag without version_prefix.
 			if p.VersionPrefix == "" {
-				return "{{version}}"
+				return "{{tag}}"
 			}
+
+			return p.lead() + "{{version}}"
+		case "trimV .Version":
+			if rest, ok := strings.CutPrefix(before, "v"); ok || before == "" {
+				return rest + "{{version}}"
+			}
+
+			return "{{tag}}"
 		}
 
 		if v, ok := vars[strings.TrimPrefix(expr, ".")]; ok && strings.HasPrefix(expr, ".") {
@@ -641,6 +677,28 @@ func (p aquaPackage) render(t string, vars map[string]string) (string, error) {
 	}
 
 	return out, nil
+}
+
+// lead returns what comes between version_prefix and the first digit in the
+// newest tag, such as "v" in kustomize/v5.4.1, or "knative-v" in
+// knative-v1.23.0 of an entry with no version_prefix.
+func (p aquaPackage) lead() string {
+	rest, ok := strings.CutPrefix(p.tag, p.VersionPrefix)
+	if i := strings.IndexFunc(rest, unicode.IsDigit); ok && i > 0 {
+		return rest[:i]
+	}
+
+	return ""
+}
+
+// stripPrefix is the strip_prefix of the translated manifest. oku reads a "v"
+// as optional when nothing else comes before the version.
+func (p aquaPackage) stripPrefix() string {
+	if p.VersionPrefix == "" && p.lead() == "v" {
+		return ""
+	}
+
+	return p.VersionPrefix + p.lead()
 }
 
 // windowsExt reports whether aqua adds ".exe" to the programs of p on Windows,

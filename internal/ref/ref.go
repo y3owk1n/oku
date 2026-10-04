@@ -133,6 +133,12 @@ func ParseIn(dir, s string) (Ref, error) {
 		body, r.Version = splitVersion(s)
 	}
 
+	// In a URL, "@version" follows a file name with an extension, so the "@" of
+	// tool@2.toml is part of the file name.
+	if hasAnyPrefix(s, []string{"https://", "http://"}) && !strings.Contains(path.Base(body), ".") {
+		body, r.Version = s, ""
+	}
+
 	switch {
 	case hasAnyPrefix(body, []string{"github:", "gitea:", "codeberg:", "gitlab:"}):
 		r.Kind = Forge

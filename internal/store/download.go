@@ -331,7 +331,7 @@ func digestIn(data []byte, url, fileName string) (string, error) {
 
 	lines := strings.Split(string(data), "\n")
 	for _, line := range lines {
-		if strings.Contains(line, fileName) {
+		if namesFile(line, fileName) {
 			if digest := hexDigestRe.FindString(line); digest != "" {
 				return strings.ToLower(digest), nil
 			}
@@ -343,6 +343,20 @@ func digestIn(data []byte, url, fileName string) (string, error) {
 	}
 
 	return "", fmt.Errorf("%s holds no sha256 for %s", url, fileName)
+}
+
+// namesFile reports whether a line of a checksum file names fileName as one of
+// its fields, as in "<digest>  dist/name", "<digest> *name" or
+// "SHA256 (name) = <digest>". A line for other-name does not name name.
+func namesFile(line, fileName string) bool {
+	for _, field := range strings.Fields(line) {
+		field = strings.TrimRight(strings.TrimLeft(field, "*("), "):")
+		if path.Base(field) == fileName {
+			return true
+		}
+	}
+
+	return false
 }
 
 // jsonSHA256 reads the digest of fileName from a JSON checksum manifest, or
