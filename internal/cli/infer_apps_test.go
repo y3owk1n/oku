@@ -61,10 +61,14 @@ func TestB352InferenceFindsTheAppsOfEachOS(t *testing.T) {
 			"Exec=tool %U\nIcon=tool\n",
 		"share/applications/tool-shell.desktop": "[Desktop Entry]\nType=Application\n" +
 			"Name=Tool Shell\nExec=tool\nTerminal=true\n",
+		"share/applications/other.desktop": "[Desktop Entry]\nType=Application\nName=Other\nExec=other\n",
 	})
 	windows, _ := m.archive(t, "windows", map[string]string{
 		"bin/tool.exe":     guiExe(),
 		"bin/toolctl.exe":  "MZ",
+		"bin/tool-ctl.exe": "MZ",
+		// A GUI program that is no program of the package is no app either.
+		"bin/updater.exe":  guiExe(),
 		"share/readme.txt": "hi",
 	})
 
@@ -85,14 +89,16 @@ func TestB352InferenceFindsTheAppsOfEachOS(t *testing.T) {
 	}
 
 	// A desktop entry that runs the program is the Linux app, and one for the
-	// terminal is not.
+	// terminal or for a program the package does not ship is not.
 	if got := artifactOf(t, out, linuxArm); !strings.Contains(got, `app = ["share/applications/tool.desktop"]`) ||
 		strings.Contains(got, "Tool.app") {
 		t.Fatalf("the Linux artifact should take its desktop entry and no bundle:\n%s", out)
 	}
 
-	// A program for the GUI is the Windows app.
-	if got := artifactOf(t, out, windowsX); !strings.Contains(got, `app = ["bin/tool.exe"]`) {
+	// A program for the GUI is the Windows app, and a console one is a command
+	// only.
+	if got := artifactOf(t, out, windowsX); !strings.Contains(got, `bin = ["bin/tool.exe", "bin/tool-ctl.exe"]`) ||
+		!strings.Contains(got, `app = ["bin/tool.exe"]`) {
 		t.Fatalf("the Windows artifact should take its GUI program as the app:\n%s", out)
 	}
 }
@@ -180,7 +186,8 @@ func TestB355AManifestWithATopLevelAppIsRefused(t *testing.T) {
 		`bin = ["bin/foo"]`+"\n[[app]]\nname = \"Foo\"\nexec = \"bin/foo\"")
 
 	_, err := m.run(t, "", "add", ref)
-	if err == nil || !strings.Contains(err.Error(), "[[app]] is gone") {
+	if err == nil || !strings.Contains(err.Error(), "[[app]] is gone") ||
+		!strings.Contains(err.Error(), "name the app in the artifact's app") {
 		t.Fatalf("want a refusal that names the artifact's app, got %v", err)
 	}
 }

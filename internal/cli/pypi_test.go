@@ -139,7 +139,9 @@ func TestB343AddRefusesAPythonPackageWithoutAPython(t *testing.T) {
 
 	_, err := m.run(t, "", "add", "pypi:tool", "--yes")
 	if err == nil || !strings.Contains(err.Error(), "pypi:tool needs python") ||
-		!strings.Contains(err.Error(), "examples/runtimes/python.toml") {
+		!strings.Contains(err.Error(), "set runtimes.python in") ||
+		!strings.Contains(err.Error(), "examples/runtimes/python.toml") ||
+		!strings.Contains(err.Error(), "guide: https://github.com/y3owk1n/oku/blob/main/docs/guides/npm-pypi-go-cargo.md") {
 		t.Fatalf("want add to fail and point at runtimes.python, got %v", err)
 	}
 

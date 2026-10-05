@@ -12,16 +12,29 @@ import (
 func TestB530GCKeepsWhatTheLedgerAndRunningSessionsUse(t *testing.T) {
 	m := newMachine(t)
 
-	// Three packages that no generation holds once each is removed.
+	// Three packages that no generation holds once each is removed. The first
+	// runs on interp, a dep that only its closure names.
+	m.namedManifest(t, "interp", "interp", "interp")
+	archive, sum := m.archive(t, "exposed", map[string]string{"exposed": script})
+	manifests := map[string]string{
+		"exposed": m.rawManifest(t, "exposed", fmt.Sprintf(
+			"[runtime]\ndeps = [\"./interp.toml\"]\n[[artifact]]\nurl = \"file://%s\"\nsha256 = %q\nbin = [\"exposed\"]\n",
+			archive, sum,
+		)),
+		"session": m.namedManifest(t, "session", "session", "session"),
+		"ended":   m.namedManifest(t, "ended", "ended", "ended"),
+	}
 	paths := map[string]string{}
 
 	for _, name := range []string{"exposed", "session", "ended"} {
-		_, err := m.run(t, "", "add", m.namedManifest(t, name, name, name))
+		_, err := m.run(t, "", "add", manifests[name])
 		must(t, err)
 
 		for _, entry := range m.storeEntries(t) {
-			if strings.HasPrefix(entry, name+"-") {
-				paths[name] = filepath.Join(m.data, "store", entry)
+			for _, pkg := range []string{name, "interp"} {
+				if strings.HasPrefix(entry, pkg+"-") {
+					paths[pkg] = filepath.Join(m.data, "store", entry)
+				}
 			}
 		}
 
@@ -44,7 +57,9 @@ func TestB530GCKeepsWhatTheLedgerAndRunningSessionsUse(t *testing.T) {
 	out, err := m.run(t, "", "gc", "--keep", "1")
 	must(t, err)
 
-	for name, want := range map[string]bool{"exposed": true, "session": true, "ended": false} {
+	for name, want := range map[string]bool{
+		"exposed": true, "interp": true, "session": true, "ended": false,
+	} {
 		if exists(paths[name]) != want {
 			t.Fatalf("want the store path of %s kept %v:\n%s", name, want, out)
 		}

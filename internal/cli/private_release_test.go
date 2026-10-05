@@ -71,3 +71,39 @@ func TestB335APrivateGitHubReleaseDownloadsThroughTheAPIWithTheToken(t *testing.
 		t.Fatalf("tool printed %q", got)
 	}
 }
+
+func TestB470APrivateReleaseDownloadFollowsNoRedirectToAFile(t *testing.T) {
+	m := newMachine(t)
+
+	var github *httptest.Server
+
+	github = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/repos/owner/tool/releases/tags/v1.0.0":
+			fmt.Fprintf(w, `{"tag_name": "v1.0.0", "assets": [{"name": "tool.tar.gz", `+
+				`"browser_download_url": %q, "url": %q}]}`,
+				github.URL+"/owner/tool/releases/download/v1.0.0/tool.tar.gz",
+				github.URL+"/api/repos/owner/tool/releases/assets/7")
+		case "/api/repos/owner/tool/releases/assets/7":
+			// The API's answer is the one redirect a private download takes.
+			http.Redirect(w, r, "file:///signed/tool.tar.gz", http.StatusFound)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(github.Close)
+
+	m.opts.GitHubAPI, m.opts.GitHubWeb = github.URL+"/api", github.URL
+	t.Setenv("GITHUB_TOKEN", "secret")
+
+	ref := m.rawManifest(t, "tool", fmt.Sprintf(
+		"[[artifact]]\nurl = %q\nsha256 = %q\nbin = [\"tool\"]\n",
+		github.URL+"/owner/tool/releases/download/v1.0.0/tool.tar.gz", anySHA,
+	))
+
+	want := github.URL + "/api/repos/owner/tool/releases/assets/7 redirects to file:///signed/tool.tar.gz, " +
+		"which oku does not follow"
+	if out, err := m.run(t, "", "add", ref); err == nil || !strings.Contains(err.Error(), want) {
+		t.Fatalf("want the redirect to a file refused, got %v:\n%s", err, out)
+	}
+}

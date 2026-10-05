@@ -44,6 +44,10 @@ func TestB511VerifyNamesTheFilesThatChangedAndRepairRemovesThem(t *testing.T) {
 	must(t, os.WriteFile(readme, []byte("changed"), 0o644))
 	must(t, os.WriteFile(filepath.Join(pkg, "extra"), []byte("x"), 0o644))
 
+	// Python writes bytecode beside the code it runs, which is no change.
+	must(t, os.MkdirAll(filepath.Join(pkg, "__pycache__"), 0o755))
+	must(t, os.WriteFile(filepath.Join(pkg, "__pycache__", "tool.pyc"), []byte("x"), 0o644))
+
 	out, err = m.run(t, "", "verify", "--json")
 	if err == nil || !strings.Contains(err.Error(), "--repair") {
 		t.Fatalf("want verify to fail and name --repair, got %v", err)
@@ -65,7 +69,7 @@ func TestB511VerifyNamesTheFilesThatChangedAndRepairRemovesThem(t *testing.T) {
 			Kind string `json:"kind"`
 		}{"pkg/doc/readme", "changed"}) || results[0].Changes[1].Path != "pkg/extra" ||
 		results[0].Changes[1].Kind != "added" {
-		t.Fatalf("want the changed and the added file named, got %+v", results)
+		t.Fatalf("want the changed and the added file named, and no __pycache__, got %+v", results)
 	}
 
 	_, err = m.run(t, "", "verify", "--repair")

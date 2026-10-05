@@ -366,6 +366,25 @@ func must(t *testing.T, err error) {
 	}
 }
 
+// canClone reports whether a file in from can become a clone in to. It asks
+// cp, so a test does not take the answer from the code it checks.
+func canClone(t *testing.T, from, to string) bool {
+	t.Helper()
+
+	flag := map[string]string{"darwin": "-c", "linux": "--reflink=always"}[runtime.GOOS]
+	if flag == "" {
+		return false
+	}
+
+	src, dst := filepath.Join(from, "oku-clone-probe"), filepath.Join(to, "oku-clone-probe")
+	must(t, os.WriteFile(src, []byte("probe"), 0o644))
+
+	defer os.Remove(src)
+	defer os.Remove(dst)
+
+	return exec.Command("cp", flag, src, dst).Run() == nil
+}
+
 func exists(path string) bool {
 	_, err := os.Stat(path)
 

@@ -60,7 +60,15 @@ func TestB469GitIsNotRunForAHostThePolicyRefuses(t *testing.T) {
 func TestB470RedirectVersionFollowsNoRedirectToAFile(t *testing.T) {
 	m := newMachine(t)
 
+	// Only the version page redirects, so a refusal names the version lookup
+	// and not the download.
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/latest" {
+			http.NotFound(w, r)
+
+			return
+		}
+
 		http.Redirect(w, r, "file:///dl/1.2.3/tool.tar.gz", http.StatusFound)
 	}))
 	t.Cleanup(server.Close)
@@ -73,7 +81,9 @@ func TestB470RedirectVersionFollowsNoRedirectToAFile(t *testing.T) {
 			"bin = [\"tool\"]\n",
 	), 0o644))
 
-	if out, err := m.run(t, "", "add", ref); err == nil || !strings.Contains(err.Error(), "which oku does not follow") {
+	out, err := m.run(t, "", "add", ref)
+	if err == nil || !strings.Contains(err.Error(), "read the version from") ||
+		!strings.Contains(err.Error(), "redirects to file:///dl/1.2.3/tool.tar.gz, which oku does not follow") {
 		t.Fatalf("want the redirect to a file refused, got %v:\n%s", err, out)
 	}
 }

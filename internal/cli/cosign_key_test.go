@@ -56,10 +56,10 @@ func TestB519ACosignSigningKeyMustHaveSignedTheSignatureInTheLog(t *testing.T) {
 	for _, tc := range []struct {
 		name    string
 		signer  *ecdsa.PrivateKey
-		wantErr bool
+		wantErr string
 	}{
-		{"the developer's key", developer, false},
-		{"another key", other, true},
+		{"the developer's key", developer, ""},
+		{"another key", other, "does not show that the manifest's cosign signing key signed"},
 	} {
 		t.Run("bundle by "+tc.name, func(t *testing.T) {
 			m := newMachine(t)
@@ -71,8 +71,12 @@ func TestB519ACosignSigningKeyMustHaveSignedTheSignatureInTheLog(t *testing.T) {
 				"sigstore_bundle = \""+r.release("tool.tar.gz.sigstore.json")+"\"\n")
 
 			out, err := m.run(t, "", "add", tool)
-			if (err != nil) != tc.wantErr {
-				t.Fatalf("want a refusal %v, got %v\n%s", tc.wantErr, err, out)
+
+			switch {
+			case tc.wantErr == "" && err != nil:
+				t.Fatalf("add: %v\n%s", err, out)
+			case tc.wantErr != "" && (err == nil || !strings.Contains(err.Error(), tc.wantErr)):
+				t.Fatalf("want a refusal that says %q, got %v", tc.wantErr, err)
 			}
 		})
 	}

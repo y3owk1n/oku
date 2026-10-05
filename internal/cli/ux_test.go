@@ -100,6 +100,22 @@ func TestB125AMissingFileIsNamedPlainly(t *testing.T) {
 	}
 }
 
+func TestB548AGroupRefusesASubcommandItDoesNotHave(t *testing.T) {
+	m := newMachine(t)
+
+	for _, group := range []string{"cache", "key", "manifest", "self", "service", "source"} {
+		want := `unknown command "bogus" for "oku ` + group + `"`
+		if _, err := m.run(t, "", group, "bogus"); err == nil || !strings.Contains(err.Error(), want) {
+			t.Fatalf("%s bogus: want %q, got %v", group, want, err)
+		}
+	}
+
+	// The group alone still lists its commands.
+	if out, err := m.run(t, "", "cache"); err != nil || !strings.Contains(out, "Commands:") {
+		t.Fatalf("cache alone should print its help: %v\n%s", err, out)
+	}
+}
+
 func TestB543AListThatDoesNotParseNamesItsLineEvenInList(t *testing.T) {
 	m := newMachine(t)
 

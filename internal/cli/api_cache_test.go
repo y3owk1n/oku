@@ -3,6 +3,8 @@ package cli_test
 import (
 	"os"
 	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -39,15 +41,28 @@ func TestB384GCCacheDeletesAnAnswerNoCommandHasReadForAMonth(t *testing.T) {
 		t.Fatalf("the cache holds %d answers, want 1", len(kept))
 	}
 
-	// An answer read today stays.
+	old := time.Now().Add(-31 * 24 * time.Hour)
+	must(t, os.Chtimes(kept[0], old, old))
+
+	// The host answers 304 to update, so oku reads the kept answer, and that
+	// read makes it new again.
+	server.unchanged = 0
+
+	_, err = m.run(t, "", "update")
+	must(t, err)
+
+	if server.unchanged != 1 || len(apiAnswers(t, m)) != 1 {
+		t.Fatalf("update got %d answers of 304 and left %d answers, want 1 and 1",
+			server.unchanged, len(apiAnswers(t, m)))
+	}
+
 	out, err := m.run(t, "", "gc", "--cache")
 	must(t, err)
 
 	if len(apiAnswers(t, m)) != 1 {
-		t.Fatalf("gc deleted an answer oku just read:\n%s", out)
+		t.Fatalf("gc deleted an answer that update read since:\n%s", out)
 	}
 
-	old := time.Now().Add(-31 * 24 * time.Hour)
 	must(t, os.Chtimes(kept[0], old, old))
 
 	out, err = m.run(t, "", "gc", "--cache")
@@ -107,6 +122,23 @@ func TestB402GCCacheOlderThanClearsTheCacheAndKeepsEveryGeneration(t *testing.T)
 	_, err := m.run(t, "", "add", m.discoveredManifest(t, "1.0.0"))
 	must(t, err)
 
+	for _, name := range []string{"one", "two"} {
+		_, err := m.run(t, "", "add", m.namedManifest(t, name, name, name))
+		must(t, err)
+	}
+
+	// Generations 1 and 2 are older than the age, so a gc that read it as an
+	// age for generations would delete one.
+	for n, age := range map[int]time.Duration{1: 10, 2: 8} {
+		path := filepath.Join(m.genDir(n), "oku-gen.toml")
+		data, err := os.ReadFile(path)
+		must(t, err)
+
+		created := time.Now().Add(-age * 24 * time.Hour).UTC().Format(time.RFC3339)
+		data = regexp.MustCompile(`(?m)^created = .*$`).ReplaceAll(data, []byte("created = "+created))
+		must(t, os.WriteFile(path, data, 0o644))
+	}
+
 	before, err := m.run(t, "", "generations")
 	must(t, err)
 
@@ -156,13 +188,20 @@ func TestB385AnAnswerFromAnOlderOkuIsAskedForAgain(t *testing.T) {
 		t.Fatalf("the cache holds %d answers, want 1", len(kept))
 	}
 
+	server.tags = []string{"v1.1.0", "v1.0.0"}
+
+	// The old answer carries the ETag the host gives now, so the host would
+	// answer 304 if oku sent it.
+	resp, err := server.Client().Get(server.URL + "/api/repos/owner/tool/releases")
+	must(t, err)
+	resp.Body.Close()
+
 	// An older oku kept the whole answer as one JSON document, with the body
 	// inside it as base64.
 	must(t, os.WriteFile(kept[0], []byte(
-		`{"etag": "\"old\"", "type": "application/json", "body": "W10="}`,
+		`{"etag": `+strconv.Quote(resp.Header.Get("ETag"))+`, "type": "application/json", "body": "W10="}`,
 	), 0o644))
 
-	server.tags = []string{"v1.1.0", "v1.0.0"}
 	server.unchanged = 0
 
 	_, err = m.run(t, "", "update")

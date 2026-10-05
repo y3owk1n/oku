@@ -102,6 +102,11 @@ func TestB131ATargetOfSomeoneElseStopsTheChangeBeforeItStarts(t *testing.T) {
 		t.Fatalf("sync should refuse and name %s, got %v\n%s", font, err, out)
 	}
 
+	// A check that comes later undoes a change that started, and says so.
+	if strings.Contains(out, "undoing the change") {
+		t.Fatalf("sync started the change before it found the font it cannot write:\n%s", out)
+	}
+
 	if _, still := m.services.state["food"]; !still {
 		t.Fatal("sync removed the service before it found the font it cannot write")
 	}

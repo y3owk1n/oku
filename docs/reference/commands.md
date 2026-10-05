@@ -42,7 +42,9 @@ per command. These are `add`, `remove`, `list`, `sync`, `update`, `outdated`,
 find a problem.
 `--json` does not change an exit code. A command that gets the wrong number of
 arguments says whether one is missing or there are too many, prints its usage
-line and exits with `1`.
+line and exits with `1`. A command that groups others, such as `oku cache`,
+lists its commands when run alone. Given a subcommand it does not have, it
+exits with `1`, as in `oku: unknown command "bogus" for "oku cache"`.
 
 `add`, `remove`, `sync`, `update` and `rollback` change the machine all the way
 or not at all. See [the transaction model](paths.md#how-a-change-applies).
@@ -901,6 +903,7 @@ $ oku gc --keep 2
   ```
 - It keeps a project on a drive that is not mounted, such as one under
   `/Volumes`, `/media` or `/mnt`, or on a missing Windows drive, and says so.
+- It keeps a project whose folder it cannot read, and says so.
 - It keeps a project profile whose folder it does not know, and says how many.
   Such a profile is from before oku recorded each project's folder, for a
   project that `oku allow` never named either. Running any oku command in that

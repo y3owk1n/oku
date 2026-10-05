@@ -393,8 +393,9 @@ order step in `prd/product.md`.
 - B529 [1] When `oku.toml` or `oku.lock` is a symlink, oku writes the file it
   points at, keeps that file's mode, and leaves the link.
 - B524 [1] oku refuses a list with a table or key it does not know, at the
-  top or in a package's entry, or a value of the wrong type, names the line,
-  and changes nothing.
+  top or in a package's entry, or a value of the wrong type, and changes
+  nothing. For a table or key at the top it names the line. For one in a
+  package's entry it names the entry and the key.
 - B525 [1] An install of a manifest with a key oku does not know goes ahead
   and warns of each such key with its line.
 - B526 [1] A ref in `include` or `[packages]` with `@version` fails, and the
@@ -624,7 +625,8 @@ order step in `prd/product.md`.
   what it would remove.
 - B371 [3] `oku gc --older-than 30d` first deletes the generations older than
   30 days, except the newest of them, which was active 30 days ago, and the
-  active one. It takes days (`d`) or weeks (`w`) and refuses anything else.
+  active one. It takes hours (`h`), days (`d`) or weeks (`w`) and refuses
+  anything else.
   With `--keep N`, a generation stays when either flag keeps it.
 - B348 [3] `oku gc --cache` also deletes each download in the cache that no
   kept store path was made from, and the index of downloads by url. It skips a
@@ -751,9 +753,10 @@ order step in `prd/product.md`.
   `ppc64le`, `armv6` or `i586`, fits no platform, whatever its format. An
   Android build fits none either.
 - B481 [4] An asset that names its OS and no arch fits amd64 and arm64 on
-  macOS, and amd64 on Linux and Windows. `win32` names Windows, a `.exe` with
-  no OS word is a Windows build, `64bit` and `64-bit` name amd64, and `32bit`
-  and `32-bit` name 386.
+  macOS, and amd64 on Linux and Windows. `win32` names Windows. A `.exe` with
+  no OS word is a Windows build, unless its name says `desktop`, `app`, `gui`,
+  `installer` or `setup`. `64bit` and `64-bit` name amd64, and `32bit` and
+  `32-bit` name 386.
 - B482 [4] Inference gives no artifact from an Inno Setup or NSIS setup
   program, and fails when the host's asset is one. `add` gives none to a
   `.exe` with no OS word that it did not open.
@@ -1597,11 +1600,9 @@ order step in `prd/product.md`.
 - B527 [12] A command that undoes a change that did not finish keeps an
   `oku.toml` or `oku.lock` that the user edited since, unless oku was killed
   while it wrote them, and says so.
-||||||| Stash base
 - B528 [12] A generation that a killed oku left without its state file does not
   stop `oku generations`, and `oku gc` deletes it. A store path that a delete
   left half done is replaced, not used.
-||||||| Stash base
 - B533 [12] A change stops and names a `text` or `render` file that the user
   edited in place, or a `secret` whose link the user replaced, and writes
   nothing. A file with a writable mode gets its own copy in each generation.
@@ -1815,6 +1816,9 @@ order step in `prd/product.md`.
   change.
 - B541 [11] A command given too few or too many arguments says which, and
   prints its usage line.
+- B548 [11] A command that groups others, such as `oku cache`, fails on a
+  subcommand it does not have and names it, as `oku` itself does. Run alone,
+  it prints its commands.
 - B542 [10] `oku cache add` takes an http(s) URL or a directory that exists,
   and refuses anything else.
 - B543 [11] An `oku.toml` or a manifest that does not parse fails with the
