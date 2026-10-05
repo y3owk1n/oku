@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.14.1](https://github.com/y3owk1n/oku/compare/v0.14.0...v0.14.1) (2026-10-05)
+
+
+### Bug Fixes
+
+* **cli:** refuse an unknown subcommand of a group, and say when gc keeps a project it cannot read ([#405](https://github.com/y3owk1n/oku/issues/405)) ([b8eccf6](https://github.com/y3owk1n/oku/commit/b8eccf6025eb3d6e161631bc1e59680fa236a3ae))
+* resolve a colon file ref against its list, and clean up after manifest test ([#407](https://github.com/y3owk1n/oku/issues/407)) ([b0fffe6](https://github.com/y3owk1n/oku/commit/b0fffe668f7a2f766bbb4e8ce770a1b311a710b5))
+
 ## [0.14.0](https://github.com/y3owk1n/oku/compare/v0.13.0...v0.14.0) (2026-10-04)
 
 
