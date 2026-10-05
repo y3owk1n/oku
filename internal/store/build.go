@@ -180,7 +180,7 @@ func (s *Store) Build(
 	// fails must leave the old one where it was.
 	if opts.Rebuild && exists(filepath.Join(prefix, metaFile)) {
 		old := prefix + ".old"
-		if err := removeFrozen(old); err != nil {
+		if err := RemoveFrozen(old); err != nil {
 			return Realized{}, err
 		}
 
@@ -202,7 +202,7 @@ func (s *Store) Build(
 	}
 
 	// A crashed build may have left the prefix behind without a meta file.
-	if err := removeFrozen(prefix); err != nil {
+	if err := RemoveFrozen(prefix); err != nil {
 		return Realized{}, err
 	}
 

@@ -66,9 +66,9 @@ func thaw(path string) error {
 	return err
 }
 
-// removeFrozen deletes the frozen tree at path, or does nothing when there is
+// RemoveFrozen deletes the frozen tree at path, or does nothing when there is
 // none.
-func removeFrozen(path string) error {
+func RemoveFrozen(path string) error {
 	if err := thaw(path); err != nil {
 		return err
 	}
