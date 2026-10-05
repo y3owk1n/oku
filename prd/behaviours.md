@@ -644,8 +644,8 @@ order step in `prd/product.md`.
   answer stay, turns on `--cache`, and oku uses it instead of `--older-than`
   for the cache. It deletes no generation, so every generation stays.
 - B347 [3] When `gc --keep` deletes generations and no store path becomes
-  unused, it ends with `every store path is still used by a generation`,
-  never with `nothing to delete`.
+  unused, it ends with `every store path is still in use`, never with
+  `nothing to delete`.
 - B344 [3] `oku du` gives the size of the store, the profiles, the cache, the
   apps and fonts oku placed, and the rest of its data, and a total that is
   their sum. A file with several hard links counts once. What it says `oku gc`
@@ -1017,8 +1017,9 @@ order step in `prd/product.md`.
   comments, and it refuses a manifest that discovers its versions.
 - B125 [4] `oku manifest hash <url | file>` prints the download's `sha256` and
   `integrity` as lines a manifest accepts.
-  A file that does not exist fails with `there is no file at`, and so does
-  `manifest lint` or `manifest bump` of a missing manifest.
+  A file that does not exist fails with `there is no file at`, and
+  `manifest lint` or `manifest bump` of a missing manifest fails with
+  `there is no manifest at`.
 - B119 [4] `oku manifest bump --repo <ref>` reads releases from any forge ref.
 - B30 [4] `oku source add <alias> <ref>` makes `alias/name` resolve to the
   manifest `name` in that collection, and `add` accepts `alias/name` refs.
@@ -1404,6 +1405,9 @@ order step in `prd/product.md`.
   manifest's `signer_workflow`, at any ref, signed those bytes in a run for
   the repo of the releases and for the release's tag. The lock records
   `verified = 'sigstore'`.
+- B547 [10] oku refuses a Sigstore certificate that no certificate
+  transparency log in Sigstore's trust root recorded, and nothing enters the
+  store.
 - B502 [10] With `attestations = true`, an artifact installs only when GitHub
   holds an attestation of its digest that `signer_workflow` signed in a run
   for the repo of the releases, at any ref.
