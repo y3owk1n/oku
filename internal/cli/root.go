@@ -174,6 +174,7 @@ func NewRootCmd(opts Options) *cobra.Command {
 
 	root.AddCommand(platformCommands()...)
 	groupCommands(root)
+	refuseUnknownSubcommands(root)
 
 	for _, path := range exclusive {
 		if c, _, err := root.Find(path); err == nil && c != root {
@@ -190,6 +191,26 @@ func NewRootCmd(opts Options) *cobra.Command {
 	})
 
 	return root
+}
+
+// refuseUnknownSubcommands makes each command that only groups others, such
+// as cache, refuse a subcommand it does not have, as the root does. Cobra
+// would print the group's help and exit 0.
+func refuseUnknownSubcommands(cmd *cobra.Command) {
+	for _, c := range cmd.Commands() {
+		if c.HasSubCommands() && !c.Runnable() {
+			c.Args = func(c *cobra.Command, args []string) error {
+				if len(args) > 0 {
+					return fmt.Errorf("unknown command %q for %q", args[0], c.CommandPath())
+				}
+
+				return nil
+			}
+			c.RunE = func(c *cobra.Command, _ []string) error { return c.Help() }
+		}
+
+		refuseUnknownSubcommands(c)
+	}
 }
 
 const globalFlag = "global"
