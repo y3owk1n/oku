@@ -119,7 +119,7 @@ func ParseIn(dir, s string) (Ref, error) {
 	var r Ref
 
 	inDir := func(path string) string {
-		if dir == "" || filepath.IsAbs(path) || strings.Contains(path, ":") {
+		if dir == "" || filepath.IsAbs(path) || filepath.VolumeName(path) != "" {
 			return path
 		}
 
