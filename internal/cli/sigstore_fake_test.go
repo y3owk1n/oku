@@ -20,6 +20,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -28,6 +29,10 @@ import (
 
 	"github.com/cyberphone/json-canonicalization/go/src/webpki.org/jsoncanonicalizer"
 	"github.com/digitorus/timestamp"
+	ct "github.com/google/certificate-transparency-go"
+	cttls "github.com/google/certificate-transparency-go/tls"
+	ctx509 "github.com/google/certificate-transparency-go/x509"
+	"github.com/google/certificate-transparency-go/x509util"
 	"github.com/secure-systems-lab/go-securesystemslib/dsse"
 	protobundle "github.com/sigstore/protobuf-specs/gen/pb-go/bundle/v1"
 	protocommon "github.com/sigstore/protobuf-specs/gen/pb-go/common/v1"
@@ -43,17 +48,17 @@ import (
 	"github.com/sigstore/sigstore-go/pkg/root"
 	"github.com/sigstore/sigstore-go/pkg/testing/ca"
 	"github.com/sigstore/sigstore-go/pkg/tlog"
-	"github.com/sigstore/sigstore-go/pkg/verify"
 
 	"github.com/y3owk1n/oku/internal/sigstore"
 )
 
-// fakeSigstore is a Fulcio and a Rekor of the tests' own. Its certificates
-// carry what GitHub Actions puts in them: the workflow, the issuer, and the
-// repo and ref of the run.
+// fakeSigstore is a Fulcio, a certificate transparency log and a Rekor of the
+// tests' own. Its certificates carry what GitHub Actions puts in them: the
+// workflow, the issuer, and the repo and ref of the run.
 type fakeSigstore struct {
 	fulcio    *x509.Certificate
 	fulcioKey *ecdsa.PrivateKey
+	ctKey     *ecdsa.PrivateKey
 	rekorKey  *ecdsa.PrivateKey
 	logID     string
 
@@ -63,7 +68,7 @@ type fakeSigstore struct {
 	logged map[string][]*protorekor.TransparencyLogEntry
 
 	// github and tsa are the CA and the timestamp authority of a fake of
-	// GitHub's own Sigstore, once withGitHub made it.
+	// GitHub's own Sigstore.
 	github, tsa       *x509.Certificate
 	githubKey, tsaKey *ecdsa.PrivateKey
 }
@@ -84,15 +89,29 @@ func newFakeSigstore(t *testing.T, m *machine) *fakeSigstore {
 	fulcio, fulcioKey, err := ca.GenerateFulcioIntermediate(rootCert, rootKey)
 	must(t, err)
 
-	rekorKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	must(t, err)
-
-	der, err := x509.MarshalPKIXPublicKey(rekorKey.Public())
-	must(t, err)
-
-	id := sha256.Sum256(der)
-	logID := hex.EncodeToString(id[:])
+	f := &fakeSigstore{fulcio: fulcio, fulcioKey: fulcioKey, logged: map[string][]*protorekor.TransparencyLogEntry{}}
 	now := time.Now()
+
+	// log makes a key of a log, and the entry of the trust root that names it.
+	log := func(url string) (*ecdsa.PrivateKey, string, *root.TransparencyLog) {
+		key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+		must(t, err)
+
+		der, err := x509.MarshalPKIXPublicKey(key.Public())
+		must(t, err)
+
+		id := sha256.Sum256(der)
+
+		return key, hex.EncodeToString(id[:]), &root.TransparencyLog{
+			BaseURL: url, ID: id[:], HashFunc: crypto.SHA256, PublicKey: key.Public(),
+			ValidityPeriodStart: now.Add(-time.Hour), ValidityPeriodEnd: now.Add(time.Hour),
+			SignatureHashFunc: crypto.SHA256,
+		}
+	}
+
+	ctKey, ctID, ctLog := log("https://ctfe.test")
+	rekorKey, logID, rekorLog := log("https://rekor.test")
+	f.ctKey, f.rekorKey, f.logID = ctKey, rekorKey, logID
 
 	material, err := root.NewTrustedRoot(
 		root.TrustedRootMediaType01,
@@ -100,25 +119,16 @@ func newFakeSigstore(t *testing.T, m *machine) *fakeSigstore {
 			Root: rootCert, Intermediates: []*x509.Certificate{fulcio}, URI: "https://fulcio.test",
 			ValidityPeriodStart: now.Add(-time.Hour), ValidityPeriodEnd: now.Add(time.Hour),
 		}},
-		nil, nil,
-		map[string]*root.TransparencyLog{logID: {
-			BaseURL: "https://rekor.test", ID: id[:], HashFunc: crypto.SHA256, PublicKey: rekorKey.Public(),
-			ValidityPeriodStart: now.Add(-time.Hour), ValidityPeriodEnd: now.Add(time.Hour),
-			SignatureHashFunc: crypto.SHA256,
-		}},
+		map[string]*root.TransparencyLog{ctID: ctLog},
+		nil,
+		map[string]*root.TransparencyLog{logID: rekorLog},
 	)
 	must(t, err)
-
-	f := &fakeSigstore{
-		fulcio: fulcio, fulcioKey: fulcioKey, rekorKey: rekorKey, logID: logID,
-		logged: map[string][]*protorekor.TransparencyLogEntry{},
-	}
 
 	rekor := httptest.NewServer(http.HandlerFunc(f.serveRekor))
 	t.Cleanup(rekor.Close)
 
-	m.opts.Sigstore = sigstore.New(material, rekor.URL, rekor.Client(),
-		verify.WithTransparencyLog(1), verify.WithObserverTimestamps(1))
+	m.opts.Sigstore = sigstore.New(material, f.githubRoot(t), rekor.URL, rekor.Client())
 
 	return f
 }
@@ -165,12 +175,18 @@ func (f *fakeSigstore) serveRekor(w http.ResponseWriter, r *http.Request) {
 func (f *fakeSigstore) leaf(t *testing.T, r run) (*x509.Certificate, *ecdsa.PrivateKey) {
 	t.Helper()
 
-	return leafFrom(t, r, f.fulcio, f.fulcioKey)
+	return leafFrom(t, r, f.fulcio, f.fulcioKey, f.ctKey)
 }
 
 // leafFrom issues a certificate for r from the CA ca, and returns it with its
-// key.
-func leafFrom(t *testing.T, r run, ca *x509.Certificate, caKey *ecdsa.PrivateKey) (*x509.Certificate, *ecdsa.PrivateKey) {
+// key. With ctKey, the certificate carries a timestamp of that certificate
+// transparency log, as Fulcio's do.
+func leafFrom(
+	t *testing.T,
+	r run,
+	ca *x509.Certificate,
+	caKey, ctKey *ecdsa.PrivateKey,
+) (*x509.Certificate, *ecdsa.PrivateKey) {
 	t.Helper()
 
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
@@ -186,7 +202,7 @@ func leafFrom(t *testing.T, r run, ca *x509.Certificate, caKey *ecdsa.PrivateKey
 		return pkix.Extension{Id: oid, Value: data}
 	}
 
-	der, err := x509.CreateCertificate(rand.Reader, &x509.Certificate{
+	template := &x509.Certificate{
 		SerialNumber: big.NewInt(time.Now().UnixNano()),
 		URIs:         []*url.URL{subject},
 		NotBefore:    time.Now().Add(-time.Minute),
@@ -199,13 +215,75 @@ func leafFrom(t *testing.T, r run, ca *x509.Certificate, caKey *ecdsa.PrivateKey
 			utf8(asn1.ObjectIdentifier{1, 3, 6, 1, 4, 1, 57264, 1, 12}, "https://github.com/"+r.repo),
 			utf8(asn1.ObjectIdentifier{1, 3, 6, 1, 4, 1, 57264, 1, 14}, r.ref),
 		},
-	}, ca, key.Public(), caKey)
+	}
+
+	if ctKey != nil {
+		template.ExtraExtensions = append(template.ExtraExtensions, logTimestamp(t, template, key, ca, caKey, ctKey))
+	}
+
+	der, err := x509.CreateCertificate(rand.Reader, template, ca, key.Public(), caKey)
 	must(t, err)
 
 	cert, err := x509.ParseCertificate(der)
 	must(t, err)
 
 	return cert, key
+}
+
+// logTimestamp returns the extension that holds the timestamp of the
+// certificate transparency log ctKey for the certificate template makes. The
+// log signs a precertificate, which carries a poison extension in its place.
+func logTimestamp(
+	t *testing.T,
+	template *x509.Certificate,
+	key *ecdsa.PrivateKey,
+	ca *x509.Certificate,
+	caKey, ctKey *ecdsa.PrivateKey,
+) pkix.Extension {
+	t.Helper()
+
+	poison := pkix.Extension{Id: asn1.ObjectIdentifier(ctx509.OIDExtensionCTPoison), Critical: true, Value: asn1.NullBytes}
+	precert := *template
+	precert.ExtraExtensions = append(slices.Clone(template.ExtraExtensions), poison)
+
+	der, err := x509.CreateCertificate(rand.Reader, &precert, ca, key.Public(), caKey)
+	must(t, err)
+
+	chain, err := ctx509.ParseCertificates(append(der, ca.Raw...))
+	must(t, err)
+
+	logKey, err := x509.MarshalPKIXPublicKey(ctKey.Public())
+	must(t, err)
+
+	sct := ct.SignedCertificateTimestamp{
+		SCTVersion: ct.V1, LogID: ct.LogID{KeyID: sha256.Sum256(logKey)}, Timestamp: uint64(time.Now().UnixMilli()),
+	}
+
+	leaf, err := ct.MerkleTreeLeafFromChain(chain, ct.PrecertLogEntryType, sct.Timestamp)
+	must(t, err)
+
+	input, err := ct.SerializeSCTSignatureInput(sct, ct.LogEntry{Leaf: *leaf})
+	must(t, err)
+
+	digest := sha256.Sum256(input)
+
+	sig, err := ecdsa.SignASN1(rand.Reader, ctKey, digest[:])
+	must(t, err)
+
+	sct.Signature = ct.DigitallySigned{
+		Algorithm: cttls.SignatureAndHashAlgorithm{Hash: cttls.SHA256, Signature: cttls.ECDSA}, Signature: sig,
+	}
+
+	list, err := x509util.MarshalSCTsIntoSCTList([]*ct.SignedCertificateTimestamp{&sct})
+	must(t, err)
+
+	data, err := cttls.Marshal(*list)
+	must(t, err)
+
+	value, err := asn1.Marshal(data)
+	must(t, err)
+
+	return pkix.Extension{Id: asn1.ObjectIdentifier(ctx509.OIDExtensionCTSCT), Value: value}
 }
 
 // logEntry records an entry of kind in the fake Rekor, with its promise to
@@ -438,9 +516,10 @@ func (f *fakeSigstore) bundle(
 	return data
 }
 
-// withGitHub makes m also trust a fake of GitHub's own Sigstore: a CA whose
-// certificates name GitHub, Inc., and a timestamp authority in place of a log.
-func (f *fakeSigstore) withGitHub(t *testing.T, m *machine) {
+// githubRoot makes a fake of GitHub's own Sigstore, a CA whose certificates
+// name GitHub, Inc., and a timestamp authority in place of a log, and returns
+// its trust root.
+func (f *fakeSigstore) githubRoot(t *testing.T) root.TrustedMaterial {
 	t.Helper()
 
 	now := time.Now()
@@ -498,7 +577,7 @@ func (f *fakeSigstore) withGitHub(t *testing.T, m *machine) {
 	)
 	must(t, err)
 
-	m.opts.Sigstore.WithGitHub(material)
+	return material
 }
 
 // githubAttest returns a bundle in which r attests, through GitHub's own
@@ -508,7 +587,7 @@ func (f *fakeSigstore) withGitHub(t *testing.T, m *machine) {
 func (f *fakeSigstore) githubAttest(t *testing.T, r run, digest string, stamped bool) []byte {
 	t.Helper()
 
-	cert, key := leafFrom(t, r, f.github, f.githubKey)
+	cert, key := leafFrom(t, r, f.github, f.githubKey, nil)
 
 	statement := []byte(`{"_type": "https://in-toto.io/Statement/v1", ` +
 		`"subject": [{"name": "tool.tar.gz", "digest": {"sha256": "` + digest + `"}}], ` +
