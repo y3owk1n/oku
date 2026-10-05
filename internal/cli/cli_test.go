@@ -1759,9 +1759,16 @@ func TestB455LatestTakesTheReleaseTheForgeMarksAsLatest(t *testing.T) {
 		t.Fatalf("add did not take the latest release 1.3.1: %v\n%s", err, out)
 	}
 
-	// A pinned version picks from every release.
+	// A pinned version and a range pick from every release.
 	if out, err := m.run(t, "", "add", ref+"@4.3.7"); err != nil || m.toolOutput(t) != "4.3.7" {
 		t.Fatalf("a pin did not reach 4.3.7: %v\n%s", err, out)
+	}
+
+	_, err = m.run(t, "", "remove", "tool")
+	must(t, err)
+
+	if out, err := m.run(t, "", "add", ref+"@>=4"); err != nil || m.toolOutput(t) != "4.3.7" {
+		t.Fatalf("a range did not reach 4.3.7: %v\n%s", err, out)
 	}
 }
 
@@ -4962,9 +4969,14 @@ func TestB406RunStepCannotReachTheUsersTerminalsPreferencesOrTempDir(t *testing.
 			t.Skip("defaults cannot read back what it wrote here either")
 		}
 
+		// Each terminal window of the user's is a /dev/ttys device. The step must
+		// not open one, or it could read what the user types.
+		terminal := openTerminal(t)
+
 		probe = fmt.Sprintf(`cat %q >/dev/null 2>&1 && echo temp=readable > probe.txt || echo temp=hidden > probe.txt
-defaults read %s secret >/dev/null 2>&1 && echo prefs=readable >> probe.txt || echo prefs=hidden >> probe.txt`,
-			secret, domain)
+defaults read %s secret >/dev/null 2>&1 && echo prefs=readable >> probe.txt || echo prefs=hidden >> probe.txt
+(exec 3<%q) 2>/dev/null && echo tty=readable >> probe.txt || echo tty=hidden >> probe.txt`,
+			secret, domain, terminal)
 	case "linux":
 		// Opening /dev/ptmx gives this process a terminal under /dev/pts.
 		terminal, err := os.OpenFile("/dev/ptmx", os.O_RDWR, 0)

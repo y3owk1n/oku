@@ -41,6 +41,16 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y -qq dconf-cli dconf-service dbus
           .github/scripts/live-linux.sh
+      - name: Live test of [host] packages on Fedora and Arch
+        if: runner.os == 'Linux'
+        # Ubuntu's dpkg cannot show a name that another package provides, so the
+        # check runs in a container of each distribution that can.
+        run: |
+          CGO_ENABLED=0 go build -o "$RUNNER_TEMP/oku" ./cmd/oku
+          for image in fedora:latest archlinux:latest; do
+            docker run --rm -e OKU=/oku -v "$RUNNER_TEMP/oku:/oku:ro" \
+              -v "$PWD/.github/scripts:/scripts:ro" "$image" sh /scripts/live-host.sh
+          done
 
   action:
     if: ${{ !startsWith(github.head_ref, 'release-please--') }}

@@ -159,33 +159,33 @@ Set-Location $root
 $env:PATH = "$env:PATH$([IO.Path]::PathSeparator)$bin"
 Invoke-Expression ((& oku hook pwsh) -join [Environment]::NewLine)
 Invoke-Expression ((& oku hook pwsh) -join [Environment]::NewLine)
-Check 'the hook wrapped the prompt' { Test-Path Function:\_oku_prompt }
+Check 'B82: the hook wrapped the prompt' { Test-Path Function:\_oku_prompt }
 $entries = $env:PATH -split [IO.Path]::PathSeparator
-Check 'the hook puts the profile bin first on PATH, once' {
+Check 'B82: the hook puts the profile bin first on PATH, once' {
     ($entries[0] -eq $bin) -and (@($entries | Where-Object { $_ -eq $bin }).Count -eq 1)
 }
 
 prompt | Out-Null
-Check 'outside the project fd is not on PATH' { -not (Get-Command fd -ErrorAction SilentlyContinue) }
+Check 'B82: outside the project fd is not on PATH' { -not (Get-Command fd -ErrorAction SilentlyContinue) }
 
 Set-Location $project
 cmd /c exit 7
 prompt | Out-Null
 Check 'B82: the prompt keeps LASTEXITCODE' { $LASTEXITCODE -eq 7 }
-Check 'inside the project fd comes from the project profile' {
+Check 'B82: inside the project fd comes from the project profile' {
     (Get-Command fd).Source -like '*profiles*project-*'
 }
 $fdVersion = & fd --version
 Check 'fd runs through its shim' { $fdVersion -match '^fd \d' }
-Check 'inside the project its [env] applies' {
+Check 'B82: inside the project its [env] applies' {
     ($env:STAGE -eq 'dev') -and ($env:REGION -eq 'eu west') -and
     (($env:PATH -split ';')[0] -eq (Join-Path $project 'scripts'))
 }
 
 Set-Location $root
 prompt | Out-Null
-Check 'leaving the project takes fd away again' { -not (Get-Command fd -ErrorAction SilentlyContinue) }
-Check 'leaving the project restores STAGE and drops its PATH entry' {
+Check 'B82: leaving the project takes fd away again' { -not (Get-Command fd -ErrorAction SilentlyContinue) }
+Check 'B82: leaving the project restores STAGE and drops its PATH entry' {
     ($env:STAGE -eq 'mine') -and (-not $env:REGION) -and
     (($env:PATH -split ';') -notcontains (Join-Path $project 'scripts'))
 }
@@ -202,11 +202,11 @@ $env:PATH = "$env:PATH;$other"
 Oku remove fd
 prompt | Out-Null
 $fdVersion = & fd --version
-Check 'after remove the next prompt runs the fd behind the profile' { $fdVersion -eq 'other fd' }
+Check 'B82: after remove the next prompt runs the fd behind the profile' { $fdVersion -eq 'other fd' }
 Oku add github:sharkdp/fd
 prompt | Out-Null
 $fdVersion = & fd --version
-Check 'after add the next prompt runs the fd of the profile again' { $fdVersion -match '^fd \d' }
+Check 'B82: after add the next prompt runs the fd of the profile again' { $fdVersion -match '^fd \d' }
 $env:PATH = $withoutOther
 
 # doctor, without the profile on PATH and then with it. The hook above already
@@ -1216,6 +1216,30 @@ Oku remove python-nested
 Oku add $pythonToml
 $version = & "$bin\python.exe" --version
 Check 'B81: a program that loads a DLL beside it in its download runs from its shim' { $version -match '^Python 3\.13' }
+
+# A build step runs python from a build dep, and python loads the DLL beside it
+# in the dep's download.
+$byPython = Join-Path $fixtures 'by-python.toml'
+Set-Content $byPython @"
+[package]
+name = "by-python"
+[version]
+value = "1.0.0"
+[build]
+deps = [{ ref = "$($pythonToml -replace '\\', '/')" }]
+[[build.step]]
+run = '''python -c "open('made.txt', 'w').write('made by python')"'''
+shell = "pwsh"
+[[build.step]]
+install = { share = ["made.txt"] }
+"@
+Oku add $byPython --yes
+# The store is in the data directory or, after setup --system, the shared root.
+$made = Get-ChildItem -Recurse -Filter made.txt -ErrorAction SilentlyContinue `
+    (Join-Path $env:XDG_DATA_HOME 'oku'), (Join-Path $env:ProgramData 'oku') |
+    Select-Object -First 1 | Get-Content
+Check 'B81: a build step runs a program of a dep that loads a DLL beside it' { $made -eq 'made by python' }
+Oku remove by-python
 
 # A program whose dep ships a DLL gets a link to that DLL beside it. Windows
 # looks in the program's directory first, and in the working directory before

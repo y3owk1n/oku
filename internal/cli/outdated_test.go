@@ -3,11 +3,16 @@ package cli_test
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/y3owk1n/oku/internal/cli"
 )
@@ -87,5 +92,93 @@ func TestB262OutdatedListsWhatHasANewerVersionAndChangesNothing(t *testing.T) {
 	out, err = m.run(t, "", "outdated")
 	if err != nil || !strings.Contains(out, "1.0.0") || !strings.Contains(out, "1.1.0") || !strings.Contains(out, "latest") {
 		t.Fatalf("outdated with tool pinned to 1.0.0 and 1.1.0 released:\n%s", out)
+	}
+}
+
+func TestB178OutdatedLooksUpThePackagesAtOnce(t *testing.T) {
+	m := newMachine(t)
+
+	// Each package reads its version from a page of its own. Once counting is
+	// on, the server waits with each page until another one is in flight, for
+	// up to half a second, and counts the most in flight at once.
+	var (
+		mu             sync.Mutex
+		counting       bool
+		inFlight, most int
+	)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		mu.Lock()
+		watch := counting
+		inFlight++
+		most = max(most, inFlight)
+		mu.Unlock()
+
+		for deadline := time.Now().Add(500 * time.Millisecond); watch && time.Now().Before(deadline); {
+			mu.Lock()
+			both := most > 1
+			mu.Unlock()
+
+			if both {
+				break
+			}
+
+			time.Sleep(5 * time.Millisecond)
+		}
+
+		mu.Lock()
+		inFlight--
+		mu.Unlock()
+
+		_, _ = w.Write([]byte("1.0.0"))
+	}))
+	t.Cleanup(server.Close)
+
+	list := "[packages]\n"
+
+	for _, name := range []string{"one", "two"} {
+		archive, sum := m.archive(t, name, map[string]string{name: script})
+		list += fmt.Sprintf("%s = %q\n", name, m.rawManifest(t, name, fmt.Sprintf(
+			"[[artifact]]\nurl = \"file://%s\"\nsha256 = %q\nbin = [%q]\n", archive, sum, name,
+		)))
+
+		// rawManifest pins the version. A page source takes its place.
+		path := filepath.Join(m.fixtures, name+".toml")
+		data, err := os.ReadFile(path)
+		must(t, err)
+		must(t, os.WriteFile(path, []byte(strings.Replace(string(data), "value = \"1.2.3\"\n",
+			fmt.Sprintf("from = \"page\"\nrepo = \"%s/%s\"\nregex = '([0-9.]+)'\n", server.URL, name), 1)), 0o644))
+	}
+
+	must(t, os.MkdirAll(m.config, 0o755))
+	must(t, os.WriteFile(filepath.Join(m.config, "oku.toml"), []byte(list), 0o644))
+
+	_, err := m.run(t, "", "sync")
+	must(t, err)
+
+	outdated := func() int {
+		mu.Lock()
+		counting, most = true, 0
+		mu.Unlock()
+
+		out, err := m.run(t, "", "outdated")
+		if err != nil {
+			t.Fatalf("outdated: %v\n%s", err, out)
+		}
+
+		mu.Lock()
+		defer mu.Unlock()
+
+		return most
+	}
+
+	if n := outdated(); n != 2 {
+		t.Fatalf("without OKU_PARALLEL outdated looked up %d packages at once, want 2", n)
+	}
+
+	t.Setenv("OKU_PARALLEL", "1")
+
+	if n := outdated(); n != 1 {
+		t.Fatalf("with OKU_PARALLEL=1 outdated looked up %d packages at once, want 1", n)
 	}
 }
