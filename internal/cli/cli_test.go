@@ -479,11 +479,18 @@ func TestB5ListShowsNameVersionRef(t *testing.T) {
 	out, err := m.run(t, "", "list")
 	must(t, err)
 
-	for _, want := range []string{"tool", "1.2.3", ref} {
-		if !strings.Contains(out, want) {
-			t.Fatalf("list output lacks %q:\n%s", want, out)
+	// The ref holds the name too, so the name has to be a cell of its own.
+	for line := range strings.Lines(out) {
+		if strings.Contains(line, ref) {
+			if !slices.Equal(strings.Fields(line), []string{"tool", "1.2.3", ref}) {
+				t.Fatalf("want the row tool, 1.2.3 and the ref, got:\n%s", out)
+			}
+
+			return
 		}
 	}
+
+	t.Fatalf("list output lacks %s:\n%s", ref, out)
 }
 
 func TestB6FailedInstallLeavesProfileUnchanged(t *testing.T) {
@@ -612,6 +619,14 @@ func TestB94SelfUninstallRemovesEverythingAfterOneQuestion(t *testing.T) {
 		t.Fatalf("want one question:\n%s", out)
 	}
 
+	// The question comes after the list of what goes.
+	listed, _, _ := strings.Cut(out, "[y/N]")
+	for _, path := range []string{m.data, m.cache, m.exe} {
+		if !strings.Contains(listed, path) {
+			t.Fatalf("the question does not follow a line naming %s:\n%s", path, out)
+		}
+	}
+
 	for _, path := range []string{m.data, m.cache, m.config, m.exe} {
 		if exists(path) {
 			t.Fatalf("%s still exists after the uninstall", path)
@@ -622,24 +637,28 @@ func TestB94SelfUninstallRemovesEverythingAfterOneQuestion(t *testing.T) {
 func TestB96KeepListKeepsGlobalList(t *testing.T) {
 	m := newMachine(t)
 	list := filepath.Join(m.config, "oku.toml")
+	locked := filepath.Join(m.config, "oku.lock")
 
 	must(t, os.MkdirAll(m.config, 0o755))
 	must(t, os.WriteFile(list, []byte("[packages]\n"), 0o644))
+	must(t, os.WriteFile(locked, nil, 0o644))
 	must(t, os.WriteFile(filepath.Join(m.config, "config.toml"), nil, 0o644))
 
 	out, err := m.run(t, "", "self", "uninstall", "--keep-list", "--yes")
 	must(t, err)
 
-	if !exists(list) {
-		t.Fatal("oku.toml was removed")
+	for _, path := range []string{list, locked} {
+		if !exists(path) {
+			t.Fatalf("%s was removed", path)
+		}
+
+		if !strings.Contains(out, path) {
+			t.Fatalf("output does not say where %s is:\n%s", filepath.Base(path), out)
+		}
 	}
 
 	if exists(filepath.Join(m.config, "config.toml")) {
 		t.Fatal("config.toml was kept")
-	}
-
-	if !strings.Contains(out, list) {
-		t.Fatalf("output does not say where the list is:\n%s", out)
 	}
 }
 
@@ -647,9 +666,17 @@ func TestB102UninstallPrintsPathEntryToRemove(t *testing.T) {
 	m := newMachine(t)
 	bin := m.profile("bin")
 
+	// A PATH without the profile bin gets no such line.
+	out, err := m.run(t, "", "self", "uninstall", "--yes")
+	must(t, err)
+
+	if strings.Contains(out, "from PATH") {
+		t.Fatalf("output names a PATH entry that PATH lacks:\n%s", out)
+	}
+
 	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
 
-	out, err := m.run(t, "", "self", "uninstall", "--yes")
+	out, err = m.run(t, "", "self", "uninstall", "--yes")
 	must(t, err)
 
 	if !strings.Contains(out, "remove "+bin+" from PATH") {
@@ -689,7 +716,13 @@ func TestB10AddAcceptsEveryRefKind(t *testing.T) {
 		server.URL + "/plain/tool@2.toml",
 		"github:owner/repo",
 		"github:owner/recipes#tool",
+		// A file whose name starts like a scheme is that file.
+		"gihub:tool.toml",
 	}
+
+	// add reads a relative ref from the directory oku runs in.
+	must(t, os.WriteFile(filepath.Join(m.fixtures, "gihub:tool.toml"), body, 0o644))
+	t.Chdir(m.fixtures)
 
 	if _, err := exec.LookPath("git"); err == nil {
 		repo := filepath.Join(m.fixtures, "repo")
@@ -741,9 +774,11 @@ func TestB10AddAcceptsEveryRefKind(t *testing.T) {
 		t.Fatal("adding a repo that does not exist succeeded")
 	}
 
-	// oku says what is wrong with a mistyped scheme and an empty #.
+	// oku names what is wrong with an empty # and with a mistyped scheme. For the
+	// mistyped one it also lists the schemes it knows.
 	for ref, want := range map[string]string{
-		"gihub:owner/repo": "oku knows no ref scheme gihub:", "github:owner/repo#": "nothing follows #",
+		"gihub:owner/repo":   "oku knows no ref scheme gihub: and no file has that name\nthe schemes are github:",
+		"github:owner/repo#": "nothing follows #",
 	} {
 		if _, err := m.run(t, "", "add", ref); err == nil || !strings.Contains(err.Error(), want) {
 			t.Fatalf("add %s: want %q, got %v", ref, want, err)
@@ -906,23 +941,81 @@ func TestB178SyncOfAnInstalledPackageReadsNoChecksums(t *testing.T) {
 
 func TestB178ParallelEnvLimitsHowManyPackagesInstallAtOnce(t *testing.T) {
 	m := newMachine(t)
-	one := m.manifest(t, "one", map[string]string{"one": script}, `bin = ["one"]`)
-	two := m.manifest(t, "two", map[string]string{"two": script}, `bin = ["two"]`)
+
+	// The server holds a download until another one is in flight, for up to
+	// half a second, and counts the most in flight at once.
+	var (
+		mu             sync.Mutex
+		inFlight, most int
+	)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		inFlight++
+		most = max(most, inFlight)
+		mu.Unlock()
+
+		for deadline := time.Now().Add(500 * time.Millisecond); time.Now().Before(deadline); {
+			mu.Lock()
+			both := most > 1
+			mu.Unlock()
+
+			if both {
+				break
+			}
+
+			time.Sleep(5 * time.Millisecond)
+		}
+
+		mu.Lock()
+		inFlight--
+		mu.Unlock()
+
+		http.ServeFile(w, r, filepath.Join(m.fixtures, filepath.Base(r.URL.Path)))
+	}))
+	t.Cleanup(server.Close)
+
+	list := "[packages]\n"
+
+	for _, name := range []string{"one", "two"} {
+		_, sum := m.archive(t, name, map[string]string{name: script})
+		list += fmt.Sprintf("%s = %q\n", name, m.rawManifest(t, name, fmt.Sprintf(
+			"[[artifact]]\nurl = \"%s/%s.tar.gz\"\nsha256 = %q\nbin = [%q]\n", server.URL, name, sum, name,
+		)))
+	}
+
+	must(t, os.MkdirAll(m.config, 0o755))
+	must(t, os.WriteFile(filepath.Join(m.config, "oku.toml"), []byte(list), 0o644))
+
+	// Each sync starts on a new machine, so it downloads both packages.
+	syncFresh := func() (string, int) {
+		must(t, removeAll(m.data))
+		must(t, removeAll(m.cache))
+
+		mu.Lock()
+		most = 0
+		mu.Unlock()
+
+		out, err := m.run(t, "", "sync")
+		if err != nil {
+			t.Fatalf("sync: %v\n%s", err, out)
+		}
+
+		mu.Lock()
+		defer mu.Unlock()
+
+		return out, most
+	}
+
+	// By default both download at once, so the server sees two in flight.
+	if _, n := syncFresh(); n != 2 {
+		t.Fatalf("without OKU_PARALLEL %d downloads were in flight at once, want 2", n)
+	}
 
 	t.Setenv("OKU_PARALLEL", "1")
 
-	for _, ref := range []string{one, two} {
-		_, err := m.run(t, "", "add", ref)
-		must(t, err)
-	}
-
-	must(t, removeAll(m.data))
-
-	out, err := m.run(t, "", "sync")
-	must(t, err)
-
-	if !strings.Contains(out, "profile now holds 2 packages") {
-		t.Fatalf("sync with one package at a time installed something else:\n%s", out)
+	if out, n := syncFresh(); n != 1 || !strings.Contains(out, "profile now holds 2 packages") {
+		t.Fatalf("with OKU_PARALLEL=1 %d downloads were in flight at once, want 1:\n%s", n, out)
 	}
 
 	t.Setenv("OKU_PARALLEL", "many")
@@ -1376,9 +1469,19 @@ func TestB19RelativeRefsStartAtTheListAndRemoteListsRejectAbsolutePaths(t *testi
 		t.Fatalf("sync with a relative ref: %v\n%s", err, out)
 	}
 
+	// A colon in a file name is no scheme, so the path still starts at the list.
+	data, err := os.ReadFile(filepath.Join(m.fixtures, "tool.toml"))
+	must(t, err)
+	must(t, os.WriteFile(filepath.Join(m.fixtures, "my:tool.toml"), data, 0o644))
+	must(t, os.WriteFile(listPath, []byte("[packages]\ntool = \"../../fixtures/my:tool.toml\"\n"), 0o644))
+
+	if out, err := m.run(t, "", "sync"); err != nil {
+		t.Fatalf("sync with a relative ref whose name holds a colon: %v\n%s", err, out)
+	}
+
 	must(t, os.WriteFile(listPath, []byte("include = [\"github:me/lists\"]\n"), 0o644))
 
-	_, err := m.run(t, "", "sync")
+	_, err = m.run(t, "", "sync")
 	if err == nil || !strings.Contains(err.Error(), "local path") {
 		t.Fatalf("want a remote list naming a local path to fail, got %v", err)
 	}
@@ -1462,6 +1565,9 @@ type releaseServer struct {
 	nextOnly  bool
 	// latest is the tag of the release the server marks as latest.
 	latest string
+	// prereleases are tags whose names read as releases but that the server
+	// marks as prereleases.
+	prereleases []string
 
 	// together holds each request for a page after the first until that many
 	// have been in flight at once, for up to a second. most records the most
@@ -1521,7 +1627,8 @@ func newReleaseServer(t *testing.T, tags ...string) *releaseServer {
 		for _, tag := range tags {
 			items = append(items, fmt.Sprintf(
 				`{"tag_name": %q, "draft": %t, "prerelease": %t}`,
-				tag, strings.HasSuffix(tag, "-draft"), strings.Contains(tag, "-rc"),
+				tag, strings.HasSuffix(tag, "-draft"),
+				strings.Contains(tag, "-rc") || slices.Contains(rs.prereleases, tag),
 			))
 		}
 
@@ -1615,8 +1722,9 @@ func (m machine) toolOutput(t *testing.T) string {
 func TestB118AddFindsAVersionPastTheFirstPageOfReleases(t *testing.T) {
 	m := newMachine(t)
 
+	// GitHub gives 100 releases to a page, so 2.0.3 is on the third.
 	var tags []string
-	for i := 60; i > 0; i-- {
+	for i := 250; i > 0; i-- {
 		tags = append(tags, fmt.Sprintf("v2.0.%d", i))
 	}
 
@@ -1775,10 +1883,15 @@ func TestB254WithoutGITHUB_TOKENOkuAsksGhForItsLogin(t *testing.T) {
 
 func TestB20AddPicksNewestDiscoveredVersionOrThePinnedOne(t *testing.T) {
 	m := newMachine(t)
-	server := newReleaseServer(t, "v1.2.0", "v1.10.0", "v2.0.0-rc1", "v3.0.0-draft", "nightly")
+	// The forge marks v1.11.0 a prerelease, though its name reads as a release.
+	// stable is no version, and its name does not mark a prerelease.
+	server := newReleaseServer(
+		t, "stable", "v1.2.0", "v1.10.0", "v1.11.0", "v2.0.0-rc1", "v3.0.0-draft", "nightly",
+	)
+	server.prereleases = []string{"v1.11.0"}
 	m.opts.GitHubAPI = server.URL + "/api"
 
-	ref := m.discoveredManifest(t, "1.2.0", "1.10.0")
+	ref := m.discoveredManifest(t, "1.2.0", "1.10.0", "1.11.0")
 
 	_, err := m.run(t, "", "add", ref)
 	must(t, err)
@@ -1977,8 +2090,8 @@ func TestB107AMovingTagDownloadMustMatchTheAPIDigest(t *testing.T) {
 		t.Fatalf("add should refuse a download that does not match the API digest, got %v", err)
 	}
 
-	if entries, _ := os.ReadDir(filepath.Join(m.data, "oku", "store")); len(entries) != 0 {
-		t.Fatalf("the rejected download left %d store entries", len(entries))
+	if entries := m.storeEntries(t); len(entries) != 0 {
+		t.Fatalf("the rejected download left %v in the store", entries)
 	}
 
 	if _, err := os.Lstat(m.profile("bin", "tool")); err == nil {
@@ -2007,9 +2120,12 @@ func TestB108SyncFailsOnceTheLockedMovingTagMoved(t *testing.T) {
 
 	must(t, removeAll(m.data))
 
+	// The digest pinned in the lock would stop the newer build too, so the error
+	// must say that the tag moved.
 	_, err = m.run(t, "", "sync")
-	if err == nil || !strings.Contains(err.Error(), "oku update tool") {
-		t.Fatalf("want sync to fail and name oku update tool, got %v", err)
+	if err == nil || !strings.Contains(err.Error(), "moved the tag nightly") ||
+		!strings.Contains(err.Error(), "oku update tool") {
+		t.Fatalf("want sync to fail, say the tag moved and name oku update tool, got %v", err)
 	}
 
 	if _, err := os.Lstat(m.profile("bin", "tool")); err == nil {
@@ -2074,8 +2190,10 @@ func TestB110LintAndBumpRefuseAMisplacedTag(t *testing.T) {
 		t.Errorf("lint warned about a download GitHub reports a sha256 for: %v\n%s", err, out)
 	}
 
-	if _, err := m.run(t, "", "manifest", "bump", path); err == nil {
-		t.Fatal("bump accepted a manifest that follows a moving tag")
+	// Asking upstream would fail too, so only the words show that bump refused.
+	if _, err := m.run(t, "", "manifest", "bump", path); err == nil ||
+		!strings.Contains(err.Error(), "nothing to bump") {
+		t.Fatalf("bump did not refuse a manifest that follows a moving tag: %v", err)
 	}
 }
 
@@ -2227,6 +2345,17 @@ func TestB23GCDeletesOnlyStorePathsNoGenerationUses(t *testing.T) {
 		if !exists(path) {
 			t.Fatalf("gc deleted %s", path)
 		}
+	}
+
+	// After a rollback the active generation is not the newest, and --keep
+	// keeps it too.
+	for _, args := range [][]string{{"add", gone}, {"rollback"}, {"gc", "--keep", "1"}} {
+		_, err := m.run(t, "", args...)
+		must(t, err)
+	}
+
+	if _, err := exec.Command(m.profile("bin", "keep")).Output(); err != nil {
+		t.Fatalf("gc --keep 1 deleted the active generation, keep no longer runs: %v", err)
 	}
 }
 
@@ -2660,18 +2789,7 @@ func TestB115AddInfersFromACodebergRepoAndUpdateListsItsReleases(t *testing.T) {
 }
 
 func TestB426AGitLabReleaseDatedInThePastCountsFromWhenItWasMade(t *testing.T) {
-	m := newMachine(t)
-	archive, _ := m.archive(t, "release", map[string]string{"tool": script})
-
-	// Whoever makes a release on GitLab sets released_at, even to a month ago.
-	// created_at is when the server made it.
-	release := fmt.Sprintf(
-		`{"tag_name": "v1.4.0", "commit": {"id": "5555555555555555555555555555555555555555"},`+
-			` "released_at": %q, "created_at": %q,`+
-			` "assets": {"links": [{"name": %q, "direct_asset_url": "file://%s"}]}}`,
-		time.Now().AddDate(0, -1, 0).Format(time.RFC3339), time.Now().Format(time.RFC3339),
-		hostAssetName(), archive,
-	)
+	var release string
 
 	const project = "/api/v4/projects/owner%2Ftool"
 
@@ -2697,8 +2815,28 @@ func TestB426AGitLabReleaseDatedInThePastCountsFromWhenItWasMade(t *testing.T) {
 
 	t.Cleanup(func() { http.DefaultClient.Transport = client })
 
-	if out, err := m.run(t, "", "add", "gitlab:owner/tool"); err == nil || !strings.Contains(err.Error(), "release age") {
-		t.Fatalf("a release made today should wait for the minimum release age, got %v:\n%s", err, out)
+	// Whoever makes a release on GitLab sets released_at, even to a month ago.
+	// created_at is when the server made it. A release made a month ago that
+	// comes out today is new as well.
+	monthAgo, today := time.Now().AddDate(0, -1, 0), time.Now()
+
+	for _, dates := range [][2]time.Time{{monthAgo, today}, {today, monthAgo}} {
+		// A fresh machine has nothing cached from the case before.
+		m := newMachine(t)
+		archive, _ := m.archive(t, "release", map[string]string{"tool": script})
+
+		release = fmt.Sprintf(
+			`{"tag_name": "v1.4.0", "commit": {"id": "5555555555555555555555555555555555555555"},`+
+				` "released_at": %q, "created_at": %q,`+
+				` "assets": {"links": [{"name": %q, "direct_asset_url": "file://%s"}]}}`,
+			dates[0].Format(time.RFC3339), dates[1].Format(time.RFC3339), hostAssetName(), archive,
+		)
+
+		if out, err := m.run(t, "", "add", "gitlab:owner/tool"); err == nil ||
+			!strings.Contains(err.Error(), "release age") {
+			t.Fatalf("a release with released_at %s and created_at %s should wait for the minimum "+
+				"release age, got %v:\n%s", dates[0].Format(time.DateOnly), dates[1].Format(time.DateOnly), err, out)
+		}
 	}
 }
 
@@ -3120,7 +3258,7 @@ bin = ["tool"]
 
 func TestB123VersionsComeFromTheNPMRegistry(t *testing.T) {
 	m := newMachine(t)
-	ref := npmServer(t, &m, "", "1.0.0", "1.1.0", "2.0.0-beta.1")
+	ref := npmServer(t, &m, "", "1.0.0", "1.1.0", "1.2.0-beta.1")
 
 	out, err := m.run(t, "", "add", ref)
 	if err != nil {
@@ -3131,9 +3269,22 @@ func TestB123VersionsComeFromTheNPMRegistry(t *testing.T) {
 		t.Fatalf("add installed %s, want the newest version that is no prerelease", got)
 	}
 
-	// The registry's sha512 checked the download, so oku did not trust it blindly.
-	if strings.Contains(out, "trusted this download") {
-		t.Fatalf("add trusted a download that the registry has a digest for:\n%s", out)
+	// The latest tag alone keeps 1.2.0-beta.1 out of a plain add, so a prefix
+	// shows that add skips a prerelease.
+	_, err = m.run(t, "", "add", ref+"@1")
+	must(t, err)
+
+	if got := m.toolOutput(t); got != "1.1.0" {
+		t.Fatalf("add @1 installed %s, want the newest version that is no prerelease", got)
+	}
+
+	// The registry's sha512 checked the download, so the lock records no first
+	// use.
+	locked, err := os.ReadFile(filepath.Join(m.config, "oku.lock"))
+	must(t, err)
+
+	if strings.Contains(out, "trusted this download") || strings.Contains(string(locked), "first-use") {
+		t.Fatalf("add trusted a download that the registry has a digest for:\n%s\n%s", out, locked)
 	}
 
 	_, err = m.run(t, "", "add", ref+"@1.0.0")
@@ -3494,8 +3645,9 @@ func TestB342AddRefusesAnNPMPackageWithDependenciesWithoutANode(t *testing.T) {
 
 	_, err := m.run(t, "", "add", "npm:@scope/tool")
 	if err == nil || !strings.Contains(err.Error(), "runtimes.node") ||
-		!strings.Contains(err.Error(), "examples/runtimes/node.toml") {
-		t.Fatalf("want add to fail and point at runtimes.node, got %v", err)
+		!strings.Contains(err.Error(), "examples/runtimes/node.toml") ||
+		!strings.Contains(err.Error(), "guide: https://github.com/y3owk1n/oku/blob/main/docs/guides/") {
+		t.Fatalf("want add to fail and point at runtimes.node, its example and the guide, got %v", err)
 	}
 
 	if exists(m.profile("bin", "tool")) || exists(filepath.Join(m.config, "oku.lock")) {
@@ -3506,24 +3658,32 @@ func TestB342AddRefusesAnNPMPackageWithDependenciesWithoutANode(t *testing.T) {
 func TestB120ManifestInitReadsUniversalAndWindowsGnuAssets(t *testing.T) {
 	m := newMachine(t)
 	archive, _ := m.archive(t, "release", map[string]string{"tool": script})
+	universal, _ := m.archive(t, "universal", map[string]string{"tool": script})
 
+	// No asset names a darwin arch, which would win over the universal build on
+	// a Mac. The Linux ones cover a Linux host.
 	inferServer(t, &m, map[string]string{
-		hostAssetName():                         archive,
-		"tool-v1.4.0-darwin-all.tar.gz":         archive,
-		"tool-v1.4.0-x86_64-pc-windows-gnu.zip": archive,
-		"checksums.txt.sig":                     archive,
+		"tool-v1.4.0-x86_64-unknown-linux-musl.tar.gz":  archive,
+		"tool-v1.4.0-aarch64-unknown-linux-musl.tar.gz": archive,
+		"tool-v1.4.0-darwin-all.tar.gz":                 universal,
+		"tool-v1.4.0-x86_64-pc-windows-gnu.zip":         archive,
+		"checksums.txt.sig":                             archive,
 	})
 
 	out, err := m.run(t, "", "manifest", "init", "--from", "owner/tool", "-o", "-")
 	must(t, err)
 
-	for _, want := range []string{
-		`os = "darwin", arch = "amd64"`, `os = "darwin", arch = "arm64"`,
-		`os = "windows", arch = "amd64"`,
-	} {
-		if !strings.Contains(out, want) {
-			t.Fatalf("the manifest lacks %q:\n%s", want, out)
+	for _, arch := range []string{"amd64", "arm64"} {
+		match := fmt.Sprintf(`match = { os = "darwin", arch = %q }`, arch)
+		if !slices.ContainsFunc(strings.Split(out, "[[artifact]]"), func(block string) bool {
+			return strings.Contains(block, match) && strings.Contains(block, "/universal.tar.gz")
+		}) {
+			t.Fatalf("the manifest does not take the universal build for darwin %s:\n%s", arch, out)
 		}
+	}
+
+	if !strings.Contains(out, `os = "windows", arch = "amd64"`) {
+		t.Fatalf("the manifest takes no windows-gnu build:\n%s", out)
 	}
 
 	if strings.Contains(out, "sha256_url") {
@@ -3568,6 +3728,7 @@ func TestB278AnInferredPackageExposesTheProgramsNamedAfterItsOwn(t *testing.T) {
 	archive, _ := m.archive(t, strings.TrimSuffix(hostAssetName(), ".tar.gz"), map[string]string{
 		"tool-1.4.0/tool":        "#!/bin/sh\necho tool\n",
 		"tool-1.4.0/tool-keygen": "#!/bin/sh\necho keygen\n",
+		"tool-1.4.0/helper":      "#!/bin/sh\necho helper\n",
 		"tool-1.4.0/install.sh":  "#!/bin/sh\n",
 	})
 
@@ -3584,8 +3745,12 @@ func TestB278AnInferredPackageExposesTheProgramsNamedAfterItsOwn(t *testing.T) {
 		t.Fatalf("tool-keygen printed %q", got)
 	}
 
-	if _, err := os.Stat(m.profile("bin", "install.sh")); err == nil {
-		t.Fatal("an executable not named after the program became a program")
+	// Inference skips a script such as install.sh by its ending alone, so only
+	// helper shows the rule of the name.
+	for _, name := range []string{"helper", "install.sh"} {
+		if _, err := os.Stat(m.profile("bin", name)); err == nil {
+			t.Fatalf("%s, which is not named after the program, became a program", name)
+		}
 	}
 }
 
@@ -3756,8 +3921,9 @@ func TestB30SourceAliasResolvesToAManifestInTheCollection(t *testing.T) {
 		"packages/tool.toml": m.describedManifest(t, "tool", "a tool"),
 	})
 
-	if _, err := m.run(t, "", "add", "core/tool"); err == nil {
-		t.Fatal("an alias that is not defined resolved")
+	// The ref fails as an alias, not later as a ref or a file of that name.
+	if _, err := m.run(t, "", "add", "core/tool"); err == nil || !strings.Contains(err.Error(), "core is not a source") {
+		t.Fatalf("want an alias that is not defined refused, got %v", err)
 	}
 
 	_, err := m.run(t, "", "source", "add", "core", "github:someone/recipes")
@@ -4045,6 +4211,32 @@ func TestB29ManifestBumpMovesVersionAndChecksums(t *testing.T) {
 
 	if !strings.Contains(out, "already at 1.1.0") {
 		t.Fatalf("a second bump:\n%s", out)
+	}
+
+	// --to moves to a version that is not the newest.
+	out, err = m.run(t, "", "manifest", "bump", path, "--repo", "owner/tool", "--strip-prefix", "v", "--to", "1.0.0")
+	if err != nil {
+		t.Fatalf("bump --to: %v\n%s", err, out)
+	}
+
+	bumped, err = os.ReadFile(path)
+	must(t, err)
+
+	if !strings.Contains(string(bumped), `value = "1.0.0"`) || !strings.Contains(string(bumped), oldSum) {
+		t.Fatalf("bump --to 1.0.0 wrote:\n%s", bumped)
+	}
+
+	// A manifest that discovers its versions has no version to rewrite.
+	discovers := filepath.Join(m.fixtures, "discovers.toml")
+	must(t, os.WriteFile(discovers, []byte(fmt.Sprintf(
+		"[package]\nname = \"tool\"\n[version]\nfrom = \"github-releases\"\nrepo = \"owner/tool\"\nstrip_prefix = \"v\"\n"+
+			"[[artifact]]\nurl = \"file://%s/tool-{{version}}.tar.gz\"\nbin = [\"tool\"]\n",
+		m.fixtures,
+	)), 0o644))
+
+	if _, err := m.run(t, "", "manifest", "bump", discovers, "--repo", "owner/tool"); err == nil ||
+		!strings.Contains(err.Error(), "nothing to bump") {
+		t.Fatalf("want bump refused for a manifest that discovers its versions, got %v", err)
 	}
 }
 
@@ -5119,13 +5311,14 @@ func TestB412PwshOutputDoublesEveryKindOfSingleQuote(t *testing.T) {
 
 	body, err := os.ReadFile(path)
 	must(t, err)
-	must(t, os.WriteFile(path, append(body, []byte("\n[env]\nQUOTED = \"a\u2019; b\u2018 c' d\"\n")...), 0o644))
+	must(t, os.WriteFile(path, append(body, []byte("\n[env]\nQUOTED = \"a\u2019; b\u2018 c' d\u201a e\u201b\"\n")...), 0o644))
 
 	_, err = m.run(t, "", "add", path, "--yes")
 	must(t, err)
 
+	// PowerShell reads U+0027 and U+2018 to U+201B as single quotes.
 	out := m.stdout(t, "env", "--shell", "pwsh")
-	if !strings.Contains(out, "'a\u2019\u2019; b\u2018\u2018 c'' d'") {
+	if !strings.Contains(out, "'a\u2019\u2019; b\u2018\u2018 c'' d\u201a\u201a e\u201b\u201b'") {
 		t.Fatalf("pwsh output does not double each quote:\n%s", out)
 	}
 }
@@ -5332,6 +5525,12 @@ func TestB55ManifestTestBuildsInAThrowawayStoreAndReportsTheFailingStep(t *testi
 	m := newMachine(t)
 	good := m.buildManifest(t, true, "", writeTool+installTool)
 
+	// The throwaway store and the build directory go under TMPDIR, so one that
+	// oku fails to delete stays in here.
+	tmp := filepath.Join(m.fixtures, "tmp")
+	must(t, os.Mkdir(tmp, 0o755))
+	t.Setenv("TMPDIR", tmp)
+
 	out, err := m.run(t, "", "manifest", "test", good, "--yes")
 	if err != nil {
 		t.Fatalf("manifest test: %v\n%s", err, out)
@@ -5365,6 +5564,10 @@ func TestB55ManifestTestBuildsInAThrowawayStoreAndReportsTheFailingStep(t *testi
 		if exists(path) {
 			t.Fatalf("manifest test wrote %s", path)
 		}
+	}
+
+	if left, _ := filepath.Glob(filepath.Join(tmp, "oku-*")); len(left) != 0 {
+		t.Fatalf("manifest test left its store or build directory behind: %v", left)
 	}
 }
 
@@ -5443,6 +5646,13 @@ func TestB60CommandsActOnTheProjectListUnlessGlobal(t *testing.T) {
 		t.Fatalf("remove left first in the project list:\n%s", listed)
 	}
 
+	// A list ref sets up the global list, so a project refuses it. The ref is a
+	// local path, so nothing is fetched if the refusal is gone.
+	if _, err := m.run(t, "", "sync", filepath.Join(m.fixtures, "machines")); err == nil ||
+		!strings.Contains(err.Error(), "sets up the global list") {
+		t.Fatalf("want sync <ref> refused inside the project, got %v", err)
+	}
+
 	// Outside the project the same commands act on the global list.
 	m.opts.WorkDir = m.fixtures
 
@@ -5454,6 +5664,14 @@ func TestB60CommandsActOnTheProjectListUnlessGlobal(t *testing.T) {
 
 	if !strings.Contains(out, "second") || strings.Contains(out, "first ") {
 		t.Fatalf("list outside the project:\n%s", out)
+	}
+
+	// The config directory holds the global list's oku.toml, and is no project.
+	m.opts.WorkDir = m.config
+
+	out, err = m.run(t, "", "list")
+	if err != nil || !strings.Contains(out, "second") || strings.Contains(out, "project ") {
+		t.Fatalf("list in the config directory: %v\n%s", err, out)
 	}
 }
 
@@ -5882,6 +6100,11 @@ func TestB99UninstallPrintsTheHookLineToDelete(t *testing.T) {
 
 	if !strings.Contains(out, ".zshrc") || !strings.Contains(out, "hook zsh") {
 		t.Fatalf("uninstall did not name the hook line:\n%s", out)
+	}
+
+	// Only a line that doctor would find is one to delete.
+	if strings.Contains(out, "# mine") {
+		t.Fatalf("uninstall named a line of the user's own as the hook line:\n%s", out)
 	}
 }
 
@@ -6614,8 +6837,11 @@ func TestB75SetupSystemNamesTheRootAndAsksBeforeElevating(t *testing.T) {
 		t.Fatalf("add elevated without --system: %v", *elevated)
 	}
 
-	if _, err := m.run(t, "", "setup"); err == nil {
-		t.Fatal("setup ran without --system")
+	// A yes to the question would let setup elevate, so only the missing flag
+	// stops it.
+	if _, err := m.run(t, "y\n", "setup"); err == nil || !strings.Contains(err.Error(), "--system") ||
+		len(*elevated) != 0 {
+		t.Fatalf("setup ran without --system: %v, elevated %v", err, *elevated)
 	}
 
 	out, err := m.run(t, "n\n", "setup", "--system")
@@ -6711,7 +6937,9 @@ func TestB415SystemApplyTakesATargetOnlyDirectlyInTheSystemDirectories(t *testin
 	keep := filepath.Join(filepath.Dir(dirs.Apps), "keep")
 	must(t, os.WriteFile(keep, []byte("mine"), 0o644))
 
-	for _, target := range []string{dirs.Apps + "/..", dirs.Apps + "/.", dirs.Apps + "/x/../.."} {
+	// The last target is clean, and only being outside the apps directory refuses
+	// it.
+	for _, target := range []string{dirs.Apps + "/..", dirs.Apps + "/.", dirs.Apps + "/x/../..", keep} {
 		change, err := json.Marshal(map[string]any{"Item": map[string]string{"Kind": "app", "Target": target}})
 		must(t, err)
 
@@ -7053,7 +7281,7 @@ func TestB85TrustedCacheEntryIsUsedAndNothingIsBuilt(t *testing.T) {
 	}
 }
 
-func TestB86UnsignedOrUntrustedCacheEntryIsIgnoredAndThePackageBuilds(t *testing.T) {
+func TestB86UnsignedInvalidOrUntrustedCacheEntryIsIgnoredAndThePackageBuilds(t *testing.T) {
 	dir, key := publisher(t, true)
 
 	untrusting := newMachine(t)
@@ -7067,8 +7295,30 @@ func TestB86UnsignedOrUntrustedCacheEntryIsIgnoredAndThePackageBuilds(t *testing
 		t.Fatalf("an entry from an untrusted key was not ignored:\n%s", out)
 	}
 
+	// A changed trusted comment keeps the key ID of the trusted key, so only the
+	// check of the signature itself makes oku ignore the entry.
 	signatures, err := filepath.Glob(filepath.Join(dir, "*.minisig"))
 	must(t, err)
+
+	signed, err := os.ReadFile(signatures[0])
+	must(t, err)
+	must(t, os.WriteFile(signatures[0], bytes.Replace(
+		signed, []byte("\ntrusted comment: "), []byte("\ntrusted comment: changed "), 1,
+	), 0o644))
+
+	invalid := newMachine(t)
+	_, err = invalid.run(t, "", "cache", "add", dir)
+	must(t, err)
+	_, err = invalid.run(t, "", "key", "trust", key)
+	must(t, err)
+
+	out, err = invalid.run(t, "", "add", invalid.cachedManifest(t, true, writeTool), "--yes")
+	must(t, err)
+
+	if !strings.Contains(out, "no trusted key signed it") || strings.Contains(out, "came from") {
+		t.Fatalf("an entry with an invalid signature was not ignored:\n%s", out)
+	}
+
 	must(t, os.Remove(signatures[0]))
 
 	unsigned := newMachine(t)
@@ -7508,7 +7758,8 @@ func TestB103DataCommandsPrintJSON(t *testing.T) {
 		t.Fatalf("info --json: %v", info)
 	}
 
-	if why := decode("why", "food").(map[string]any); why["in_list"] == "" {
+	// A missing in_list decodes to nil, which a comparison with "" would let pass.
+	if why := decode("why", "food").(map[string]any); why["in_list"] == nil || why["in_list"] == "" {
 		t.Fatalf("why --json: %v", why)
 	}
 
@@ -7995,13 +8246,16 @@ func TestB221SelfUpdateKeepsANightlyAndTakesANamedRelease(t *testing.T) {
 		return string(data)
 	}
 
-	if _, err := m.run(t, "", "self", "update"); err == nil ||
+	if _, err := m.run(t, "", "self", "update"); err == nil || !strings.Contains(err.Error(), "--nightly") ||
 		!strings.Contains(err.Error(), "--release") || current() != "binary" {
-		t.Fatalf("a bare run on a nightly build should refuse and name --release, got %v", err)
+		t.Fatalf("a bare run on a nightly build should refuse and name --nightly and --release, got %v", err)
 	}
 
-	if _, err := m.run(t, "", "self", "update", "--nightly", "--release"); err == nil {
-		t.Fatal("--nightly with --release was accepted")
+	// Without the check, --nightly would fail later on the signature of this
+	// release, so the error must be the one about the flags.
+	if _, err := m.run(t, "", "self", "update", "--nightly", "--release"); err == nil ||
+		!strings.Contains(err.Error(), "exclude each other") {
+		t.Fatalf("--nightly with --release should be refused as flags that exclude each other, got %v", err)
 	}
 
 	out, err := m.run(t, "", "self", "update", "--release")
@@ -8464,8 +8718,9 @@ func TestB196WhichNamesThePackageOfAProgram(t *testing.T) {
 	out, err := m.run(t, "", "which", "tool")
 	must(t, err)
 
-	if !strings.Contains(out, "tool 1.2.3") || !strings.Contains(out, "/tool") {
-		t.Fatalf("which output:\n%s", out)
+	// The profile's link ends in /tool too, so the path must be the one in the store.
+	if !strings.Contains(out, "tool 1.2.3") || !strings.Contains(out, filepath.Join("store", "tool-1.2.3-")) {
+		t.Fatalf("which does not name the package and its file in the store:\n%s", out)
 	}
 
 	shadow := filepath.Join(t.TempDir(), "shadow")
@@ -8828,24 +9083,41 @@ func TestB358SyncOfAnNPMPackageInTheStoreRunsNoNPM(t *testing.T) {
 }
 
 func TestB436TwoQuestionsReadTheirOwnAnswers(t *testing.T) {
-	m := newMachine(t)
-	m.opts.Interactive = yes()
+	// A yes for both shows the first question left the second line alone, and a
+	// no for the second shows it does not take the first one's answer.
+	for _, tc := range []struct {
+		answers string
+		want    []string
+		ok      bool
+	}{
+		{"y\ny\n", []string{"approved one", "approved two"}, true},
+		{"y\nn\n", []string{"approved one", "rejected two"}, false},
+	} {
+		m := newMachine(t)
+		m.opts.Interactive = yes()
 
-	var refs []string
+		var refs []string
 
-	for _, name := range []string{"one", "two"} {
-		path := filepath.Join(m.fixtures, name+".toml")
-		must(t, os.WriteFile(path, []byte(
-			"[package]\nname = \""+name+"\"\n[version]\nvalue = \"1.0.0\"\n[build]\n"+
-				strings.ReplaceAll(writeTool+installTool, "tool", name),
-		), 0o644))
+		for _, name := range []string{"one", "two"} {
+			path := filepath.Join(m.fixtures, name+".toml")
+			must(t, os.WriteFile(path, []byte(
+				"[package]\nname = \""+name+"\"\n[version]\nvalue = \"1.0.0\"\n[build]\n"+
+					strings.ReplaceAll(writeTool+installTool, "tool", name),
+			), 0o644))
 
-		refs = append(refs, path)
-	}
+			refs = append(refs, path)
+		}
 
-	out, err := m.run(t, "y\ny\n", append([]string{"add"}, refs...)...)
-	if err != nil || !strings.Contains(out, "approved one") || !strings.Contains(out, "approved two") {
-		t.Fatalf("want both approved from one stdin: %v\n%s", err, out)
+		out, err := m.run(t, tc.answers, append([]string{"add"}, refs...)...)
+		if (err == nil) != tc.ok {
+			t.Fatalf("answers %q: add returned %v\n%s", tc.answers, err, out)
+		}
+
+		for _, line := range tc.want {
+			if !strings.Contains(out, line) {
+				t.Fatalf("answers %q: want %q:\n%s", tc.answers, line, out)
+			}
+		}
 	}
 }
 

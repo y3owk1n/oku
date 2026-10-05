@@ -17,6 +17,7 @@ import (
 	"github.com/y3owk1n/oku/internal/manifest"
 	"github.com/y3owk1n/oku/internal/platform"
 	"github.com/y3owk1n/oku/internal/ref"
+	"github.com/y3owk1n/oku/internal/store"
 	"github.com/y3owk1n/oku/internal/tempdir"
 	"github.com/y3owk1n/oku/internal/ui"
 )
@@ -583,8 +584,9 @@ func runManifestTest(
 		return err
 	}
 
+	// The store paths a test built are frozen, which os.RemoveAll cannot undo.
 	if !keep {
-		defer os.RemoveAll(scratch)
+		defer func() { _ = store.RemoveFrozen(scratch) }()
 	}
 
 	// Only the store is throwaway. The cache is content-addressed, so sharing it
