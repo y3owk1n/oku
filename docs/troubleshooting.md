@@ -280,9 +280,10 @@ provenance, whose builder must be one that slsa-verifier trusts.
 oku installed nothing. A release that someone replaced looks like this, so ask
 the developer before you work around it.
 
-When the manifest names a new workflow, `oku sync` and `oku update` stop with
-`oku.lock pinned the signer workflow ...`. Check with the developer, then pass
-`--accept-key`. See
+When the manifest names a new workflow, `oku update` stops with
+`oku.lock pinned the signer workflow ...`, and `oku sync` says that
+[the manifest changed](#the-manifest-changed-since-okulock-was-written). Check
+with the developer, then pass `--accept-key` to `oku update`. See
 [Sigstore signatures](reference/security.md#sigstore-signatures-of-a-manifest).
 
 ## OSV lists a version as malicious

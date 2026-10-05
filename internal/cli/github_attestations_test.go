@@ -21,7 +21,6 @@ func TestB521AnAttestationOfGitHubsOwnSigstoreNeedsItsTimestamp(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			m := newMachine(t)
 			f := newFakeSigstore(t, &m)
-			f.withGitHub(t, &m)
 			r := newSignedRelease(t, &m)
 
 			r.mu.Lock()

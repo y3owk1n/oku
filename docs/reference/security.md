@@ -488,12 +488,15 @@ and each must be in Sigstore's transparency log.
 [Cosign key](manifest.md#cosign-key) gives the format.
 
 `oku.lock` pins the key at the first install. When the manifest later shows
-another key, or drops it, `oku sync` and `oku update` stop:
+another key, or drops it, `oku update` stops:
 
 ```
 oku: foo: oku.lock pinned the signing key RWTr8ko..., and the manifest now has the signing key RWSwtYz...
 if the developer announced this change, run the command again with --accept-key
 ```
+
+`oku sync` stops too. For the version that `oku.lock` holds, it says that
+[the manifest changed](../troubleshooting.md#the-manifest-changed-since-okulock-was-written).
 
 A new key is what an attacker who took over the repo would publish. Check with
 the developer before you run `oku update foo --accept-key`. oku trusts the key
@@ -513,6 +516,8 @@ artifact only when the signature shows that:
 
 - Sigstore's certificate authority issued the certificate to that workflow,
   run by GitHub Actions, at any ref of the workflow file
+- a certificate transparency log that Sigstore trusts recorded the
+  certificate, so anyone can find it in that log
 - the run was for the repo of the releases, so a workflow that other repos
   share cannot sign for this one
 - for a bundle, the run was for the release's tag, so an older signed file
@@ -530,16 +535,19 @@ oku reads Sigstore's public trust root through TUF from
 oku, and keeps it in its cache for a day. GitHub signs the attestations of a
 private repo with a Sigstore of its own. For a bundle whose certificate GitHub
 issued, oku reads GitHub's trust root the same way from `tuf-repo.github.com`.
-It then requires a timestamp of GitHub's timestamp authority in place of the
-transparency log, as `gh attestation verify` does.
+It then requires a timestamp of GitHub's timestamp authority in place of both
+logs, as `gh attestation verify` does.
 
 `oku.lock` pins `signer_workflow` at the first install. When the manifest
-later names another workflow, or none, `oku sync` and `oku update` stop:
+later names another workflow, or none, `oku update` stops:
 
 ```
 oku: tool: oku.lock pinned the signer workflow you/tool/.github/workflows/release.yml, and the manifest now has the signer workflow you/tool/.github/workflows/other.yml
 if the developer announced this change, run the command again with --accept-key
 ```
+
+`oku sync` stops too, and for the version that `oku.lock` holds it says that
+the manifest changed.
 
 A Sigstore signature needs no key for the developer to keep safe. It shows
 which workflow built the file, and nothing more. Someone who can push to the

@@ -1,10 +1,13 @@
 package cli_test
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/y3owk1n/oku/internal/cli"
 )
 
 func TestB541AWrongArgumentCountShowsTheCommandsUsage(t *testing.T) {
@@ -87,12 +90,12 @@ func TestB125AMissingFileIsNamedPlainly(t *testing.T) {
 	m := newMachine(t)
 	missing := filepath.Join(m.fixtures, "nope.toml")
 
-	for _, args := range [][]string{
-		{"manifest", "hash", missing}, {"manifest", "lint", missing}, {"manifest", "bump", missing},
+	for command, want := range map[string]string{
+		"hash": "there is no file at", "lint": "there is no manifest at", "bump": "there is no manifest at",
 	} {
-		if _, err := m.run(t, "", args...); err == nil || !strings.Contains(err.Error(), "there is no") ||
+		if _, err := m.run(t, "", "manifest", command, missing); err == nil || !strings.Contains(err.Error(), want) ||
 			strings.Contains(err.Error(), "404") || strings.Contains(err.Error(), "no such file") {
-			t.Fatalf("%v: want a plain message, got %v", args, err)
+			t.Fatalf("manifest %s: want %q, got %v", command, want, err)
 		}
 	}
 }
@@ -152,9 +155,33 @@ func TestB544NotesAndQuestionsGoToStderr(t *testing.T) {
 
 	inferServer(t, &m, map[string]string{hostAssetName(): archive})
 
-	if out := m.stdout(t, "add", "github:owner/tool"); strings.Contains(out, "inferred") {
-		t.Fatalf("the note about the inferred manifest went to stdout:\n%s", out)
+	stdout, stderr := m.split(t, "", "add", "github:owner/tool")
+	if strings.Contains(stdout, "inferred") || !strings.Contains(stderr, "inferred") {
+		t.Fatalf("the note about the inferred manifest should go to stderr only:\nstdout:\n%s\nstderr:\n%s", stdout, stderr)
 	}
+
+	m.opts.Interactive = yes()
+
+	stdout, stderr = m.split(t, "y\n", "add", m.buildManifest(t, false, "", writeTool+installTool))
+	if strings.Contains(stdout, "y/N") || !strings.Contains(stderr, "y/N") {
+		t.Fatalf("the build approval should go to stderr only:\nstdout:\n%s\nstderr:\n%s", stdout, stderr)
+	}
+}
+
+// split runs oku with stdin and returns what it wrote to stdout and to stderr.
+func (m machine) split(t *testing.T, stdin string, args ...string) (stdout, stderr string) {
+	t.Helper()
+
+	var out, errOut bytes.Buffer
+
+	cmd := cli.NewRootCmd(m.opts)
+	cmd.SetArgs(args)
+	cmd.SetIn(strings.NewReader(stdin))
+	cmd.SetOut(&out)
+	cmd.SetErr(&errOut)
+	must(t, cmd.Execute())
+
+	return out.String(), errOut.String()
 }
 
 func TestB546AnEmptyGenerationStateStopsGCAndDeletesNothing(t *testing.T) {

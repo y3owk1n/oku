@@ -1334,6 +1334,15 @@ Check 'packages that share a download install in one sync' {
     Test-Path (Join-Path $env:XDG_DATA_HOME 'oku\profiles\project-*\current\bin\stringer.exe')
 }
 
+# oku never runs as a shim under its own name, so a spec planted beside it
+# runs nothing.
+$planted = Join-Path $root 'planted'
+New-Item -ItemType Directory -Force $planted | Out-Null
+Copy-Item $oku (Join-Path $planted 'oku.exe')
+Set-Content -Encoding ascii (Join-Path $planted 'oku.shim') "path = $env:WINDIR\System32\whoami.exe"
+$plantedVersion = & (Join-Path $planted 'oku.exe') --version
+Check 'a shim file beside oku runs nothing' { ($plantedVersion -join ' ') -match '^oku version' }
+
 # A process that a build started may still hold a directory for a moment.
 Set-Location $repoRoot
 foreach ($try in 1..30) {

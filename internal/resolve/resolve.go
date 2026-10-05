@@ -36,7 +36,7 @@ type Resolver struct {
 	// Crates and CrateDownloads replace the URLs of the crates.io API and of
 	// its downloads when set.
 	Crates, CrateDownloads string
-	// MinAge makes Pick and PickWithin pass over a release published less than
+	// MinAge makes Pick and PickWaiting pass over a release published less than
 	// MinAge ago, unless the caller names its exact version. Zero turns it off.
 	MinAge time.Duration
 	// Now is the time MinAge counts back from. Nil means time.Now.
@@ -251,29 +251,6 @@ func (r *Resolver) pickFrom(
 	})
 }
 
-// PickWithin returns the newest release of v that satisfies constraint, such as
-// ">=3" or ">=1.2, <2". An empty constraint accepts every version.
-func (r *Resolver) PickWithin(
-	ctx context.Context,
-	v manifest.Version,
-	constraint string,
-) (Release, error) {
-	if v.From == "" {
-		ok, err := Satisfies(v.Value, constraint)
-		if err != nil || !ok {
-			return Release{}, errors.Join(err, fmt.Errorf(
-				"no version satisfies %q, the versions found are %s", constraint, v.Value,
-			))
-		}
-
-		return Release{Version: v.Value, Tag: v.Value}, nil
-	}
-
-	release, _, err := r.PickWaiting(ctx, v, constraint)
-
-	return release, err
-}
-
 // newest returns the first of releases that fits and passes MinAge, and the
 // newest one that fits and MinAge passed over. none makes the error for when
 // nothing fits, from the first few versions.
@@ -435,13 +412,13 @@ func ceiling(part, op string) (string, error) {
 
 type memoKey struct{}
 
-// memo holds the releases that List found during one command, by version source.
+// memo holds the releases of each version source during one command.
 type memo struct {
 	mu    sync.Mutex
 	lists map[string]*listing
 }
 
-// listing is what List found for one source. read is set once the first page is
+// listing holds the releases of one source. read is set once the first page is
 // in, and complete once every page is. The mutex serializes the lookups of one
 // source, so packages that share a source still cost one lookup.
 type listing struct {
@@ -452,19 +429,12 @@ type listing struct {
 	err            error
 }
 
-// WithMemo returns a context in which List asks each version source once.
+// WithMemo returns a context in which a Resolver asks each version source once.
 // Packages of one command that share a source, and a second lookup of one
 // package, cost no more requests. It covers git tags and branches, which
 // forge.WithAnswers does not see.
 func WithMemo(ctx context.Context) context.Context {
 	return context.WithValue(ctx, memoKey{}, &memo{lists: map[string]*listing{}})
-}
-
-// List returns every release of v, newest first.
-func (r *Resolver) List(ctx context.Context, v manifest.Version) ([]Release, error) {
-	releases, _, err := r.listing(ctx, v, true)
-
-	return releases, err
 }
 
 // listing returns the releases of v, newest first, and whether the host has more

@@ -179,6 +179,29 @@ func TestB501ASigstoreBundleMustShowTheWorkflowSignedTheDownloadForItsRepoAndTag
 	}
 }
 
+func TestB547ACertificateWithoutATimestampOfACertificateTransparencyLogIsRefused(t *testing.T) {
+	m := newMachine(t)
+	f := newFakeSigstore(t, &m)
+	r := newSignedRelease(t, &m)
+
+	// Fulcio records every certificate it issues in a certificate transparency
+	// log. A certificate without the log's timestamp never went through it.
+	f.ctKey = nil
+	r.set("tool.tar.gz.sigstore.json", f.signBlob(t, release, r.archive))
+
+	tool := r.manifest(t, &m, "signer_workflow = \""+workflow+"\"\n",
+		"sigstore_bundle = \""+r.release("tool.tar.gz.sigstore.json")+"\"\n")
+
+	out, err := m.run(t, "", "add", tool)
+	if err == nil || !strings.Contains(err.Error(), "certificate timestamp") {
+		t.Fatalf("want a refusal, got %v\n%s", err, out)
+	}
+
+	if len(m.storeEntries(t)) != 0 {
+		t.Fatal("a download whose certificate no log recorded reached the store")
+	}
+}
+
 func TestB502AttestationsMustIncludeOneTheWorkflowSignedForTheRepo(t *testing.T) {
 	m := newMachine(t)
 	f := newFakeSigstore(t, &m)
@@ -243,12 +266,7 @@ func TestB503TheLockPinsTheSignerWorkflow(t *testing.T) {
 	sign(other)
 	r.manifest(t, &m, "signer_workflow = \""+other+"\"\n", bundled)
 
-	// A local manifest that changed stops sync before the workflow does.
-	if _, err := m.run(t, "", "sync"); err == nil {
-		t.Fatal("sync took a changed signer workflow")
-	}
-
-	if _, err := m.run(t, "", "update"); err == nil || !strings.Contains(err.Error(), "--accept-key") {
+	if _, err := m.run(t, "", "update"); err == nil || !strings.Contains(err.Error(), "pinned the signer workflow") {
 		t.Fatalf("update took a changed signer workflow: %v", err)
 	}
 
@@ -260,6 +278,12 @@ func TestB503TheLockPinsTheSignerWorkflow(t *testing.T) {
 
 	if !strings.Contains(string(text), "signer_workflow = '"+other+"'") {
 		t.Fatalf("want the lock to pin the accepted workflow:\n%s", text)
+	}
+
+	r.manifest(t, &m, "", "")
+
+	if _, err := m.run(t, "", "update"); err == nil || !strings.Contains(err.Error(), "now has no signer workflow") {
+		t.Fatalf("update took a dropped signer workflow: %v", err)
 	}
 }
 

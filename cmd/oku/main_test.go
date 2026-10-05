@@ -21,13 +21,28 @@ func TestB429AShimFileBesideOkuRunsNothing(t *testing.T) {
 		t.Fatalf("build oku: %v\n%s", err, out)
 	}
 
-	// Someone who can write beside oku drops a spec that names another program.
-	if err := os.WriteFile(filepath.Join(dir, "oku.shim"), []byte("path = /bin/echo\narg = hijacked\n"), 0o644); err != nil {
+	// Outside Windows a copy under another name runs no shim either, which the
+	// copy named tool checks. live-windows.ps1 checks oku under its own name.
+	data, err := os.ReadFile(binary)
+	if err != nil {
 		t.Fatal(err)
 	}
 
-	out, err := exec.Command(binary, "--version").CombinedOutput()
-	if err != nil || strings.Contains(string(out), "hijacked") || !strings.Contains(string(out), "oku version") {
-		t.Fatalf("oku --version ran the spec beside it: %v\n%s", err, out)
+	if err := os.WriteFile(filepath.Join(dir, "tool"), data, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, name := range []string{"oku", "tool"} {
+		// Someone who can write beside the binary drops a spec that names
+		// another program.
+		spec := []byte("path = /bin/echo\narg = hijacked\n")
+		if err := os.WriteFile(filepath.Join(dir, name+".shim"), spec, 0o644); err != nil {
+			t.Fatal(err)
+		}
+
+		out, err := exec.Command(filepath.Join(dir, name), "--version").CombinedOutput()
+		if err != nil || strings.Contains(string(out), "hijacked") || !strings.Contains(string(out), "oku version") {
+			t.Fatalf("%s --version ran the spec beside it: %v\n%s", name, err, out)
+		}
 	}
 }

@@ -108,44 +108,41 @@ type Verifier struct {
 	err      error
 }
 
-// New returns a Verifier that trusts material, with the checks of options. It
-// asks the transparency log at rekor with client.
-func New(material root.TrustedMaterial, rekor string, client *http.Client, options ...verify.VerifierOption) *Verifier {
-	return &Verifier{
-		load:       func() (root.TrustedMaterial, error) { return material, nil },
-		options:    options,
-		keyOptions: options,
-		rekor:      rekor,
-		client:     client,
-	}
-}
-
-// WithGitHub makes v check a bundle whose certificate GitHub's own Sigstore
-// issued against material. Such a bundle must carry a timestamp of GitHub's
-// timestamp authority in place of a log entry.
-func (v *Verifier) WithGitHub(material root.TrustedMaterial) *Verifier {
-	v.github = New(material, "", nil, verify.WithSignedTimestamps(1))
-
-	return v
+// New returns a Verifier that trusts public for Sigstore's public instance and
+// github for GitHub's own, with the checks of Public. It asks the transparency
+// log at rekor with client.
+func New(public, github root.TrustedMaterial, rekor string, client *http.Client) *Verifier {
+	return newVerifier(
+		func() (root.TrustedMaterial, error) { return public, nil },
+		func() (root.TrustedMaterial, error) { return github, nil },
+		rekor, client,
+	)
 }
 
 // Public returns a Verifier for Sigstore's public instance, and for GitHub's
 // own. It reads their trust roots through TUF with client, and keeps them
-// under cacheDir. A bundle of the public instance must carry a log entry and
-// the log's timestamp, and a certificate timestamp when it has a certificate.
+// under cacheDir.
 func Public(cacheDir string, client *http.Client) *Verifier {
-	github := &Verifier{
-		load: func() (root.TrustedMaterial, error) {
-			return trustRoot(tuf.DefaultOptions().WithRoot(githubRoot).WithRepositoryBaseURL(githubTUF), cacheDir, client)
-		},
-		options: []verify.VerifierOption{verify.WithSignedTimestamps(1)},
-	}
-
-	return &Verifier{
-		load: func() (root.TrustedMaterial, error) {
+	return newVerifier(
+		func() (root.TrustedMaterial, error) {
 			return trustRoot(tuf.DefaultOptions(), cacheDir, client)
 		},
-		github: github,
+		func() (root.TrustedMaterial, error) {
+			return trustRoot(tuf.DefaultOptions().WithRoot(githubRoot).WithRepositoryBaseURL(githubTUF), cacheDir, client)
+		},
+		PublicRekor, client,
+	)
+}
+
+// newVerifier returns a Verifier that loads the trust roots of the public
+// instance with public and of GitHub's with github. A bundle of the public
+// instance must carry a log entry and the log's timestamp, and a certificate
+// timestamp when it has a certificate. A bundle of GitHub's must carry a
+// timestamp of GitHub's timestamp authority.
+func newVerifier(public, github func() (root.TrustedMaterial, error), rekor string, client *http.Client) *Verifier {
+	return &Verifier{
+		load:   public,
+		github: &Verifier{load: github, options: []verify.VerifierOption{verify.WithSignedTimestamps(1)}},
 		options: []verify.VerifierOption{
 			verify.WithSignedCertificateTimestamps(1),
 			verify.WithTransparencyLog(1),
@@ -155,7 +152,7 @@ func Public(cacheDir string, client *http.Client) *Verifier {
 			verify.WithTransparencyLog(1),
 			verify.WithObserverTimestamps(1),
 		},
-		rekor:  PublicRekor,
+		rekor:  rekor,
 		client: client,
 	}
 }
