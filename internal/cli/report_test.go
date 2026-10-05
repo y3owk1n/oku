@@ -1,7 +1,9 @@
 package cli_test
 
 import (
+	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -9,6 +11,8 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+
+	"github.com/y3owk1n/oku/internal/platform"
 )
 
 // managedList writes a list with one text file and one setting.
@@ -153,13 +157,46 @@ func TestB228ATerminalGetsEachPackageRowMarkedWithItsChange(t *testing.T) {
 		t.Fatalf("sync should print a plus row for the new package:\n%s", out)
 	}
 
+	body, err := os.ReadFile(ref)
+	must(t, err)
+
+	must(t, os.WriteFile(ref, append(body, "# changed\n"...), 0o644))
+
+	out, err = m.run(t, "", "update")
+	must(t, err)
+
+	if !strings.Contains(out, "\x1b[36m~\x1b[0m \x1b[1mtool\x1b[0m  1.2.3  \x1b[2mmanifest changed") {
+		t.Fatalf("update should print a cyan tilde row for the same version changed:\n%q", out)
+	}
+
+	must(t, os.WriteFile(ref, bytes.Replace(body, []byte(`"1.2.3"`), []byte(`"1.3.0"`), 1), 0o644))
+
+	out, err = m.run(t, "", "update")
+	must(t, err)
+
+	if !strings.Contains(out, "\x1b[36m↑\x1b[0m \x1b[1mtool\x1b[0m  1.2.3 → 1.3.0") {
+		t.Fatalf("update should print a cyan arrow row for the new version:\n%q", out)
+	}
+
 	m.writeFilesList(t, "[packages]\n")
 
 	out, err = m.run(t, "", "sync")
 	must(t, err)
 
-	if !strings.Contains(out, "-\x1b[0m \x1b[1mtool\x1b[0m  1.2.3  \x1b[2mremoved") {
+	if !strings.Contains(out, "-\x1b[0m \x1b[1mtool\x1b[0m  1.3.0  \x1b[2mremoved") {
 		t.Fatalf("sync should print a minus row for the removed package:\n%s", out)
+	}
+
+	// A package with nothing for the host is pinned for the other platform.
+	other := otherPlatform()
+	m.writeOwnList(t, fmt.Sprintf("[lock]\nplatforms = [%q]\n\n[packages]\nthere = { ref = %q, when = { os = %q, arch = %q } }\n",
+		other, m.onlyFor(t, "there", other), other.OS, other.Arch))
+
+	out, err = m.run(t, "", "sync")
+	must(t, err)
+
+	if !strings.Contains(out, "\x1b[2m·\x1b[0m \x1b[1mthere\x1b[0m  1.2.3  \x1b[2mpinned and not installed on "+platform.Host().String()) {
+		t.Fatalf("sync should print a dim dot row for a pin on another platform:\n%q", out)
 	}
 }
 

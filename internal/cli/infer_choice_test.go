@@ -4,6 +4,8 @@ import (
 	"archive/tar"
 	"bytes"
 	"compress/gzip"
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -138,18 +140,17 @@ func TestB198InferencePrefersTheSmallerAssetAndNoneNamedAsAnApp(t *testing.T) {
 	m := newMachine(t)
 	_, arch, _ := hostWords()
 
-	// Both builds add one word to the name, so only its size favours the
-	// command line build.
-	cli, _ := m.archive(t, "cli-slim", map[string]string{"tool": script})
-	bundle, _ := m.archive(t, "bundle", map[string]string{
-		"tool": script, "resources.bin": strings.Repeat("x", 1<<16),
-	})
+	// Every build adds one word to the name. Size alone puts the command line
+	// build before the bundle. The app is the smallest, so only the word app
+	// puts it last.
+	cli, _ := m.archive(t, "cli-slim", map[string]string{"tool": script, "notes": noise(1 << 10)})
+	bundle, _ := m.archive(t, "bundle", map[string]string{"tool": script, "resources.bin": noise(1 << 12)})
 	app, _ := m.archive(t, "app", map[string]string{"tool": script})
 
 	base := strings.TrimSuffix(hostAssetName(), ".tar.gz")
 	name := base + "-full.tar.gz"
 	slim := base + "-slim.tar.gz"
-	appName := strings.Replace(name, "tool-", "tool-app-", 1)
+	appName := base + "-app.tar.gz"
 	// The same build in another format is an alternative too.
 	sevenZip := base + "-slim.7z"
 
@@ -299,11 +300,14 @@ func TestB174InferencePrefersTheCommandLineBuildAndTheChecksumsOfItsOwnOS(t *tes
 		return path
 	}
 
+	// The desktop app is the smaller file and both names add one word, so only
+	// the word desktop puts the app last.
+	cli, _ := m.archive(t, "cli", map[string]string{"tool": script, "notes": noise(1 << 10)})
+
 	inferServer(t, &m, map[string]string{
-		// A desktop app beside the command line build, as sst/opencode ships them.
-		"tool-desktop-mac-arm64.app.tar.gz": file("desktop"),
-		"tool-darwin-arm64.zip":             file("cli"),
-		"tool-linux-arm64.tar.gz":           file("linux"),
+		"tool-darwin-arm64-desktop.zip": file("desktop"),
+		"tool-darwin-arm64-cli.zip":     cli,
+		"tool-linux-arm64.tar.gz":       file("linux"),
 		// manifest init wants an asset for the machine it runs on.
 		"tool-linux-x86_64.tar.gz": file("linux-amd64"),
 		"tool-darwin-x86_64.zip":   file("cli-amd64"),
@@ -701,6 +705,15 @@ func TestB481InferenceReadsPlatformsFromMoreNames(t *testing.T) {
 			t.Fatalf("an exe without an arch is no arm64 build:\n%s", out)
 		}
 	})
+}
+
+// noise returns n characters that do not compress, so an archive that holds
+// them is larger by about n.
+func noise(n int) string {
+	data := make([]byte, n/2)
+	_, _ = rand.Read(data)
+
+	return hex.EncodeToString(data)
 }
 
 func TestB482InferenceRefusesAWindowsSetupProgram(t *testing.T) {

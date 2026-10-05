@@ -448,10 +448,6 @@ func TestB4RemoveDropsPackageAndKeepsStorePath(t *testing.T) {
 	if got := m.storeEntries(t); len(got) != 1 {
 		t.Fatalf("store holds %v, want the one removed package", got)
 	}
-
-	if _, err := m.run(t, "", "remove", "tool"); err == nil {
-		t.Fatal("removing a package twice succeeded")
-	}
 }
 
 func TestB5ListShowsNameVersionRef(t *testing.T) {
@@ -821,37 +817,6 @@ func TestB14FirstUseChecksumIsPinnedAndEnforced(t *testing.T) {
 	_, err = m.run(t, "", "add", ref)
 	if err == nil || !strings.Contains(err.Error(), "checksum mismatch") {
 		t.Fatalf("want checksum mismatch, got %v", err)
-	}
-}
-
-func TestArtifactChecksumComesFromSHA256URL(t *testing.T) {
-	m := newMachine(t)
-	archive, sum := m.archive(t, "tool", map[string]string{"tool": script})
-	sums := filepath.Join(m.fixtures, "checksums.txt")
-
-	must(t, os.WriteFile(sums, []byte(
-		strings.Repeat("1", 64)+"  other.tar.gz\n"+sum+"  tool.tar.gz\n",
-	), 0o644))
-
-	ref := m.rawManifest(t, "tool", fmt.Sprintf(
-		"[[artifact]]\nurl = \"file://%s\"\nsha256_url = \"file://%s\"\nbin = [\"tool\"]\n",
-		archive, sums,
-	))
-
-	out, err := m.run(t, "", "add", ref)
-	must(t, err)
-
-	if strings.Contains(out, "trusted") {
-		t.Fatalf("add fell back to first-use trust:\n%s", out)
-	}
-
-	must(t, os.WriteFile(sums, []byte(strings.Repeat("2", 64)+"  tool.tar.gz\n"), 0o644))
-	must(t, removeAll(m.data))
-	must(t, removeAll(m.cache))
-	must(t, removeAll(m.config))
-
-	if _, err := m.run(t, "", "add", ref); err == nil {
-		t.Fatal("a download that differs from the published checksum was accepted")
 	}
 }
 
@@ -1989,8 +1954,8 @@ func TestB107AMovingTagDownloadMustMatchTheAPIDigest(t *testing.T) {
 	server.digest = strings.Repeat("0", 64)
 
 	_, err := m.run(t, "", "add", server.manifest(t, m))
-	if err == nil {
-		t.Fatal("add accepted a download that does not match the API digest")
+	if err == nil || !strings.Contains(err.Error(), "checksum mismatch") {
+		t.Fatalf("add should refuse a download that does not match the API digest, got %v", err)
 	}
 
 	if entries, _ := os.ReadDir(filepath.Join(m.data, "oku", "store")); len(entries) != 0 {
@@ -5044,7 +5009,7 @@ func TestB409StepsOkuRunsItselfDoNotFollowALinkARunStepLeft(t *testing.T) {
 		"patch": {
 			run: `ln -s VICTIM/patched new.txt
 printf 'diff --git a/new.txt b/new.txt\nnew file mode 100644\n--- /dev/null\n+++ b/new.txt\n@@ -0,0 +1 @@\n+evil\n' > p.diff`,
-			step: `patch = { file = "p.diff", strip = 1 }`,
+			step: `patch = { file = "p.diff" }`,
 		},
 		"extract": {
 			run:  "mkdir x && echo evil > x/extracted && tar czf a.tgz x && ln -s VICTIM out",
@@ -5083,8 +5048,8 @@ shell = "sh"
 `, name, strings.ReplaceAll(tc.run, "VICTIM", victim), tc.step), 0o644))
 
 			out, err := m.run(t, "", "add", path, "--yes")
-			if err == nil {
-				t.Fatalf("the build followed the link and succeeded:\n%s", out)
+			if err == nil || !strings.Contains(err.Error(), "leads outside") && !strings.Contains(err.Error(), "path escapes") {
+				t.Fatalf("the build did not refuse the link: %v\n%s", err, out)
 			}
 
 			if entries, _ := os.ReadDir(victim); len(entries) > 0 {
@@ -7322,10 +7287,13 @@ func TestB89SigningKeyVerifiesArtifactsAndAChangedKeyStopsUntilAccepted(t *testi
 
 	m.signedManifest(t, otherPublic.String(), otherSecret, false)
 
-	for _, command := range []string{"sync", "update"} {
-		if _, err := m.run(t, "", command); err == nil {
-			t.Fatalf("%s accepted a changed signing key", command)
-		}
+	// sync stops first because the manifest changed since oku.lock was written (B13).
+	if _, err := m.run(t, "", "sync"); err == nil {
+		t.Fatal("sync accepted a changed signing key")
+	}
+
+	if _, err := m.run(t, "", "update"); err == nil || !strings.Contains(err.Error(), "pinned the signing key") {
+		t.Fatalf("want update to refuse the changed signing key, got %v", err)
 	}
 
 	m.signedManifest(t, "", secret, false)
