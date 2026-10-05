@@ -178,11 +178,12 @@ $ oku gc --keep 2
   N is at least 1.
 - `--older-than 30d` deletes the generations older than 30 days, and keeps the
   newest of them, which was active 30 days ago. So you can always roll back to
-  how things were then. It takes days (`d`) or weeks (`w`). With `--keep` too,
-  a generation stays when either flag keeps it.
+  how things were then. It takes hours (`h`), days (`d`) or weeks (`w`). With
+  `--keep` too, a generation stays when either flag keeps it.
 - gc removes the profile of a project whose folder or `oku.toml` is gone,
   with its generations, and says so. It also forgets the project's
-  `oku allow`. A project on a volume that is not mounted stays.
+  `oku allow`. A project on a volume that is not mounted, or in a folder gc
+  cannot read, stays.
 - Then gc deletes each store path that no remaining generation uses. A
   [dep](../how-oku-works.md#runtime-dep) counts as used while a package that
   needs it is.
