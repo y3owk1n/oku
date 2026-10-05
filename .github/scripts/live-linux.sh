@@ -62,15 +62,15 @@ Delay = "0"
 LIST
 
 "$oku" sync
-check 'a string arrives' "$(dconf read /org/oku/live/scheme)" "'prefer-dark'"
-check 'an integer arrives' "$(dconf read /org/oku/live/count)" '9'
-check 'a boolean arrives' "$(dconf read /org/oku/live/enabled)" 'true'
-check 'a float arrives' "$(dconf read /org/oku/live/scale)" '1.5'
+check 'B153: a string arrives' "$(dconf read /org/oku/live/scheme)" "'prefer-dark'"
+check 'B153: an integer arrives' "$(dconf read /org/oku/live/count)" '9'
+check 'B153: a boolean arrives' "$(dconf read /org/oku/live/enabled)" 'true'
+check 'B153: a float arrives' "$(dconf read /org/oku/live/scale)" '1.5'
 check 'an array arrives, with a quote escaped' "$(dconf read /org/oku/live/names)" "['one', \"it's\"]"
 
 sed -i 's/count = 9/count = 11/' "$list"
 "$oku" sync
-check 'a changed value arrives' "$(dconf read /org/oku/live/count)" '11'
+check 'B153: a changed value arrives' "$(dconf read /org/oku/live/count)" '11'
 
 "$oku" rollback
 check 'rollback gives the value of the generation before' "$(dconf read /org/oku/live/count)" '9'

@@ -41,12 +41,12 @@ Check 'bin is a junction to the links that generations share' {
 }
 
 $version = & "$bin\rg.exe" --version
-Check 'the shim passes arguments and stdout through' { $version -match '^ripgrep \d' }
+Check 'B80: the shim passes arguments and stdout through' { $version -match '^ripgrep \d' }
 
 # The store's bin holds rg.exe and the spec beside it. oku run takes the one
 # program, not the spec, and starts the file the spec names.
 $ran = (& $oku run github:BurntSushi/ripgrep -- --version) -join ' '
-Check 'run starts the one program of a package and not its spec' { $ran -match '^ripgrep \d' }
+Check 'B432: run starts the one program of a package and not its spec' { $ran -match '^ripgrep \d' }
 
 $whichRg = (& $oku which rg) -join "`n"
 Check 'which names the package of a shim and the file it runs' {
@@ -54,10 +54,10 @@ Check 'which names the package of a shim and the file it runs' {
 }
 
 $found = 'needle in a haystack' | & "$bin\rg.exe" needle
-Check 'the shim passes stdin through' { $found -match 'needle' }
+Check 'B80: the shim passes stdin through' { $found -match 'needle' }
 
 'nothing here' | & "$bin\rg.exe" needle | Out-Null
-Check 'the shim passes the exit code through' { $LASTEXITCODE -eq 1 }
+Check 'B80: the shim passes the exit code through' { $LASTEXITCODE -eq 1 }
 
 Push-Location $env:RUNNER_TEMP
 $elsewhere = & "$bin\rg.exe" --version
@@ -171,7 +171,7 @@ Check 'outside the project fd is not on PATH' { -not (Get-Command fd -ErrorActio
 Set-Location $project
 cmd /c exit 7
 prompt | Out-Null
-Check 'the prompt keeps LASTEXITCODE' { $LASTEXITCODE -eq 7 }
+Check 'B82: the prompt keeps LASTEXITCODE' { $LASTEXITCODE -eq 7 }
 Check 'inside the project fd comes from the project profile' {
     (Get-Command fd).Source -like '*profiles*project-*'
 }
@@ -585,14 +585,14 @@ Set-Content (Join-Path $msiProject 'oku.toml') ("[packages]`n" + ($msiRefs -join
 Set-Location $msiProject
 Oku sync
 Set-Location $root
-Check 'two .msi downloads unpack in one sync' {
+Check 'B288: two .msi downloads unpack in one sync' {
     (Get-Content (Join-Path $msiProject 'oku.lock') -Raw) -match "msi-a[\s\S]*msi-b"
 }
 
 # A winget package whose MSI names no command gets the program its moniker
 # names, as nvim of Neovim.Neovim, and not one named after the package.
 $nvimManifest = (& $oku add winget:Neovim.Neovim --manifest) -join "`n"
-Check 'a winget MSI without commands takes the program of its moniker' { $nvimManifest -match 'nvim\.exe' }
+Check 'B434: a winget MSI without commands takes the program of its moniker' { $nvimManifest -match 'nvim\.exe' }
 
 # A temporary directory that an ended oku process left, which gc removes.
 $ended = Start-Process cmd -ArgumentList '/c', 'exit' -PassThru -Wait -WindowStyle Hidden
@@ -652,8 +652,8 @@ $pinger = Start-Process "$bin\share-b.exe" -ArgumentList '-n', '30', '127.0.0.1'
 Start-Sleep -Seconds 1
 Oku remove share-a
 Oku gc --keep 1
-Check 'gc deletes a store path while a program of the other one runs' { -not (Test-Path "$store\share-a-*") }
-Check 'gc deletes the old generations while a shim runs' {
+Check 'B366: gc deletes a store path while a program of the other one runs' { -not (Test-Path "$store\share-a-*") }
+Check 'B366: gc deletes the old generations while a shim runs' {
     @(Get-ChildItem $profileDir -Directory -Filter 'gen-*').Count -eq 1
 }
 Check 'the shim keeps running' { -not $pinger.HasExited }
@@ -673,7 +673,7 @@ $key = (Get-FileHash $zeros -Algorithm SHA256).Hash.ToLower()
 Oku remove share-b
 Oku gc --keep 1
 Check 'gc drops the shared file once no store path holds it' { -not (Test-Path "$store\.links\$key") }
-Check 'gc deletes what it moved aside once the program has ended' {
+Check 'B366: gc deletes what it moved aside once the program has ended' {
     @((Join-Path $env:XDG_DATA_HOME 'oku\trash'), (Join-Path $shared 'trash')) | ForEach-Object {
         -not (Test-Path $_) -or @(Get-ChildItem $_).Count -eq 0
     } | Where-Object { -not $_ } | Measure-Object | ForEach-Object { $_.Count -eq 0 }
@@ -697,7 +697,7 @@ Start-Sleep -Seconds 2
 Check 'a shim and the program it started run' { @(Get-Process linger -ErrorAction SilentlyContinue).Count -eq 2 }
 Stop-Process $lingerShim
 Start-Sleep -Seconds 2
-Check 'stopping the shim stops the program it started' { -not (Get-Process linger -ErrorAction SilentlyContinue) }
+Check 'B367: stopping the shim stops the program it started' { -not (Get-Process linger -ErrorAction SilentlyContinue) }
 
 # A process that the program starts keeps running, as an editor that a launcher
 # opens does. launch is a copy of cmd, which starts ping and waits.
@@ -705,7 +705,7 @@ $launchShim = Start-Process "$bin\launch.exe" -ArgumentList '/c', 'ping -n 120 1
 Start-Sleep -Seconds 2
 Stop-Process $launchShim
 Start-Sleep -Seconds 2
-Check 'stopping the shim leaves what its program started' {
+Check 'B367: stopping the shim leaves what its program started' {
     -not (Get-Process launch -ErrorAction SilentlyContinue) -and (Get-Process PING -ErrorAction SilentlyContinue)
 }
 Get-Process PING -ErrorAction SilentlyContinue | Stop-Process
@@ -731,9 +731,9 @@ $null = Start-Process "$bin\linger.exe" -ArgumentList '-n', '120', '127.0.0.1' -
 Start-Sleep -Seconds 2
 Set-Location $env:RUNNER_TEMP
 $uninstalled = (Oku self uninstall --yes --system) -join "`n"
-Check 'uninstall says that a program it installed still runs' { $uninstalled -match 'still runs' }
+Check 'B368: uninstall says that a program it installed still runs' { $uninstalled -match 'still runs' }
 Check 'uninstall --system removes the shared root' { -not (Test-Path (Join-Path $env:ProgramData 'oku')) }
-Check 'oku.exe is no longer at its path' { -not (Test-Path $oku) }
+Check 'B101: oku.exe is no longer at its path' { -not (Test-Path $oku) }
 Check 'data, cache and config are gone' {
     -not (Test-Path "$env:XDG_DATA_HOME\oku") -and -not (Test-Path "$env:XDG_CACHE_HOME\oku") -and
     -not (Test-Path "$env:XDG_CONFIG_HOME\oku")
@@ -746,7 +746,7 @@ Check 'the project list and lock are untouched' {
     (Test-Path "$project\oku.toml") -and (Test-Path "$project\oku.lock")
 }
 Start-Sleep -Seconds 8
-Check 'the file that was moved aside is deleted once oku has exited' {
+Check 'B101: the file that was moved aside is deleted once oku has exited' {
     -not (Test-Path "$oku.uninstalled")
 }
 Get-Process linger -ErrorAction SilentlyContinue | Stop-Process
@@ -754,7 +754,7 @@ Get-Process linger -ErrorAction SilentlyContinue | Stop-Process
 for ($i = 0; $i -lt 30 -and ((Test-Path "$env:XDG_DATA_HOME\oku-uninstalled") -or (Test-Path "$env:ProgramData\oku-uninstalled")); $i++) {
     Start-Sleep -Seconds 1
 }
-Check 'the files of the program are deleted once it has ended' {
+Check 'B368: the files of the program are deleted once it has ended' {
     -not (Test-Path "$env:XDG_DATA_HOME\oku-uninstalled") -and -not (Test-Path "$env:ProgramData\oku-uninstalled")
 }
 
@@ -1049,7 +1049,7 @@ tilesize = 48
 Oku sync
 $props = Get-ItemProperty $regKey
 $kinds = Get-Item $regKey
-Check 'registry values arrive with their types, and the table of macOS is skipped' {
+Check 'B153: registry values arrive with their types, and the table of macOS is skipped' {
     ($props.Delay -eq '0') -and ($props.Count -eq 9) -and ($props.Enabled -eq 1) -and ($props.Size -eq 48) -and
     (($props.Names -join ',') -eq 'one,two') -and ($kinds.GetValueKind('Delay') -eq 'String') -and
     ($kinds.GetValueKind('Size') -eq 'DWord') -and ($kinds.GetValueKind('Names') -eq 'MultiString')
@@ -1194,7 +1194,7 @@ Check 'the shim of a program in a directory of its download names the real file'
     $nestedSpec -match 'path = .*\\pkg\\python\\python\.exe'
 }
 $version = & "$bin\python.exe" --version
-Check 'a program that loads a DLL beside it in a directory of its download runs from its shim' {
+Check 'B81: a program that loads a DLL beside it in a directory of its download runs from its shim' {
     $version -match '^Python 3\.13'
 }
 
@@ -1215,7 +1215,7 @@ Oku remove python-nested
 # DLL then sit at the top of pkg.
 Oku add $pythonToml
 $version = & "$bin\python.exe" --version
-Check 'a program that loads a DLL beside it in its download runs from its shim' { $version -match '^Python 3\.13' }
+Check 'B81: a program that loads a DLL beside it in its download runs from its shim' { $version -match '^Python 3\.13' }
 
 # A program whose dep ships a DLL gets a link to that DLL beside it. Windows
 # looks in the program's directory first, and in the working directory before
@@ -1253,7 +1253,7 @@ install = { bin = ["dlluser.exe"] }
 "@
 Oku add (Join-Path $fixtures 'dlluser.toml') --yes
 $dllUser = [regex]::Match(((Get-Content "$bin\dlluser.shim") -join "`n"), 'path = (.+)').Groups[1].Value.Trim()
-Check 'the DLL of a dep sits beside the program that loads it' {
+Check 'B430: the DLL of a dep sits beside the program that loads it' {
     Test-Path (Join-Path (Split-Path $dllUser) 'okudep.dll')
 }
 
@@ -1278,14 +1278,14 @@ bin = ["dllart.exe"]
 Oku remove dlluser
 Oku add (Join-Path $fixtures 'dllart.toml') --yes
 $artDll = { Get-Content -Raw (Join-Path (Split-Path ([regex]::Match(((Get-Content "$bin\dllart.shim") -join "`n"), 'path = (.+)').Groups[1].Value.Trim())) 'okudep.dll') }
-Check 'a download gets the DLL of its dep beside its program' { (& $artDll).Trim() -eq 'a DLL of the dep' }
+Check 'B430: a download gets the DLL of its dep beside its program' { (& $artDll).Trim() -eq 'a DLL of the dep' }
 Set-Content (Join-Path $dllKit 'okudep.dll') 'the next DLL of the dep'
 $dllZip2 = Join-Path $fixtures 'dllkit2.zip'
 Compress-Archive -Force -Path (Join-Path $dllKit '*') -DestinationPath $dllZip2
 (Get-Content -Raw (Join-Path $fixtures 'dllkit.toml')).Replace('1.0.0', '2.0.0').Replace('dllkit.zip', 'dllkit2.zip') |
     Set-Content (Join-Path $fixtures 'dllkit.toml')
 Oku update --yes
-Check 'a new version of the dep replaces the DLL beside the program' { (& $artDll).Trim() -eq 'the next DLL of the dep' }
+Check 'B430: a new version of the dep replaces the DLL beside the program' { (& $artDll).Trim() -eq 'the next DLL of the dep' }
 Oku remove dllart
 
 # A machine without PowerShell 7 builds registry packages with the Windows
@@ -1300,9 +1300,9 @@ try {
     $env:PATH = $pathBefore
 }
 $shfmt = & "$bin\shfmt.exe" --version
-Check 'a go: ref builds with Windows PowerShell when PowerShell 7 is missing' { $shfmt -match '\d+\.\d+' }
+Check 'B269: a go: ref builds with Windows PowerShell when PowerShell 7 is missing' { $shfmt -match '\d+\.\d+' }
 $moo = (& "$bin\cowsay.exe" -t moo) -join "`n"
-Check 'a pypi: ref builds with Windows PowerShell when PowerShell 7 is missing' { $moo -match 'moo' }
+Check 'B269: a pypi: ref builds with Windows PowerShell when PowerShell 7 is missing' { $moo -match 'moo' }
 
 # In this project the go package is also the runtime of a go: package, so one
 # sync downloads the go zip twice at once. Windows refuses to replace the file

@@ -246,7 +246,7 @@ func TestB293ATranslationFollowsTheRecipesRuleForEachPlatform(t *testing.T) {
 
 	out, err := m.run(t, "", "manifest", "init", "--from", "cask:tool", "-o", "-")
 	if err != nil {
-		t.Fatalf("init: %v\n%s", err, out)
+		t.Fatalf("B296: manifest init did not write the translated manifest: %v\n%s", err, out)
 	}
 
 	for _, want := range []string{
@@ -500,7 +500,7 @@ func TestB292AScoopManifestTranslatesItsArchesProgramsAndShortcuts(t *testing.T)
 
 	out, err := m.run(t, "", "manifest", "init", "--from", "scoop:tool", "-o", "-")
 	if err != nil {
-		t.Fatalf("init: %v\n%s", err, out)
+		t.Fatalf("B296: manifest init did not write the translated manifest: %v\n%s", err, out)
 	}
 
 	for _, want := range []string{

@@ -193,12 +193,12 @@ func TestB391RunNamesSeveralAppsAndAppPicksOne(t *testing.T) {
 	// The name ignores case, and the suffix a macOS bundle carries.
 	out, err = m.run(t, "", "run", "--yes", ref, "--app", "ALPHA")
 	if err != nil || !strings.Contains(out, "started alpha") {
-		t.Fatalf("--app ALPHA did not start alpha: %v\n%s", err, out)
+		t.Fatalf("B389: --app ALPHA did not start alpha, which the plist names: %v\n%s", err, out)
 	}
 
 	out, err = m.run(t, "", "run", "--yes", ref, "--app", "beta.app")
 	if err != nil || !strings.Contains(out, "started beta") {
-		t.Fatalf("--app beta.app did not start beta: %v\n%s", err, out)
+		t.Fatalf("B389: --app beta.app did not start beta, the only program of its bundle: %v\n%s", err, out)
 	}
 
 	_, err = m.run(t, "", "run", "--yes", ref, "--app", "gamma")
