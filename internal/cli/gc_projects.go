@@ -25,6 +25,8 @@ type projectState struct {
 	gone string
 	// away reports a project on a volume that is not mounted.
 	away bool
+	// unread reports a project whose folder oku cannot read.
+	unread bool
 }
 
 // projectStates looks up the project of each project profile. A profile from
@@ -61,6 +63,8 @@ func (e env) projectStates(profiles []*profile.Profile) ([]projectState, error) 
 			s.gone = "its folder is gone"
 		case gone(filepath.Join(s.dir, list.FileName)):
 			s.gone = "its " + list.FileName + " is gone"
+		case unreadable(filepath.Join(s.dir, list.FileName)):
+			s.unread = true
 		}
 
 		states = append(states, s)
@@ -71,8 +75,9 @@ func (e env) projectStates(profiles []*profile.Profile) ([]projectState, error) 
 
 // removeGoneProjects deletes the profile of each project that is gone, and its
 // entry among the projects the shell hook may apply, and says so on out. It
-// keeps a project on a volume that is not mounted, and one whose folder it does
-// not know, and says that too. It returns the projects that are gone.
+// keeps a project on a volume that is not mounted, one whose folder it cannot
+// read, and one whose folder it does not know, and says that too. It returns
+// the projects that are gone.
 func (e env) removeGoneProjects(
 	out io.Writer,
 	profiles []*profile.Profile,
@@ -121,6 +126,8 @@ func (e env) removeGoneProjects(
 			)))
 		case state.away:
 			fmt.Fprintf(out, "kept project %s, its volume is not mounted\n", s.Home(state.dir))
+		case state.unread:
+			fmt.Fprintf(out, "kept project %s, oku cannot read its folder\n", s.Home(state.dir))
 		case state.dir == "":
 			unknown++
 		}
@@ -162,6 +169,13 @@ func gone(path string) bool {
 	_, err := os.Stat(path)
 
 	return errors.Is(err, fs.ErrNotExist)
+}
+
+// unreadable reports whether oku may not look at path.
+func unreadable(path string) bool {
+	_, err := os.Stat(path)
+
+	return errors.Is(err, fs.ErrPermission)
 }
 
 func exists(path string) bool {

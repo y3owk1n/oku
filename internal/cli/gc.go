@@ -38,8 +38,9 @@ func newGCCmd() *cobra.Command {
 
 Old generations keep their packages in the store so rollback needs no download.
 --keep deletes old generations first, which frees the packages only they use.
---older-than deletes the generations older than a number of days or weeks, and
-keeps the one that was active then, so you can still roll back to that date.
+--older-than deletes the generations older than a number of hours, days or
+weeks, and keeps the one that was active then, so you can still roll back to
+that date.
 With both, a generation stays when either flag keeps it.
 --cache also deletes the downloads that no kept store path was made from, the
 downloads that no install has used for two days, and the API answers that no

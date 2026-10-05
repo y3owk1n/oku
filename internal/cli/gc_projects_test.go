@@ -98,8 +98,17 @@ func TestB378GCKeepsAProjectItCannotRead(t *testing.T) {
 	must(t, os.Chmod(locked, 0))
 	t.Cleanup(func() { _ = os.Chmod(locked, 0o755) })
 
-	if out, err := m.run(t, "", "gc"); err != nil {
-		t.Fatalf("gc: %v\n%s", err, out)
+	want := "kept project " + filepath.Join(locked, "proj") + ", oku cannot read its folder"
+
+	for _, args := range [][]string{{"gc", "--dry-run"}, {"gc"}} {
+		out, err := m.run(t, "", args...)
+		if err != nil {
+			t.Fatalf("%v: %v\n%s", args, err, out)
+		}
+
+		if !strings.Contains(out, want) {
+			t.Fatalf("%v did not say why it kept the project:\n%s", args, out)
+		}
 	}
 
 	if len(m.profiles(t)) != 1 {
