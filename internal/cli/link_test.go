@@ -10,9 +10,9 @@ import (
 	"testing"
 )
 
-// linkedApp writes the manifest of a program named name that links libgreet
-// from the greet package, with greet as a build dep and runtime as its
-// [runtime] table.
+// linkedApp writes the manifest of two programs, name and name2, that link
+// libgreet from the greet package, with greet as a build dep and runtime as
+// its [runtime] table.
 func (m machine) linkedApp(t *testing.T, name, runtimeDeps string) string {
 	t.Helper()
 
@@ -59,12 +59,13 @@ deps = ["./greet.toml"]
 [[build.step]]
 run = """
 printf '#include <stdio.h>\\n#include <greet.h>\\nint main(void) { puts(greet()); return 0; }\\n' > main.c
-cc -o %s main.c %s
+cc -o %[1]s main.c %[2]s
+cp %[1]s %[1]s2
 """
 shell = "sh"
 [[build.step]]
-install = { bin = [%q] }
-%s`, name, name, link, name, runtimeDeps)), 0o644))
+install = { bin = [%[1]q, "%[1]s2"] }
+%[3]s`, name, link, runtimeDeps)), 0o644))
 
 	return path
 }

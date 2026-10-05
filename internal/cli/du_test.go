@@ -9,7 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/y3owk1n/oku/internal/clone"
 	"github.com/y3owk1n/oku/internal/status"
 )
 
@@ -75,7 +74,7 @@ func TestB380DuSaysAClonedAppSharesTheStoresBlocks(t *testing.T) {
 	note := "shares its blocks with the store"
 	out := m.stdout(t, "du")
 
-	if clone.Possible(filepath.Join(m.data, "store"), filepath.Dir(app)) {
+	if canClone(t, filepath.Join(m.data, "store"), filepath.Dir(app)) {
 		if !strings.Contains(out, note) {
 			t.Fatalf("du said nothing about the clone:\n%s", out)
 		}
@@ -182,7 +181,14 @@ func TestB348GCCacheDeletesDownloadsNoKeptStorePathWasMadeFrom(t *testing.T) {
 		t.Fatal("du says gc --cache frees nothing, but the index by url is old")
 	}
 
-	out, err := m.run(t, "", "gc", "--keep", "1", "--cache")
+	out, err := m.run(t, "", "gc", "--cache", "--dry-run")
+	must(t, err)
+
+	if !strings.Contains(out, "would free "+status.Size(before.GCCacheFrees)+" from") {
+		t.Fatalf("du says gc --cache frees %s, gc says otherwise:\n%s", status.Size(before.GCCacheFrees), out)
+	}
+
+	out, err = m.run(t, "", "gc", "--keep", "1", "--cache")
 	must(t, err)
 
 	switch {

@@ -116,6 +116,17 @@ func TestB374SelfUpdateTakesTheNewestReleaseOlderThanTheMinimumReleaseAge(t *tes
 		t.Fatalf("self update on 1.3.0 took %q:\n%s", binary(), out)
 	}
 
+	// A build newer than the newest release that is old enough never goes back.
+	m.opts.Version = "1.3.5"
+	must(t, os.WriteFile(m.exe, []byte("oku v1.3.5"), 0o755))
+
+	out, err = m.run(t, "", "self", "update")
+	must(t, err)
+
+	if binary() != "oku v1.3.5" || !strings.Contains(out, "1.3.5 is the newest release that is old enough") {
+		t.Fatalf("self update on 1.3.5 took %q:\n%s", binary(), out)
+	}
+
 	out, err = m.run(t, "", "self", "update", "--min-release-age", "0")
 	must(t, err)
 

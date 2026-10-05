@@ -116,6 +116,16 @@ func TestB372AddTakesTheNewestVersionOlderThanTheMinimumReleaseAge(t *testing.T)
 		t.Fatalf("a plain update took %s and said:\n%s", got, out)
 	}
 
+	// Nor does it fail when every version is too new for it.
+	out, err = m.run(t, "", "update", "tool", "--min-release-age", "2w")
+	if err != nil {
+		t.Fatalf("update --min-release-age 2w: %v\n%s", err, out)
+	}
+
+	if got := m.toolVersion(t); got != "1.1.0" {
+		t.Fatalf("update --min-release-age 2w took %s, want 1.1.0", got)
+	}
+
 	if out := m.stdout(t, "outdated"); strings.Contains(out, "waiting") {
 		t.Fatalf("outdated shows a version as waiting behind the locked one:\n%s", out)
 	}
@@ -174,6 +184,10 @@ func TestB372AnExactVersionSkipsTheMinimumReleaseAge(t *testing.T) {
 func TestB373AVersionWithoutAReleaseTimeIsTakenWithANote(t *testing.T) {
 	m := newMachine(t)
 	tool := ageServer(t, &m, map[string]time.Duration{"1.0.0": 0})
+
+	// The list says allow, since by default oku asks first.
+	m.opts.UnknownReleaseAge = ""
+	m.writeFilesList(t, "[lock]\nunknown_release_age = \"allow\"\n")
 
 	out, err := m.run(t, "", "add", tool)
 	must(t, err)

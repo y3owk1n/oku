@@ -80,9 +80,9 @@ func TestB538OnlyAManifestOnThisMachineMayNameAURLOfThisMachine(t *testing.T) {
 
 	var server *httptest.Server
 
-	manifest := func(version string) string {
+	manifest := func(version, url string) string {
 		return "[package]\nname = \"tool\"\n" + version +
-			"[[artifact]]\nurl = \"" + server.URL + "/tool.tar.gz\"\nbin = [\"tool\"]\n"
+			"[[artifact]]\nurl = \"" + url + "\"\nbin = [\"tool\"]\n"
 	}
 
 	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -90,11 +90,13 @@ func TestB538OnlyAManifestOnThisMachineMayNameAURLOfThisMachine(t *testing.T) {
 		case "/api/repos/owner/tool/commits/HEAD", "/api/repos/owner/page/commits/HEAD":
 			_, _ = w.Write([]byte(commit))
 		case "/raw/owner/tool/" + commit + "/oku.pkg.toml", "/tool.toml":
-			_, _ = w.Write([]byte(manifest("[version]\nvalue = \"1.0.0\"\n")))
+			_, _ = w.Write([]byte(manifest("[version]\nvalue = \"1.0.0\"\n", server.URL+"/tool.tar.gz")))
 		case "/raw/owner/page/" + commit + "/oku.pkg.toml":
 			// A version read from a local service could carry its answer away.
+			// The artifact is remote, so only the page can be refused.
 			_, _ = w.Write([]byte(manifest(
-				"[version]\nfrom = \"page\"\nrepo = \"" + server.URL + "/admin\"\nregex = '([0-9.]+)'\n",
+				"[version]\nfrom = \"page\"\nrepo = \""+server.URL+"/admin\"\nregex = '([0-9.]+)'\n",
+				"https://example.com/tool.tar.gz",
 			)))
 		case "/tool.tar.gz":
 			_, _ = w.Write(data)
@@ -107,10 +109,14 @@ func TestB538OnlyAManifestOnThisMachineMayNameAURLOfThisMachine(t *testing.T) {
 	m.opts.GitHubAPI = server.URL + "/api"
 	m.opts.GitHubRaw = server.URL + "/raw"
 
-	for _, ref := range []string{"github:owner/tool", "github:owner/page"} {
+	for ref, local := range map[string]string{
+		"github:owner/tool": server.URL + "/tool.tar.gz",
+		"github:owner/page": server.URL + "/admin",
+	} {
 		if out, err := m.run(t, "", "add", ref); err == nil ||
-			!strings.Contains(err.Error(), "only a manifest on this machine may name a URL of this machine") {
-			t.Fatalf("want %s refused, got %v:\n%s", ref, err, out)
+			!strings.Contains(err.Error(), "only a manifest on this machine may name a URL of this machine") ||
+			!strings.Contains(err.Error(), local) {
+			t.Fatalf("want %s refused for %s, got %v:\n%s", ref, local, err, out)
 		}
 	}
 
@@ -146,9 +152,15 @@ func TestB540AManifestInAProjectReadsOnlyFilesOfTheProject(t *testing.T) {
 		return path
 	}
 
-	if out, err := m.run(t, "", "add", manifest(outside)); err == nil ||
-		!strings.Contains(err.Error(), "a manifest in a project may read only files of the project") {
-		t.Fatalf("want a project's manifest refused a file outside it, got %v:\n%s", err, out)
+	// A link in the project counts as where it leads.
+	link := filepath.Join(project, "tools", "link.tar.gz")
+	must(t, os.Symlink(outside, link))
+
+	for _, file := range []string{outside, link} {
+		if out, err := m.run(t, "", "add", manifest(file)); err == nil ||
+			!strings.Contains(err.Error(), "a manifest in a project may read only files of the project") {
+			t.Fatalf("want a project's manifest that names %s refused, got %v:\n%s", file, err, out)
+		}
 	}
 
 	if out, err := m.run(t, "", "add", manifest(inside)); err != nil {

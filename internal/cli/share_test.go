@@ -112,6 +112,11 @@ func TestB362StorePathsKeepOneCopyOfAnIdenticalFile(t *testing.T) {
 	infoTwo, err := os.Stat(two)
 	must(t, err)
 
+	store := filepath.Join(m.data, "store")
+	if !os.SameFile(infoOne, infoTwo) && !canClone(t, m.data, store) {
+		t.Fatal("the store keeps two copies of the blob on a filesystem that cannot clone")
+	}
+
 	// A hard link must not let one store path change the other. A clone keeps the
 	// mode the file had, which the read-only store takes the write bits off.
 	if os.SameFile(infoOne, infoTwo) {
@@ -122,9 +127,9 @@ func TestB362StorePathsKeepOneCopyOfAnIdenticalFile(t *testing.T) {
 		t.Fatalf("a clone changed mode: %v and %v", infoOne.Mode(), infoTwo.Mode())
 	}
 
-	store := m.duStore(t)
-	if want := m.storeBytes(t, "one", "two") - int64(len(blob)); store != want {
-		t.Fatalf("du gives the store %d bytes, want %d with the blob once", store, want)
+	size := m.duStore(t)
+	if want := m.storeBytes(t, "one", "two") - int64(len(blob)); size != want {
+		t.Fatalf("du gives the store %d bytes, want %d with the blob once", size, want)
 	}
 
 	for _, name := range []string{"one", "two"} {
@@ -217,6 +222,16 @@ func TestB364GCSharesTheFilesOfOlderStorePaths(t *testing.T) {
 
 	if data, err := os.ReadFile(two); err != nil || string(data) != blob {
 		t.Fatalf("sharing changed the blob of two: %v", err)
+	}
+
+	infoOne, err := os.Stat(m.blobOf(t, "one"))
+	must(t, err)
+	infoTwo, err := os.Stat(two)
+	must(t, err)
+
+	store := filepath.Join(m.data, "store")
+	if !os.SameFile(infoOne, infoTwo) && !canClone(t, m.data, store) {
+		t.Fatal("the store keeps two copies of the blob on a filesystem that cannot clone")
 	}
 
 	out, err = m.run(t, "", "gc")

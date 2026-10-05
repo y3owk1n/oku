@@ -125,6 +125,12 @@ func TestB268LintDoesNotWarnWhenGitHubOrCratesIOReportTheDigest(t *testing.T) {
 	if !strings.Contains(out, "users trust the first download") {
 		t.Fatalf("lint did not warn about a file that no host reports a digest for:\n%s", out)
 	}
+
+	out = lint("elsewhere-source", release+"[build]\nsource = { url = \"https://example.com/tool.tar.gz\", strip = 1 }\n"+
+		"[[build.step]]\ninstall = { bin = [\"tool\"] }\n")
+	if !strings.Contains(out, "build.source: no sha256 or sha256_url, so users trust the first download") {
+		t.Fatalf("lint did not warn about a source that no host reports a digest for:\n%s", out)
+	}
 }
 
 // digestInferServer fakes GitHub for owner/tool with no manifest, whose release

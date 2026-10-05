@@ -10,7 +10,7 @@ import (
 
 func TestB524AListWithAnUnknownOrMistypedKeyChangesNothing(t *testing.T) {
 	for _, tc := range []struct{ name, list, wantErr string }{
-		{"a misspelt table", "[package]\ntool = %q\n", "unknown table or key package"},
+		{"a misspelt table", "[package]\ntool = %q\n", "line 1: unknown table or key package"},
 		{"a misspelt entry key", "[packages]\ntool = { ref = %q, verison = \"1\" }\n", "unknown key verison"},
 		{"a value of the wrong type", "[packages]\ntool = { ref = %q, version = 1 }\n", "version wants a string"},
 	} {
@@ -48,7 +48,7 @@ func TestB525AnInstallWarnsOfAManifestKeyItDoesNotKnow(t *testing.T) {
 		t.Fatalf("a manifest for a newer oku did not install: %v\n%s", err, out)
 	}
 
-	if !strings.Contains(out, "unknown key artifact.shiny") || !strings.Contains(out, "newer oku") {
+	if !strings.Contains(out, "line 6: unknown key artifact.shiny") || !strings.Contains(out, "newer oku") {
 		t.Fatalf("add did not name the key it left out:\n%s", out)
 	}
 }

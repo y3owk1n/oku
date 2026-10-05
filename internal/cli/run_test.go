@@ -165,7 +165,7 @@ func TestB390RunTakesTheOneProgramOfAPackageWithNoApp(t *testing.T) {
 	none := m.manifest(t, "none", map[string]string{"share/none/data": "text"}, `data = true`)
 
 	_, err = m.run(t, "", "run", "--yes", none)
-	if err == nil || !strings.Contains(err.Error(), "no app and no program") {
+	if err == nil || !strings.Contains(err.Error(), "none ships no app and no program to run") {
 		t.Fatalf("want an error for a package that runs nothing, got %v", err)
 	}
 }
@@ -202,7 +202,7 @@ func TestB391RunNamesSeveralAppsAndAppPicksOne(t *testing.T) {
 	}
 
 	_, err = m.run(t, "", "run", "--yes", ref, "--app", "gamma")
-	if err == nil || !strings.Contains(err.Error(), "no app gamma") {
+	if err == nil || !strings.Contains(err.Error(), "suite ships no app gamma, it ships alpha, beta") {
 		t.Fatalf("want an error naming the app that is missing, got %v", err)
 	}
 }
@@ -210,7 +210,7 @@ func TestB391RunNamesSeveralAppsAndAppPicksOne(t *testing.T) {
 func TestB392RunPassesTheArgumentsAndTheEnvironment(t *testing.T) {
 	m := newMachine(t)
 	ref := m.appManifest(t, "gui", map[string]string{
-		"gui": "#!/bin/sh\necho \"args=$*\"\necho \"home=$APP_HOME\"\ncommand -v gui\n",
+		"gui": "#!/bin/sh\necho \"args=$*\"\necho \"home=$APP_HOME\"\n",
 	}, "")
 
 	out, err := m.run(t, "", "run", "--yes", ref, "--", "one", "two")
@@ -225,9 +225,27 @@ func TestB392RunPassesTheArgumentsAndTheEnvironment(t *testing.T) {
 	if !strings.Contains(out, "home="+filepath.Join(m.data, "store")) {
 		t.Fatalf("the app did not get the package's [env]:\n%s", out)
 	}
+}
 
-	if !strings.Contains(out, filepath.Join(m.data, "store")) {
-		t.Fatalf("the app did not find the package's programs on PATH:\n%s", out)
+func TestB393RunPutsThePackagesBinFirstOnPath(t *testing.T) {
+	m := newMachine(t)
+	ref := m.appManifest(t, "gui", map[string]string{
+		"gui": "#!/bin/sh\necho \"which=$(command -v gui)\"\n",
+	}, "")
+
+	// A gui already on PATH must not win over the package's own.
+	shadow := filepath.Join(m.fixtures, "shadow")
+	must(t, os.MkdirAll(shadow, 0o755))
+	must(t, os.WriteFile(filepath.Join(shadow, "gui"), []byte(script), 0o755))
+	t.Setenv("PATH", shadow+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	out, err := m.run(t, "", "run", "--yes", ref)
+	if err != nil {
+		t.Fatalf("run: %v\n%s", err, out)
+	}
+
+	if !strings.Contains(out, "which="+filepath.Join(m.data, "store")) {
+		t.Fatalf("the app did not find the package's gui first on PATH:\n%s", out)
 	}
 }
 

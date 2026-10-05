@@ -705,6 +705,23 @@ func TestB481InferenceReadsPlatformsFromMoreNames(t *testing.T) {
 			t.Fatalf("an exe without an arch is no arm64 build:\n%s", out)
 		}
 	})
+
+	// A name that says setup is an installer, whatever the file holds.
+	t.Run("setup exe", func(t *testing.T) {
+		m := newMachine(t)
+		host, _ := m.archive(t, "host", map[string]string{"tool": script})
+		setup := filepath.Join(m.fixtures, "tool-1.4.0-setup.exe")
+		must(t, os.WriteFile(setup, []byte("MZ"), 0o644))
+
+		inferServer(t, &m, map[string]string{"tool-1.4.0-setup.exe": setup, hostAssetName(): host})
+
+		out, err := m.run(t, "", "manifest", "init", "--from", "owner/tool", "-o", "-")
+		must(t, err)
+
+		if strings.Contains(out, `os = "windows"`) {
+			t.Fatalf("windows should get no artifact from a setup program:\n%s", out)
+		}
+	})
 }
 
 // noise returns n characters that do not compress, so an archive that holds

@@ -77,7 +77,10 @@ func TestB154ASecretEntryWritesTheDecryptedValue(t *testing.T) {
 
 func TestB155AnAgeFileNeedsNoProgramAndASopsFileGoesThroughSops(t *testing.T) {
 	m := newMachine(t)
-	m.encrypt(t, "secrets/id.age", "from age", m.ageKey(t, ""))
+	key := m.ageKey(t, "")
+	m.encrypt(t, "secrets/id.age", "from age", key)
+	// The content says age, whatever the name says.
+	m.encrypt(t, "secrets/named.yaml", "age by content", key)
 	m.writeTemplate(
 		t,
 		"secrets/secrets.yaml",
@@ -87,6 +90,7 @@ func TestB155AnAgeFileNeedsNoProgramAndASopsFileGoesThroughSops(t *testing.T) {
 	t.Setenv("PATH", "/usr/bin:/bin")
 	m.writeFilesList(t, "[packages]\nsops = \""+m.fakeSops(t)+"\"\n[files]\n"+
 		"\"{{home}}/.from-age\" = { secret = \"./secrets/id.age\" }\n"+
+		"\"{{home}}/.named\" = { secret = \"./secrets/named.yaml\" }\n"+
 		"\"{{home}}/.from-sops\" = { secret = \"./secrets/secrets.yaml\", key = \"ssh/id\" }\n")
 
 	_, err := m.run(t, "", "sync")
@@ -94,6 +98,10 @@ func TestB155AnAgeFileNeedsNoProgramAndASopsFileGoesThroughSops(t *testing.T) {
 
 	if body, _ := os.ReadFile(home(".from-age")); string(body) != "from age" {
 		t.Fatalf("the age secret is %q", body)
+	}
+
+	if body, _ := os.ReadFile(home(".named")); string(body) != "age by content" {
+		t.Fatalf("the age secret named .yaml is %q", body)
 	}
 
 	if body, _ := os.ReadFile(home(".from-sops")); string(body) != `sops-value:["ssh"]["id"]` {
@@ -312,16 +320,32 @@ func TestB162SopsFromTheListComesBeforePath(t *testing.T) {
 func TestB163TheIdentitiesComeFromTheEnvironmentOrTheConfigDirectory(t *testing.T) {
 	m := newMachine(t)
 
+	// With the variable empty, sops learns the file in the config directory
+	// only from oku.
+	t.Setenv("SOPS_AGE_KEY_FILE", "")
+
+	inConfig := filepath.Join(filepath.Dir(m.config), "sops", "age", "keys.txt")
+	m.ageKey(t, "")
+	m.writeTemplate(t, "secrets/secrets.yaml", "a: ENC[x]\nsops:\n    version: 3\n")
+	m.writeFilesList(t, "[packages]\nsops = \""+m.fakeSops(t)+"\"\n[files]\n"+
+		"\"{{home}}/.sops\" = { secret = \"./secrets/secrets.yaml\", key = \"a\" }\n")
+
+	_, err := m.run(t, "", "sync")
+	must(t, err)
+
+	if saw, _ := os.ReadFile(home(".sops-key-file")); strings.TrimSpace(string(saw)) != inConfig {
+		t.Fatalf("sops got the identity file %q, want %q", saw, inConfig)
+	}
+
 	elsewhere := filepath.Join(m.fixtures, "my-keys.txt")
 	m.encrypt(t, "secrets/id.age", "from env", m.ageKey(t, elsewhere))
-	m.writeTemplate(t, "secrets/secrets.yaml", "a: ENC[x]\nsops:\n    version: 3\n")
 	t.Setenv("SOPS_AGE_KEY_FILE", elsewhere)
 
 	m.writeFilesList(t, "[packages]\nsops = \""+m.fakeSops(t)+"\"\n[files]\n"+
 		"\"{{home}}/.age\" = { secret = \"./secrets/id.age\" }\n"+
 		"\"{{home}}/.sops\" = { secret = \"./secrets/secrets.yaml\", key = \"a\" }\n")
 
-	_, err := m.run(t, "", "sync")
+	_, err = m.run(t, "", "sync")
 	must(t, err)
 
 	if body, _ := os.ReadFile(home(".age")); string(body) != "from env" {

@@ -226,11 +226,13 @@ func TestB168ASettingOfThisMacGoesToItsOwnDomain(t *testing.T) {
 }
 
 func TestB416ADefaultsDomainIsADomainAndNotAPath(t *testing.T) {
-	for _, domain := range []string{"~/Library/LaunchAgents/evil", "/Library/Preferences/x", `a\b`} {
-		m := newMachine(t)
+	for _, domain := range []string{"~evil", "/Library/Preferences/x", `a\b`} {
+		// The fake keeps a sync that should have failed off the real defaults.
+		m, _ := settingsMachine(t)
 		m.writeFilesList(t, fmt.Sprintf("[defaults.%q]\nkey = 1\n", domain))
 
-		if _, err := m.run(t, "", "sync"); err == nil || !strings.Contains(err.Error(), "not a path") {
+		want := fmt.Sprintf("defaults.%q must be a domain such as com.apple.dock, not a path", domain)
+		if _, err := m.run(t, "", "sync"); err == nil || !strings.Contains(err.Error(), want) {
 			t.Fatalf("want the domain %s refused, got %v", domain, err)
 		}
 	}

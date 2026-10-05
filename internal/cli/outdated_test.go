@@ -38,7 +38,9 @@ func TestB262OutdatedListsWhatHasANewerVersionAndChangesNothing(t *testing.T) {
 		t.Fatalf("outdated with an empty lock: %v\n%s", err, out)
 	}
 
-	_, err := m.run(t, "", "add", m.discoveredManifest(t, "1.0.0", "1.1.0"))
+	ref := m.discoveredManifest(t, "1.0.0", "1.1.0")
+
+	_, err := m.run(t, "", "add", ref)
 	must(t, err)
 
 	out, err := m.run(t, "", "outdated")
@@ -49,7 +51,9 @@ func TestB262OutdatedListsWhatHasANewerVersionAndChangesNothing(t *testing.T) {
 	// oku claims nothing about a package whose lookup fails.
 	server.tags = nil
 
-	if out, err := m.run(t, "", "outdated"); err == nil || strings.Contains(out, "newest version") {
+	out, err = m.run(t, "", "outdated")
+	if err == nil || !strings.Contains(err.Error(), "tool: github-releases owner/tool has no versions") ||
+		strings.Contains(out, "newest version") {
 		t.Fatalf("outdated whose lookup failed: %v\n%s", err, out)
 	}
 
@@ -64,7 +68,7 @@ func TestB262OutdatedListsWhatHasANewerVersionAndChangesNothing(t *testing.T) {
 	must(t, json.Unmarshal([]byte(out), &rows))
 
 	if len(rows) != 1 || rows[0].Name != "tool" || rows[0].Version != "1.0.0" ||
-		rows[0].Newest != "1.1.0" || rows[0].Latest != "1.1.0" {
+		rows[0].Newest != "1.1.0" || rows[0].Latest != "1.1.0" || rows[0].Ref != ref {
 		t.Fatalf("outdated --json gave %+v", rows)
 	}
 
@@ -77,8 +81,6 @@ func TestB262OutdatedListsWhatHasANewerVersionAndChangesNothing(t *testing.T) {
 
 	// An exact version in the list holds update back, and the latest release
 	// still shows.
-	ref := m.discoveredManifest(t, "1.0.0", "1.1.0")
-
 	_, err = m.run(t, "", "add", ref+"@1.0.0")
 	must(t, err)
 

@@ -29,8 +29,16 @@ func TestB286GCRemovesTemporaryFilesThatEndedOkuProcessesLeft(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("TMPDIR", dir)
 
+	// Another oku process that still runs.
+	running := exec.Command("sleep", "60")
+	must(t, running.Start())
+	t.Cleanup(func() {
+		_ = running.Process.Kill()
+		_ = running.Wait()
+	})
+
 	ended := filepath.Join(dir, fmt.Sprintf("oku-build-%d-1", endedPid(t)))
-	live := filepath.Join(dir, fmt.Sprintf("oku-build-%d-2", os.Getpid()))
+	live := filepath.Join(dir, fmt.Sprintf("oku-build-%d-2", running.Process.Pid))
 	other := filepath.Join(dir, "not-oku")
 	// A folder of the user's whose name only starts like oku's.
 	mine := filepath.Join(dir, "oku-review")
