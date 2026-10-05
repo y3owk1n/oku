@@ -74,15 +74,22 @@ elsewhere = { command = "oku-no-such-program", when = { os = %q } }
 		}
 	}
 
-	// doctor reads the requirements from the active generation.
+	// doctor reads the requirements from the active generation, and counts each
+	// missing one as a problem.
 	out, err = m.run(t, "", "doctor")
-	if err == nil || !strings.Contains(out, want[2]) || !strings.Contains(out, want[0]) {
-		t.Fatalf("doctor does not report what the host lacks: %v\n%s", err, out)
+	if err == nil {
+		t.Fatalf("B447: doctor passed a host that lacks what the generation needs:\n%s", out)
+	}
+
+	for _, name := range []string{"compiler", "sdk", "libgl"} {
+		if !strings.Contains(out, "problem  "+name+" is missing") {
+			t.Fatalf("B447: doctor does not count %s as a problem:\n%s", name, out)
+		}
 	}
 
 	// A requirement oku cannot check here is a note, not a problem.
 	if !strings.Contains(out, "note     "+want[3]) {
-		t.Fatalf("doctor does not note what it cannot check:\n%s", out)
+		t.Fatalf("B448: doctor does not note what it cannot check:\n%s", out)
 	}
 }
 

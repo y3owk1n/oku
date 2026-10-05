@@ -69,9 +69,25 @@ jobs:
         with:
           path: .github/action-test
           cache: "false"
-      - name: A later step runs the project's tools
+      - name: "B263: a later step runs the project's tools"
         shell: bash
         run: fd --version
+      # oku sync refuses the extra words, so the step fails. Had the action run
+      # args as shell code, the file would exist.
+      - uses: ./
+        id: hostile
+        continue-on-error: true
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        with:
+          path: .github/action-test
+          cache: "false"
+          args: "--locked $(touch b404-ran) `touch b404-ran`"
+      - name: "B404: the action splits args and runs none of it as shell code"
+        shell: bash
+        run: |
+          test "${{ steps.hostile.outcome }}" = failure
+          test ! -e b404-ran && test ! -e .github/action-test/b404-ran
 
   action-tag:
     if: ${{ !startsWith(github.head_ref, 'release-please--') }}
@@ -94,7 +110,7 @@ jobs:
         with:
           path: .github/action-test
           cache: "false"
-      - name: The action installed the release of its tag
+      - name: "B263: the action installed the release of its tag"
         shell: bash
         run: oku --version | grep -F 0.6.0
 

@@ -37,7 +37,7 @@ func TestB143RenderFillsTheVariablesIntoAReadOnlyFile(t *testing.T) {
 
 	want := "font-family = JetBrains Mono\nbackground = #0c1410\nkeep = {{.Go}}\n"
 	if string(body) != want {
-		t.Fatalf("the target holds %q, want %q", body, want)
+		t.Fatalf("B145: the target holds %q, want %q", body, want)
 	}
 
 	if info, err := os.Stat(target); err != nil || info.Mode().Perm()&0o222 != 0 {
