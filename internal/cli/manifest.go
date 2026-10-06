@@ -574,7 +574,7 @@ func runManifestTest(
 		return err
 	}
 
-	own, err := loadEnv()
+	e, err := loadEnv()
 	if err != nil {
 		return err
 	}
@@ -590,13 +590,10 @@ func runManifestTest(
 	}
 
 	// Only the store is throwaway. The cache is content-addressed, so sharing it
-	// is safe and saves downloads.
-	e := env{
-		config: scratch + "/config",
-		data:   scratch + "/data",
-		root:   scratch + "/data",
-		cache:  own.cache,
-	}
+	// is safe and saves downloads. The build uses the same network policy,
+	// Sigstore checks and OSV lookups as an install.
+	e.useServices(opts)
+	e.config, e.data, e.root = scratch+"/config", scratch+"/data", scratch+"/data"
 	out := cmd.OutOrStdout()
 
 	got, err := e.install(cmd.Context(), opts, request{
