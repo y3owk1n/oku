@@ -494,14 +494,7 @@ func scopedEnv(cmd *cobra.Command, opts Options) (env, error) {
 		return e, err
 	}
 
-	e.hosts.GitHubAPI, e.hosts.GitHubRaw, e.hosts.GitHubWeb = opts.GitHubAPI, opts.GitHubRaw, opts.GitHubWeb
-	if opts.Sigstore != nil {
-		e.sigstore = opts.Sigstore
-	}
-
-	if opts.OSVAPI != "" {
-		e.osvClient.Base = opts.OSVAPI
-	}
+	e.useServices(opts)
 
 	if global, _ := cmd.Flags().GetBool(globalFlag); global {
 		return e, nil
@@ -528,6 +521,18 @@ func scopedEnv(cmd *cobra.Command, opts Options) (env, error) {
 	}
 
 	return e, nil
+}
+
+// useServices points e at the forges, Sigstore and OSV that opts gives.
+func (e *env) useServices(opts Options) {
+	e.hosts.GitHubAPI, e.hosts.GitHubRaw, e.hosts.GitHubWeb = opts.GitHubAPI, opts.GitHubRaw, opts.GitHubWeb
+	if opts.Sigstore != nil {
+		e.sigstore = opts.Sigstore
+	}
+
+	if opts.OSVAPI != "" {
+		e.osvClient.Base = opts.OSVAPI
+	}
 }
 
 // findProject returns the nearest directory at or above dir that holds an

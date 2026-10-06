@@ -114,3 +114,25 @@ func TestB516ABuildStopsAtADependencyThatOSVListsAsMalicious(t *testing.T) {
 		t.Fatalf("want the build to go on with a note, got %v\n%s", err, out)
 	}
 }
+
+func TestB516ManifestTestStopsAtADependencyThatOSVListsAsMalicious(t *testing.T) {
+	m := newMachine(t)
+	npmServerWith(t, &m, "", true, "1.2.3")
+	osvServer(t, &m, map[string]string{"left-pad@1.3.0": "MAL-2025-2"}, false)
+
+	path := m.rawManifest(t, "vendored", fmt.Sprintf(`[build]
+deps = [%q]
+
+[[build.step]]
+vendor = "npm"
+package = "@scope/tool"
+
+[[build.step]]
+install = { bin = [{ name = "vendored", run = "{{dep.interp.prefix}}/bin/node", args = ["{{prefix}}/lib/node_modules/@scope/tool/tool"] }] }
+`, m.fakeNode(t)))
+
+	_, err := m.run(t, "", "manifest", "test", path, "--yes")
+	if err == nil || !strings.Contains(err.Error(), "left-pad 1.3.0, see https://osv.dev/vulnerability/MAL-2025-2") {
+		t.Fatalf("want manifest test stopped at the malicious dependency, got %v", err)
+	}
+}
