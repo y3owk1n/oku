@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.14.2](https://github.com/y3owk1n/oku/compare/v0.14.1...v0.14.2) (2026-10-06)
+
+
+### Bug Fixes
+
+* **cli:** stop manifest test crashing on a vendor step ([#410](https://github.com/y3owk1n/oku/issues/410)) ([180d5c8](https://github.com/y3owk1n/oku/commit/180d5c8a423e5ce2f75c267c886602b641c325dc))
+
 ## [0.14.1](https://github.com/y3owk1n/oku/compare/v0.14.0...v0.14.1) (2026-10-05)
 
 
