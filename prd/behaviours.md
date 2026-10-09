@@ -443,6 +443,9 @@ order step in `prd/product.md`.
   repo, a registry package or a git URL make one request or one git call
   between them. So do inference and the version lookup of one package, and the
   two lookups of `outdated`.
+- B556 [3] One command downloads each checksum file once and shows one wait
+  line for it. Inference checks a shared file such as `checksums.txt` against
+  every asset of a release, and the install after it reads the same file.
 - B251 [3] When GitHub answers 429, or 403 with `Retry-After`, oku stops and
   says how many seconds to wait.
 - B262 [3] `oku outdated` lists each package of `oku.lock` whose newest
