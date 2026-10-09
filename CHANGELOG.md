@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.14.3](https://github.com/y3owk1n/oku/compare/v0.14.2...v0.14.3) (2026-10-09)
+
+
+### Bug Fixes
+
+* **cli:** make manifest test apply the release age and trust checks of add ([#412](https://github.com/y3owk1n/oku/issues/412)) ([364f7d9](https://github.com/y3owk1n/oku/commit/364f7d9fe9a9e8c0d28c3b30377016889a70d1a3))
+* **deps:** build with go 1.26.9 and x/net 0.60.0 ([#413](https://github.com/y3owk1n/oku/issues/413)) ([d8b850e](https://github.com/y3owk1n/oku/commit/d8b850efc476b8fb25e30a6beeb089c484aa9085))
+* **manifest:** make lint refuse a shell that cannot run on the step's OS ([#415](https://github.com/y3owk1n/oku/issues/415)) ([eeb4748](https://github.com/y3owk1n/oku/commit/eeb4748c02c9c533571f87b5ee36f3de899e056e))
+* **store:** take a build step's shell from the build's PATH ([#417](https://github.com/y3owk1n/oku/issues/417)) ([9750a05](https://github.com/y3owk1n/oku/commit/9750a057de23d0884cf63d79a15553a1a52985cf))
+
+
+### Documentation
+
+* **manifest:** say where a Windows shim gets its runtime dep dirs ([#416](https://github.com/y3owk1n/oku/issues/416)) ([12a25fd](https://github.com/y3owk1n/oku/commit/12a25fd59093000f489e4e1f362852a3fe5c1118))
+
 ## [0.14.2](https://github.com/y3owk1n/oku/compare/v0.14.1...v0.14.2) (2026-10-06)
 
 
