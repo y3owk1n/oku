@@ -1357,9 +1357,9 @@ completions = { generate = "wrapgen completions {{shell}}" }
 "@
 Oku add (Join-Path $fixtures 'wrapgen.toml') --yes
 $wrapGenFish = Join-Path $env:XDG_DATA_HOME 'oku\profiles\global\current\share\completions\fish\wrapgen.fish'
-Check 'B214: completions.generate runs a bin table with run on Windows' {
-    (Get-Content -Raw $wrapGenFish) -match 'complete fish'
-}
+$wrapGenText = Get-Content -Raw $wrapGenFish
+Write-Host "wrapgen.fish holds: $wrapGenText"
+Check 'B214: completions.generate runs a bin table with run on Windows' { $wrapGenText -match 'complete fish' }
 Oku remove wrapgen
 
 # A machine without PowerShell 7 builds registry packages with the Windows
