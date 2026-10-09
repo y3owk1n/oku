@@ -2044,11 +2044,12 @@ A `run` step does not see the user's environment. On macOS and Linux it gets:
 - `HOME` and `TMPDIR` pointing at empty temporary directories
 - `OKU_PREFIX`, `OKU_SRC`, `OKU_JOBS`, and the step's `env`
 
-A tool the build uses must therefore be in `needs`. A `needs` tool is on `PATH`
-as a link under its own name, not with its directory, so a `cc` from a Nix
-profile or a Homebrew `bin` does not put that directory's `python` or `make` on
-`PATH` too. The link keeps the tool in its real directory, so a compiler driver
-still finds the assembler and linker beside itself.
+A tool the build uses must therefore be in `needs`. The step's `shell` comes
+from this `PATH` too, and never from the one oku runs with. A `needs` tool is on
+`PATH` as a link under its own name, not with its directory, so a `cc` from a
+Nix profile or a Homebrew `bin` does not put that directory's `python` or `make`
+on `PATH` too. The link keeps the tool in its real directory, so a compiler
+driver still finds the assembler and linker beside itself.
 
 oku lets two tools read the files they keep in the home directory:
 

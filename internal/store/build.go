@@ -815,14 +815,6 @@ func runCommand(
 		return "", fmt.Errorf("shell %q must be sh, bash, pwsh or cmd", shell)
 	}
 
-	// Windows ships Windows PowerShell 5.1 and not PowerShell 7, so without pwsh
-	// on PATH a pwsh step runs in powershell.exe.
-	program := shell
-	if _, err := exec.LookPath("pwsh"); shell == "pwsh" && runtime.GOOS == "windows" && err != nil {
-		program = "powershell"
-	}
-
-	box.Argv = append(append([]string{program}, args...), script)
 	box.Dir = src
 	box.Network = step.Network
 	box.Env = slices.Clone(env)
@@ -835,6 +827,21 @@ func runCommand(
 
 		box.Env = append(box.Env, key+"="+expanded)
 	}
+
+	// The shell comes from the build's PATH and never from oku's own. Windows
+	// ships Windows PowerShell 5.1 and not PowerShell 7, so without pwsh a pwsh
+	// step runs in powershell.exe.
+	tools := []string{shell}
+	if shell == "pwsh" && runtime.GOOS == "windows" {
+		tools = append(tools, "powershell")
+	}
+
+	program, err := findTool(tools, box.Env)
+	if err != nil {
+		return "", fmt.Errorf("shell %w", err)
+	}
+
+	box.Argv = append(append([]string{program}, args...), script)
 
 	cmd, why := sandbox.Command(ctx, box)
 

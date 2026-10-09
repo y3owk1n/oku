@@ -350,6 +350,29 @@ Check 'the build saw a scratch home, not the real profile' {
     ($where -match 'oku-build-') -and ($where -notmatch [regex]::Escape($env:USERPROFILE))
 }
 
+# A build takes its shell from its own PATH, never from oku's. The runner has
+# Git's sh on PATH, so a sh step builds only once needs names sh (B551).
+Get-Command sh | Out-Null
+$shBuild = @'
+[package]
+name = "shstep"
+[version]
+value = "1.0.0"
+[build]
+{0}
+[[build.step]]
+run = "echo hi > out.txt"
+shell = "sh"
+'@
+Set-Content (Join-Path $fixtures 'shstep.toml') ($shBuild -replace '\{0\}', '')
+$refused = (& $oku manifest test (Join-Path $fixtures 'shstep.toml') --yes 2>&1) -join "`n"
+Check 'B551: a build does not run the sh on oku''s own PATH' {
+    ($LASTEXITCODE -ne 0) -and ($refused -match 'needs sh, which is not among the build''s tools')
+}
+
+Set-Content (Join-Path $fixtures 'shstep.toml') ($shBuild -replace '\{0\}', 'needs = ["sh"]')
+Oku manifest test (Join-Path $fixtures 'shstep.toml') --yes
+
 # The app and the font of that package, for the current user.
 $shortcut = $helloShortcut
 $font = Join-Path $env:LOCALAPPDATA 'Microsoft\Windows\Fonts\OkuLive.ttf'
