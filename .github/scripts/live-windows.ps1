@@ -363,6 +363,8 @@ value = "1.0.0"
 [[build.step]]
 run = "echo hi > out.txt"
 shell = "sh"
+[[build.step]]
+install = { share = ["out.txt"] }
 '@
 Set-Content (Join-Path $fixtures 'shstep.toml') ($shBuild -replace '\{0\}', '')
 $refused = (& $oku manifest test (Join-Path $fixtures 'shstep.toml') --yes 2>&1) -join "`n"
