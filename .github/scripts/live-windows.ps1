@@ -1342,7 +1342,7 @@ Oku remove dllart
 # command can run it.
 $wrapGen = Join-Path $fixtures 'wrapgen'
 New-Item -ItemType Directory -Force $wrapGen | Out-Null
-Set-Content (Join-Path $wrapGen 'tool.ps1') '"complete $($args[1])"'
+Set-Content -Encoding ascii (Join-Path $wrapGen 'tool.cmd') '@echo complete %2'
 $wrapGenZip = Join-Path $fixtures 'wrapgen.zip'
 Compress-Archive -Force -Path (Join-Path $wrapGen '*') -DestinationPath $wrapGenZip
 Set-Content (Join-Path $fixtures 'wrapgen.toml') @"
@@ -1352,7 +1352,7 @@ name = "wrapgen"
 value = "1.0.0"
 [[artifact]]
 url = "file:///$($wrapGenZip -replace '\\', '/')"
-bin = [{ name = "wrapgen", run = "pwsh", args = ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "{{pkg}}/tool.ps1"] }]
+bin = [{ name = "wrapgen", run = "cmd", args = ["/C", "{{pkg}}/tool.cmd"] }]
 completions = { generate = "wrapgen completions {{shell}}" }
 "@
 Oku add (Join-Path $fixtures 'wrapgen.toml') --yes
@@ -1360,6 +1360,9 @@ $wrapGenFish = Join-Path $env:XDG_DATA_HOME 'oku\profiles\global\current\share\c
 Check 'B214: completions.generate runs a bin table with run on Windows' {
     (Get-Content -Raw $wrapGenFish) -match 'complete fish'
 }
+# An arg that names no directory of the package keeps its slash, so cmd gets /C.
+$wrapGenRan = & "$bin\wrapgen.exe" completions zsh
+Check 'B553: a bin table passes an arg such as /C as written' { $wrapGenRan -match 'complete zsh' }
 Oku remove wrapgen
 
 # A machine without PowerShell 7 builds registry packages with the Windows

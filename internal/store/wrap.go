@@ -88,13 +88,19 @@ func writeWraps(
 
 		words := make([]string, 0, len(w.Args)+1)
 
-		for _, text := range append([]string{w.Run}, w.Args...) {
+		for i, text := range append([]string{w.Run}, w.Args...) {
 			word, err := manifest.Expand(text, vars)
 			if err != nil {
 				return fmt.Errorf("bin %q: %w", w.Name, err)
 			}
 
-			words = append(words, filepath.FromSlash(word))
+			// run is a path, and so is an arg that holds a directory of the package.
+			// Any other arg, such as cmd's /C, stays as written.
+			if i == 0 || manifest.NamesDir(text) {
+				word = filepath.FromSlash(word)
+			}
+
+			words = append(words, word)
 		}
 
 		// An interpreter cannot run a native program, such as the binary that an

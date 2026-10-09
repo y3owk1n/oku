@@ -798,7 +798,9 @@ bin = [{ name = "gh-actions-language-server", run = "{{dep.node.prefix}}/bin/nod
 
 `run` and `args` expand the [template variables](#template-variables) of an
 artifact, `{{pkg}}`, `{{prefix}}` and `{{dep.<name>.prefix}}`. They must not
-hold a line break.
+hold a line break. On Windows, oku turns the slashes of `run` into backslashes.
+It does the same for each arg that holds one of those three. Any other arg stays
+as written, so in `args = ["/C", "{{pkg}}/tool.cmd"]` the program gets `/C`.
 
 - The interpreter is a [runtime dep](../how-oku-works.md#runtime-dep), so the
   user does not need it on `PATH`, and it does not appear there either. The
