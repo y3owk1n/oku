@@ -1019,6 +1019,9 @@ order step in `prd/product.md`.
   npm.
 - B218 [4] `manifest lint` rejects shell paths together with `generate`, `name`
   without `generate`, and an unknown template variable in `generate`.
+- B550 [4] `manifest lint` rejects `sh` or `bash` on a `run` step that can
+  run on Windows, and `cmd` on one that can run on macOS or Linux. A step can
+  run on the platforms that its `when` and the `[build]`'s both match.
 - B29 [4] `oku manifest bump` rewrites a static version and its checksums to
   the newest upstream release, or to `--to <version>`. It keeps the file's
   comments, and it refuses a manifest that discovers its versions.
