@@ -36,16 +36,17 @@ oku: checksum mismatch for <url>: expected <digest>, download is <digest>
 
 When an attacker publishes a version from a stolen account, the registry
 usually removes it within hours. On 2025-09-08 the malicious chalk 5.6.1 and debug
-4.4.2 were on npm for about two hours. So `add`, `update`, `sync` and
-`oku shell` take the newest version that came out at least a day ago, and
-leave a newer one waiting. [`oku outdated`](commands.md#oku-outdated) lists
-what waits and when oku takes it.
+4.4.2 were on npm for about two hours. So `add`, `update`, `sync`,
+`oku shell`, `oku run` and `oku manifest test` take the newest version that
+came out at least a day ago, and leave a newer one waiting.
+[`oku outdated`](commands.md#oku-outdated) lists what waits and when oku takes
+it.
 
 - `[lock]` `min_release_age` in `oku.toml` sets the age for the list, and
   `min_release_age` on a package sets it for that one. `"0"` turns it off. See
   [`[lock]`](oku-toml.md#lock).
-- `--min-release-age 0` on `add`, `update`, `sync` or `oku shell` takes the
-  newest version for one run, such as for a security fix.
+- `--min-release-age 0` on any of those commands takes the newest version for
+  one run, such as for a security fix.
 - A version you name exactly, as in `oku add github:x/y@1.2.3`, and a version
   that `oku.lock` pins skip the check.
 - It never takes a package back to an older version than `oku.lock` holds,
@@ -85,8 +86,8 @@ such a source:
   command goes on.
 - For a package that is new to the lock there is nothing to keep, so the
   command stops and says how to go on.
-- `--accept-unknown-age` on `add`, `update`, `sync` or `oku shell` takes such
-  versions for one run without asking.
+- `--accept-unknown-age` on `add`, `update`, `sync`, `oku shell`, `oku run` or
+  `oku manifest test` takes such versions for one run without asking.
 - `min_release_age = "0"` on a package turns the check off for it, so oku
   neither asks nor refuses.
 - A version you name exactly and a version `oku.lock` pins are never asked

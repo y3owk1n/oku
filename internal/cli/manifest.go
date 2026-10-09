@@ -579,6 +579,20 @@ func runManifestTest(
 		return err
 	}
 
+	// The release age and trust checks read the user's own list, as oku add
+	// --global does. So oku builds them before e.config points at the scratch.
+	own, err := list.Read(e.listPath())
+	if err != nil {
+		return err
+	}
+
+	age, err := releaseAge(cmd, own, list.Entry{})
+	if err != nil {
+		return err
+	}
+
+	checkAge, checkTrust := e.ageChecker(cmd, opts, flags), e.trustChecker(cmd, opts, flags)
+
 	scratch, err := tempdir.Dir("test")
 	if err != nil {
 		return err
@@ -599,7 +613,10 @@ func runManifestTest(
 	got, err := e.install(cmd.Context(), opts, request{
 		ref:        r,
 		fromSource: m.BuildsOn(platform.Host()),
+		releaseAge: age,
 		approve:    e.approver(cmd, opts, flags),
+		checkAge:   checkAge,
+		checkTrust: checkTrust,
 		log:        buildLog(cmd, flags),
 		progress: func(step, total int, kind string, err error) {
 			s := ui.For(out)

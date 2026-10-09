@@ -612,6 +612,10 @@ order step in `prd/product.md`.
   run, and `min_release_age = "0"` on the package skips the check. A version
   named exactly, a locked version, a moving tag and a branch are never asked
   about.
+- B549 [3] `oku manifest test` takes the version that `oku add --global`
+  takes. The global list's minimum release age, `unknown_release_age` and
+  `unverified` apply, and so do `--min-release-age`, `--accept-unknown-age`
+  and `--accept-unverified`.
 - B376 [3] The `pubDate` of a Sparkle feed's item is its release time, so the
   minimum release age checks it.
 - B426 [3] A GitLab release counts its age from the later of its
