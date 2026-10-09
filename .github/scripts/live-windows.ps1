@@ -1342,7 +1342,7 @@ Oku remove dllart
 # command can run it.
 $wrapGen = Join-Path $fixtures 'wrapgen'
 New-Item -ItemType Directory -Force $wrapGen | Out-Null
-Set-Content -Encoding ascii (Join-Path $wrapGen 'tool.cmd') '@echo complete %2'
+Set-Content (Join-Path $wrapGen 'tool.ps1') '"complete $($args[1])"'
 $wrapGenZip = Join-Path $fixtures 'wrapgen.zip'
 Compress-Archive -Force -Path (Join-Path $wrapGen '*') -DestinationPath $wrapGenZip
 Set-Content (Join-Path $fixtures 'wrapgen.toml') @"
@@ -1352,14 +1352,14 @@ name = "wrapgen"
 value = "1.0.0"
 [[artifact]]
 url = "file:///$($wrapGenZip -replace '\\', '/')"
-bin = [{ name = "wrapgen", run = "cmd", args = ["/C", "{{pkg}}/tool.cmd"] }]
+bin = [{ name = "wrapgen", run = "pwsh", args = ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "{{pkg}}/tool.ps1"] }]
 completions = { generate = "wrapgen completions {{shell}}" }
 "@
 Oku add (Join-Path $fixtures 'wrapgen.toml') --yes
 $wrapGenFish = Join-Path $env:XDG_DATA_HOME 'oku\profiles\global\current\share\completions\fish\wrapgen.fish'
-$wrapGenText = Get-Content -Raw $wrapGenFish
-Write-Host "wrapgen.fish holds: $wrapGenText"
-Check 'B214: completions.generate runs a bin table with run on Windows' { $wrapGenText -match 'complete fish' }
+Check 'B214: completions.generate runs a bin table with run on Windows' {
+    (Get-Content -Raw $wrapGenFish) -match 'complete fish'
+}
 Oku remove wrapgen
 
 # A machine without PowerShell 7 builds registry packages with the Windows
