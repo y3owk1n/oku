@@ -12,8 +12,9 @@ import (
 	"github.com/y3owk1n/oku/internal/shim"
 )
 
-// writeWrappers writes the programs of a.Wrap into <tmp>/bin. final is where
-// tmp ends up, so the paths in a wrapper are the ones that exist afterwards.
+// writeWrappers writes the programs of a.Wrap into bin. The package's files are
+// in tmp now. final is where tmp ends up, and the paths in a wrapper start with
+// final.
 //
 // A wrapper is a shell script that ends in "exec". A Windows script cannot pass
 // arguments and signals through unchanged. There the wrapper is the spec file
@@ -24,7 +25,7 @@ import (
 // on, and node need not be on the user's PATH. A Windows shim gets them from
 // the profile.
 func writeWrappers(
-	tmp, final string,
+	bin, tmp, final string,
 	m *manifest.Manifest,
 	a manifest.Artifact,
 	p platform.Platform,
@@ -51,7 +52,7 @@ func writeWrappers(
 		return path
 	}
 
-	return writeWraps(filepath.Join(tmp, "bin"), a.Wrap, vars, p.OS, depDirs(deps, "bin"), local)
+	return writeWraps(bin, a.Wrap, vars, p.OS, depDirs(deps, "bin"), local)
 }
 
 // writeWraps writes wraps into the directory bin. vars are what their run and

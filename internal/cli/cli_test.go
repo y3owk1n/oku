@@ -8880,6 +8880,40 @@ func TestB214ArtifactCompletionsAreGeneratedByRunningTheDownload(t *testing.T) {
 	}
 }
 
+func TestB214CompletionsRunAProgramInAnAppBundleOrAWrap(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		files    map[string]string
+		artifact string
+	}{
+		{
+			"wrap",
+			map[string]string{"tool.sh": completer},
+			`bin = [{ name = "tool", run = "/bin/sh", args = ["{{pkg}}/tool.sh"] }]`,
+		},
+		{
+			"app bundle",
+			map[string]string{"Tool.app/Contents/MacOS/tool": completer, "Tool.app/Contents/Info.plist": "<plist/>"},
+			"bin = [\"Tool.app/Contents/MacOS/tool\"]\napp = [\"Tool.app\"]",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m := newMachine(t)
+			ref := m.manifest(t, "tool", tc.files,
+				tc.artifact+"\ncompletions = { generate = \"tool completions {{shell}}\" }")
+
+			if out, err := m.run(t, "", "add", ref, "--yes"); err != nil {
+				t.Fatalf("add: %v\n%s", err, out)
+			}
+
+			body, err := os.ReadFile(m.profile("share", "completions", "fish", "tool.fish"))
+			if err != nil || string(body) != "complete fish\n" {
+				t.Fatalf("fish completions: %v %q", err, body)
+			}
+		})
+	}
+}
+
 func TestB215FailedCompletionsCommandFailsTheInstallWithItsOutput(t *testing.T) {
 	m := newMachine(t)
 
