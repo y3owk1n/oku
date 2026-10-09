@@ -1345,6 +1345,10 @@ order step in `prd/product.md`.
 
 - B80 [9] Profile `bin` entries are shims that exec the store binary with
   arguments, stdio and exit code passed through.
+- B553 [9] On Windows oku turns the slashes of a `bin` table's `run` into
+  backslashes. It does the same for each arg that holds `{{pkg}}`, `{{prefix}}`
+  or `{{dep.<name>.prefix}}`. Any other arg, such as `/C`, reaches the program
+  as written.
 - B81 [9] A binary with DLL deps in other store paths, or beside its real file
   anywhere in its own download, starts from any working directory, and so does
   a build step that runs such a binary of a dep.

@@ -1159,6 +1159,19 @@ func splitBin(raw []any) ([]string, []Wrapper, error) {
 	return paths, wraps, nil
 }
 
+// NamesDir reports whether s holds a variable that expands to a directory of a
+// package: {{prefix}}, {{pkg}} or {{dep.<name>.prefix}}.
+func NamesDir(s string) bool {
+	for _, match := range templateRe.FindAllStringSubmatch(s, -1) {
+		name := match[1]
+		if name == "prefix" || name == "pkg" || strings.HasPrefix(name, "dep.") && strings.HasSuffix(name, ".prefix") {
+			return true
+		}
+	}
+
+	return false
+}
+
 // Expand replaces {{name}} with vars[name] and fails on an unknown name. Where
 // vars has a version, the variables derived from it, such as
 // {{version_major}}, expand too.
