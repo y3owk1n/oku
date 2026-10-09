@@ -874,6 +874,10 @@ completions = { generate = "atuin gen-completions --shell {{shell}}" }
   package into the profile. The working directory is the unpacked package, the
   package's own `bin` is first on `PATH`, and the command runs in the
   [build sandbox](#the-build-sandbox).
+- Every program of that `bin` runs from the unpacked package. That includes a
+  program inside an app bundle and a `bin` table with `run`. On Windows, the
+  profile makes the program of a `bin` table with `run`, so the command cannot
+  run it.
 - A non-zero exit or an empty stdout fails the install, and the error holds the
   command and its stderr.
 - `generate` executes the download, so oku asks for the same approval as for a

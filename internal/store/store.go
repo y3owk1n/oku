@@ -304,14 +304,7 @@ func (s *Store) Realize(
 		return Realized{}, err
 	}
 
-	for name, command := range bundleCommands(a.App, a.Bin, a.Wrap, p.OS) {
-		bundle := filepath.Join(final, "pkg", filepath.FromSlash(command[0]))
-		if err := writeAppCommand(filepath.Join(tmp, "bin", name), bundle, command[1]); err != nil {
-			return Realized{}, fmt.Errorf("bin %q: %w", name, err)
-		}
-	}
-
-	if err := writeWrappers(tmp, final, m, a, p, deps); err != nil {
+	if err := writeWrappers(filepath.Join(tmp, "bin"), tmp, final, m, a, p, deps); err != nil {
 		return Realized{}, err
 	}
 
@@ -329,8 +322,18 @@ func (s *Store) Realize(
 	}
 
 	if a.Completions.Generate != "" {
-		if realized.Unsandboxed, err = s.generateArtifactCompletions(ctx, a, tmp); err != nil {
+		if realized.Unsandboxed, err = s.generateArtifactCompletions(ctx, m, a, p, deps, tmp); err != nil {
 			return Realized{}, fmt.Errorf("%s: %w", m.Package.Name, err)
+		}
+	}
+
+	// A command of an app bundle runs the bundle at final, which does not exist
+	// yet. It replaces the link in bin after the completions, which run the
+	// program through that link.
+	for name, command := range bundleCommands(a.App, a.Bin, a.Wrap, p.OS) {
+		bundle := filepath.Join(final, "pkg", filepath.FromSlash(command[0]))
+		if err := writeAppCommand(filepath.Join(tmp, "bin", name), bundle, command[1]); err != nil {
+			return Realized{}, fmt.Errorf("bin %q: %w", name, err)
 		}
 	}
 
@@ -407,10 +410,15 @@ func (s *Store) Realize(
 
 // generateArtifactCompletions runs the artifact's completions command in the
 // unpacked package under tmp, with the package's own bin first on PATH, and
-// writes the files under tmp/share/completions.
+// writes the files under tmp/share/completions. The wraps in tmp/bin run files
+// at the package's store path, which does not exist yet. So oku writes wraps
+// that run the files in tmp, and puts them first on PATH.
 func (s *Store) generateArtifactCompletions(
 	ctx context.Context,
+	m *manifest.Manifest,
 	a manifest.Artifact,
+	p platform.Platform,
+	deps []Dep,
 	tmp string,
 ) (string, error) {
 	work, err := tempdir.Dir("completions")
@@ -425,8 +433,13 @@ func (s *Store) generateArtifactCompletions(
 		}
 	}
 
+	wraps := filepath.Join(work, "bin")
+	if err := writeWrappers(wraps, tmp, tmp, m, a, p, deps); err != nil {
+		return "", err
+	}
+
 	systemDirs, env := hostEnv(filepath.Join(work, "home"), filepath.Join(work, "tmp"))
-	env = append(env, "PATH="+joinPaths(append([]string{filepath.Join(tmp, "bin")}, systemDirs...)))
+	env = append(env, "PATH="+joinPaths(append([]string{wraps, filepath.Join(tmp, "bin")}, systemDirs...)))
 
 	home, _ := os.UserHomeDir()
 	box := sandbox.Spec{Home: home, Readable: []string{s.dir}, Writable: []string{tmp, work}}
