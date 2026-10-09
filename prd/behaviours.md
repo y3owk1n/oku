@@ -1055,6 +1055,10 @@ order step in `prd/product.md`.
 - B35 [5] With no matching artifact, or with `--from-source`, oku runs
   `[build]` steps in order and installs what `install` steps name. The lock
   records the strategy, so `sync` builds on that platform too.
+- B545 [5] `oku add --from-source` writes `from_source = true` to the
+  package's entry. With it, oku builds the package at every version that
+  `sync` or `update` takes, and pins a build for each `[lock]` platform. oku
+  refuses a platform that `[build]` leaves out, and names it.
 - B36 [5] A missing `needs` tool fails before any step runs, naming the tool.
 - B274 [5] `[build] when` limits the build to matching platforms, in the forms
   of a list's `when`. oku neither builds nor pins a build for any other.
