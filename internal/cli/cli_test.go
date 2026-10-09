@@ -4376,7 +4376,7 @@ func TestB35BuildRunsStepsInOrderAndFromSourceForcesIt(t *testing.T) {
 	}
 }
 
-func TestB545FromSourceInTheListBuildsEveryVersionOnEveryLockPlatform(t *testing.T) {
+func TestB552FromSourceInTheListBuildsEveryVersionOnEveryLockPlatform(t *testing.T) {
 	m := newMachine(t)
 	ref := m.buildManifest(t, true, `needs = ["sh"]`, writeTool+installTool)
 
