@@ -130,3 +130,51 @@ func TestB28AnInstallSaysWhichCompletionsKeyItLeftOut(t *testing.T) {
 		t.Fatalf("add should install and name the key it left out: %v\n%s", err, out)
 	}
 }
+
+func TestB550LintChecksTheShellOfARunStepForEachOS(t *testing.T) {
+	m := newMachine(t)
+	path := filepath.Join(m.fixtures, "tool.toml")
+
+	lint := func(build, step string) (string, error) {
+		must(t, os.WriteFile(path, []byte(`[package]
+name = "tool"
+description = "a tool"
+[version]
+value = "1.0.0"
+[build]
+`+build+`
+source = { url = "https://example.com/tool.tar.gz", sha256 = "0000000000000000000000000000000000000000000000000000000000000000" }
+[[build.step]]
+run = "make"
+`+step+`
+[[build.step]]
+install = { bin = ["tool"] }
+`), 0o644))
+
+		return m.run(t, "", "manifest", "lint", path)
+	}
+
+	for _, tc := range []struct{ build, step, want string }{
+		{"", `shell = "sh"`, `so change shell "sh"`},
+		{"", `shell = "bash"`, `so change shell "bash"`},
+		{`when = { os = "windows" }`, `shell = "sh"`, `so change shell "sh"`},
+		{"", `shell = "cmd"`, `shell "cmd" runs only on Windows`},
+		{`when = { os = "linux" }`, `shell = "cmd"`, `shell "cmd" runs only on Windows`},
+	} {
+		if out, err := lint(tc.build, tc.step); err == nil || !strings.Contains(out, tc.want) {
+			t.Errorf("lint of %q with [build] %q did not say %q: %v\n%s", tc.step, tc.build, tc.want, err, out)
+		}
+	}
+
+	for _, tc := range []struct{ build, step string }{
+		{"", "shell = \"sh\"\nwhen = [{ os = \"darwin\" }, { os = \"linux\" }]"},
+		{`when = { os = "linux" }`, `shell = "bash"`},
+		{"", "shell = \"cmd\"\nwhen = { os = \"windows\" }"},
+		{`when = { os = "windows" }`, `shell = "cmd"`},
+		{"", `shell = "pwsh"`},
+	} {
+		if out, err := lint(tc.build, tc.step); err != nil {
+			t.Errorf("lint refused %q with [build] %q: %v\n%s", tc.step, tc.build, err, out)
+		}
+	}
+}

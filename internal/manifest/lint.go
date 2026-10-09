@@ -288,17 +288,29 @@ func lintStep(i int, s Step, buildWhen platform.When) []string {
 	var found []string
 
 	if s.Run != nil {
-		// A step whose when, and the build's, match a Windows platform can run on
-		// Windows, where no default shell exists.
+		// A step runs on the platforms that its when, and the build's, match. A
+		// Windows step needs pwsh or cmd, and cmd exists only on Windows.
 		when, _ := platform.ParseWhen(s.RawWhen)
+		reach := slices.DeleteFunc(when.Of(), func(p platform.Platform) bool { return !buildWhen.Matches(p) })
 
-		onWindows := slices.ContainsFunc(when.Of(), func(p platform.Platform) bool {
-			return p.OS == "windows" && buildWhen.Matches(p)
-		})
-		if onWindows && s.Shell == "" {
+		onWindows := slices.ContainsFunc(reach, func(p platform.Platform) bool { return p.OS == "windows" })
+		offWindows := slices.ContainsFunc(reach, func(p platform.Platform) bool { return p.OS != "windows" })
+
+		switch {
+		case onWindows && s.Shell == "":
 			found = append(found, fmt.Sprintf(
 				"build.step[%d]: this run step can run on Windows, so set shell, "+
 					`or limit it with when = { os = "..." }`, i,
+			))
+		case onWindows && (s.Shell == "sh" || s.Shell == "bash"):
+			found = append(found, fmt.Sprintf(
+				"build.step[%d]: this run step can run on Windows, where shell must be pwsh or cmd, "+
+					`so change shell %q, or limit it with when = { os = "..." }`, i, s.Shell,
+			))
+		case offWindows && s.Shell == "cmd":
+			found = append(found, fmt.Sprintf(
+				`build.step[%d]: shell "cmd" runs only on Windows, so limit this run step with when = { os = "windows" }`,
+				i,
 			))
 		}
 

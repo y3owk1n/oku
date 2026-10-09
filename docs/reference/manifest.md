@@ -1077,6 +1077,7 @@ manifest may have both, and oku then uses an artifact when one fits.
 [build]
 needs = ["cc", "make"]
 source = { git = "https://github.com/Old-Man-Programmer/tree", tag = "{{tag}}" }
+when = [{ os = "darwin" }, { os = "linux" }]
 
 [[build.step]]
 run = "make -j{{jobs}}"
@@ -1144,7 +1145,7 @@ Any step may also set:
 | Key | Meaning |
 |---|---|
 | `when` | The step only runs on a matching machine, see [Match and when](#match-and-when). |
-| `shell` | For `run`, `sh`, `bash`, `pwsh` or `cmd`. Default `sh`, except on Windows, which has no default. On Windows without PowerShell 7, `pwsh` runs Windows PowerShell 5.1. `oku manifest lint` requires `shell` on every `run` step that can reach Windows, which is every step whose `when` and the `[build]`'s `when` both match Windows. |
+| `shell` | For `run`, `sh`, `bash`, `pwsh` or `cmd`. Default `sh`, except on Windows, which has no default. On Windows without PowerShell 7, `pwsh` runs Windows PowerShell 5.1. `oku manifest lint` requires `pwsh` or `cmd` on every `run` step that can reach Windows, which is every step whose `when` and the `[build]`'s `when` both match Windows. It refuses `cmd` on a step that can reach macOS or Linux. |
 | `env` | Extra variables for `run`, as a table. Values expand template variables. |
 | `network` | `true` gives a `run` step the network, see [The build sandbox](#the-build-sandbox). |
 
@@ -1316,6 +1317,7 @@ everything it downloaded.
 [build]
 needs = ["go", "git"]
 source = { git = "https://github.com/rakyll/hey", tag = "{{tag}}" }
+when = [{ os = "darwin" }, { os = "linux" }]
 
 [[build.step]]
 vendor = "go"

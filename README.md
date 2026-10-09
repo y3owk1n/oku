@@ -168,6 +168,7 @@ bin = ["tool"]
 
 [build]                     # used when no artifact fits the machine
 needs = ["go"]
+when = [{ os = "darwin" }, { os = "linux" }]  # sh exists only there
 [[build.step]]
 run = "go build -o tool ."
 shell = "sh"
