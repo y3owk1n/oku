@@ -186,9 +186,11 @@ build still gets a scrubbed environment with a scratch home and temp
 directory, see [the build environment](../reference/manifest.md#the-build-environment).
 
 A manifest's `run` step that can run on Windows must name its shell, `pwsh` or
-`cmd`. `pwsh` is PowerShell 7 when it is installed, else the Windows PowerShell
-5.1 that ships with Windows. oku's own steps for `npm:`, `pypi:`, `go:` and
-`cargo:` refs need no PowerShell 7.
+`cmd`. `oku manifest lint` fails on one that sets no shell, or sets `sh` or
+`bash`. Give a step for `sh` a `when` that leaves Windows out, and a step for
+Windows its own `when = { os = "windows" }`. `pwsh` is PowerShell 7 when it is
+installed, else the Windows PowerShell 5.1 that ships with Windows. oku's own
+steps for `npm:`, `pypi:`, `go:` and `cargo:` refs need no PowerShell 7.
 
 ## Uninstall
 

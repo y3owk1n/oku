@@ -1198,7 +1198,8 @@ the whole schema.
 | error | Everything `oku add` rejects, such as a bad name, `value` together with `from`, or an artifact with none of `bin`, `man` and `completions`. |
 | error | A template variable that does not exist. |
 | error | A build step with no type key, or with more than one. |
-| error | A `run` step that can run on Windows and sets no `shell`. A step can run on Windows unless its `when` names another `os`. |
+| error | A `run` step that can run on Windows and sets no `shell`, or sets `sh` or `bash`. A step can run on Windows unless its `when`, or the `[build]`'s, names another `os`. |
+| error | A `run` step with `shell = "cmd"` that can run on macOS or Linux. |
 | error | A `fetch` step without `sha256`. |
 | error | A `bin` table with both `path` and `run`. |
 | error | An artifact at an `http://` URL without `sha256` or `signing_key`, or a build source at one without `sha256`. |

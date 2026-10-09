@@ -7903,7 +7903,8 @@ func TestB51FetchStepNeedsASha256AndDownloadsWithOne(t *testing.T) {
 	must(t, os.WriteFile(source, []byte(script), 0o644))
 
 	digest := sha256.Sum256([]byte(script))
-	build := "[[build.step]]\nrun = \"cp tool.sh tool && chmod +x tool\"\nshell = \"sh\"\n" + installTool
+	build := "[[build.step]]\nrun = \"cp tool.sh tool && chmod +x tool\"\nshell = \"sh\"\n" +
+		"when = [{ os = \"darwin\" }, { os = \"linux\" }]\n" + installTool
 
 	unpinned := m.buildManifest(t, false, "", fmt.Sprintf(
 		"[[build.step]]\nfetch = { url = \"file://%s\", to = \"tool.sh\" }\n", source,

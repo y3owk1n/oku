@@ -19,6 +19,7 @@ repo = "rust-lang/rust"
 # into one prefix, so this is a build and not an artifact. Each download is
 # checked against the .sha256 file beside it.
 [build]
+when = [{ os = "darwin" }, { os = "linux" }]
 
 [[build.step]]
 when = { os = "darwin", arch = "arm64" }
