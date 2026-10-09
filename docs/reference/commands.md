@@ -1238,6 +1238,10 @@ hey 0.1.5 works on darwin-arm64 (build)
 - A manifest with a `[build]` builds from source, deps included, in the same
   sandbox a user gets. One with only artifacts installs the one for this
   machine.
+- It takes the version that `oku add --global` would take. The minimum release
+  age, `unknown_release_age` and `unverified` of your global `oku.toml` apply.
+  A manifest that `oku add` stops on without a terminal, as in CI, stops here
+  too.
 - It ends with the files a profile would link.
 - A failing step prints `FAILED`, the build error with the end of the step's
   output, and exits with `1`.

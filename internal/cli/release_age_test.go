@@ -323,3 +323,50 @@ func TestB376ASparkleItemsPubDateIsItsReleaseTime(t *testing.T) {
 		t.Fatalf("a Sparkle item 10 days old: %v\n%s", err, out)
 	}
 }
+
+func TestB549ManifestTestTakesTheVersionAddTakes(t *testing.T) {
+	m := newMachine(t)
+	tool := ageServer(t, &m, map[string]time.Duration{
+		"1.0.0": 10 * 24 * time.Hour, "1.1.0": 2 * time.Hour,
+	})
+
+	for _, tc := range []struct {
+		args []string
+		want string
+	}{
+		{nil, "tool 1.0.0 works"},
+		{[]string{"--min-release-age", "0"}, "tool 1.1.0 works"},
+	} {
+		out, err := m.run(t, "", append([]string{"manifest", "test", tool}, tc.args...)...)
+		if err != nil || !strings.Contains(out, tc.want) {
+			t.Fatalf("manifest test %v: %v\n%s", tc.args, err, out)
+		}
+	}
+}
+
+func TestB549ManifestTestAsksAboutAnUndatedVersionAsAddDoes(t *testing.T) {
+	m, tool := undated(t)
+
+	_, err := m.run(t, "", "manifest", "test", tool)
+	if err == nil || !strings.Contains(err.Error(), "--accept-unknown-age") {
+		t.Fatalf("manifest test without a terminal took an undated version: %v", err)
+	}
+
+	out, err := m.run(t, "", "manifest", "test", tool, "--accept-unknown-age")
+	if err != nil || !strings.Contains(out, "tool 1.1.0 works") {
+		t.Fatalf("manifest test --accept-unknown-age: %v\n%s", err, out)
+	}
+
+	// The list's unknown_release_age and unverified apply.
+	m.writeFilesList(t, "[lock]\nunknown_release_age = \"allow\"\nunverified = \"refuse\"\n")
+
+	_, err = m.run(t, "", "manifest", "test", tool)
+	if err == nil || !strings.Contains(err.Error(), "--accept-unverified") {
+		t.Fatalf("manifest test trusted a download that nothing states a digest for: %v", err)
+	}
+
+	out, err = m.run(t, "", "manifest", "test", tool, "--accept-unverified")
+	if err != nil || !strings.Contains(out, "tool 1.1.0 works") {
+		t.Fatalf("manifest test --accept-unverified: %v\n%s", err, out)
+	}
+}
