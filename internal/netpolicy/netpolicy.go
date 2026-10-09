@@ -11,6 +11,10 @@ import (
 	"net/netip"
 	"net/url"
 	"strings"
+	"syscall"
+	"time"
+
+	"github.com/y3owk1n/oku/internal/status"
 )
 
 // Policy is where oku may connect. The zero Policy refuses private addresses
@@ -142,40 +146,39 @@ func (p Policy) checkHost(host string) error {
 	return &Refused{Host: host}
 }
 
-// addrs resolves host to the addresses oku may connect to. A host that Private
+// checkAddr refuses addr for host when it is private. A host that Private
 // names, and "localhost", may resolve to anything. A loopback address that
 // the URL names itself passes too.
-func (p Policy) addrs(ctx context.Context, host string) ([]netip.Addr, error) {
-	if addr, err := netip.ParseAddr(host); err == nil {
-		if private(addr) && !addr.Unmap().IsLoopback() && !p.privateOK(host) {
-			return nil, &Refused{Host: host, Addr: addr}
-		}
+func (p Policy) checkAddr(host string, addr netip.Addr) error {
+	if !private(addr) || p.privateOK(host) || strings.EqualFold(host, "localhost") {
+		return nil
+	}
 
-		return []netip.Addr{addr}, nil
+	if named, err := netip.ParseAddr(host); err == nil && named.Unmap().IsLoopback() {
+		return nil
+	}
+
+	return &Refused{Host: host, Addr: addr}
+}
+
+// resolves refuses a host whose every address checkAddr refuses.
+func (p Policy) resolves(ctx context.Context, host string) error {
+	if addr, err := netip.ParseAddr(host); err == nil {
+		return p.checkAddr(host, addr)
 	}
 
 	found, err := net.DefaultResolver.LookupNetIP(ctx, "ip", host)
 	if err != nil {
-		return nil, err
+		return err
 	}
-
-	if p.privateOK(host) || strings.EqualFold(host, "localhost") {
-		return found, nil
-	}
-
-	var public []netip.Addr
 
 	for _, addr := range found {
-		if !private(addr) {
-			public = append(public, addr)
+		if p.checkAddr(host, addr) == nil {
+			return nil
 		}
 	}
 
-	if len(public) == 0 {
-		return nil, &Refused{Host: host, Addr: found[0]}
-	}
-
-	return public, nil
+	return &Refused{Host: host, Addr: found[0]}
 }
 
 // CheckURL refuses a URL that the policy would not connect to, for a program
@@ -190,9 +193,7 @@ func (p Policy) CheckURL(ctx context.Context, rawURL string) error {
 		return err
 	}
 
-	_, err := p.addrs(ctx, host)
-
-	return err
+	return p.resolves(ctx, host)
 }
 
 // gitHost is the host of a URL that git accepts, or "" for a local one. Git
@@ -224,36 +225,43 @@ type proxyKey struct{}
 
 // Transport sets t to connect only where p allows, and returns it wrapped so
 // that each request and each redirect checks its host first.
+//
+// The dialer is Go's own. It dials a host's IPv4 addresses 0.3 s after its
+// IPv6 ones, and splits the timeout between the addresses, so one address that
+// drops connection attempts does not use all of it. It checks each address as
+// it dials it.
 func (p Policy) Transport(t *http.Transport) http.RoundTripper {
-	dialer := &net.Dialer{}
 	t.DialContext = func(ctx context.Context, network, address string) (net.Conn, error) {
+		dialer := &net.Dialer{Timeout: 30 * time.Second, KeepAlive: 30 * time.Second}
+
 		// The proxy is the user's own, so oku dials it and checks only host names.
 		if address == ctx.Value(proxyKey{}) {
 			return dialer.DialContext(ctx, network, address)
 		}
 
-		host, port, err := net.SplitHostPort(address)
+		host, _, err := net.SplitHostPort(address)
 		if err != nil {
 			return nil, err
 		}
 
-		addrs, err := p.addrs(ctx, host)
-		if err != nil {
-			return nil, err
-		}
-
-		var errs []error
-
-		for _, addr := range addrs {
-			conn, err := dialer.DialContext(ctx, network, net.JoinHostPort(addr.String(), port))
-			if err == nil {
-				return conn, nil
+		dialer.ControlContext = func(_ context.Context, _, address string, _ syscall.RawConn) error {
+			addr, err := netip.ParseAddrPort(address)
+			if err != nil {
+				return err
 			}
 
-			errs = append(errs, err)
+			return p.checkAddr(host, addr.Addr())
 		}
 
-		return nil, errors.Join(errs...)
+		conn, err := dialer.DialContext(ctx, network, address)
+
+		// The dial error around a refusal repeats the address, so return the
+		// refusal alone.
+		if refused, ok := errors.AsType[*Refused](err); ok {
+			return nil, refused
+		}
+
+		return conn, err
 	}
 
 	return guard{policy: p, next: t}
@@ -299,6 +307,10 @@ func (g guard) RoundTrip(req *http.Request) (*http.Response, error) {
 			req = req.WithContext(context.WithValue(req.Context(), proxyKey{}, proxyAddress(proxy)))
 		}
 	}
+
+	// Most requests run inside a Start wait that names them. Idle names the host
+	// for the rest once they take a second.
+	defer status.Idle(req.Context(), "waiting for %s", host)()
 
 	return g.next.RoundTrip(req)
 }

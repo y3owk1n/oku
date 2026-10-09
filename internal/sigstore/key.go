@@ -27,7 +27,7 @@ import (
 // signature, as cosign verify-blob --key checks by default, so for a signature
 // without a bundle oku finds the log's entry in Rekor.
 func (v *Verifier) VerifyWithKey(ctx context.Context, data, digest []byte, key string) error {
-	if err := v.trust(); err != nil {
+	if err := v.trust(ctx); err != nil {
 		return err
 	}
 

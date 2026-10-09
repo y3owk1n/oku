@@ -648,6 +648,21 @@ one ends. On a terminal the line shows how long it has waited, and goes away
 once the command goes on. Commands that only read, such as `list`, `generations` and `doctor`,
 never wait. A killed oku leaves no stale lock, because the OS releases it.
 
+## oku waits for a host
+
+```
+jq 1.8.2: waiting for api.osv.dev 12s
+```
+
+On a terminal, oku names the host a request waits for once the request has run
+for a second. It does so only when no other line, such as a download, says what
+oku waits for. The host is slow, or the route to it loses packets.
+
+oku starts an IPv4 attempt 0.3 s after an IPv6 attempt that has not answered.
+An IPv6 route that drops connections then adds 0.3 s when the host also has an
+IPv4 address. When no address of the host answers, the request fails after 30
+seconds.
+
 ## A disk image is mounted
 
 ```

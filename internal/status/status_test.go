@@ -161,3 +161,42 @@ func TestB554AWaitShowsOnceItRunsForTheGraceAndKeepsItsLine(t *testing.T) {
 		t.Fatalf("the next wait of a shown package should show at once:\n%q", got)
 	}
 }
+
+func TestB559ARequestNoOtherWaitNamesShowsItsHostAfterASecond(t *testing.T) {
+	var out bytes.Buffer
+
+	r := live(&out)
+	jq := Scope(With(context.Background(), r), "jq")
+
+	defer Idle(jq, "waiting for api.osv.dev")()
+
+	time.Sleep(grace)
+
+	if got := screen(r, &out); strings.Contains(got, "api.osv.dev") {
+		t.Fatalf("a request younger than a second should not show yet:\n%q", got)
+	}
+
+	time.Sleep(idleGrace)
+
+	if got := screen(r, &out); !strings.Contains(got, "jq: waiting for api.osv.dev") {
+		t.Fatalf("a long request should name its host:\n%q", got)
+	}
+
+	// The package's own wait names more than the host, so its line shows that
+	// wait.
+	defer Start(jq, "downloading jq-macos-arm64")()
+
+	if got := screen(r, &out); !strings.Contains(got, "jq: downloading jq-macos-arm64") ||
+		strings.Contains(got, "api.osv.dev") {
+		t.Fatalf("the package's own wait should take the line:\n%q", got)
+	}
+
+	// A pipe gets a line for each wait, and none for a request.
+	var piped bytes.Buffer
+
+	Idle(With(context.Background(), New(&piped)), "waiting for api.osv.dev")()
+
+	if piped.Len() != 0 {
+		t.Fatalf("a pipe should get no line for a request:\n%q", piped.String())
+	}
+}

@@ -4,6 +4,7 @@
 package sigstore
 
 import (
+	"context"
 	_ "embed"
 	"errors"
 	"fmt"
@@ -90,7 +91,7 @@ func (id Identity) certificate() (verify.CertificateIdentity, error) {
 
 // Verifier checks bundles against a trust root, which it loads on first use.
 type Verifier struct {
-	load    func() (root.TrustedMaterial, error)
+	load    func(context.Context) (root.TrustedMaterial, error)
 	options []verify.VerifierOption
 	// keyOptions are the checks of a signature by a key, which has no
 	// certificate and so no certificate timestamp.
@@ -113,8 +114,8 @@ type Verifier struct {
 // log at rekor with client.
 func New(public, github root.TrustedMaterial, rekor string, client *http.Client) *Verifier {
 	return newVerifier(
-		func() (root.TrustedMaterial, error) { return public, nil },
-		func() (root.TrustedMaterial, error) { return github, nil },
+		func(context.Context) (root.TrustedMaterial, error) { return public, nil },
+		func(context.Context) (root.TrustedMaterial, error) { return github, nil },
 		rekor, client,
 	)
 }
@@ -124,11 +125,11 @@ func New(public, github root.TrustedMaterial, rekor string, client *http.Client)
 // under cacheDir.
 func Public(cacheDir string, client *http.Client) *Verifier {
 	return newVerifier(
-		func() (root.TrustedMaterial, error) {
-			return trustRoot(tuf.DefaultOptions(), cacheDir, client)
+		func(ctx context.Context) (root.TrustedMaterial, error) {
+			return trustRoot(ctx, tuf.DefaultOptions(), cacheDir, client)
 		},
-		func() (root.TrustedMaterial, error) {
-			return trustRoot(tuf.DefaultOptions().WithRoot(githubRoot).WithRepositoryBaseURL(githubTUF), cacheDir, client)
+		func(ctx context.Context) (root.TrustedMaterial, error) {
+			return trustRoot(ctx, tuf.DefaultOptions().WithRoot(githubRoot).WithRepositoryBaseURL(githubTUF), cacheDir, client)
 		},
 		PublicRekor, client,
 	)
@@ -139,7 +140,11 @@ func Public(cacheDir string, client *http.Client) *Verifier {
 // instance must carry a log entry and the log's timestamp, and a certificate
 // timestamp when it has a certificate. A bundle of GitHub's must carry a
 // timestamp of GitHub's timestamp authority.
-func newVerifier(public, github func() (root.TrustedMaterial, error), rekor string, client *http.Client) *Verifier {
+func newVerifier(
+	public, github func(context.Context) (root.TrustedMaterial, error),
+	rekor string,
+	client *http.Client,
+) *Verifier {
 	return &Verifier{
 		load:   public,
 		github: &Verifier{load: github, options: []verify.VerifierOption{verify.WithSignedTimestamps(1)}},
@@ -160,20 +165,25 @@ func newVerifier(public, github func() (root.TrustedMaterial, error), rekor stri
 // Verify checks that data, a bundle in JSON, signs the file whose sha256 is
 // digest, and that id signed it. The bundle may also be in cosign's older
 // format.
-func (v *Verifier) Verify(data, digest []byte, id Identity) error {
+func (v *Verifier) Verify(ctx context.Context, data, digest []byte, id Identity) error {
 	b, err := readBundle(data, digest)
 	if err != nil {
 		return fmt.Errorf("%w: read the bundle: %w", ErrVerify, err)
 	}
 
-	return v.verify(b, digest, id)
+	return v.verify(ctx, b, digest, id)
 }
 
 // trustRoot reads the trust root of the TUF repository that opts name with
 // client, and keeps it under cacheDir.
-func trustRoot(opts *tuf.Options, cacheDir string, client *http.Client) (root.TrustedMaterial, error) {
+func trustRoot(
+	ctx context.Context,
+	opts *tuf.Options,
+	cacheDir string,
+	client *http.Client,
+) (root.TrustedMaterial, error) {
 	material, err := root.FetchTrustedRootWithOptions(
-		opts.WithCachePath(cacheDir).WithFetcher(fetcher{client}).WithCacheValidity(1),
+		opts.WithCachePath(cacheDir).WithFetcher(fetcher{ctx: ctx, client: client}).WithCacheValidity(1),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("read the Sigstore trust root from %s: %w", opts.RepositoryBaseURL, err)
@@ -184,12 +194,12 @@ func trustRoot(opts *tuf.Options, cacheDir string, client *http.Client) (root.Tr
 
 // verify checks that b signs the file whose sha256 is digest, and that id
 // signed it.
-func (v *Verifier) verify(b *bundle.Bundle, digest []byte, id Identity) error {
+func (v *Verifier) verify(ctx context.Context, b *bundle.Bundle, digest []byte, id Identity) error {
 	if v != nil && v.github != nil && issuedByGitHub(b) {
-		return v.github.verify(b, digest, id)
+		return v.github.verify(ctx, b, digest, id)
 	}
 
-	if err := v.trust(); err != nil {
+	if err := v.trust(ctx); err != nil {
 		return err
 	}
 
@@ -222,13 +232,13 @@ func issuedByGitHub(b *bundle.Bundle) bool {
 }
 
 // trust loads the trust root on first use.
-func (v *Verifier) trust() error {
+func (v *Verifier) trust(ctx context.Context) error {
 	if v == nil {
 		return fmt.Errorf("%w: this oku has no Sigstore trust root here", ErrVerify)
 	}
 
 	v.once.Do(func() {
-		if v.material, v.err = v.load(); v.err != nil {
+		if v.material, v.err = v.load(ctx); v.err != nil {
 			return
 		}
 
@@ -241,11 +251,19 @@ func (v *Verifier) trust() error {
 // fetcher reads the files of the TUF repository with oku's client, so the
 // trust root goes through the same network rules as every download.
 type fetcher struct {
+	// ctx is the context of the check that first needs the trust root, since
+	// the TUF client passes none.
+	ctx    context.Context
 	client *http.Client
 }
 
 func (f fetcher) DownloadFile(url string, maxLength int64, _ time.Duration) ([]byte, error) {
-	resp, err := f.client.Get(url)
+	req, err := http.NewRequestWithContext(f.ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := f.client.Do(req)
 	if err != nil {
 		return nil, err
 	}

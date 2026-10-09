@@ -73,7 +73,7 @@ func (s *Store) verifySigstore(ctx context.Context, m *manifest.Manifest, a mani
 	var errs []error
 
 	for _, data := range bundles {
-		err := s.Sigstore.Verify(data, sum, sigstore.Identity{Workflow: m.Package.SignerWorkflow, Repo: repo})
+		err := s.Sigstore.Verify(ctx, data, sum, sigstore.Identity{Workflow: m.Package.SignerWorkflow, Repo: repo})
 		if err == nil {
 			return nil
 		}
@@ -172,7 +172,7 @@ func (s *Store) verifySigned(ctx context.Context, m *manifest.Manifest, url, cer
 	}
 
 	if certURL == "" {
-		return s.Sigstore.Verify(data, sum, signer(m))
+		return s.Sigstore.Verify(ctx, data, sum, signer(m))
 	}
 
 	cert, err := s.bundle(ctx, certURL)

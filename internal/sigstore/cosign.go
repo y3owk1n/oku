@@ -85,7 +85,7 @@ func (v *Verifier) VerifySignature(ctx context.Context, signature, cert, digest 
 		return fmt.Errorf("%w: %w", ErrVerify, err)
 	}
 
-	return v.verify(b, digest, id)
+	return v.verify(ctx, b, digest, id)
 }
 
 // logged returns the log's entry in which sig, in base64, signs the file whose
@@ -316,7 +316,7 @@ func (v *Verifier) VerifyStatement(ctx context.Context, line, digest []byte, id 
 	}
 
 	if json.Unmarshal(line, &envelope) != nil || envelope.PayloadType == "" {
-		return v.Verify(line, digest, id)
+		return v.Verify(ctx, line, digest, id)
 	}
 
 	if v == nil {
@@ -379,7 +379,7 @@ func (v *Verifier) VerifyStatement(ctx context.Context, line, digest []byte, id 
 			return fmt.Errorf("%w: %w", ErrVerify, err)
 		}
 
-		return v.verify(b, digest, id)
+		return v.verify(ctx, b, digest, id)
 	}
 
 	return fmt.Errorf("%w: %s holds no entry of this envelope", ErrVerify, v.rekor)
