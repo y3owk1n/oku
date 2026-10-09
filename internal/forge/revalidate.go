@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -23,7 +24,8 @@ import (
 // dir, and asks the host again with If-None-Match. The host answers 304 when
 // nothing changed. GitHub does not count a 304 against the rate limit of a
 // request with a token. The host checks every request, so the answer is never
-// stale.
+// stale. A file at a full commit SHA cannot change, so the client gives the
+// answer it kept, with or without an ETag, and asks nothing.
 func Revalidating(dir string, next http.RoundTripper) *http.Client {
 	return &http.Client{Transport: revalidator{dir: dir, next: next}, CheckRedirect: CheckRedirect}
 }
@@ -112,7 +114,22 @@ func (r revalidator) revalidate(req *http.Request) (*http.Response, error) {
 	// oku asks again in full for an answer it cannot read, such as one an older
 	// oku kept in another format.
 	old, have := read(path)
-	if have {
+
+	// A file at a full commit SHA never changes, so oku asks the host nothing.
+	if have && req.Context().Value(fixedKey{}) != nil {
+		used(path)
+
+		return &http.Response{
+			Status:        "200 OK",
+			StatusCode:    http.StatusOK,
+			Header:        http.Header{"Content-Type": {old.Type}},
+			Body:          io.NopCloser(bytes.NewReader(old.Body)),
+			ContentLength: int64(len(old.Body)),
+			Request:       req,
+		}, nil
+	}
+
+	if have && old.ETag != "" {
 		req = req.Clone(req.Context())
 		req.Header.Set("If-None-Match", old.ETag)
 	}
@@ -125,18 +142,15 @@ func (r revalidator) revalidate(req *http.Request) (*http.Response, error) {
 	switch {
 	case resp.StatusCode == http.StatusNotModified && have:
 		resp.Body.Close()
-
-		// The age of the file says when oku last used the answer, which is what gc
-		// goes by.
-		now := time.Now()
-		_ = os.Chtimes(path, now, now)
+		used(path)
 
 		resp.StatusCode, resp.Status = http.StatusOK, "200 OK"
 		resp.Header.Set("Link", old.Link)
 		resp.Header.Set("Content-Type", old.Type)
 		resp.Body = io.NopCloser(bytes.NewReader(old.Body))
 		resp.ContentLength = int64(len(old.Body))
-	case resp.StatusCode == http.StatusOK && resp.Header.Get("ETag") != "":
+	case resp.StatusCode == http.StatusOK &&
+		(resp.Header.Get("ETag") != "" || req.Context().Value(fixedKey{}) != nil):
 		// Every reader of this client refuses an answer over maxAnswer, so more is
 		// not worth reading.
 		body, err := io.ReadAll(io.LimitReader(resp.Body, maxAnswer+1))
@@ -157,6 +171,27 @@ func (r revalidator) revalidate(req *http.Request) (*http.Response, error) {
 	}
 
 	return resp, nil
+}
+
+// used sets the time on the answer at path. The age of the file says when oku
+// last used the answer, which is what gc goes by.
+func used(path string) {
+	now := time.Now()
+	_ = os.Chtimes(path, now, now)
+}
+
+type fixedKey struct{}
+
+// fixed marks ctx, when commit is a full SHA, so that the client gives the
+// answer it kept without asking the host. A branch, a tag or a short SHA can
+// name another commit later, so fixed leaves ctx as it is for them.
+func fixed(ctx context.Context, commit string) context.Context {
+	if len(commit) != 40 && len(commit) != 64 ||
+		strings.Trim(commit, "0123456789abcdef") != "" {
+		return ctx
+	}
+
+	return context.WithValue(ctx, fixedKey{}, true)
 }
 
 // keep writes an answer in one rename. The cache only saves requests, so a

@@ -113,7 +113,7 @@ func (g *gitlab) Head(ctx context.Context, repo string) (string, error) {
 
 func (g *gitlab) File(ctx context.Context, repo, commit, path string) ([]byte, error) {
 	body, _, err := g.get(
-		ctx,
+		fixed(ctx, commit),
 		g.project(
 			repo,
 		)+"/repository/files/"+url.PathEscape(

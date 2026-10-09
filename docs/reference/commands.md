@@ -1698,7 +1698,10 @@ These rules apply to every command.
 - **Waits.** While oku waits, stderr says what for, with the package's name in
   front: reading a manifest, looking up versions, downloading, unpacking,
   cloning, asking a cache, or running a build step. On a terminal that is one
-  line per package that is installing. A download shows how far it got, such
+  line per package that is installing. A package's line appears once one of
+  its waits has run for 0.2 seconds, so a lookup that the cache answers shows
+  no line. Once it appears, the line stays until the package's last wait ends.
+  A download shows how far it got, such
   as `1.4 MiB of 2.0 MiB, 70%`, with the time so far. After eight lines the
   last one counts the rest, and the lines go away when the waits end. While
   another oku changes the machine, a wait line says `waiting for oku process

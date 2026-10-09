@@ -298,7 +298,9 @@ days, and the API answers that no command has read for 30 days, see
 [`oku gc`](commands.md#oku-gc).
 
 An API answer holds the host's ETag, so the next lookup asks the host whether
-anything changed, and downloads the whole list again only when it did. Reading
+anything changed, and downloads the whole list again only when it did. A
+manifest at a full commit SHA cannot change, so oku reads it from the cache
+and asks the host nothing. Reading
 an answer sets the time on its file, which is the age `oku gc --cache` goes by.
 An answer that an older oku kept in another format costs one request to fetch
 again.

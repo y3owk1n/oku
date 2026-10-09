@@ -81,7 +81,7 @@ func (g *gitea) Head(ctx context.Context, repo string) (string, error) {
 }
 
 func (g *gitea) File(ctx context.Context, repo, commit, path string) ([]byte, error) {
-	return g.get(ctx, repo, "/raw/"+path+"?ref="+url.QueryEscape(commit))
+	return g.get(fixed(ctx, commit), repo, "/raw/"+path+"?ref="+url.QueryEscape(commit))
 }
 
 // Files reads the tree page by page, because the server caps a page.
