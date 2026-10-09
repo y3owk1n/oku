@@ -193,6 +193,10 @@ order step in `prd/product.md`.
   `git`, and git follows no http redirect.
 - B470 [2] A `redirect` version source and a private GitHub release download
   follow the redirect rules of B419.
+- B558 [2] When one address of a host drops connection attempts, oku reaches
+  the host on its other addresses. oku dials an IPv4 address 0.3 s after an
+  IPv6 address that has not answered, so a broken IPv6 route does not stall a
+  request.
 - B422 [2] `oku manifest lint` fails on an artifact or a build source at an
   `http://` URL without a `sha256`.
 - B431 [2] A `file://` URL names a file of this machine: `file:///C:/x` a
@@ -1599,6 +1603,11 @@ order step in `prd/product.md`.
   for 0.2 s, so a wait that the cache answers draws nothing. After that the
   package's next waits show at once, so its line stays from one wait to the
   next.
+- B559 [11] On a terminal, a request that runs for 1 s shows
+  `waiting for <host>` when its package has no other wait running. A slow host
+  then never leaves the screen blank. While the package has a wait of its own,
+  such as a download, its line shows that wait instead. A pipe gets no line for
+  a request.
 - B93 [11] The install script puts one static binary in place and prints the
   hook line for the user's shell. It needs no root and edits no existing file.
 - B220 [11] The install script prints the installed version, and ends with the
