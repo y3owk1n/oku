@@ -811,6 +811,9 @@ hold a line break.
   Windows it is a [shim](../how-oku-works.md#shim) that holds the arguments, so
   `run` names an `.exe` there. Use one `[[artifact]]` per OS when the paths
   differ.
+- On Windows the profile adds the `bin` of each runtime dep to the shim it
+  links, as `dir =` lines. The shim in the store has none, so after
+  `oku manifest test --keep` the shim in the kept store does not show them.
 
 ### Expose a file under another name
 
