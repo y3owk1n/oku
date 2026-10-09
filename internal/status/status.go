@@ -26,6 +26,9 @@ const (
 	// grace is how long a wait runs before a terminal shows it. A lookup that
 	// a cache answers ends sooner, and its line would only flash.
 	grace = 200 * time.Millisecond
+	// idleGrace is how long an Idle wait runs before a terminal shows it. A
+	// request that answers at once draws nothing.
+	idleGrace = time.Second
 	// clearLine returns to the first column and erases the line.
 	clearLine = "\r\x1b[2K"
 	// upLine moves the cursor one line up and erases that line.
@@ -68,6 +71,8 @@ type task struct {
 	started time.Time
 	// read and total count the bytes of a download. total is -1 when unknown.
 	read, total int64
+	// idle marks a wait that shows only while its scope has no other wait.
+	idle bool
 }
 
 // New returns a reporter that writes to out. It redraws a line when out is a
@@ -119,8 +124,19 @@ func Scope(ctx context.Context, name string) context.Context {
 // Start shows a wait until the caller calls the returned function. A wait that
 // starts inside another one replaces it until it ends.
 func Start(ctx context.Context, format string, args ...any) func() {
+	return begin(ctx, false, format, args...)
+}
+
+// Idle shows a wait that no Start wait names, such as a request to a host.
+// Only a terminal shows it, once it has run for a second, and only while its
+// scope has no Start wait running.
+func Idle(ctx context.Context, format string, args ...any) func() {
+	return begin(ctx, true, format, args...)
+}
+
+func begin(ctx context.Context, idle bool, format string, args ...any) func() {
 	r, _ := ctx.Value(reporterKey{}).(*Reporter)
-	if r == nil {
+	if r == nil || idle && !r.live {
 		return func() {}
 	}
 
@@ -131,7 +147,7 @@ func Start(ctx context.Context, format string, args ...any) func() {
 		text = own.label + ": " + text
 	}
 
-	return r.start(text, own.key)
+	return r.start(text, own.key, idle)
 }
 
 // Reader adds the bytes read from in to the innermost wait of ctx. total is the
@@ -149,7 +165,7 @@ func Reader(ctx context.Context, in io.Reader, total int64) io.Reader {
 	own, _ := ctx.Value(scopeKey{}).(scope)
 
 	for _, t := range slices.Backward(r.tasks) {
-		if t.scope == own.key {
+		if t.scope == own.key && !t.idle {
 			t.total = total
 
 			return &countingReader{in: in, r: r, t: t}
@@ -210,8 +226,8 @@ func (r *Reporter) pause() func() {
 	}
 }
 
-func (r *Reporter) start(text, scope string) func() {
-	t := &task{text: text, scope: scope, started: time.Now(), total: -1}
+func (r *Reporter) start(text, scope string, idle bool) func() {
+	t := &task{text: text, scope: scope, started: time.Now(), total: -1, idle: idle}
 
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -287,8 +303,9 @@ func (r *Reporter) spin(stop, done chan struct{}) {
 }
 
 // draw writes one line per scope, each with the innermost wait of that scope,
-// and one for the waits with no scope. A scope shows once a wait of it has run
-// for grace. The caller holds mu.
+// and one for the waits with no scope. A scope shows once its outermost wait
+// has run for grace. An Idle wait shows only in a scope with no other wait,
+// once it has run for idleGrace. The caller holds mu.
 func (r *Reporter) draw() {
 	r.clear()
 
@@ -296,38 +313,54 @@ func (r *Reporter) draw() {
 		return
 	}
 
+	// outer and inner are the first and the last Start wait of a scope.
+	type waits struct{ outer, inner, idle *task }
+
 	var (
-		shown []*task
-		seen  = map[string]int{}
+		scopes []string
+		of     = map[string]*waits{}
 	)
 
 	for _, t := range r.tasks {
-		if i, ok := seen[t.scope]; ok {
-			if shown[i] != nil {
-				shown[i] = t
-			}
-
-			continue
+		w := of[t.scope]
+		if w == nil {
+			w = &waits{}
+			of[t.scope] = w
+			scopes = append(scopes, t.scope)
 		}
-
-		seen[t.scope] = len(shown)
 
 		switch {
-		case r.shownScopes[t.scope]:
-		case time.Since(t.started) >= grace:
-			if r.shownScopes == nil {
-				r.shownScopes = map[string]bool{}
-			}
-
-			r.shownScopes[t.scope] = true
+		case t.idle:
+			w.idle = t
+		case w.outer == nil:
+			w.outer, w.inner = t, t
 		default:
-			t = nil
+			w.inner = t
 		}
-
-		shown = append(shown, t)
 	}
 
-	shown = slices.DeleteFunc(shown, func(t *task) bool { return t == nil })
+	var shown []*task
+
+	for _, key := range scopes {
+		w := of[key]
+
+		switch {
+		case w.outer == nil && time.Since(w.idle.started) < idleGrace:
+			continue
+		case w.outer == nil:
+			shown = append(shown, w.idle)
+		case !r.shownScopes[key] && time.Since(w.outer.started) < grace:
+			continue
+		default:
+			shown = append(shown, w.inner)
+		}
+
+		if r.shownScopes == nil {
+			r.shownScopes = map[string]bool{}
+		}
+
+		r.shownScopes[key] = true
+	}
 
 	spinner := r.style.Accent(string([]rune(frames)[r.frame%len([]rune(frames))]))
 	lines := make([]string, 0, maxLines)
