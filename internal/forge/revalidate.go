@@ -186,12 +186,17 @@ type fixedKey struct{}
 // answer it kept without asking the host. A branch, a tag or a short SHA can
 // name another commit later, so fixed leaves ctx as it is for them.
 func fixed(ctx context.Context, commit string) context.Context {
-	if len(commit) != 40 && len(commit) != 64 ||
-		strings.Trim(commit, "0123456789abcdef") != "" {
+	if !FullSHA(commit) {
 		return ctx
 	}
 
 	return context.WithValue(ctx, fixedKey{}, true)
+}
+
+// FullSHA reports whether commit is a whole SHA-1 or SHA-256 commit id, which
+// always names the same files.
+func FullSHA(commit string) bool {
+	return (len(commit) == 40 || len(commit) == 64) && strings.Trim(commit, "0123456789abcdef") == ""
 }
 
 // keep writes an answer in one rename. The cache only saves requests, so a
