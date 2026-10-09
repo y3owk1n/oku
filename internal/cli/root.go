@@ -120,7 +120,7 @@ func NewRootCmd(opts Options) *cobra.Command {
 			}
 
 			ctx := status.With(cmd.Context(), status.New(cmd.ErrOrStderr()))
-			cmd.SetContext(resolve.WithMemo(forge.WithAnswers(ctx)))
+			cmd.SetContext(store.WithChecksums(resolve.WithMemo(forge.WithAnswers(ctx))))
 
 			return nil
 		},

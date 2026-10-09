@@ -237,3 +237,34 @@ func TestB307OkuAsksGitHubForOneVersionOfItsAPIAndNamesItWhenRetired(t *testing.
 		t.Fatalf("oku asked for version %q of GitHub's API", asked)
 	}
 }
+
+func TestB556OneCommandReadsAChecksumFileOnce(t *testing.T) {
+	m := newMachine(t)
+	files, digests := map[string]string{}, map[string]string{}
+
+	var sums strings.Builder
+
+	for _, platform := range []string{
+		"x86_64-unknown-linux-musl", "aarch64-unknown-linux-musl", "x86_64-apple-darwin", "aarch64-apple-darwin",
+	} {
+		name := "tool-v1.4.0-" + platform
+		archive, sum := m.archive(t, name, map[string]string{"tool": script})
+		files[name+".tar.gz"], digests[name+".tar.gz"] = archive, sum
+		fmt.Fprintf(&sums, "%s  %s.tar.gz\n", sum, name)
+	}
+
+	files["checksums.txt"] = filepath.Join(m.fixtures, "checksums.txt")
+	must(t, os.WriteFile(files["checksums.txt"], []byte(sums.String()), 0o644))
+
+	digestInferServer(t, &m, files, digests)
+
+	// Inference checks the file against each asset, and the install reads it too.
+	out, err := m.run(t, "", "add", "github:owner/tool")
+	if err != nil {
+		t.Fatalf("add: %v\n%s", err, out)
+	}
+
+	if got := strings.Count(out, "reading the checksums at"); got != 1 {
+		t.Fatalf("add read checksums.txt %d times, want once:\n%s", got, out)
+	}
+}

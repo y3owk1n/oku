@@ -17,6 +17,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/y3owk1n/oku/internal/forge"
@@ -305,8 +306,40 @@ func (s *Store) PublishedSHA256(ctx context.Context, url, fileName string) (stri
 	return digestIn(data, url, fileName)
 }
 
-// checksums downloads the checksum file at url.
+type checksumsKey struct{}
+
+// checksumFile is one checksum file that a command read.
+type checksumFile struct {
+	once sync.Once
+	data []byte
+	err  error
+}
+
+// WithChecksums returns a context in which the store reads each checksum file
+// once. Inference checks one shared file against each asset of a release, and
+// the install after it reads that file again.
+func WithChecksums(ctx context.Context) context.Context {
+	return context.WithValue(ctx, checksumsKey{}, &sync.Map{})
+}
+
+// checksums downloads the checksum file at url. In a context from
+// WithChecksums it downloads each file once.
 func (s *Store) checksums(ctx context.Context, url string) ([]byte, error) {
+	read, _ := ctx.Value(checksumsKey{}).(*sync.Map)
+	if read == nil {
+		return s.readChecksums(ctx, url)
+	}
+
+	// A login can make a private file readable, so the login is part of the key.
+	got, _ := read.LoadOrStore(url+"\n"+s.auth.For(url), &checksumFile{})
+	file := got.(*checksumFile)
+	file.once.Do(func() { file.data, file.err = s.readChecksums(ctx, url) })
+
+	return file.data, file.err
+}
+
+// readChecksums downloads the checksum file at url.
+func (s *Store) readChecksums(ctx context.Context, url string) ([]byte, error) {
 	defer status.Start(ctx, "reading the checksums at %s", url)()
 
 	resp, err := s.get(ctx, url)
