@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.15.0](https://github.com/y3owk1n/oku/compare/v0.14.3...v0.15.0) (2026-10-09)
+
+
+### Features
+
+* **list:** keep building from source across updates with from_source ([#419](https://github.com/y3owk1n/oku/issues/419)) ([f4dd74a](https://github.com/y3owk1n/oku/commit/f4dd74a7f68aa5442ed00189be3a83bcaefe02e3))
+
+
+### Bug Fixes
+
+* **store:** keep a bin table's switches such as /C as written on Windows ([#423](https://github.com/y3owk1n/oku/issues/423)) ([8c181f5](https://github.com/y3owk1n/oku/commit/8c181f54f347137fc145426208edb118a7594a97))
+* **store:** let completions.generate run a bin table with run on Windows ([#422](https://github.com/y3owk1n/oku/issues/422)) ([e4425ca](https://github.com/y3owk1n/oku/commit/e4425ca83fa7ee8808e6e0aeb723adba7870dfd5))
+* **store:** let completions.generate run a program in an app bundle or a wrap ([#421](https://github.com/y3owk1n/oku/issues/421)) ([5c77434](https://github.com/y3owk1n/oku/commit/5c7743420557f9bf3162f8523b1af96d11917b0d))
+
 ## [0.14.3](https://github.com/y3owk1n/oku/compare/v0.14.2...v0.14.3) (2026-10-09)
 
 
