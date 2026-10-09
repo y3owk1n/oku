@@ -1,8 +1,10 @@
 package cli_test
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -111,5 +113,37 @@ func TestB209ABinTableWithAPathExposesAFileUnderAnotherName(t *testing.T) {
 
 	if out, err := m.run(t, "", "add", both); err == nil {
 		t.Fatalf("add accepted path together with run:\n%s", out)
+	}
+}
+
+func TestB551ABuildRunsTheShellOnItsOwnPath(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the shell that oku's PATH holds is a shell script")
+	}
+
+	m := newMachine(t)
+	source := filepath.Join(m.fixtures, "completer")
+	must(t, os.WriteFile(source, []byte(completer), 0o755))
+
+	// oku's own PATH holds only a sh that fails. A host that cannot sandbox, such
+	// as a Linux container without user namespaces, then shows which sh ran.
+	fake := t.TempDir()
+	must(t, os.WriteFile(filepath.Join(fake, "sh"), []byte("#!/bin/sh\necho the sh on the PATH of oku ran\nexit 1\n"), 0o755))
+	t.Setenv("PATH", fake)
+
+	ref := m.buildManifest(
+		t, false, "",
+		fmt.Sprintf("[[build.step]]\nrun = \"cp %s tool\"\nshell = \"sh\"\n", source)+
+			"[[build.step]]\ninstall = { bin = [\"tool\"], "+
+			"completions = { generate = \"tool completions {{shell}}\" } }\n",
+	)
+
+	if out, err := m.run(t, "", "add", ref, "--yes"); err != nil {
+		t.Fatalf("add: %v\n%s", err, out)
+	}
+
+	body, err := os.ReadFile(m.profile("share", "completions", "zsh", "_tool"))
+	if err != nil || string(body) != "complete zsh\n" {
+		t.Fatalf("zsh completions: %v %q", err, body)
 	}
 }

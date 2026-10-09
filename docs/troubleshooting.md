@@ -463,6 +463,7 @@ See [Name what the machine must have](guides/new-machine.md#name-what-the-machin
 | Message | Fix |
 |---|---|
 | `the build needs "<tool>", which is not on PATH` | Install that tool. oku does not install what a manifest `needs`. |
+| `shell needs <shell>, which is not among the build's tools, add it to needs` | The step's shell is not on the build's `PATH`. On Windows set `shell` to `pwsh` or `cmd`. Elsewhere add the shell to `needs`, or a package that has it to `deps`. |
 | `build.step[N] (run) failed`, then the end of its output | A build step failed. `--verbose` shows its whole output. |
 | `no version satisfies ">=9", the versions found are ...` | A dep's version constraint matches nothing upstream. |
 | `dependency cycle: ...` | Two manifests depend on each other. Fix one of them. |

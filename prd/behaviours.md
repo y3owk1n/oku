@@ -1143,6 +1143,10 @@ order step in `prd/product.md`.
   rustup-managed toolchain adds `RUSTUP_HOME`.
 - B207 [6] The build `PATH` ends in `/usr/bin`, `/bin`, `/usr/sbin` and
   `/sbin`, in that order, so `sysctl` is found.
+- B551 [6] A `run` step's shell and the shell of `completions.generate` come
+  from the build's `PATH`, never from the `PATH` oku runs with, also when the
+  build runs without the sandbox. A shell that the build's `PATH` lacks fails
+  the step and says to add it to `needs`.
 - B55 [6] `oku manifest test` builds into a throwaway store and reports
   success or the failing step. It leaves the user's store, profile, list and
   lock untouched, and it leaves no build directory behind.

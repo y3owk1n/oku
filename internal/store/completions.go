@@ -34,6 +34,12 @@ func generateCompletions(
 		shell, args = "cmd", []string{"/C"}
 	}
 
+	// The shell comes from the build's PATH and never from oku's own.
+	program, err := findTool([]string{shell}, env)
+	if err != nil {
+		return "", fmt.Errorf("completions.generate: shell %w", err)
+	}
+
 	var why string
 
 	for _, name := range manifest.Shells {
@@ -42,7 +48,7 @@ func generateCompletions(
 			return "", fmt.Errorf("completions.generate: %w", err)
 		}
 
-		box.Argv = append(append([]string{shell}, args...), command)
+		box.Argv = append(append([]string{program}, args...), command)
 		box.Dir = dir
 		box.Env = slices.Clone(env)
 
