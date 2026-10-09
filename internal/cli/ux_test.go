@@ -93,8 +93,14 @@ func TestB125AMissingFileIsNamedPlainly(t *testing.T) {
 	for command, want := range map[string]string{
 		"hash": "there is no file at", "lint": "there is no manifest at", "bump": "there is no manifest at",
 	} {
-		if _, err := m.run(t, "", "manifest", command, missing); err == nil || !strings.Contains(err.Error(), want) ||
-			strings.Contains(err.Error(), "404") || strings.Contains(err.Error(), "no such file") {
+		_, err := m.run(t, "", "manifest", command, missing)
+		if err == nil {
+			t.Fatalf("manifest %s of a missing file passed", command)
+		}
+
+		// The random name of the temporary directory can contain "404".
+		text := strings.ReplaceAll(err.Error(), filepath.Dir(missing), "")
+		if !strings.Contains(text, want) || strings.Contains(text, "404") || strings.Contains(text, "no such file") {
 			t.Fatalf("manifest %s: want %q, got %v", command, want, err)
 		}
 	}
