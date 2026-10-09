@@ -44,6 +44,9 @@ type Entry struct {
 	// manifest with.
 	Asset string
 	Bins  []string
+	// FromSource builds the package from source on every platform, at every
+	// version, even where a prebuilt download fits.
+	FromSource bool
 	// MinReleaseAge replaces the list's minimum release age for this package, as
 	// ParseAge reads it. Empty keeps the list's.
 	MinReleaseAge string
@@ -551,7 +554,7 @@ func toFile(value any) (File, error) {
 // entryKeys are the keys of a package entry, each with the Go type its value
 // must have, or "" for one that toEntry checks itself.
 var entryKeys = map[string]string{
-	"ref": "string", "version": "string", "service": "bool", "system": "bool", "asset": "string",
+	"ref": "string", "version": "string", "service": "bool", "system": "bool", "asset": "string", "from_source": "bool",
 	"run_as": "string", "min_release_age": "", "signing_key": "string", "signer_workflow": "string",
 	"bin": "", "when": "",
 }
@@ -581,6 +584,7 @@ func toEntry(value any) (Entry, error) {
 		e.Service, _ = v["service"].(bool)
 		e.System, _ = v["system"].(bool)
 		e.Asset, _ = v["asset"].(string)
+		e.FromSource, _ = v["from_source"].(bool)
 		e.RunAs, _ = v["run_as"].(string)
 
 		if e.Ref == "" {
@@ -658,8 +662,8 @@ func Line(name string, entry Entry) string {
 	value := fmt.Sprintf("%q", entry.Ref)
 
 	if entry.Version != "" || entry.Service || entry.System || entry.RunAs != "" ||
-		len(entry.When) > 0 || entry.Asset != "" || len(entry.Bins) > 0 || entry.MinReleaseAge != "" ||
-		entry.SigningKey != "" || entry.SignerWorkflow != "" {
+		len(entry.When) > 0 || entry.Asset != "" || len(entry.Bins) > 0 || entry.FromSource ||
+		entry.MinReleaseAge != "" || entry.SigningKey != "" || entry.SignerWorkflow != "" {
 		fields := []string{fmt.Sprintf("ref = %q", entry.Ref)}
 
 		if entry.Version != "" {
@@ -677,6 +681,10 @@ func Line(name string, entry Entry) string {
 			}
 
 			fields = append(fields, "bin = ["+strings.Join(quoted, ", ")+"]")
+		}
+
+		if entry.FromSource {
+			fields = append(fields, "from_source = true")
 		}
 
 		if entry.Service {

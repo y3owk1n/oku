@@ -237,7 +237,7 @@ func reconcile(
 		// oku does not install a package for another platform. It keeps the lock
 		// entry, or pins the package again when the entry has to change.
 		lockOnly := !entry.When.Matches(host)
-		if lockOnly && !needsLock(previous, r.String(), platforms, strict, fresh) {
+		if lockOnly && !needsLock(previous, r.String(), platforms, strict, fresh, entry.FromSource) {
 			if previous.Name != "" {
 				next.Set(previous)
 			}
@@ -286,6 +286,7 @@ func reconcile(
 				name:            name,
 				asset:           entry.Asset,
 				bins:            entry.Bins,
+				fromSource:      entry.FromSource,
 				when:            entry.When,
 				fit:             fit,
 				platforms:       platforms,
@@ -681,17 +682,24 @@ func elapsed(d time.Duration) time.Duration {
 
 // needsLock reports whether sync must pin a package that it does not install.
 // previous is its lock entry, and platforms are the ones to pin it for.
+// With fromSource, each of them needs a build pin.
 func needsLock(
 	previous lock.Package,
 	ref string,
 	platforms []platform.Platform,
-	strict, fresh bool,
+	strict, fresh, fromSource bool,
 ) bool {
 	if len(platforms) == 0 {
 		return false
 	}
 
 	if fresh || previous.Ref != ref {
+		return true
+	}
+
+	if fromSource && slices.ContainsFunc(platforms, func(p platform.Platform) bool {
+		return previous.Platforms[p.String()].Strategy != strategyBuild
+	}) {
 		return true
 	}
 

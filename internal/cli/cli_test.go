@@ -4376,6 +4376,62 @@ func TestB35BuildRunsStepsInOrderAndFromSourceForcesIt(t *testing.T) {
 	}
 }
 
+func TestB552FromSourceInTheListBuildsEveryVersionOnEveryLockPlatform(t *testing.T) {
+	m := newMachine(t)
+	ref := m.buildManifest(t, true, `needs = ["sh"]`, writeTool+installTool)
+
+	if out, err := m.run(t, "", "add", ref, "--from-source", "--yes"); err != nil {
+		t.Fatalf("add --from-source: %v\n%s", err, out)
+	}
+
+	listPath := filepath.Join(m.config, "oku.toml")
+
+	own, err := os.ReadFile(listPath)
+	must(t, err)
+
+	if !strings.Contains(string(own), "from_source = true") {
+		t.Fatalf("add --from-source did not write from_source to oku.toml:\n%s", own)
+	}
+
+	data, err := os.ReadFile(ref)
+	must(t, err)
+	must(t, os.WriteFile(ref, []byte(strings.Replace(string(data), `"1.0.0"`, `"1.1.0"`, 1)), 0o644))
+
+	if out, err := m.run(t, "", "update", "--yes"); err != nil {
+		t.Fatalf("update: %v\n%s", err, out)
+	}
+
+	if got := m.toolOutput(t); got != "built 1.1.0" {
+		t.Fatalf("update installed %q, want the build of 1.1.0", got)
+	}
+
+	// The other platforms of [lock] get a build pin, though the artifact fits.
+	other := otherPlatform()
+	must(t, os.WriteFile(listPath, append([]byte(fmt.Sprintf("[lock]\nplatforms = [%q]\n\n", other)), own...), 0o644))
+
+	if out, err := m.run(t, "", "sync", "--yes"); err != nil {
+		t.Fatalf("sync: %v\n%s", err, out)
+	}
+
+	locked, err := os.ReadFile(filepath.Join(m.config, "oku.lock"))
+	must(t, err)
+
+	_, entry, _ := strings.Cut(string(locked), "platform."+other.String()+"]")
+	if !strings.Contains(entry, "strategy = 'build'") {
+		t.Fatalf("oku.lock does not pin a build for %s:\n%s", other, locked)
+	}
+
+	// oku refuses a platform that the [build] leaves out, and pins no download for it.
+	host := platform.Host()
+	narrow := m.buildManifest(t, true, fmt.Sprintf("needs = [\"sh\"]\nwhen = { os = %q }", host.OS), writeTool+installTool)
+	must(t, os.Rename(narrow, ref))
+
+	_, err = m.run(t, "", "update", "--yes")
+	if err == nil || !strings.Contains(err.Error(), "leaves out "+other.String()) {
+		t.Fatalf("want an error that names %s, got %v", other, err)
+	}
+}
+
 func TestB36MissingNeedsToolFailsBeforeAnyStep(t *testing.T) {
 	m := newMachine(t)
 	marker := filepath.Join(m.fixtures, "ran")

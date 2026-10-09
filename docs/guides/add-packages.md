@@ -61,7 +61,8 @@ Adding a package that is already installed replaces it.
 Three flags change how a package installs. `--service` runs its daemon now and
 at every login, see [Services](services.md). `--system` puts its apps, fonts
 and services where every user sees them, see [System-wide](system-wide.md).
-`--from-source` builds it even when a download fits. `--min-release-age` and
+`--from-source` builds it even when a download fits, and keeps building
+every version that `oku update` takes. `--min-release-age` and
 `--accept-unknown-age` change which version it takes, see
 [Pick a version](#pick-a-version). The
 [command reference](../reference/commands.md#oku-add) lists them all.
