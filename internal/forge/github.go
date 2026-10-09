@@ -89,6 +89,8 @@ func (g *github) Head(ctx context.Context, repo string) (string, error) {
 }
 
 func (g *github) File(ctx context.Context, repo, commit, path string) ([]byte, error) {
+	ctx = fixed(ctx, commit)
+
 	if g.raw != "" {
 		return g.get(ctx, g.raw+"/"+repo+"/"+commit+"/"+path, "")
 	}

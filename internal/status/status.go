@@ -23,6 +23,9 @@ import (
 const (
 	frames   = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
 	interval = 100 * time.Millisecond
+	// grace is how long a wait runs before a terminal shows it. A lookup that
+	// a cache answers ends sooner, and its line would only flash.
+	grace = 200 * time.Millisecond
 	// clearLine returns to the first column and erases the line.
 	clearLine = "\r\x1b[2K"
 	// upLine moves the cursor one line up and erases that line.
@@ -45,6 +48,9 @@ type Reporter struct {
 	frame int
 	// drawn counts the lines on the terminal from the last draw.
 	drawn int
+	// shownScopes holds the scopes a draw showed. Their next waits show at once,
+	// so a package keeps its line from one wait to the next.
+	shownScopes map[string]bool
 	// paused stops the redraw while another program uses the terminal, or
 	// while oku asks the user something. held is what the line writers got
 	// meanwhile, which the resume writes out below the answer.
@@ -216,7 +222,6 @@ func (r *Reporter) start(text, scope string) func() {
 		fmt.Fprintln(r.out, text)
 	} else if len(r.tasks) == 1 {
 		r.stop, r.done = make(chan struct{}), make(chan struct{})
-		r.draw()
 
 		go r.spin(r.stop, r.done)
 	}
@@ -282,7 +287,8 @@ func (r *Reporter) spin(stop, done chan struct{}) {
 }
 
 // draw writes one line per scope, each with the innermost wait of that scope,
-// and one for the waits with no scope. The caller holds mu.
+// and one for the waits with no scope. A scope shows once a wait of it has run
+// for grace. The caller holds mu.
 func (r *Reporter) draw() {
 	r.clear()
 
@@ -297,14 +303,31 @@ func (r *Reporter) draw() {
 
 	for _, t := range r.tasks {
 		if i, ok := seen[t.scope]; ok {
-			shown[i] = t
+			if shown[i] != nil {
+				shown[i] = t
+			}
 
 			continue
 		}
 
 		seen[t.scope] = len(shown)
+
+		switch {
+		case r.shownScopes[t.scope]:
+		case time.Since(t.started) >= grace:
+			if r.shownScopes == nil {
+				r.shownScopes = map[string]bool{}
+			}
+
+			r.shownScopes[t.scope] = true
+		default:
+			t = nil
+		}
+
 		shown = append(shown, t)
 	}
+
+	shown = slices.DeleteFunc(shown, func(t *task) bool { return t == nil })
 
 	spinner := r.style.Accent(string([]rune(frames)[r.frame%len([]rune(frames))]))
 	lines := make([]string, 0, maxLines)

@@ -2007,3 +2007,14 @@ it as before. Why: the exported `OKU_HOOK_SAVED` held the value that a line
 such as `GITHUB_TOKEN = false` hid, so every program in the project could read
 it. `oku exec` loses the old value of a variable that a project changed, and
 unsets it, which keeps a secret from an agent that `unless` names.
+
+## D122. A file at a full commit SHA is read without asking the host
+
+oku reads a forge file at a full commit SHA from the answer it kept, with or
+without an ETag. For a `git+` ref whose commit the cached clone holds, oku
+checks the commit out without `git fetch`. A branch, a tag or a short SHA still
+asks the host. Why: sync and `oku update <name>` read the locked manifest of
+every package they keep. Each `github:` package with its own manifest cost a
+304 round trip, and each `git+` package cost a `git fetch` of about 0.9 s, for
+an answer that cannot change. On a terminal each of those reads drew a line for
+a moment, so updating one package flashed lines for the others.

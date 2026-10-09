@@ -150,6 +150,10 @@ The commands are in [oku source](commands.md#oku-source) and
 | file, URL | no | Reads the bytes. There is no commit, so `oku.lock` pins the manifest's sha256 and `oku sync` stops when the content changed. |
 
 The commit goes into `oku.lock`, and `oku sync` reads that same commit again.
+A file at a full commit SHA never changes, so oku reads it from its cache and
+asks the host nothing. For a `git+` ref, oku reads the commit from the clone in
+its cache when the clone already holds it. `oku update jq` reads the manifests
+of the other packages this way too.
 
 oku keeps each API answer in its cache and asks next time only whether it
 changed. With `GITHUB_TOKEN` set, GitHub does not count an unchanged answer

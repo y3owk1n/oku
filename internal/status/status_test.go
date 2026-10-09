@@ -16,6 +16,21 @@ func live(out *bytes.Buffer) *Reporter {
 	return &Reporter{out: out, live: true, style: ui.Style{}, width: func() int { return 80 }}
 }
 
+// screen draws r and returns what the terminal shows after the last erase.
+func screen(r *Reporter, out *bytes.Buffer) string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	r.draw()
+
+	shown := out.String()
+	if i := strings.LastIndex(shown, "\x1b[2K"); i >= 0 {
+		shown = shown[i+len("\x1b[2K"):]
+	}
+
+	return shown
+}
+
 func TestB232AQuestionHoldsTheOtherPackagesOutputUntilItIsAnswered(t *testing.T) {
 	var out bytes.Buffer
 
@@ -94,14 +109,11 @@ func TestB176APackageKeepsOneLineFromItsFirstWait(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	r.mu.Lock()
-	r.draw()
-	screen := out.String()[strings.LastIndex(out.String(), "\x1b[2K")+len("\x1b[2K"):]
-	r.mu.Unlock()
+	time.Sleep(grace)
 
-	lines := strings.Split(screen, "\n")
+	lines := strings.Split(screen(r, &out), "\n")
 	if len(lines) != 2 {
-		t.Fatalf("two packages should take two lines:\n%q", screen)
+		t.Fatalf("two packages should take two lines:\n%q", lines)
 	}
 
 	if !strings.Contains(lines[0], "jq 1.8.2: downloading jq-macos-arm64 512 B of 2.0 KiB, 25%") {
@@ -110,5 +122,42 @@ func TestB176APackageKeepsOneLineFromItsFirstWait(t *testing.T) {
 
 	if !strings.Contains(lines[1], "fd: reading github:sharkdp/fd") {
 		t.Fatalf("fd should keep its own line:\n%q", lines[1])
+	}
+}
+
+func TestB554AWaitShowsOnceItRunsForTheGraceAndKeepsItsLine(t *testing.T) {
+	var out bytes.Buffer
+
+	r := live(&out)
+	ctx := With(context.Background(), r)
+
+	// A lookup that the cache answers ends before its line would show.
+	Start(Scope(ctx, "uts"), "reading github:y3owk1n/uts#uts-main")()
+
+	if out.Len() != 0 {
+		t.Fatalf("a short wait drew on the terminal:\n%q", out.String())
+	}
+
+	defer Start(Scope(ctx, "fd"), "reading github:sharkdp/fd")()
+
+	jq := Scope(ctx, "jq")
+	reading := Start(jq, "reading github:jqlang/jq")
+
+	if got := screen(r, &out); strings.Contains(got, "jq") || strings.Contains(got, "fd") {
+		t.Fatalf("waits younger than the grace should not show yet:\n%q", got)
+	}
+
+	time.Sleep(grace)
+
+	if got := screen(r, &out); !strings.Contains(got, "jq: reading") || !strings.Contains(got, "fd: reading") {
+		t.Fatalf("waits past the grace should show:\n%q", got)
+	}
+
+	// jq keeps its line from one wait to the next.
+	reading()
+	defer Start(jq, "downloading jq-macos-arm64")()
+
+	if got := screen(r, &out); !strings.Contains(got, "jq: downloading jq-macos-arm64") {
+		t.Fatalf("the next wait of a shown package should show at once:\n%q", got)
 	}
 }

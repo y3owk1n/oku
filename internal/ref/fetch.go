@@ -391,6 +391,16 @@ func (f *Fetcher) checkout(ctx context.Context, r Ref, commit string) (string, s
 		target = "HEAD"
 	}
 
+	// A clone that already holds the commit needs nothing from the host. A
+	// short SHA could name another commit once the repo grows, so oku fetches
+	// for it.
+	if len(commit) == 40 || len(commit) == 64 {
+		if git(ctx, dir, "cat-file", "-e", commit+"^{commit}") == nil &&
+			git(ctx, dir, "checkout", "--quiet", "--force", commit) == nil {
+			return dir, commit, nil
+		}
+	}
+
 	if err := git(
 		ctx,
 		dir,

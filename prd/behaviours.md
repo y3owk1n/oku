@@ -430,6 +430,11 @@ order step in `prd/product.md`.
 - B250 [3] oku keeps each answer of a forge API with its ETag and asks again
   with `If-None-Match`. When the host answers 304, `update` uses the answer it
   kept, and a changed answer replaces it.
+- B555 [3] oku reads a forge manifest at a full commit SHA, such as the one
+  `oku.lock` pins, from the answer it kept, and asks the forge nothing. It
+  reads a `git+` manifest from the clone in its cache when the clone holds that
+  commit. So `oku update jq` and `oku sync` ask no host for the manifests of
+  the packages they keep.
 - B385 [3] An answer that an older oku kept in another format makes oku ask the
   host for the whole answer again, and the lookup gives the same versions.
 - B361 [3] oku reads a registry answer of up to 64 MB whole, with or without
@@ -1583,6 +1588,10 @@ order step in `prd/product.md`.
   the time and the bytes so far, which goes away when the wait ends. A URL shows
   as the file it names, and a download of known size gives a percentage.
   Anything else gets one line for each wait.
+- B554 [11] On a terminal a package's line shows once one of its waits has run
+  for 0.2 s, so a wait that the cache answers draws nothing. After that the
+  package's next waits show at once, so its line stays from one wait to the
+  next.
 - B93 [11] The install script puts one static binary in place and prints the
   hook line for the user's shell. It needs no root and edits no existing file.
 - B220 [11] The install script prints the installed version, and ends with the
