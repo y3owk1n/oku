@@ -438,6 +438,12 @@ func (s *Store) generateArtifactCompletions(
 		return "", err
 	}
 
+	if p.OS == "windows" {
+		if err := placeShims(wraps, a.Wrap); err != nil {
+			return "", err
+		}
+	}
+
 	systemDirs, env := hostEnv(filepath.Join(work, "home"), filepath.Join(work, "tmp"))
 	env = append(env, "PATH="+joinPaths(append([]string{wraps, filepath.Join(tmp, "bin")}, systemDirs...)))
 
@@ -448,6 +454,29 @@ func (s *Store) generateArtifactCompletions(
 	defer done()
 
 	return generateCompletions(ctx, a.Completions, filepath.Join(tmp, "pkg"), tmp, env, box, nil)
+}
+
+// placeShims puts a shim beside the spec of each wrap in bin. On Windows the
+// profile makes the shim that runs a wrap, and the store holds none. A shim is a
+// copy of oku.exe, never a link, since Windows refuses to delete a link to a
+// program that is running.
+func placeShims(bin string, wraps []manifest.Wrapper) error {
+	self, err := os.Executable()
+	if err != nil {
+		return err
+	}
+
+	for _, w := range wraps {
+		if w.Path != "" {
+			continue
+		}
+
+		if err := copyFile(self, filepath.Join(bin, w.Name)+".exe"); err != nil {
+			return fmt.Errorf("bin %q: %w", w.Name, err)
+		}
+	}
+
+	return nil
 }
 
 // vouched checks download, whose sha256 is digest, against the integrity value

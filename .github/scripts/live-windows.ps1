@@ -1337,6 +1337,31 @@ Oku update --yes
 Check 'B430: a new version of the dep replaces the DLL beside the program' { (& $artDll).Trim() -eq 'the next DLL of the dep' }
 Oku remove dllart
 
+# The profile makes the shim that runs a bin table with run, so the store holds
+# only its spec. oku gives completions.generate a shim of its own, so the
+# command can run it.
+$wrapGen = Join-Path $fixtures 'wrapgen'
+New-Item -ItemType Directory -Force $wrapGen | Out-Null
+Set-Content (Join-Path $wrapGen 'tool.ps1') '"complete $($args[1])"'
+$wrapGenZip = Join-Path $fixtures 'wrapgen.zip'
+Compress-Archive -Force -Path (Join-Path $wrapGen '*') -DestinationPath $wrapGenZip
+Set-Content (Join-Path $fixtures 'wrapgen.toml') @"
+[package]
+name = "wrapgen"
+[version]
+value = "1.0.0"
+[[artifact]]
+url = "file:///$($wrapGenZip -replace '\\', '/')"
+bin = [{ name = "wrapgen", run = "pwsh", args = ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "{{pkg}}/tool.ps1"] }]
+completions = { generate = "wrapgen completions {{shell}}" }
+"@
+Oku add (Join-Path $fixtures 'wrapgen.toml') --yes
+$wrapGenFish = Join-Path $env:XDG_DATA_HOME 'oku\profiles\global\current\share\completions\fish\wrapgen.fish'
+Check 'B214: completions.generate runs a bin table with run on Windows' {
+    (Get-Content -Raw $wrapGenFish) -match 'complete fish'
+}
+Oku remove wrapgen
+
 # A machine without PowerShell 7 builds registry packages with the Windows
 # PowerShell 5.1 that Windows ships. The runner has PowerShell 7, so its
 # directory leaves PATH for these two builds.
