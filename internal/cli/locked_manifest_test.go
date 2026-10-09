@@ -117,3 +117,56 @@ func TestB555UpdateOfOnePackageReadsTheOthersLockedManifestsFromTheClone(t *test
 		t.Fatalf("tool printed %q", got)
 	}
 }
+
+func TestB557ALockedManifestOnALaterPathIsReadWithoutTryingTheFirst(t *testing.T) {
+	const commit = "0123456789abcdef0123456789abcdef01234567"
+
+	m := newMachine(t)
+
+	body, err := os.ReadFile(m.manifest(t, "tool", map[string]string{"tool": script}, `bin = ["tool"]`))
+	must(t, err)
+
+	var misses atomic.Int32
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/repos/owner/recipes/commits/HEAD":
+			_, _ = w.Write([]byte(commit))
+		case "/raw/owner/recipes/" + commit + "/packages/tool.toml":
+			_, _ = w.Write(body)
+		case "/raw/owner/recipes/" + commit + "/tool.toml":
+			misses.Add(1)
+			http.NotFound(w, r)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(server.Close)
+
+	m.opts.GitHubAPI = server.URL + "/api"
+	m.opts.GitHubRaw = server.URL + "/raw"
+
+	for _, ref := range []string{
+		"github:owner/recipes#tool",
+		m.manifest(t, "other", map[string]string{"other": script}, `bin = ["other"]`),
+	} {
+		_, err := m.run(t, "", "add", ref)
+		must(t, err)
+	}
+
+	// add found no tool.toml at the commit, and a commit never changes.
+	for _, args := range [][]string{{"update", "other"}, {"sync"}, {"update"}} {
+		out, err := m.run(t, "", args...)
+		if err != nil {
+			t.Fatalf("%v: %v\n%s", args, err, out)
+		}
+	}
+
+	if got := misses.Load(); got != 1 {
+		t.Fatalf("oku asked for tool.toml at %s %d times, want once", commit[:7], got)
+	}
+
+	if got := m.toolOutput(t); got != "hello from tool" {
+		t.Fatalf("tool printed %q", got)
+	}
+}

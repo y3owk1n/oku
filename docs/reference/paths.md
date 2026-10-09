@@ -74,6 +74,7 @@ export XDG_CACHE_HOME=/tmp/oku-try/cache
   downloads/by-url/<hash>      the digest each url gave in the last day, so a run that stopped early does not download again
   git/<hash>/                  clones for git+ refs
   api/<hash>                   answers of forge and registry APIs, asked again with their ETag. One line of JSON, then the answer packed with zstd
+  api/path-<hash>              the path that held a #name manifest at a commit, such as packages/name.toml
 ```
 
 ## The store

@@ -15,8 +15,10 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/klauspost/compress/gzip"
 
@@ -36,6 +38,9 @@ type Fetcher struct {
 	Hosts forge.Hosts
 	// GitCache holds the clones that Git refs read from.
 	GitCache string
+	// Found is the folder of records that say which path held a forge ref's file
+	// at a full commit SHA, when it was not the first path oku tried.
+	Found string
 }
 
 // Fetched is a file plus where it came from.
@@ -63,6 +68,8 @@ func NewFetcher(cacheDir string, net netpolicy.Policy) *Fetcher {
 			Net:  net,
 		},
 		GitCache: filepath.Join(cacheDir, "git"),
+		// gc ages these records with the answers.
+		Found: filepath.Join(cacheDir, "api"),
 	}
 }
 
@@ -148,7 +155,20 @@ func (f *Fetcher) fetchForge(
 		}
 	}
 
-	for _, path := range t.paths(r.Fragment) {
+	paths := t.paths(r.Fragment)
+	record := f.found(r, commit, paths)
+
+	// The commit names the same files every time, so the path that held the file
+	// before holds it again, and the paths before it are still missing.
+	if at, err := os.ReadFile(record); err == nil && slices.Contains(paths, string(at)) {
+		paths = []string{string(at)}
+
+		// gc goes by the time on the record, as it does for an answer.
+		now := time.Now()
+		_ = os.Chtimes(record, now, now)
+	}
+
+	for i, path := range paths {
 		data, err := file(ctx, host, repo, commit, path)
 		if errors.Is(err, ErrNotFound) {
 			continue
@@ -158,6 +178,12 @@ func (f *Fetcher) fetchForge(
 			return Fetched{}, fmt.Errorf("fetch %s: %w", r, err)
 		}
 
+		// A record only saves requests, so a failed write is not an error. A torn
+		// record names none of the paths, so the next lookup tries them all.
+		if i > 0 && record != "" && os.MkdirAll(f.Found, 0o755) == nil {
+			_ = os.WriteFile(record, []byte(path), 0o644)
+		}
+
 		return Fetched{Data: data, Commit: commit, Path: path}, nil
 	}
 
@@ -165,6 +191,18 @@ func (f *Fetcher) fetchForge(
 		"%s: no %s at commit %s: %w",
 		r, strings.Join(t.paths(r.Fragment), " or "), commit, ErrNotFound,
 	)
+}
+
+// found returns the file that records which of paths holds the file of r at
+// commit, or "" when commit can name other files later.
+func (f *Fetcher) found(r Ref, commit string, paths []string) string {
+	if f.Found == "" || len(paths) < 2 || !forge.FullSHA(commit) {
+		return ""
+	}
+
+	sum := sha256.Sum256([]byte(strings.Join(append([]string{r.Scheme, r.Location, commit}, paths...), "\n")))
+
+	return filepath.Join(f.Found, "path-"+hex.EncodeToString(sum[:]))
 }
 
 // paths lists where a Forge ref's file may be, in lookup order.
@@ -394,7 +432,7 @@ func (f *Fetcher) checkout(ctx context.Context, r Ref, commit string) (string, s
 	// A clone that already holds the commit needs nothing from the host. A
 	// short SHA could name another commit once the repo grows, so oku fetches
 	// for it.
-	if len(commit) == 40 || len(commit) == 64 {
+	if forge.FullSHA(commit) {
 		if git(ctx, dir, "cat-file", "-e", commit+"^{commit}") == nil &&
 			git(ctx, dir, "checkout", "--quiet", "--force", commit) == nil {
 			return dir, commit, nil

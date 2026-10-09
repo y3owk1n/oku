@@ -435,6 +435,10 @@ order step in `prd/product.md`.
   reads a `git+` manifest from the clone in its cache when the clone holds that
   commit. So `oku update jq` and `oku sync` ask no host for the manifests of
   the packages they keep.
+- B557 [3] A forge ref's `#name` manifest may be on a later path, such as
+  `packages/name.toml` after `name.toml`. oku then records which path held it
+  at that full commit SHA. A later read at that commit asks the forge for that
+  path alone, and not for the missing file.
 - B385 [3] An answer that an older oku kept in another format makes oku ask the
   host for the whole answer again, and the lookup gives the same versions.
 - B361 [3] oku reads a registry answer of up to 64 MB whole, with or without
