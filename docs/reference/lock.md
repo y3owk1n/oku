@@ -133,7 +133,8 @@ from any machine.
   `sha256_url`. With neither it downloads the file, hashes it and says so, see
   [trust on first use](security.md#trust-on-first-use). It never unpacks or
   runs a download for another platform.
-- A platform that the manifest builds from source gets `strategy = 'build'`,
+- A platform that the manifest builds from source, or every platform of a
+  package with `from_source = true`, gets `strategy = 'build'`,
   the source archive with its `sha256`, and `impure` when a `run` step for
   that platform uses the network. oku builds nothing for it.
 - oku pins a package whose `when` leaves out your machine, with its deps,

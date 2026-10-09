@@ -1064,16 +1064,7 @@ func hostStrategy(
 	case (build || !ok) && m.BuildsOn(host):
 		build = true
 	case build:
-		if m.HasBuild() {
-			return manifest.Artifact{}, false, fmt.Errorf(
-				"the [build] of %s leaves out %s in its when", m.Package.Name, host,
-			)
-		}
-
-		return manifest.Artifact{}, false, fmt.Errorf(
-			"%s has no [build], so it cannot be built from source",
-			m.Package.Name,
-		)
+		return manifest.Artifact{}, false, cannotBuild(m, host)
 	case !ok:
 		return manifest.Artifact{}, false, fmt.Errorf(
 			"%s has no artifact for %s", m.Package.Name, host,
@@ -1081,6 +1072,15 @@ func hostStrategy(
 	}
 
 	return artifact, build, nil
+}
+
+// cannotBuild reports why oku cannot build m from source on p.
+func cannotBuild(m *manifest.Manifest, p platform.Platform) error {
+	if m.HasBuild() {
+		return fmt.Errorf("the [build] of %s leaves out %s in its when", m.Package.Name, p)
+	}
+
+	return fmt.Errorf("%s has no [build], so it cannot be built from source", m.Package.Name)
 }
 
 // keepPins fills the pins that entry lacks from the entry of the same build in
@@ -1349,7 +1349,12 @@ func (e env) lockOthers(
 	platforms map[string]lock.Platform,
 	host hostBuild,
 ) ([]string, error) {
-	if req.keepVersion && !req.strictPlatforms && !req.lockOnly {
+	// A package built from source pins a build in place of each download.
+	downloads := req.fromSource && slices.ContainsFunc(req.platforms, func(p platform.Platform) bool {
+		return platforms[p.String()].Strategy != strategyBuild
+	})
+
+	if req.keepVersion && !req.strictPlatforms && !req.lockOnly && !downloads {
 		return nil, nil
 	}
 
@@ -1362,7 +1367,11 @@ func (e env) lockOthers(
 		// an older oku did not write, and pinFor adds only what is missing.
 		at, ok := platforms[p.String()]
 		if ok && at.Strategy != strategyBuild {
-			continue
+			if !req.fromSource {
+				continue
+			}
+
+			at = lock.Platform{}
 		}
 
 		// Progress names the version of p, not the host's.
@@ -1373,8 +1382,10 @@ func (e env) lockOthers(
 
 		version := cmp.Or(m.Versions[p.String()], m.Version.Value)
 
-		entry, trusted, err := pinFor(scoped, e.store().As(auth).SignedAfter(req.signedAfter(p, version)), m, release, p, host, at)
-		if err != nil && req.strictPlatforms {
+		entry, trusted, err := pinFor(
+			scoped, e.store().As(auth).SignedAfter(req.signedAfter(p, version)), m, release, p, host, at, req.fromSource,
+		)
+		if err != nil && (req.strictPlatforms || req.fromSource) {
 			return nil, err
 		}
 
@@ -1413,7 +1424,8 @@ type hostBuild struct {
 
 // pinFor returns the lock entry of m for platform p, and whether oku trusted a
 // download for it. host is the install on this machine, and at is the entry
-// that oku.lock holds for p, whose pins stay.
+// that oku.lock holds for p, whose pins stay. fromSource pins a build even
+// where an artifact fits.
 func pinFor(
 	ctx context.Context,
 	s *store.Store,
@@ -1422,13 +1434,16 @@ func pinFor(
 	p platform.Platform,
 	host hostBuild,
 	at lock.Platform,
+	fromSource bool,
 ) (lock.Platform, bool, error) {
 	artifact, ok, err := m.Select(p)
 
 	switch {
 	case err != nil:
 		return lock.Platform{}, false, err
-	case !ok && m.BuildsOn(p):
+	case fromSource && !m.BuildsOn(p):
+		return lock.Platform{}, false, cannotBuild(m, p)
+	case (fromSource || !ok) && m.BuildsOn(p):
 		pin, err := s.PinBuild(ctx, m, p, store.BuildPin{SourceURL: at.URL, SHA256: at.SHA256})
 		if err != nil {
 			return lock.Platform{}, false, fmt.Errorf("%s for %s: %w", m.Package.Name, p, err)

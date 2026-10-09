@@ -96,6 +96,7 @@ or a table:
 | `service` | boolean | `true` runs the package's services now and at every login. `oku add --service` writes it. See [Services](../guides/services.md). |
 | `asset` | string | For a repo with no manifest, the glob that picks its release asset. `oku add --asset` writes it. See [Fix a wrong pick](../guides/add-packages.md#fix-a-wrong-pick-with---asset-and---bin). |
 | `bin` | array of strings | For a repo with no manifest, the programs inside the asset. `oku add --bin` writes it. |
+| `from_source` | boolean | `true` builds the package from source at every version, even where a prebuilt download fits. oku also pins a build for each platform of [`[lock]`](#lock). It refuses a platform that the manifest's `[build]` leaves out, and names it. `oku add --from-source` writes it. |
 | `min_release_age` | string | Replaces [`[lock]` `min_release_age`](#lock) for this package, such as `"0"` for a package you want as soon as it is released. |
 | `signing_key` | string | The developer's minisign or [cosign](manifest.md#cosign-key) public key. oku checks every download against it from the first install, whether the manifest names a key or not, and refuses a manifest that names another. See [Pin a signer yourself](security.md#pin-a-signer-yourself). |
 | `signer_workflow` | string | The GitHub Actions workflow that signs the releases, as `owner/repo/.github/workflows/<file>`. oku refuses a manifest that names another, or no Sigstore signature. See [Pin a signer yourself](security.md#pin-a-signer-yourself). |

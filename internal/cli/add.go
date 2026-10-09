@@ -350,6 +350,7 @@ func runAdd(
 				When:           entryWhen,
 				Asset:          got.lock.Asset,
 				Bins:           got.lock.Bins,
+				FromSource:     fromSource,
 				MinReleaseAge:  own.Packages[got.lock.Name].MinReleaseAge,
 				SigningKey:     own.Packages[got.lock.Name].SigningKey,
 				SignerWorkflow: own.Packages[got.lock.Name].SignerWorkflow,

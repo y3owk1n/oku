@@ -66,7 +66,7 @@ Installs the package that a [ref](refs.md) points at, and writes it to
 |---|---|
 | `--system` | Puts the package's apps, fonts and services in [system scope](../how-oku-works.md#system-scope), and writes `system = true` to `oku.toml`. oku lists the files, asks unless you pass `--yes`, and uses `sudo`. |
 | `--service` | Runs the package's services now and at every login, and writes `service = true` to `oku.toml`. |
-| `--from-source` | Builds from source even when a prebuilt download fits. `oku.lock` records the choice, so `oku sync` builds too. |
+| `--from-source` | Builds from source even when a prebuilt download fits. oku writes `from_source = true` to `oku.toml`, so `oku sync` and `oku update` build too. |
 | `--asset <glob>` | For a repo with no manifest, the release asset to use. A glob that names one asset takes it for this machine. One that names more takes the best of them on every platform. Other platforms take the asset of the same program. |
 | `--bin <name>` | For a repo with no manifest, or a URL of the download itself, the file name of a program inside it. Give it once per program. oku records `--asset` and `--bin` in `oku.toml` and `oku.lock`, and `oku update` infers the next version with them. |
 | `--yes`, `-y` | Approves the manifest's build commands, the command that generates an artifact's completions, and the variables its `[env]` sets, without asking. See [approvals](security.md#approve-build-commands). In a project it also trusts the [sources](security.md#trusted-sources) of the project's other entries. |
