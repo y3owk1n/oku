@@ -61,12 +61,14 @@ oku.toml yet.`,
 				return err
 			}
 
-			if len(args) == 1 {
-				e, err := scopedEnv(cmd, opts)
-				if err != nil {
-					return err
-				}
+			e, err := scopedEnv(cmd, opts)
+			if err != nil {
+				return err
+			}
 
+			var a *adoption
+
+			if len(args) == 1 {
 				if e.project != "" {
 					return fmt.Errorf(
 						"`oku sync <list-ref>` sets up the global list, and this is the project %s\n"+
@@ -86,20 +88,21 @@ oku.toml yet.`,
 					return err
 				}
 
-				a := adoption{before: before}
-				err = reconcile(cmd, opts, &flags, nil, false, &a)
-
-				// A dry run adopts nothing either.
-				if dryRun, _ := cmd.Flags().GetBool(dryRunFlag); dryRun || err != nil && !a.committed {
-					_, restoreErr := e.restoreLists(pending{Before: before, Committing: true})
-
-					return errors.Join(err, restoreErr)
-				}
-
+				a = &adoption{before: before}
+			} else if a, err = e.mergeConflict(cmd); err != nil {
 				return err
 			}
 
-			return reconcile(cmd, opts, &flags, nil, false, nil)
+			err = reconcile(cmd, opts, &flags, nil, false, a)
+
+			// A dry run adopts nothing and merges nothing either.
+			if dryRun, _ := cmd.Flags().GetBool(dryRunFlag); a != nil && (dryRun || err != nil && !a.committed) {
+				_, restoreErr := e.restoreLists(pending{Before: a.before, Committing: true})
+
+				return errors.Join(err, restoreErr)
+			}
+
+			return err
 		},
 	}
 
@@ -144,7 +147,8 @@ func newUpdateCmd(opts Options) *cobra.Command {
 }
 
 // adoption holds the list and the lock as they were before "oku sync <list-ref>"
-// wrote them, and whether the change that followed committed.
+// wrote them, or before sync merged the conflicts in oku.lock, and whether the
+// change that followed committed.
 type adoption struct {
 	before    savedLists
 	committed bool
