@@ -137,7 +137,7 @@ func (s *Store) substituteFrom(
 	// An entry from an oku that recorded no files gets a record of what the
 	// signature covered.
 	if !exists(filepath.Join(inner, treeFile)) {
-		if err := writeTree(inner); err != nil {
+		if _, err := writeTree(inner); err != nil {
 			return "", err
 		}
 	}

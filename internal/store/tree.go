@@ -22,12 +22,12 @@ const treeFile = "oku-tree.txt"
 // ErrNoTree reports a store path that an oku made before it recorded files.
 var ErrNoTree = errors.New("oku did not record its files")
 
-// writeTree records the files under dir in dir's treeFile. The record and the
-// meta file stay out of it.
-func writeTree(dir string) error {
+// writeTree records the files under dir in dir's treeFile, and returns what it
+// recorded. The record and the meta file stay out of it.
+func writeTree(dir string) (map[string]string, error) {
 	tree, err := readTree(dir)
 	if err != nil {
-		return fmt.Errorf("record the files of %s: %w", filepath.Base(dir), err)
+		return nil, fmt.Errorf("record the files of %s: %w", filepath.Base(dir), err)
 	}
 
 	var b strings.Builder
@@ -36,7 +36,7 @@ func writeTree(dir string) error {
 		fmt.Fprintf(&b, "%s\t%s\n", tree[rel], rel)
 	}
 
-	return os.WriteFile(filepath.Join(dir, treeFile), []byte(b.String()), 0o444)
+	return tree, os.WriteFile(filepath.Join(dir, treeFile), []byte(b.String()), 0o444)
 }
 
 // Record writes the record of the store path at path as it is now. It refuses
@@ -50,7 +50,9 @@ func Record(path string) error {
 		return err
 	}
 
-	return errors.Join(writeTree(path), freeze(path))
+	_, err := writeTree(path)
+
+	return errors.Join(err, freeze(path))
 }
 
 // readTree returns, for each file and link under dir by its slash path, what

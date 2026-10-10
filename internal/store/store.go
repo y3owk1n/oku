@@ -376,7 +376,8 @@ func (s *Store) Realize(
 		return Realized{}, fmt.Errorf("write %s: %w", metaFile, err)
 	}
 
-	if err := writeTree(tmp); err != nil {
+	tree, err := writeTree(tmp)
+	if err != nil {
 		return Realized{}, err
 	}
 
@@ -407,7 +408,7 @@ func (s *Store) Realize(
 	durable.SyncDir(s.dir)
 
 	// A store path that shares nothing still works, and gc shares it later.
-	_, _ = s.Share(final)
+	s.shareNew(final, tree)
 
 	if err := freeze(final); err != nil {
 		return Realized{}, fmt.Errorf("make %s read-only: %w", filepath.Base(final), err)
