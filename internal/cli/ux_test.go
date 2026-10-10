@@ -371,3 +371,51 @@ func TestB568RollbackSaysWhenTheListsVersionLeavesTheGenerationOut(t *testing.T)
 		t.Fatalf("rollback should say the list's version moves tool again:\n%s", out)
 	}
 }
+
+func TestB570RemoveAndRollbackPreviewWithDryRun(t *testing.T) {
+	m := newMachine(t)
+
+	for _, name := range []string{"one", "two"} {
+		_, err := m.run(t, "", "add", m.namedManifest(t, name, name, name))
+		must(t, err)
+	}
+
+	before := m.snapshot(t)
+
+	out, err := m.run(t, "", "remove", "two", "--dry-run")
+	if err != nil || !strings.Contains(out, "would remove the package two") || strings.Contains(out, "removed two") {
+		t.Fatalf("remove --dry-run: %v\n%s", err, out)
+	}
+
+	out, err = m.run(t, "", "rollback", "--dry-run")
+	if err != nil || !strings.Contains(out, "would remove the package two") || strings.Contains(out, "is active") {
+		t.Fatalf("rollback --dry-run: %v\n%s", err, out)
+	}
+
+	if after := m.snapshot(t); after != before || !exists(m.profile("bin", "two")) {
+		t.Fatalf("a dry run changed the machine:\nbefore %s\nafter  %s", before, after)
+	}
+
+	// add takes --dry-run as --plan.
+	out, err = m.run(t, "", "add", m.namedManifest(t, "three", "three", "three"), "--dry-run")
+	if err != nil || exists(m.profile("bin", "three")) || !strings.Contains(out, "plan: nothing was changed") {
+		t.Fatalf("add --dry-run: %v\n%s", err, out)
+	}
+
+}
+
+func TestB570RemoveWithSystemTakesTheSystemScopeAwayInOneStep(t *testing.T) {
+	m := newMachine(t)
+	dirs, elevations := m.systemScope(t)
+	font := filepath.Join(dirs.Fonts, "Test.ttf")
+
+	_, err := m.run(t, "y\n", "add", m.desktopManifest(t), "--system")
+	must(t, err)
+
+	before := *elevations
+
+	out, err := m.run(t, "", "remove", "foo", "--system", "--yes")
+	if err != nil || exists(font) || *elevations == before {
+		t.Fatalf("remove --system --yes should take the font away: %v\n%s", err, out)
+	}
+}

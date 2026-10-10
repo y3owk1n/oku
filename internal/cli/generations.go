@@ -227,7 +227,7 @@ func changes(s ui.Style, from, to profile.Generation) string {
 }
 
 func newRollbackCmd(opts Options) *cobra.Command {
-	return &cobra.Command{
+	cmd := &cobra.Command{
 		Use:   "rollback [generation]",
 		Short: "Switch the profile and oku.lock back to an earlier generation",
 		Long: `Switch the profile and oku.lock back to an earlier generation.
@@ -241,6 +241,27 @@ the store. Rollback does not change oku.toml.`,
 			return runRollback(cmd, opts, args)
 		},
 	}
+
+	changeFlags(cmd)
+
+	return cmd
+}
+
+// changeFlags adds the flags of a command that switches generations without
+// installing anything: a dry run, and system scope with or without asking.
+func changeFlags(cmd *cobra.Command) {
+	cmd.Flags().Bool(dryRunFlag, false, "print what would change, and change nothing")
+	cmd.Flags().Bool(systemFlag, false, systemUsage)
+	cmd.Flags().BoolP("yes", "y", false, "apply system scope without asking")
+}
+
+// changeOf returns the change to generation to that the flags of changeFlags ask for.
+func changeOf(cmd *cobra.Command, to int) change {
+	dryRun, _ := cmd.Flags().GetBool(dryRunFlag)
+	system, _ := cmd.Flags().GetBool(systemFlag)
+	yes, _ := cmd.Flags().GetBool("yes")
+
+	return change{to: to, dryRun: dryRun, system: system, yes: yes}
 }
 
 func runRollback(cmd *cobra.Command, opts Options, args []string) error {
@@ -307,21 +328,20 @@ func runRollback(cmd *cobra.Command, opts Options, args []string) error {
 		return err
 	}
 
-	err = e.apply(cmd, opts, change{
-		to: target.Number,
-		commit: func() error {
-			if snapshot == nil {
-				return nil
-			}
-
-			if err := list.WriteFile(e.lockPath(), snapshot); err != nil {
-				return fmt.Errorf("restore %s: %w", e.lockPath(), err)
-			}
-
+	c := changeOf(cmd, target.Number)
+	c.commit = func() error {
+		if snapshot == nil {
 			return nil
-		},
-	})
-	if err != nil {
+		}
+
+		if err := list.WriteFile(e.lockPath(), snapshot); err != nil {
+			return fmt.Errorf("restore %s: %w", e.lockPath(), err)
+		}
+
+		return nil
+	}
+
+	if err := e.apply(cmd, opts, c); err != nil || c.dryRun {
 		return err
 	}
 

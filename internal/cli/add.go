@@ -75,6 +75,11 @@ nothing. --manifest prints the manifest add would use, ready to save as a file.`
 				return errors.New("--asset and --bin describe one download, so add that ref on its own")
 			}
 
+			// --dry-run is the name sync, update, remove and rollback use.
+			if dryRun, _ := cmd.Flags().GetBool(dryRunFlag); dryRun {
+				plan = true
+			}
+
 			if plan && printed {
 				return errors.New("--plan and --manifest both print instead of adding, so pick one")
 			}
@@ -128,6 +133,7 @@ nothing. --manifest prints the manifest add would use, ready to save as a file.`
 		StringArrayVar(&bins, "bin", nil, "with no manifest, the file name of a program in the asset, once per program")
 	cmd.Flags().
 		BoolVar(&plan, "plan", false, "print what oku found and what add would do, and change nothing")
+	cmd.Flags().Bool(dryRunFlag, false, "the same as --plan")
 	cmd.Flags().
 		BoolVar(&printed, "manifest", false, "print the manifest oku would use, inferred for every platform when the ref has none")
 	cmd.Flags().StringArrayVar(&whens, "when", nil,
