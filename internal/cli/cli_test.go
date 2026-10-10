@@ -2629,10 +2629,15 @@ func TestB114AddReadsAGitHubEnterpriseHostFromTheRef(t *testing.T) {
 	must(t, os.WriteFile(filepath.Join(gh, "gh"), []byte("#!/bin/sh\necho \"$GH_ENTERPRISE_TOKEN\"\n"), 0o755))
 	t.Setenv("PATH", gh+string(os.PathListSeparator)+os.Getenv("PATH"))
 
-	var tokens []string
+	var (
+		tokens []string
+		mu     sync.Mutex
+	)
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
 		tokens = append(tokens, r.Header.Get("Authorization"))
+		mu.Unlock()
 
 		switch r.URL.Path {
 		case "/api/v3/repos/owner/tool/commits/HEAD":
@@ -2705,10 +2710,15 @@ func TestB418AForgeTokenGoesOnlyToAHostTheUserListed(t *testing.T) {
 		hostAssetName(), archive,
 	)
 
-	var tokens []string
+	var (
+		tokens []string
+		mu     sync.Mutex
+	)
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
 		tokens = append(tokens, r.Header.Get("Authorization"))
+		mu.Unlock()
 
 		switch r.URL.Path {
 		case "/api/v1/repos/owner/tool/commits":
@@ -2769,10 +2779,15 @@ func TestB115AddInfersFromACodebergRepoAndUpdateListsItsReleases(t *testing.T) {
 		hostAssetName(), archive,
 	)
 
-	var tokens []string
+	var (
+		tokens []string
+		mu     sync.Mutex
+	)
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
 		tokens = append(tokens, r.Header.Get("Authorization"))
+		mu.Unlock()
 
 		switch r.URL.Path {
 		case "/api/v1/repos/owner/tool/commits":
@@ -2888,12 +2903,17 @@ func TestB116AddInfersFromAGitLabProjectInASubgroup(t *testing.T) {
 		hostAssetName(), archive,
 	)
 
-	var tokens []string
+	var (
+		tokens []string
+		mu     sync.Mutex
+	)
 
 	const project = "/api/v4/projects/group%2Fsub%2Ftool"
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
 		tokens = append(tokens, r.Header.Get("Authorization"))
+		mu.Unlock()
 
 		switch r.URL.EscapedPath() {
 		case project + "/repository/commits":

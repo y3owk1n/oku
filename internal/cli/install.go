@@ -1540,6 +1540,8 @@ func (e env) manifestData(
 		return ref.Fetched{Data: []byte(text)}, infer.Inferred{Text: text}, err
 	}
 
+	defer e.prefetch(ctx, opts, req)()
+
 	fetched, err := e.fetcher(opts).Fetch(ctx, req.ref, req.commit, ref.Manifest)
 
 	if req.ref.Kind == ref.HTTP && isDownload(req.ref, fetched.Data, err) {
@@ -1615,6 +1617,37 @@ func (e env) manifestData(
 	}
 
 	return ref.Fetched{Data: []byte(inferred.Text), Commit: fetched.Commit}, inferred, nil
+}
+
+// prefetch starts two lookups that inferring req again makes once it finds no
+// manifest: the newest release and the first page of the release list. It does
+// so only when the lock says oku inferred req before. The answers of the
+// command keep them, so inference and the version pick read them without
+// waiting on the manifest. The returned function waits for the lookups.
+func (e env) prefetch(ctx context.Context, opts Options, req request) func() {
+	var wg sync.WaitGroup
+
+	if !req.previous.Inferred || req.ref.Kind != ref.Forge || req.ref.Fragment != "" {
+		return wg.Wait
+	}
+
+	server, repo, err := e.fetcher(opts).Hosts.Open(req.ref.Scheme, req.ref.Location)
+	if err != nil {
+		return wg.Wait
+	}
+
+	// inferAt reads the newest release for no version, and picks from the list
+	// unless it has no version and no release age.
+	want := cmp.Or(req.ref.Version, req.constraint)
+	if want == "" {
+		wg.Go(func() { _, _ = server.Release(ctx, repo, "") })
+	}
+
+	if want != "" || req.releaseAge > 0 {
+		wg.Go(func() { _, _, _ = server.Releases(ctx, repo, false) })
+	}
+
+	return wg.Wait
 }
 
 // inferAt infers a manifest with write for the version that want selects. An

@@ -10,6 +10,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 )
 
 func TestB359OneCommandListsTheReleasesOfASourceOnce(t *testing.T) {
@@ -138,5 +139,59 @@ func TestB359OneCommandReusesItsConnectionsToAHost(t *testing.T) {
 	// add asks the API one request after another, so one connection carries them.
 	if requests.Load() < 2 || conns.Load() != 1 {
 		t.Fatalf("add made %d requests over %d connections, want one", requests.Load(), conns.Load())
+	}
+}
+
+func TestB563AnUpdateAsksForTheReleasesOfAnInferredPackageAtOnce(t *testing.T) {
+	m := newMachine(t)
+	archive, _ := m.archive(t, strings.TrimSuffix(hostAssetName(), ".tar.gz"), map[string]string{
+		"tool-1.4.0/tool": "#!/bin/sh\necho inferred\n",
+	})
+	inferServer(t, &m, map[string]string{hostAssetName(): archive})
+
+	upstream, err := url.Parse(m.opts.GitHubAPI)
+	must(t, err)
+
+	var (
+		watch    atomic.Bool
+		listed   = make(chan struct{})
+		once     sync.Once
+		together atomic.Bool
+	)
+
+	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if watch.Load() {
+			switch {
+			case strings.HasSuffix(r.URL.Path, "/releases"):
+				once.Do(func() { close(listed) })
+			case strings.HasSuffix(r.URL.Path, "/releases/latest"):
+				// The newest release waits up to a second for the list. Only an
+				// update that asks for both at once sends the list in that time.
+				select {
+				case <-listed:
+					together.Store(true)
+				case <-time.After(time.Second):
+				}
+			}
+		}
+
+		r.URL.Path = upstream.Path + r.URL.Path
+		httputil.NewSingleHostReverseProxy(&url.URL{Scheme: upstream.Scheme, Host: upstream.Host}).ServeHTTP(w, r)
+	}))
+	t.Cleanup(api.Close)
+
+	m.opts.GitHubAPI = api.URL
+
+	_, err = m.run(t, "", "add", "github:owner/tool", "--min-release-age", "1d")
+	must(t, err)
+
+	watch.Store(true)
+
+	if out, err := m.run(t, "", "update", "--min-release-age", "1d"); err != nil {
+		t.Fatalf("update: %v\n%s", err, out)
+	}
+
+	if !together.Load() {
+		t.Fatal("update asked for the release list only after the newest release")
 	}
 }
