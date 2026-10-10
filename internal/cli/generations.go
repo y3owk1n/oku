@@ -231,8 +231,8 @@ func newRollbackCmd(opts Options) *cobra.Command {
 		Short: "Switch the profile and oku.lock back to an earlier generation",
 		Long: `Switch the profile and oku.lock back to an earlier generation.
 
-Without a number, rollback goes to the generation before the current one. The
-switch is one link change, because every generation's packages are still in
+Without a number, rollback goes to the generation the current one replaced.
+The switch is one link change, because every generation's packages are still in
 the store. Rollback does not change oku.toml.`,
 		Args: maxArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -278,13 +278,22 @@ func runRollback(cmd *cobra.Command, opts Options, args []string) error {
 		}
 
 		target = gens[i]
-	case at == 0:
-		return fmt.Errorf(
-			"generation %d is the oldest, there is nothing before it",
-			gens[at].Number,
-		)
 	default:
-		target = gens[at-1]
+		// The generation the active one replaced is the change to undo. After a
+		// rollback the one numbered before belongs to another line.
+		i := slices.IndexFunc(gens, func(g profile.Generation) bool { return g.Number == gens[at].From })
+		if i < 0 {
+			i = at - 1
+		}
+
+		if i < 0 {
+			return fmt.Errorf(
+				"generation %d is the oldest, there is nothing before it",
+				gens[at].Number,
+			)
+		}
+
+		target = gens[i]
 	}
 
 	if target.Current {

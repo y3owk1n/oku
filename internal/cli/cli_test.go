@@ -2303,6 +2303,29 @@ func TestB22EveryChangeIsAGenerationAndRollbackRestoresOne(t *testing.T) {
 	}
 }
 
+func TestB22APlainRollbackUndoesTheChangeAfterAFork(t *testing.T) {
+	m := newMachine(t)
+
+	// Generation 3 replaced 1, so 2 belongs to the line the rollback left.
+	for _, args := range [][]string{
+		{"add", m.namedManifest(t, "one", "one", "one")},
+		{"add", m.namedManifest(t, "two", "two", "two")},
+		{"rollback"},
+		{"add", m.namedManifest(t, "three", "three", "three")},
+	} {
+		_, err := m.run(t, "", args...)
+		must(t, err)
+	}
+
+	out, err := m.run(t, "", "rollback")
+	must(t, err)
+
+	if !strings.Contains(out, "generation 1 is active") || exists(m.profile("bin", "two")) ||
+		exists(m.profile("bin", "three")) || !exists(m.profile("bin", "one")) {
+		t.Fatalf("want rollback to undo the add of three and go to generation 1:\n%s", out)
+	}
+}
+
 func TestB23GCDeletesOnlyStorePathsNoGenerationUses(t *testing.T) {
 	m := newMachine(t)
 	keep := m.namedManifest(t, "keep", "keep", "keep")
