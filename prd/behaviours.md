@@ -1656,6 +1656,9 @@ order step in `prd/product.md`.
 - B567 [11] `oku -v` on its own prints the version, as `oku --version` does.
   Before a command, `-v` is that command's `--verbose`, so `oku -v sync` is
   `oku sync -v`.
+- B573 [11] `hook`, `env --shell` and `completion` take PowerShell as `pwsh`
+  or `powershell`. `oku completion` of a shell it does not know fails, as
+  any group of commands does with a subcommand it does not have.
 - B566 [11] Shell completion reads files on the machine only. It offers the
   packages of `oku.lock` for `remove`, `update`, `info`, `why` and
   `--rebuild`, and the generations for `rollback`. It offers the services for

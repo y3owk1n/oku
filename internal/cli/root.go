@@ -191,6 +191,14 @@ func NewRootCmd(opts Options) *cobra.Command {
 
 	root.AddCommand(platformCommands()...)
 	groupCommands(root)
+	// cobra adds its completion command at the first run, after the walk below,
+	// so oku adds it here. PowerShell is "pwsh" everywhere else in oku.
+	root.InitDefaultCompletionCmd()
+
+	if pwsh, _, err := root.Find([]string{"completion", "powershell"}); err == nil {
+		pwsh.Aliases = append(pwsh.Aliases, "pwsh")
+	}
+
 	refuseUnknownSubcommands(root)
 
 	for _, path := range exclusive {

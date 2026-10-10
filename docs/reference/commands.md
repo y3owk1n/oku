@@ -1076,7 +1076,8 @@ oku hook <bash|zsh|fish|pwsh>
 
 Prints the shell code that sets oku up in a shell. You load it with one line
 in your shell's startup file, which `oku hook --help` prints for each shell.
-oku never edits that file.
+oku never edits that file. PowerShell is `pwsh` or `powershell` here, in
+`oku env --shell` and in `oku completion`.
 
 The code:
 
@@ -1616,7 +1617,7 @@ steps, see [Windows](../guides/windows.md).
 ```
 oku --version
 oku <command> --help
-oku completion <bash|zsh|fish|powershell>
+oku completion <bash|zsh|fish|pwsh>
 ```
 
 `oku --version`, or `oku -v` on its own, prints `oku version <version>`, such as
