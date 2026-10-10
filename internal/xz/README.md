@@ -7,5 +7,6 @@ Delta filter, which `github.com/ulikunitz/xz` does not. It also decodes 4 to
 11% faster than ulikunitz. oku reads every xz file with this package.
 
 The code is in the public domain under CC0, see LICENSE and AUTHORS. oku keeps
-it as upstream wrote it, formatted with gofumpt and golines only. It has no
-ARM64 or RISC-V BCJ filter.
+it as upstream wrote it, formatted with gofumpt and golines, with one change
+marked `oku:` in `dictRepeat`, which copies a match in runs. It has no ARM64 or
+RISC-V BCJ filter.
