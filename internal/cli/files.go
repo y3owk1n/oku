@@ -17,7 +17,6 @@ import (
 
 	"github.com/y3owk1n/oku/internal/expose"
 	"github.com/y3owk1n/oku/internal/list"
-	"github.com/y3owk1n/oku/internal/platform"
 	"github.com/y3owk1n/oku/internal/profile"
 	"github.com/y3owk1n/oku/internal/render"
 )
@@ -269,13 +268,12 @@ func (e env) resolveFiles(
 		vars[name] = value
 	}
 
-	host := platform.Host()
 	owners := map[string]string{}
 
 	var files []profile.File
 
 	for _, f := range listed {
-		if !f.file.When.Matches(host) {
+		if !f.file.When.Here() {
 			continue
 		}
 

@@ -731,6 +731,10 @@ func (m *Manifest) validate() error {
 		if err := a.Match.Check(); err != nil {
 			errs = append(errs, fmt.Errorf("artifact[%d].match: %w", i, err))
 		}
+
+		if a.Match.Host != "" {
+			errs = append(errs, fmt.Errorf("artifact[%d].match.host names one machine, so it belongs in oku.toml", i))
+		}
 	}
 
 	m.Host = nil

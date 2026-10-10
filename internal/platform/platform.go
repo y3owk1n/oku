@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"path/filepath"
 	"runtime"
 	"slices"
@@ -30,6 +31,9 @@ type Selector struct {
 	OS   string `toml:"os"`
 	Arch string `toml:"arch"`
 	Libc string `toml:"libc"`
+	// Host names one machine by its short host name. Only a list sets it, since
+	// a manifest describes every machine. Matches ignores it, and Here does not.
+	Host string `toml:"host"`
 }
 
 // The values Go knows for an OS and an architecture, from `go tool dist list`.
@@ -129,12 +133,17 @@ func Parse(s string) (Platform, error) {
 	)
 }
 
+// Selector is the selector that matches p alone.
+func (p Platform) Selector() Selector {
+	return Selector{OS: p.OS, Arch: p.Arch, Libc: p.Libc}
+}
+
 // TOML renders the selector as an inline table, such as `{ os = "darwin" }`.
 func (s Selector) TOML() string {
 	var parts []string
 
 	for _, field := range []struct{ key, value string }{
-		{"os", s.OS}, {"arch", s.Arch}, {"libc", s.Libc},
+		{"os", s.OS}, {"arch", s.Arch}, {"libc", s.Libc}, {"host", s.Host},
 	} {
 		if field.value != "" {
 			parts = append(parts, fmt.Sprintf("%s = %q", field.key, field.value))
@@ -198,9 +207,19 @@ func elfInterpreter(path string) (string, bool) {
 // The empty When matches every platform.
 type When []Selector
 
-// ParseWhen reads a when value as TOML gives it: one table, or an array of
-// tables. A missing one matches every platform.
+// ParseWhen reads a when value of a manifest as TOML gives it: one table, or an
+// array of tables. A missing one matches every platform.
 func ParseWhen(value any) (When, error) {
+	w, err := ParseListWhen(value)
+	if err == nil && slices.ContainsFunc(w, func(s Selector) bool { return s.Host != "" }) {
+		return nil, errors.New("when.host names one machine, so it belongs in oku.toml, not in a manifest")
+	}
+
+	return w, err
+}
+
+// ParseListWhen is ParseWhen for oku.toml, whose when may also name a host.
+func ParseListWhen(value any) (When, error) {
 	var tables []any
 
 	switch v := value.(type) {
@@ -229,9 +248,11 @@ func ParseWhen(value any) (When, error) {
 		var sel Selector
 
 		for key, field := range table {
-			target, known := map[string]*string{"os": &sel.OS, "arch": &sel.Arch, "libc": &sel.Libc}[key]
+			target, known := map[string]*string{
+				"os": &sel.OS, "arch": &sel.Arch, "libc": &sel.Libc, "host": &sel.Host,
+			}[key]
 			if !known {
-				return nil, fmt.Errorf("when.%s is not a selector key, use os, arch or libc", key)
+				return nil, fmt.Errorf("when.%s is not a selector key, use os, arch, libc or host", key)
 			}
 
 			value, ok := field.(string)
@@ -252,7 +273,31 @@ func ParseWhen(value any) (When, error) {
 	return w, nil
 }
 
-// Matches reports whether w is empty or one of its selectors matches p.
+// Here reports whether w is empty or one of its selectors matches this machine:
+// its platform and, when the selector names one, its host.
+func (w When) Here() bool {
+	host := hostName()
+
+	return len(w) == 0 || slices.ContainsFunc(w, func(s Selector) bool {
+		return s.Matches(Host()) && (s.Host == "" || strings.EqualFold(s.Host, host))
+	})
+}
+
+// hostName is the name when.host matches: OKU_HOST, or the machine's host name
+// up to its first dot, as `hostname -s` prints it.
+func hostName() string {
+	if name := os.Getenv("OKU_HOST"); name != "" {
+		return name
+	}
+
+	name, _ := os.Hostname()
+	name, _, _ = strings.Cut(name, ".")
+
+	return name
+}
+
+// Matches reports whether w is empty or one of its selectors matches p. It
+// ignores host, so a package for another machine is still pinned for p.
 func (w When) Matches(p Platform) bool {
 	return len(w) == 0 || slices.ContainsFunc(w, func(s Selector) bool { return s.Matches(p) })
 }

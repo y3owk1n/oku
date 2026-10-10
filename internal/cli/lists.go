@@ -101,8 +101,9 @@ func (e env) lockPlatforms(
 
 	var platforms []platform.Platform
 
+	// A package for another machine of this platform is pinned for it too.
 	for _, p := range own.LockPlatforms {
-		if p != platform.Host() && when.Matches(p) {
+		if (p != platform.Host() || !when.Here()) && when.Matches(p) {
 			platforms = append(platforms, p)
 		}
 	}

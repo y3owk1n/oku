@@ -77,7 +77,7 @@ Installs the package that a [ref](refs.md) points at, and writes it to
 | `--accept-unknown-age` | Takes a version whose source gives no release time without asking, whatever `[lock]` `unknown_release_age` says. See [Minimum release age](security.md#minimum-release-age). |
 | `--accept-unverified` | Trusts a download that nothing states a digest for without asking, whatever `[lock]` `unverified` says. See [Trust on first use](security.md#trust-on-first-use). |
 | `--verbose`, `-v` | Shows the output of build commands as they run, and prints a manifest that oku inferred. |
-| `--when <key=value,...>` | Limits the package to matching platforms and writes `when` to `oku.toml`, such as `--when os=linux,libc=glibc`. Give it once per table of an array. When it leaves out this machine, `add` pins the package for the `[lock]` platforms it matches and installs nothing. |
+| `--when <key=value,...>` | Limits the package to matching platforms and writes `when` to `oku.toml`, such as `--when os=linux,libc=glibc` or `--when host=work`. Give it once per table of an array. When it leaves out this machine, `add` pins the package for the `[lock]` platforms it matches and installs nothing. |
 | `--plan` | Prints what oku found for the ref and what `add` would do, and changes nothing. See [A plan](#a-plan). |
 | `--dry-run` | The same as `--plan`, the name the other commands use. |
 | `--manifest` | Prints the manifest `add` would use and changes nothing. See [A plan](#a-plan). |

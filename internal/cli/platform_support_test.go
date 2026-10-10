@@ -351,3 +351,52 @@ func TestB276AServiceAndABuildStepTakeAnArrayOfWhenTables(t *testing.T) {
 		t.Fatalf("want the step whose when matches this platform to run and fail, got %v", err)
 	}
 }
+
+func TestB575WhenHostLimitsAnEntryToOneMachine(t *testing.T) {
+	m := newMachine(t)
+	t.Setenv("OKU_HOST", "home")
+
+	here := m.namedManifest(t, "here", "here", "here")
+	work := m.namedManifest(t, "work", "work", "work")
+	note := filepath.Join(os.Getenv("HOME"), "work-note.txt")
+
+	m.writeOwnList(t, fmt.Sprintf(
+		"[lock]\nplatforms = [%q]\n\n[packages]\nhere = { ref = %q, when = { host = \"HOME\" } }\n"+
+			"work = { ref = %q, when = { host = \"work\" } }\n\n"+
+			"[files]\n\"{{home}}/work-note.txt\" = { text = \"at work\", when = { host = \"work\" } }\n",
+		platform.Host().String(), here, work,
+	))
+
+	out, err := m.run(t, "", "sync")
+	if err != nil {
+		t.Fatalf("sync: %v\n%s", err, out)
+	}
+
+	if !exists(m.profile("bin", "here")) || exists(m.profile("bin", "work")) || exists(note) {
+		t.Fatalf("sync on home should install here alone:\n%s", out)
+	}
+
+	// The lock pins work for this platform, for the machine called work.
+	lock, err := os.ReadFile(filepath.Join(m.config, "oku.lock"))
+	must(t, err)
+
+	if !strings.Contains(string(lock), `name = 'work'`) || !strings.Contains(string(lock), platform.Host().String()) {
+		t.Fatalf("the lock should pin work for %s:\n%s", platform.Host(), lock)
+	}
+
+	t.Setenv("OKU_HOST", "work")
+
+	if out, err := m.run(t, "", "sync"); err != nil || !exists(m.profile("bin", "work")) ||
+		exists(m.profile("bin", "here")) || !exists(note) {
+		t.Fatalf("sync on work should install work and write its file alone: %v\n%s", err, out)
+	}
+
+	// A manifest describes every machine.
+	ref := m.rawManifest(t, "tool", fmt.Sprintf(
+		"[[artifact]]\nmatch = { host = \"work\" }\nurl = \"file://%s\"\nsha256 = %q\nbin = [\"tool\"]\n",
+		filepath.Join(m.fixtures, "work.tar.gz"), strings.Repeat("0", 64),
+	))
+	if _, err := m.run(t, "", "add", ref); err == nil || !strings.Contains(err.Error(), "belongs in oku.toml") {
+		t.Fatalf("a manifest with match.host should be refused, got %v", err)
+	}
+}

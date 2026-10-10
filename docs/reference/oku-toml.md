@@ -125,6 +125,7 @@ file beside the list there, see [relative paths](refs.md#relative-paths-in-a-rem
 | `os` | `darwin`, `linux`, `windows` |
 | `arch` | `amd64`, `arm64` |
 | `libc` | `glibc`, `musl`. Linux only. oku reads which loader `/bin/sh` runs on. The musl loader means `musl` and any other means `glibc`, so a glibc system with the musl package installed is `glibc`. When `/bin/sh` is static, oku reports `musl` if `/lib/ld-musl-*.so.1` exists. |
+| `host` | One machine's host name, as `hostname -s` prints it, in any case. [`OKU_HOST`](paths.md#environment-variables) sets another name. Only a list takes it, since a manifest describes every machine. |
 
 - A missing key matches anything. Any other key is an error, and so is a
   value that is not a string.
@@ -135,6 +136,8 @@ file beside the list there, see [relative paths](refs.md#relative-paths-in-a-rem
   use `amd64`.
 - An array of tables matches a machine that any of them matches. An empty
   array is an error, because it matches nothing.
+- A package for another host is pinned for this platform as well when
+  `[lock] platforms` names it, so the shared lock holds it for that machine.
 
 ```toml
 [packages]

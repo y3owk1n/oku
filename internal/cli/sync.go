@@ -214,7 +214,7 @@ func reconcile(
 	}
 
 	for _, name := range rebuild {
-		if !wanted[name].entry.When.Matches(platform.Host()) {
+		if !wanted[name].entry.When.Here() {
 			return fmt.Errorf(
 				"%s is not installed on %s, so there is no build of it to replace",
 				name, platform.Host(),
@@ -263,7 +263,7 @@ func reconcile(
 
 		// oku does not install a package for another platform. It keeps the lock
 		// entry, or pins the package again when the entry has to change.
-		lockOnly := !entry.When.Matches(host)
+		lockOnly := !entry.When.Here()
 		if lockOnly && !needsLock(previous, r.String(), platforms, strict, fresh, entry.FromSource) {
 			if previous.Name != "" {
 				next.Set(previous)
