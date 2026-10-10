@@ -64,6 +64,10 @@ generation 1 is active, 1 package: - fd
 ~/.config/oku/oku.toml still lists fd, so `oku sync` will install it again. Run `oku remove fd` to drop it.
 ```
 
+When your list's `version` leaves out the version the generation holds, as
+`version = "15"` does for ripgrep 14.1.1, oku says the next `oku sync` moves
+it again and to set `version = "14.1.1"` to keep it.
+
 In the other case, the generation holds a package that your list no longer
 names. oku then prints a notice with the `oku add` command that keeps it. oku leaves that notice
 out when your list includes other lists.

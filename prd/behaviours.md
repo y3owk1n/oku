@@ -121,6 +121,9 @@ order step in `prd/product.md`.
 - B239 [1] When a rollback activates a generation that holds a package the
   list no longer names, it says the next `sync` removes it again and which
   `oku add <ref>@<version>` keeps it at the version it held. A list with includes gets no such note.
+- B568 [1] When the list's `version` of a package leaves out the version that
+  a rolled-back generation holds, the rollback says the next `sync` moves the
+  package again and which `version` keeps it.
 - B240 [1] A first `sync` of a list with nothing in it writes no generation
   and says there is nothing to sync. A run under a second reports its time in
   milliseconds, not `0s`.
