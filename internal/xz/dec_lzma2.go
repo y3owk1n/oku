@@ -503,17 +503,22 @@ func dictRepeat(dict *dictionary, len *uint32, dist uint32) bool {
 	if dist >= dict.pos {
 		back += dict.end
 	}
-	for {
-		dict.buf[dict.pos] = dict.buf[back]
-		dict.pos++
-		back++
+	// oku: copy in runs rather than a byte at a time. A run stops at the end of
+	// the buffer. When the match overlaps what it writes, a run also stops short
+	// of pos, so each copy reads only bytes already in place, as the byte loop
+	// did.
+	for left > 0 {
+		n := min(left, dict.end-back)
+		if back < dict.pos {
+			n = min(n, dict.pos-back)
+		}
+		copy(dict.buf[dict.pos:dict.pos+n], dict.buf[back:back+n])
+		dict.pos += n
+		back += n
 		if back == dict.end {
 			back = 0
 		}
-		left--
-		if !(left > 0) {
-			break
-		}
+		left -= n
 	}
 	if dict.full < dict.pos {
 		dict.full = dict.pos
