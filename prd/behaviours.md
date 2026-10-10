@@ -1723,6 +1723,12 @@ order step in `prd/product.md`.
   run, print what would change, and change nothing: no generation, no lock, no
   file, no service, no setting. They fail where the real run would fail.
   In a pipe they print only the `would` lines, and no row of a real change.
+- B578 [12] `--diff` with `--dry-run` on `sync`, `update`, `remove` and
+  `rollback` prints, under each file oku would write, the lines that change
+  with two lines of context, and `--json` gives each such file a `diff`. A
+  secret prints as `{{secret.<name>}}` and never as its value. A file with
+  secrets that is written again reads as one `would change` line. `--diff`
+  without `--dry-run` fails before it does anything.
 - B132 [12] When a step of the apply fails, oku undoes the steps it made and
   reports the error of the failed step.
 - B133 [12] After an oku process was killed during a change, the next command

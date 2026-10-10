@@ -106,6 +106,7 @@ oku.toml yet.`,
 	flags.register(cmd)
 	cmd.Flags().Bool(systemFlag, false, systemUsage)
 	cmd.Flags().Bool(dryRunFlag, false, dryRunUsage)
+	cmd.Flags().Bool(diffFlag, false, diffUsage)
 	cmd.Flags().Bool(exitCodeFlag, false, exitCodeUsage)
 	cmd.Flags().Bool(lockedFlag, false, "fail when oku.lock would change, for use in CI")
 	cmd.Flags().StringSlice(
@@ -136,6 +137,7 @@ func newUpdateCmd(opts Options) *cobra.Command {
 	flags.register(cmd)
 	cmd.Flags().Bool(systemFlag, false, systemUsage)
 	cmd.Flags().Bool(dryRunFlag, false, dryRunUsage)
+	cmd.Flags().Bool(diffFlag, false, diffUsage)
 	cmd.Flags().Bool(exitCodeFlag, false, exitCodeUsage)
 
 	return cmd

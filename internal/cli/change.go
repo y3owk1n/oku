@@ -292,21 +292,62 @@ func (e env) describe(cmd *cobra.Command, c change, plan exposePlan) error {
 			return err
 		}
 
+		// An item that oku writes again in place, such as a file with secrets
+		// whose text changed, reads as one change.
+		replaced := map[[2]string]bool{}
+		for _, item := range plan.wanted {
+			if !expose.Holds(ledger.Items, item) {
+				replaced[[2]string{string(item.Kind), item.Target}] = true
+			}
+		}
+
 		for _, item := range ledger.Items {
-			if !expose.Holds(plan.wanted, item) {
+			if !expose.Holds(plan.wanted, item) && !replaced[[2]string{string(item.Kind), item.Target}] {
 				all = append(all, wouldChange{Would: "remove", Kind: string(item.Kind), Target: item.Target})
 			}
 		}
 
 		for _, item := range plan.wanted {
-			if !expose.Holds(ledger.Items, item) {
-				all = append(all, wouldChange{Would: "write", Kind: string(item.Kind), Target: item.Target})
+			if expose.Holds(ledger.Items, item) {
+				continue
 			}
+
+			w := wouldChange{Would: "write", Kind: string(item.Kind), Target: item.Target}
+
+			was := slices.ContainsFunc(ledger.Items, func(had expose.Item) bool {
+				return had.Kind == item.Kind && had.Target == item.Target
+			})
+
+			switch {
+			case was && slices.Contains(plan.rewritten, item.Target):
+				// The content line names this file already.
+				continue
+			case was:
+				w.Would = "change"
+			}
+
+			all = append(all, w)
 		}
 	}
 
 	if c.changes != nil {
 		*c.changes = len(all) > 0
+	}
+
+	if showDiff, _ := cmd.Flags().GetBool(diffFlag); showDiff {
+		diffs, err := e.contentDiffs(c.to)
+		if err != nil {
+			return err
+		}
+
+		// A file with secrets is removed and written again, and the diff goes with
+		// the write.
+		for i, w := range all {
+			if w.Would != "remove" && (w.Kind == "file" || w.Kind == "secret") {
+				all[i].Diff = diffs[w.Target]
+				delete(diffs, w.Target)
+			}
+		}
 	}
 
 	if wantJSON(cmd) {
@@ -318,6 +359,17 @@ func (e env) describe(cmd *cobra.Command, c change, plan exposePlan) error {
 
 	for _, w := range all {
 		fmt.Fprintln(out, s.Would(s.Homes(w.String())))
+
+		for _, line := range w.Diff {
+			switch line[0] {
+			case '+':
+				fmt.Fprintln(out, s.Good("    "+line))
+			case '-':
+				fmt.Fprintln(out, s.Bad("    "+line))
+			default:
+				fmt.Fprintln(out, s.Dim("    "+line))
+			}
+		}
 	}
 
 	if len(all) == 0 {
@@ -341,6 +393,8 @@ type wouldChange struct {
 	To      string `json:"to,omitempty"`
 	Kind    string `json:"kind,omitempty"`
 	Target  string `json:"target,omitempty"`
+	// Diff is how the text of a file changes, with --diff.
+	Diff []string `json:"diff,omitempty"`
 }
 
 // String is the line a dry run prints for w.
