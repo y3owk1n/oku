@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 // fakeGo is a go command that does what oku asks of it for a module:
@@ -44,9 +45,24 @@ esac
 func goMachine(t *testing.T, versions ...string) machine {
 	t.Helper()
 
+	return goMachineAt(t, nil, versions...)
+}
+
+// goMachineAt is goMachine with a proxy that gives the time in published of
+// each version it holds.
+func goMachineAt(t *testing.T, published map[string]time.Time, versions ...string) machine {
+	t.Helper()
+
 	m := newMachine(t)
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		version, _ := strings.CutSuffix(strings.TrimPrefix(r.URL.Path, "/example.com/tool/@v/v"), ".info")
+		if at, ok := published[version]; ok {
+			fmt.Fprintf(w, "{\"Version\":\"v%s\",\"Time\":%q}\n", version, at.Format(time.RFC3339))
+
+			return
+		}
+
 		if r.URL.Path != "/example.com/tool/@v/list" {
 			// The proxy answers 410 for a path that is no module.
 			http.Error(w, "gone", http.StatusGone)
@@ -131,5 +147,25 @@ func TestB259AGoProgramFollowsTaggedVersionsAndSkipsPrereleases(t *testing.T) {
 
 	if got := m.toolOutput(t); !strings.Contains(got, " v1.3.0-rc.1 ") {
 		t.Fatalf("add @1.3.0-rc.1 took %q", got)
+	}
+}
+
+func TestB372AGoVersionThatFitsAPrefixOrARangeWaitsForItsAge(t *testing.T) {
+	day := 24 * time.Hour
+	m := goMachineAt(t, map[string]time.Time{
+		"1.6.0": time.Now().Add(-30 * day),
+		"1.4.9": time.Now().Add(-day),
+		"1.4.8": time.Now().Add(-30 * day),
+	}, "1.6.0", "1.4.9", "1.4.8")
+
+	for _, want := range []string{"1.4", "<1.5"} {
+		out, err := m.run(t, "", "add", "go:example.com/tool@"+want, "--yes", "--min-release-age", "7d")
+		if err != nil {
+			t.Fatalf("add @%s: %v\n%s", want, err, out)
+		}
+
+		if got := m.toolOutput(t); !strings.Contains(got, " v1.4.8 ") {
+			t.Fatalf("add @%s took %q, want v1.4.8, since 1.4.9 is a day old", want, got)
+		}
 	}
 }

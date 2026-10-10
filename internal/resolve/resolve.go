@@ -171,6 +171,12 @@ func (r *Resolver) PickWaiting(
 		return Release{}, Release{}, err
 	}
 
+	if v.From == manifest.FromGo {
+		if releases, err = r.goTimes(ctx, v, releases, want); err != nil {
+			return Release{}, Release{}, err
+		}
+	}
+
 	release, waiting, err := r.pickFrom(v, releases, want)
 	if err == nil || !more {
 		return release, waiting, err
@@ -226,7 +232,7 @@ func (r *Resolver) pickFrom(
 
 	if IsRange(want) {
 		return r.newest(v, releases, func(release Release) (bool, error) {
-			return Satisfies(release.Version, want)
+			return fits(release, want)
 		}, func(seen []string) error {
 			return fmt.Errorf(
 				"no version satisfies %q, the versions found are %s", want, strings.Join(seen, ", "),
@@ -242,13 +248,24 @@ func (r *Resolver) pickFrom(
 
 	// The releases are newest first, with every prerelease behind them.
 	return r.newest(v, releases, func(release Release) (bool, error) {
-		return want == "" || strings.HasPrefix(release.Version, want+"."), nil
+		return fits(release, want)
 	}, func(seen []string) error {
 		return fmt.Errorf(
 			"%s %s has no version %s, the newest are %s",
 			v.From, v.Repo, want, strings.Join(seen, ", "),
 		)
 	})
+}
+
+// fits reports whether pickFrom may take release for want when no version
+// matches want exactly. A range takes any version within it, and a prefix takes
+// a version that starts with it and a dot.
+func fits(release Release, want string) (bool, error) {
+	if IsRange(want) {
+		return Satisfies(release.Version, want)
+	}
+
+	return want == "" || strings.HasPrefix(release.Version, want+"."), nil
 }
 
 // newest returns the first of releases that fits and passes MinAge, and the
