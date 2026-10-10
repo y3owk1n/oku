@@ -845,23 +845,26 @@ installs its own files, such as `make install`, may put man pages under
 A table maps a shell to a file in the package:
 
 ```toml
-completions = { fish = "complete/rg.fish", zsh = "complete/_rg", bash = "complete/rg.bash" }
+completions = { fish = "complete/rg.fish", zsh = "complete/_rg", bash = "complete/rg.bash", pwsh = "complete/_rg.ps1" }
 ```
 
-The shells are `fish`, `zsh` and `bash`. `oku manifest lint` fails on any other
-key, such as a misspelt `fsh`, and an install leaves it out and says so.
+The shells are `fish`, `zsh`, `bash` and `pwsh`, which a table may also write
+as `powershell`. `oku manifest lint` fails on any other key, such as a misspelt
+`fsh`, and an install leaves it out and says so.
 
 A string names a directory that holds the conventional file of each shell,
-named after the program in the first `bin` entry: `<name>.fish`, `_<name>` and
-`<name>.bash`. oku links the ones the directory has, and fails when it has none:
+named after the program in the first `bin` entry: `<name>.fish`, `_<name>`,
+`<name>.bash` and `_<name>.ps1`. oku links the ones the directory has, and
+fails when it has none:
 
 ```toml
 completions = "complete/"
 ```
 
 A table with `generate` runs the program to print them, for a release that
-ships a bare binary. `{{shell}}` expands to `fish`, `zsh` and `bash` in turn,
-and each run's stdout becomes the conventional file of that shell:
+ships a bare binary. `{{shell}}` expands to `fish`, `zsh`, `bash` and
+`powershell` in turn, and each run's stdout becomes the conventional file of
+that shell:
 
 ```toml
 [[artifact]]
@@ -879,7 +882,8 @@ completions = { generate = "atuin gen-completions --shell {{shell}}" }
 - Every program of that `bin` runs from the unpacked package. That includes a
   program inside an app bundle and a `bin` table with `run`.
 - A non-zero exit or an empty stdout fails the install, and the error holds the
-  command and its stderr.
+  command and its stderr. For `powershell` it only leaves PowerShell out, so a
+  program that prints completions for the other three shells still installs.
 - `generate` executes the download, so oku asks for the same approval as for a
   build, see [Approval](#approval). `oku.lock` records `commands = true` for the
   platform. A changed command is a changed manifest, so `oku sync` stops until
@@ -895,8 +899,8 @@ completions = { generate = "atuin gen-completions --shell {{shell}}" }
 | `bin = [{ name = "probe", path = "dir/ffprobe" }]` | `bin/probe` |
 | `man = ["doc/tool.1"]` | `share/man/man1/tool.1` |
 | `completions = { fish = "c/tool.fish" }` | `share/completions/fish/tool.fish` |
-| `completions = "c/"` | `share/completions/fish/tool.fish`, `share/completions/zsh/_tool` and `share/completions/bash/tool.bash`, the ones that exist |
-| `completions = { generate = "tool completions {{shell}}" }` | The same three files, from the command's output |
+| `completions = "c/"` | `share/completions/fish/tool.fish`, `share/completions/zsh/_tool`, `share/completions/bash/tool.bash` and `share/completions/pwsh/_tool.ps1`, the ones that exist |
+| `completions = { generate = "tool completions {{shell}}" }` | The same four files, from the command's output |
 
 ## Apps and fonts
 
@@ -1586,7 +1590,7 @@ artifact's `url` and `sha256_url`, a `bin` table of an artifact or an
 | `{{src}}` | The build's source directory. |
 | `{{jobs}}` | The number of CPUs. |
 | `{{dep.<name>.prefix}}` | The store directory of a dep, by its package name. A dep's programs are in its `bin`. |
-| `{{shell}}` | `fish`, `zsh` or `bash`, in `completions.generate` only. |
+| `{{shell}}` | `fish`, `zsh`, `bash` or `powershell`, in `completions.generate` only. |
 | `{{home}}`, `{{config}}`, `{{data}}` | The user's home, config and data directories, in a service only. |
 
 The variables derived from the version work wherever `{{version}}` does.

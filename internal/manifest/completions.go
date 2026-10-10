@@ -9,8 +9,18 @@ import (
 )
 
 // Shells are the shells a completions key covers, in the order oku generates
-// them.
-var Shells = []string{"fish", "zsh", "bash"}
+// them. A table may also write pwsh as powershell.
+var Shells = []string{"fish", "zsh", "bash", "pwsh"}
+
+// GenerateName is what {{shell}} expands to for shell in completions.generate.
+// Programs take "powershell" for PowerShell.
+func GenerateName(shell string) string {
+	if shell == "pwsh" {
+		return "powershell"
+	}
+
+	return shell
+}
 
 // Completions is a "completions" key. It is a map of shell to file in the
 // package, a directory that holds the conventional file of each shell, or a
@@ -42,6 +52,8 @@ func File(shell, name string) string {
 	switch shell {
 	case "zsh":
 		return "_" + name
+	case "pwsh":
+		return "_" + name + ".ps1"
 	default:
 		return name + "." + shell
 	}
@@ -83,6 +95,8 @@ func parseCompletions(raw any, bins []string) (Completions, error) {
 				c.Generate = text
 			case "name":
 				c.Name = text
+			case "powershell":
+				paths["pwsh"] = text
 			default:
 				if !slices.Contains(Shells, key) {
 					c.Unknown = append(c.Unknown, key)

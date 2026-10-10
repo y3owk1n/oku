@@ -9010,7 +9010,7 @@ func TestB216CompletionsDirectoryNamesTheConventionalFiles(t *testing.T) {
 		t, "none", map[string]string{"none": script}, "bin = [\"none\"]\ncompletions = \"c/\"",
 	)
 	if _, err := m.run(t, "", "add", none); err == nil ||
-		!strings.Contains(err.Error(), "no none.fish, _none or none.bash") {
+		!strings.Contains(err.Error(), "no none.fish, _none, none.bash or _none.ps1") {
 		t.Fatalf("a directory with none of the files was accepted: %v", err)
 	}
 }

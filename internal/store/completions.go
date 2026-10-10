@@ -19,8 +19,11 @@ import (
 )
 
 // generateCompletions runs c.Generate once per shell in dir, with env, and
-// writes what each run prints under prefix/share/completions. The string says
-// why the command ran without the sandbox, and is empty when it was sandboxed.
+// writes what each run prints under prefix/share/completions. A program that
+// cannot print PowerShell completions only leaves PowerShell out, since a
+// manifest written for fish, zsh and bash installed without them. The string
+// says why the command ran without the sandbox, and is empty when it was
+// sandboxed.
 func generateCompletions(
 	ctx context.Context,
 	c manifest.Completions,
@@ -43,7 +46,7 @@ func generateCompletions(
 	var why string
 
 	for _, name := range manifest.Shells {
-		command, err := manifest.Expand(c.Generate, map[string]string{"shell": name})
+		command, err := manifest.Expand(c.Generate, map[string]string{"shell": manifest.GenerateName(name)})
 		if err != nil {
 			return "", fmt.Errorf("completions.generate: %w", err)
 		}
@@ -66,6 +69,10 @@ func generateCompletions(
 		err = sandbox.Run(cmd)
 		if err == nil && stdout.Len() == 0 {
 			err = errors.New("printed nothing")
+		}
+
+		if err != nil && name == "pwsh" {
+			continue
 		}
 
 		if err != nil {
@@ -121,9 +128,10 @@ func completionPaths(c manifest.Completions, root string) (map[string]string, er
 
 	if len(found) == 0 {
 		return nil, fmt.Errorf(
-			"completions %q: no %s, %s or %s in the package",
+			"completions %q: no %s, %s, %s or %s in the package",
 			path.Dir(c.Paths["fish"]),
 			path.Base(c.Paths["fish"]), path.Base(c.Paths["zsh"]), path.Base(c.Paths["bash"]),
+			path.Base(c.Paths["pwsh"]),
 		)
 	}
 
