@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -478,5 +479,52 @@ func TestB571DryRunsAndTheReleaseCheckPrintJSON(t *testing.T) {
 
 	if check["newest"] != "1.4.0" || check["available"] != true || check["running"] != "test" {
 		t.Fatalf("self update --check --json printed %v", check)
+	}
+}
+
+func TestB572GCDryRunPrintsWhatItWouldRemoveAsJSON(t *testing.T) {
+	m := newMachine(t)
+
+	for _, args := range [][]string{
+		{"add", m.namedManifest(t, "keep", "keep", "keep")},
+		{"add", m.namedManifest(t, "gone", "gone", "gone")},
+		{"remove", "gone"},
+	} {
+		_, err := m.run(t, "", args...)
+		must(t, err)
+	}
+
+	before := m.storeEntries(t)
+
+	var report struct {
+		Generations []struct {
+			Profile string `json:"profile"`
+			Number  int    `json:"number"`
+		} `json:"generations"`
+		StorePaths []struct {
+			Path  string `json:"path"`
+			Bytes int64  `json:"bytes"`
+		} `json:"store_paths"`
+		Bytes int64 `json:"bytes"`
+	}
+
+	out := m.stdout(t, "gc", "--keep", "1", "--dry-run", "--json")
+	must(t, json.Unmarshal([]byte(out), &report))
+
+	if len(report.Generations) == 0 || len(report.StorePaths) != 1 ||
+		!strings.Contains(report.StorePaths[0].Path, "gone") || report.Bytes <= 0 {
+		t.Fatalf("gc --dry-run --json should name the generations and the store path of gone:\n%s", out)
+	}
+
+	if !strings.Contains(out, `"projects": []`) {
+		t.Fatalf("an empty part should be [], not null:\n%s", out)
+	}
+
+	if got := m.storeEntries(t); !slices.Equal(got, before) {
+		t.Fatalf("a dry run deleted %v", before)
+	}
+
+	if _, err := m.run(t, "", "gc", "--json"); err == nil || !strings.Contains(err.Error(), "only with --dry-run") {
+		t.Fatalf("gc --json without --dry-run should be refused, got %v", err)
 	}
 }
