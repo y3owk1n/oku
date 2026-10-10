@@ -13,6 +13,7 @@ import (
 
 	"github.com/y3owk1n/oku/internal/list"
 	"github.com/y3owk1n/oku/internal/profile"
+	"github.com/y3owk1n/oku/internal/resolve"
 	"github.com/y3owk1n/oku/internal/ui"
 )
 
@@ -359,6 +360,26 @@ func runRollback(cmd *cobra.Command, opts Options, args []string) error {
 				e.listPath(),
 				name,
 				name,
+			)
+		}
+	}
+
+	for _, pkg := range target.Packages {
+		entry, ok := own.Packages[pkg.Name]
+		if !ok || entry.Version == "" || pkg.Version == "" {
+			continue
+		}
+
+		if allowed, err := resolve.Matches(pkg.Version, entry.Version); err == nil && !allowed {
+			warn(
+				cmd.ErrOrStderr(),
+				"%s asks version %q of %s, which leaves out %s, so `oku sync` will move it again. "+
+					"Set version = %q to keep it.",
+				e.listPath(),
+				entry.Version,
+				pkg.Name,
+				pkg.Version,
+				pkg.Version,
 			)
 		}
 	}

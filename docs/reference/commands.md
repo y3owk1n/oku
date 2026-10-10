@@ -847,7 +847,9 @@ generation 1 is active, 1 package: - fd
   longer names gets the other notice, unless the list includes other lists:
   ``~/.config/oku/oku.toml does not list fzf, so `oku sync` will remove it
   again. Run `oku add github:junegunn/fzf@0.56.3` to keep it.`` The version is
-  the one the generation held.
+  the one the generation held. When the list's `version` for a package leaves
+  out the version the generation holds, oku says that `oku sync` moves it
+  again and which `version` keeps it.
 - It writes no new generation. After `oku rollback 1`, `oku rollback 3` goes
   forward again. The next command that changes something builds on
   generation 1 and writes the number after the highest, and 2 and 3 stay.

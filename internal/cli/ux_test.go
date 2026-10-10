@@ -2,6 +2,7 @@ package cli_test
 
 import (
 	"bytes"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -342,5 +343,31 @@ func TestB567VBeforeACommandIsThatCommandsVerbose(t *testing.T) {
 		if out := m.stdout(t, args...); strings.TrimSpace(out) != "oku version test" {
 			t.Fatalf("oku %v printed %q", args, out)
 		}
+	}
+}
+
+func TestB568RollbackSaysWhenTheListsVersionLeavesTheGenerationOut(t *testing.T) {
+	m := newMachine(t)
+	server := newReleaseServer(t, "v1.0.0")
+	m.opts.GitHubAPI = server.URL + "/api"
+
+	ref := m.discoveredManifest(t, "1.0.0", "1.1.0")
+
+	_, err := m.run(t, "", "add", ref)
+	must(t, err)
+
+	server.tags = []string{"v1.1.0", "v1.0.0"}
+
+	_, err = m.run(t, "", "update")
+	must(t, err)
+
+	m.writeFilesList(t, fmt.Sprintf("[packages]\ntool = { ref = %q, version = \"1.1\" }\n", ref))
+
+	out, err := m.run(t, "", "rollback")
+	must(t, err)
+
+	if !strings.Contains(out, `asks version "1.1" of tool, which leaves out 1.0.0`) ||
+		!strings.Contains(out, `Set version = "1.0.0" to keep it.`) {
+		t.Fatalf("rollback should say the list's version moves tool again:\n%s", out)
 	}
 }
