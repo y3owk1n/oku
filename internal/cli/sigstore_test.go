@@ -4,10 +4,13 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/http/httputil"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 )
 
@@ -772,5 +775,40 @@ func TestB508InferenceKeepsTheSignaturesOfTheReposOwnWorkflow(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestB359InferenceAndTheInstallReadTheAttestationsOnce(t *testing.T) {
+	m := newMachine(t)
+	f := newFakeSigstore(t, &m)
+
+	inferRelease(t, &m, func([]byte, []byte) map[string][]byte { return nil }, func(digest string) [][]byte {
+		return [][]byte{f.attest(t, run{workflow + "@refs/heads/main", "owner/tool", "refs/heads/main"}, digest)}
+	})
+
+	upstream, err := url.Parse(m.opts.GitHubAPI)
+	must(t, err)
+
+	var asked atomic.Int32
+
+	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.Path, "/attestations/") {
+			asked.Add(1)
+		}
+
+		r.URL.Path = upstream.Path + r.URL.Path
+		httputil.NewSingleHostReverseProxy(&url.URL{Scheme: upstream.Scheme, Host: upstream.Host}).ServeHTTP(w, r)
+	}))
+	t.Cleanup(api.Close)
+
+	m.opts.GitHubAPI = api.URL
+
+	out, err := m.run(t, "", "add", "github:owner/tool")
+	if err != nil {
+		t.Fatalf("add: %v\n%s", err, out)
+	}
+
+	if got := asked.Load(); got != 1 {
+		t.Fatalf("add asked for the attestations %d times, want 1", got)
 	}
 }

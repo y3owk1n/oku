@@ -597,7 +597,12 @@ func projectProfile(dir string) string {
 func (e env) store() *store.Store {
 	s := store.New(e.root, e.cache, e.net, e.storeTransport)
 	s.Private = e.hosts.GitHubAsset
-	s.Sigstore, s.Attestations = e.sigstore, e.hosts.GitHubAttestations
+
+	// The revalidating client answers from what the command already read, so the
+	// install does not ask again for the attestations that inference read.
+	api := e.hosts
+	api.HTTP = forge.Revalidating(filepath.Join(e.cache, "api"), e.transport)
+	s.Sigstore, s.Attestations = e.sigstore, api.GitHubAttestations
 	s.OSV = &e.osvClient
 
 	return s
