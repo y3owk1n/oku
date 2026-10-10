@@ -165,7 +165,7 @@ func Hook(shell string, dirs []string, completions, oku string) (string, error) 
 // completionSetup loads the completions that packages put under dir, and the
 // ones oku prints for itself. Each shell finds them its own way: bash sources
 // every file now, zsh autoloads the files in dir once compinit has run, fish
-// reads dir on demand, and PowerShell has no package completions.
+// reads dir on demand, and PowerShell dot-sources every script now.
 func completionSetup(shell, dir, oku string) string {
 	quote := quoter(shell)
 
@@ -200,7 +200,13 @@ end
 %[2]s completion fish | source
 `, quote(dir+"/fish"), quote(oku))
 	case "pwsh":
-		return fmt.Sprintf("& %s completion powershell | Out-String | Invoke-Expression\n", quote(oku))
+		// A foreach statement runs in the hook's scope, where a pipeline would
+		// give each script a scope of its own.
+		return fmt.Sprintf(`if (Test-Path -LiteralPath %[1]s) {
+  foreach ($okuFile in Get-ChildItem -LiteralPath %[1]s -Filter *.ps1) { . $okuFile.FullName }
+}
+& %[2]s completion powershell | Out-String | Invoke-Expression
+`, quote(dir+"/pwsh"), quote(oku))
 	}
 
 	return ""

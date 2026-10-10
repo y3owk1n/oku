@@ -1205,7 +1205,7 @@ Completions come from the profile's `share/completions`.
 | bash | Sources every file. |
 | zsh | Puts the directory on `fpath` and registers each file once `compinit` has run, so the hook line may come before or after `compinit`. |
 | fish | Adds the directory to `fish_complete_path`, and reads a file when you first complete that program. |
-| PowerShell | Loads the completions of `oku` only. |
+| PowerShell | Dot-sources every `.ps1` file. |
 
 ### oku env
 

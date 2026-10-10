@@ -2114,3 +2114,15 @@ one side's version with the other side's download and checksum. A live test
 did that, and the sync then trusted fd on first use. git's index holds the two
 files intact until the conflict is resolved, so oku refuses when it no longer
 does.
+
+## D129. PowerShell completions are a fourth shell, and generate may skip them
+
+`completions` takes `pwsh` beside fish, zsh and bash. The conventional file is
+`_<bin>.ps1`, the name clap gives it and the one ripgrep ships.
+`generate` runs a fourth time with `{{shell}}` as `powershell`, the word clap
+and cobra take. When that run fails or prints nothing,
+oku leaves PowerShell out and installs the rest. Why: product.md promises
+shell completions from packages, and PowerShell loaded only oku's own. A
+manifest written for three shells installed before, and a program that knows
+no PowerShell must not start to fail. The hook dot-sources each script in a
+foreach statement, because a pipeline would run each one in a scope of its own.
