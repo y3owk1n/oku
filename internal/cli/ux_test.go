@@ -236,3 +236,34 @@ func TestB546AnEmptyGenerationStateStopsGCAndDeletesNothing(t *testing.T) {
 	_, err = m.run(t, "", "gc")
 	must(t, err)
 }
+
+func TestB564ARepoWithoutASchemeGetsItsGitHubRef(t *testing.T) {
+	m := newMachine(t)
+
+	for arg, want := range map[string]string{
+		"sharkdp/fd":                "github:sharkdp/fd",
+		"BurntSushi/ripgrep":        "github:BurntSushi/ripgrep",
+		"github.com/sharkdp/fd@1.0": "github:sharkdp/fd@1.0",
+	} {
+		_, err := m.run(t, "", "add", arg)
+		if err == nil || !strings.Contains(err.Error(), "for the repo on GitHub, use "+want) {
+			t.Fatalf("add %s: want the hint %s, got %v", arg, want, err)
+		}
+	}
+
+	if _, err := m.run(t, "", "add", "./missing.toml"); err == nil || strings.Contains(err.Error(), "GitHub") {
+		t.Fatalf("a missing file is no repo: %v", err)
+	}
+
+	// With no source to search, `oku search` cannot help.
+	if _, err := m.run(t, "", "which", "nope"); err == nil || strings.Contains(err.Error(), "oku search") {
+		t.Fatalf("which sent the user to search with no sources: %v", err)
+	}
+
+	_, err := m.run(t, "", "source", "add", "mine", m.fixtures)
+	must(t, err)
+
+	if _, err := m.run(t, "", "which", "nope"); err == nil || !strings.Contains(err.Error(), "oku search nope") {
+		t.Fatalf("which should name `oku search` once a source exists: %v", err)
+	}
+}

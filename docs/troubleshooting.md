@@ -99,6 +99,8 @@ oku: ls is not from oku, PATH runs /bin/ls
 `oku search ls` looks for a package that provides it
 ```
 
+The second line shows only when you have [sources](reference/commands.md#oku-source) to search.
+
 ## A program fails with No such file or directory
 
 bash and zsh remember where they found each program. A shell that ran a
@@ -177,7 +179,8 @@ with `--bin`. See [Fix a wrong pick](guides/add-packages.md#fix-a-wrong-pick-wit
 | Message | Fix |
 |---|---|
 | `there is no file named ripgrep here` | A bare word is a local file. Write a full ref, such as `github:BurntSushi/ripgrep`, or `alias/name` for a [source](guides/add-packages.md#use-a-short-name-for-a-collection). `oku add --help` lists every form. |
-| `<alias> is not a source and <arg> is not a file, see oku source list` | No source has that alias. `oku source list` shows yours. |
+| `<alias> is not a source and <arg> is not a file, see oku source list` | No source has that alias. `oku source list` shows yours. When the argument reads as a repo, the next line gives its `github:` ref. |
+| `there is no file at <path>` | An argument such as `BurntSushi/ripgrep` or `github.com/sharkdp/fd` reads as a path, and nothing is there. The next line gives its `github:` ref, such as `for the repo on GitHub, use github:BurntSushi/ripgrep`. |
 | `... has no version 99.0, the newest are 10.5.0, ...` | Pick a version from the list, or drop `@version`. |
 | `the manifest provides version X, not Y` | The manifest fixes one version, and `@version` asked for another. |
 | `<name> has no artifact for darwin-arm64` | The manifest has no download for this machine and no build. |

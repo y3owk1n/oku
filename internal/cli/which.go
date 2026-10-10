@@ -13,6 +13,7 @@ import (
 
 	"github.com/y3owk1n/oku/internal/profile"
 	"github.com/y3owk1n/oku/internal/shim"
+	"github.com/y3owk1n/oku/internal/source"
 	"github.com/y3owk1n/oku/internal/ui"
 )
 
@@ -46,7 +47,7 @@ func newWhichCmd(opts Options) *cobra.Command {
 					return err
 				}
 
-				answer, err = which(prof, pkgs, args[0])
+				answer, err = which(prof, pkgs, args[0], e.searchHint(args[0]))
 				if err == nil {
 					break
 				}
@@ -96,7 +97,19 @@ type whichAnswer struct {
 	ShadowedBy string `json:"shadowed_by,omitempty"`
 }
 
-func which(prof *profile.Profile, pkgs []profile.Package, program string) (whichAnswer, error) {
+// searchHint is the line that sends the user to `oku search` for program, or
+// nothing when there are no sources to search.
+func (e env) searchHint(program string) string {
+	if config, err := source.Read(e.configPath()); err != nil || len(config.Sources) == 0 {
+		return ""
+	}
+
+	return fmt.Sprintf("\n`oku search %s` looks for a package that provides it", program)
+}
+
+// which says which package of pkgs provides program. hint ends the error for a
+// program that oku did not install.
+func which(prof *profile.Profile, pkgs []profile.Package, program, hint string) (whichAnswer, error) {
 	link := filepath.Join(prof.BinDir(), program)
 	if runtime.GOOS == "windows" && filepath.Ext(program) == "" {
 		link += ".exe"
@@ -113,19 +126,10 @@ func which(prof *profile.Profile, pkgs []profile.Package, program string) (which
 		}
 
 		if found, err := exec.LookPath(program); err == nil {
-			return whichAnswer{}, fmt.Errorf(
-				"%s is not from oku, PATH runs %s\n`oku search %s` looks for a package that provides it",
-				program,
-				found,
-				program,
-			)
+			return whichAnswer{}, fmt.Errorf("%s is not from oku, PATH runs %s%s", program, found, hint)
 		}
 
-		return whichAnswer{}, fmt.Errorf(
-			"no program named %s is installed\n`oku search %s` looks for a package that provides it",
-			program,
-			program,
-		)
+		return whichAnswer{}, fmt.Errorf("no program named %s is installed%s", program, hint)
 	}
 
 	answer := whichAnswer{Program: program, Path: target}
