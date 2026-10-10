@@ -528,3 +528,20 @@ func TestB572GCDryRunPrintsWhatItWouldRemoveAsJSON(t *testing.T) {
 		t.Fatalf("gc --json without --dry-run should be refused, got %v", err)
 	}
 }
+
+func TestB573PowerShellIsPwshOrPowershell(t *testing.T) {
+	m := newMachine(t)
+
+	pwsh := m.stdout(t, "hook", "pwsh")
+	if got := m.stdout(t, "hook", "powershell"); got != pwsh || !strings.Contains(got, "$env:PATH") {
+		t.Fatalf("hook powershell should print the pwsh hook:\n%s", got)
+	}
+
+	if got := m.stdout(t, "completion", "pwsh"); got != m.stdout(t, "completion", "powershell") {
+		t.Fatalf("completion pwsh should print the powershell completion:\n%s", got)
+	}
+
+	if _, err := m.run(t, "", "completion", "bogus"); err == nil || !strings.Contains(err.Error(), `unknown command "bogus"`) {
+		t.Fatalf("completion of an unknown shell should fail, got %v", err)
+	}
+}

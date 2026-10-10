@@ -13,6 +13,16 @@ import (
 // Shells are the shells oku can write a hook for.
 var Shells = []string{"bash", "zsh", "fish", "pwsh"}
 
+// canonical is the name in Shells of shell. PowerShell is "pwsh" there, and
+// cobra's completion command calls it "powershell", so oku takes both.
+func canonical(shell string) string {
+	if shell == "powershell" {
+		return "pwsh"
+	}
+
+	return shell
+}
+
 // State variables. The hook keeps what it applied in the environment, so the
 // next run can undo exactly that.
 const (
@@ -65,6 +75,7 @@ type Change struct {
 
 // Render writes change as commands for shell.
 func Render(shell string, change Change) (string, error) {
+	shell = canonical(shell)
 	if !slices.Contains(Shells, shell) {
 		return "", fmt.Errorf("shell %q must be one of %s", shell, strings.Join(Shells, ", "))
 	}
@@ -141,6 +152,8 @@ func keepLocal(shell, value string, quote func(string) string) string {
 // and the global profile's bin, completions is the profile's share/completions,
 // and oku is the path of the binary. The one hook line is the whole shell setup.
 func Hook(shell string, dirs []string, completions, oku string) (string, error) {
+	shell = canonical(shell)
+
 	code, err := promptHook(shell)
 	if err != nil {
 		return "", err
