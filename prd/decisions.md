@@ -1762,6 +1762,14 @@ about 240 MiB to about 190 MiB. The reports were identical for every package.
 A repo whose newest 100 releases are all nightlies still resolves, because the
 first pick fails and the lookup then reads everything (B200).
 
+Revisited 2026-10-10. GitHub's newest page holds 30 releases, and the whole list
+is still read 100 to a page. GitHub builds the whole page before it compares the
+ETag, so a 304 for 100 releases took 1.8 s for cli/cli and 2.1 s for
+anomalyco/opencode, against 0.6 s for a smaller page. On a list of 78 packages
+the report was the same and no lookup had to read further. A repo whose newest
+30 releases hold no allowed version costs one more request, since the first
+page of the whole list repeats them.
+
 ## D105. The download cache keeps a download for two days
 
 `oku gc --cache` deletes a download that no install has read for two days, even
