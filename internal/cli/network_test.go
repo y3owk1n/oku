@@ -87,3 +87,31 @@ func TestB470RedirectVersionFollowsNoRedirectToAFile(t *testing.T) {
 		t.Fatalf("want the redirect to a file refused, got %v:\n%s", err, out)
 	}
 }
+
+func TestB562OKUTraceWritesEachRequestAndWaitWithItsTime(t *testing.T) {
+	m := newMachine(t)
+	server := newReleaseServer(t, "v1.0.0")
+	m.opts.GitHubAPI = server.URL + "/api"
+
+	trace := filepath.Join(t.TempDir(), "trace.txt")
+	t.Setenv("OKU_TRACE", trace)
+
+	_, err := m.run(t, "", "add", m.discoveredManifest(t, "1.0.0"))
+	must(t, err)
+
+	data, err := os.ReadFile(trace)
+	must(t, err)
+
+	text := string(data)
+	if !strings.Contains(text, "GET "+server.URL+"/api/repos/owner/tool/releases\t200 OK") ||
+		!strings.Contains(text, "\twait ") || strings.Contains(text, "per_page") {
+		t.Fatalf("want a line for the request without its query and one for a wait:\n%s", text)
+	}
+
+	for line := range strings.Lines(text) {
+		if fields := strings.Fields(line); len(fields) < 3 || !strings.HasSuffix(fields[0], "s") ||
+			!strings.HasSuffix(fields[1], "s") {
+			t.Fatalf("a line lacks its start and its duration: %q", line)
+		}
+	}
+}
