@@ -1,5 +1,66 @@
 # Changelog
 
+## [0.16.0](https://github.com/y3owk1n/oku/compare/v0.15.0...v0.16.0) (2026-10-10)
+
+
+### Features
+
+* **add:** make --dry-run the only preview flag and drop --plan ([#461](https://github.com/y3owk1n/oku/issues/461)) ([0969311](https://github.com/y3owk1n/oku/commit/0969311bb27cbea28503faac1742edddb372d8c2))
+* **cli:** add --exit-code so a check exits with 2 when there is work ([#447](https://github.com/y3owk1n/oku/issues/447)) ([f2adc2a](https://github.com/y3owk1n/oku/commit/f2adc2a3015c8b5be304007a4ac609d6b0c7de29))
+* **cli:** complete package names, generations and more from local files ([#448](https://github.com/y3owk1n/oku/issues/448)) ([708f3db](https://github.com/y3owk1n/oku/commit/708f3dba62b67f46d7964fa4ab52b29ff0e696ff))
+* **cli:** give remove and rollback --dry-run and --system ([#452](https://github.com/y3owk1n/oku/issues/452)) ([1890003](https://github.com/y3owk1n/oku/commit/1890003f0f4767a2eacde79b28c4f61f66060fce))
+* **cli:** print the changes of a dry run and the release check as JSON ([#453](https://github.com/y3owk1n/oku/issues/453)) ([9e3b817](https://github.com/y3owk1n/oku/commit/9e3b817a3122c87ed0ab916309e09f4af4dbdfca))
+* **completions:** let packages ship PowerShell completions that the hook loads ([#465](https://github.com/y3owk1n/oku/issues/465)) ([516e025](https://github.com/y3owk1n/oku/commit/516e0256cf789b6d1fd067f31d44ad7c13dba163))
+* **diff:** show what changed between two generations or two locks ([#462](https://github.com/y3owk1n/oku/issues/462)) ([ff52d21](https://github.com/y3owk1n/oku/commit/ff52d21c036b2560783c8a4fa7ccf34185a2b306))
+* **gc:** print what a dry run would remove as JSON ([#454](https://github.com/y3owk1n/oku/issues/454)) ([5e67944](https://github.com/y3owk1n/oku/commit/5e679443d8e8adc9adf05fd3b2371f0a98a1e7ec))
+* **list:** let an include take a when, so a whole list can differ by machine ([#460](https://github.com/y3owk1n/oku/issues/460)) ([5d2febb](https://github.com/y3owk1n/oku/commit/5d2febb45bd7545691fe08f78250958f8526e13a))
+* **list:** let when name a host, so a list can differ by machine ([#459](https://github.com/y3owk1n/oku/issues/459)) ([b8049fd](https://github.com/y3owk1n/oku/commit/b8049fd5293360aabf6446d697b95ac61429278a))
+* **service:** run a service as a job on a schedule ([#466](https://github.com/y3owk1n/oku/issues/466)) ([c9a5383](https://github.com/y3owk1n/oku/commit/c9a5383f08a3d8ffe14d38105a6742f81fffb395))
+* **status:** trace each request and wait to the file OKU_TRACE names ([#444](https://github.com/y3owk1n/oku/issues/444)) ([faf0269](https://github.com/y3owk1n/oku/commit/faf026908e976df5afcaccd45df48434f3325804))
+* **sync:** merge an oku.lock that git left with conflicts ([#464](https://github.com/y3owk1n/oku/issues/464)) ([5846678](https://github.com/y3owk1n/oku/commit/584667840b524f7f3a4b2f759debc42364038ab6))
+* **sync:** show how each file would change with --dry-run --diff ([#463](https://github.com/y3owk1n/oku/issues/463)) ([4ed22ed](https://github.com/y3owk1n/oku/commit/4ed22ede31d0d62be7c80f44e26cbb3d8e454500))
+
+
+### Bug Fixes
+
+* **cli:** name the github: ref of an argument that reads as a repo ([#446](https://github.com/y3owk1n/oku/issues/446)) ([5ebb85d](https://github.com/y3owk1n/oku/commit/5ebb85dd8d75d020546eee2f5c5dc6ade9c1fd7b))
+* **cli:** read -v before a command as that command's --verbose ([#449](https://github.com/y3owk1n/oku/issues/449)) ([83a8cc2](https://github.com/y3owk1n/oku/commit/83a8cc23b2ec89cc90421352ff54dbe422229b43))
+* **cli:** take pwsh and powershell for PowerShell everywhere ([#455](https://github.com/y3owk1n/oku/issues/455)) ([00b1b98](https://github.com/y3owk1n/oku/commit/00b1b982eb1c9275fbd459f5534c67b14f07f61f))
+* correct the docs and the bugs the docs audit found ([#470](https://github.com/y3owk1n/oku/issues/470)) ([21d5e15](https://github.com/y3owk1n/oku/commit/21d5e15fb225502d0abc3de09726e5f95200fafe))
+* **forge:** read a GitLab project's HEAD from its commit at HEAD ([#451](https://github.com/y3owk1n/oku/issues/451)) ([727a7e2](https://github.com/y3owk1n/oku/commit/727a7e2f0b81156b74f78df1ab6b8cf0b3c4c73c))
+* **list:** refuse an age too long to count ([#432](https://github.com/y3owk1n/oku/issues/432)) ([a298cef](https://github.com/y3owk1n/oku/commit/a298cef5c3ad8791afdf68fd32bb6c7986c129fc))
+* **network:** reach a host over IPv4 when IPv6 drops and name slow hosts ([#428](https://github.com/y3owk1n/oku/issues/428)) ([f55a401](https://github.com/y3owk1n/oku/commit/f55a401104e0cff5bb2bfddf1ab3843baee3f148))
+* **outdated:** say oku update takes a version only when it would ([#456](https://github.com/y3owk1n/oku/issues/456)) ([5bef044](https://github.com/y3owk1n/oku/commit/5bef044a2060f72198ed32e605234090bc5be11f))
+* **ref:** remember which path held a #name manifest at a commit ([#427](https://github.com/y3owk1n/oku/issues/427)) ([60b6eeb](https://github.com/y3owk1n/oku/commit/60b6eebf22c4cb0d33aafd9ba6e88c9f240efad2))
+* refuse an answer over its size limit instead of reading part of it ([#433](https://github.com/y3owk1n/oku/issues/433)) ([ba86513](https://github.com/y3owk1n/oku/commit/ba86513bbeec53b1c10b6c5fe58a965ead5e0951))
+* **resolve:** check the age of a Go version that fits a prefix or range ([#431](https://github.com/y3owk1n/oku/issues/431)) ([4ededaa](https://github.com/y3owk1n/oku/commit/4ededaa20d1a90ba148418d5caa15475928be5fe))
+* **rollback:** say when the list's version will move a package again ([#450](https://github.com/y3owk1n/oku/issues/450)) ([49b8945](https://github.com/y3owk1n/oku/commit/49b8945e8d43032d2cd02637d3f9b07d0c03bc30))
+* **rollback:** undo the change that made the active generation ([#430](https://github.com/y3owk1n/oku/issues/430)) ([fe76926](https://github.com/y3owk1n/oku/commit/fe769263319cad192cae6eeee519740d147479e5))
+* **store:** read each checksum file once per command ([#426](https://github.com/y3owk1n/oku/issues/426)) ([01f3643](https://github.com/y3owk1n/oku/commit/01f36432a90de6143c8e915a555027a48d3b96d6))
+* **sync:** keep an adopted list once the change committed ([#429](https://github.com/y3owk1n/oku/issues/429)) ([bc33484](https://github.com/y3owk1n/oku/commit/bc3348458357d6371bcef8b29f943c987e59d135))
+* **sync:** read locked manifests without asking the host and hide short waits ([#424](https://github.com/y3owk1n/oku/issues/424)) ([e3c4fa3](https://github.com/y3owk1n/oku/commit/e3c4fa3800e0362461361af4c504ed3dd7d1b40c))
+
+
+### Performance Improvements
+
+* **cli:** ask for an inferred package's releases while its manifest is read ([#445](https://github.com/y3owk1n/oku/issues/445)) ([83bdb99](https://github.com/y3owk1n/oku/commit/83bdb99f623727181375e33c5dfc5798974ff863))
+* **cli:** make each command's HTTP transports once ([#435](https://github.com/y3owk1n/oku/issues/435)) ([a163267](https://github.com/y3owk1n/oku/commit/a163267ac2e1700c98d93874f281b220a869807b))
+* **forge:** keep the GitHub attestations found for a file ([#438](https://github.com/y3owk1n/oku/issues/438)) ([1dcae0d](https://github.com/y3owk1n/oku/commit/1dcae0d0845adefd82c0d3a7264c0c397759029a))
+* **forge:** read the newest 30 GitHub releases first ([#436](https://github.com/y3owk1n/oku/issues/436)) ([b72f9d3](https://github.com/y3owk1n/oku/commit/b72f9d33082bc3d4e173871161c9098b0329f1d2))
+* **infer:** infer once when the pick is the release inference read ([#434](https://github.com/y3owk1n/oku/issues/434)) ([a29574a](https://github.com/y3owk1n/oku/commit/a29574acf338c8f0eab8254ed5f6f7e98f94efea))
+* **infer:** read the checksum files of a release's assets at once ([#443](https://github.com/y3owk1n/oku/issues/443)) ([afee34b](https://github.com/y3owk1n/oku/commit/afee34ba9a2bd8afcbc2846ecffe992988a03b49))
+* **store:** check attestations from the answers inference read ([#437](https://github.com/y3owk1n/oku/issues/437)) ([4098899](https://github.com/y3owk1n/oku/commit/40988990c80d5ede0cb2fa23e7f4bc8935b26215))
+* **store:** hash the files of a store path eight at a time ([#439](https://github.com/y3owk1n/oku/issues/439)) ([40d87ef](https://github.com/y3owk1n/oku/commit/40d87ef358424fa785d0d19f93ee1f155e35809b))
+* **store:** share a new store path with the hashes its record holds ([#441](https://github.com/y3owk1n/oku/issues/441)) ([a522d3e](https://github.com/y3owk1n/oku/commit/a522d3e92f821f216f2235c32c8a403dd0d339d8))
+* **store:** unzip with a faster inflater and several writers ([#440](https://github.com/y3owk1n/oku/issues/440)) ([6162b68](https://github.com/y3owk1n/oku/commit/6162b687fd77d65c8e8218c0d288e8f55c37e727))
+* **xz:** copy a match in runs rather than a byte at a time ([#442](https://github.com/y3owk1n/oku/issues/442)) ([3f2abf8](https://github.com/y3owk1n/oku/commit/3f2abf8d966107828d2b00088952ef8844dadcbb))
+
+
+### Documentation
+
+* **ci:** pin the action at v0.16.0, the release with --exit-code and oku diff ([#471](https://github.com/y3owk1n/oku/issues/471)) ([e552d92](https://github.com/y3owk1n/oku/commit/e552d92367315a6b8bb96158e7526c45290992b3))
+* match the help and the examples to what oku does ([#457](https://github.com/y3owk1n/oku/issues/457)) ([e330b63](https://github.com/y3owk1n/oku/commit/e330b63ff8a3107ae340f097dc89be8f96fd9189))
+
 ## [0.15.0](https://github.com/y3owk1n/oku/compare/v0.14.3...v0.15.0) (2026-10-09)
 
 
