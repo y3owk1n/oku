@@ -6,6 +6,7 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 )
@@ -57,5 +58,46 @@ func TestB359OneCommandReadsARegistryDocumentOnce(t *testing.T) {
 
 	if got := hits.Load(); got != 1 {
 		t.Fatalf("add --plan read the registry %d times, want 1\n%s", got, out)
+	}
+}
+
+func TestB359InferenceReadsTheReleaseItPicksOnce(t *testing.T) {
+	m := newMachine(t)
+	archive, _ := m.archive(t, strings.TrimSuffix(hostAssetName(), ".tar.gz"), map[string]string{
+		"tool-1.4.0/tool": "#!/bin/sh\necho inferred\n",
+	})
+	inferServer(t, &m, map[string]string{hostAssetName(): archive})
+
+	upstream, err := url.Parse(m.opts.GitHubAPI)
+	must(t, err)
+
+	var (
+		mu    sync.Mutex
+		asked []string
+	)
+
+	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		asked = append(asked, r.URL.Path)
+		mu.Unlock()
+
+		r.URL.Path = upstream.Path + r.URL.Path
+		httputil.NewSingleHostReverseProxy(&url.URL{Scheme: upstream.Scheme, Host: upstream.Host}).ServeHTTP(w, r)
+	}))
+	t.Cleanup(api.Close)
+
+	m.opts.GitHubAPI = api.URL
+
+	// With a release age, oku infers from the newest release and then picks from
+	// the versions. The pick is that same release.
+	out, err := m.run(t, "", "add", "github:owner/tool", "--min-release-age", "1d")
+	if err != nil {
+		t.Fatalf("add: %v\n%s", err, out)
+	}
+
+	for _, path := range asked {
+		if strings.Contains(path, "/releases/tags/") {
+			t.Fatalf("add inferred again from %s, the release it had read:\n%s", path, strings.Join(asked, "\n"))
+		}
 	}
 }

@@ -165,6 +165,8 @@ type Inferred struct {
 	// programs beside the first, which --bin may add.
 	Bins  []string
 	Found []string
+	// Tag is the tag of the release the manifest was inferred from.
+	Tag string
 }
 
 // Manifest returns the manifest inferred for the repo that a forge ref's
@@ -232,7 +234,7 @@ func (inf *Inferrer) Manifest(
 		program = shared
 	}
 
-	var result Inferred
+	result := Inferred{Tag: rel.Tag}
 
 	if i := slices.IndexFunc(chosen, func(c choice) bool { return c.Matches(host) }); i >= 0 {
 		result.Asset, result.Others = chosen[i].asset, chosen[i].others
