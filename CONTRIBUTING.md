@@ -112,8 +112,9 @@ There is no Windows machine to test on, so `.github/scripts/live-windows.ps1`
 runs the real `oku.exe` on the `windows-latest` runner, in the `windows-live`
 workflow. It takes about ten minutes, so a pull request runs it only when it
 changes a `_windows.go` file, `internal/shim`, `internal/trash`,
-`internal/service` or the script. Every other change runs it on `main` after
-the merge, and the Actions tab can start it for any branch. It builds oku, sets the XDG variables to a directory under `RUNNER_TEMP`, and
+`internal/service` or the script. A merge to `main` does not run it, and the
+Actions tab can start it for any branch. It builds oku, sets the XDG variables
+to a directory under `RUNNER_TEMP`, and
 installs real releases from GitHub, GitLab and gitea.com. Each check throws on
 failure, which fails the job.
 
