@@ -113,17 +113,24 @@ type Meta struct {
 }
 
 // New returns the store under dataDir that caches downloads under cacheDir and
-// connects only where net allows.
-func New(dataDir, cacheDir string, net netpolicy.Policy) *Store {
-	transport := http.DefaultTransport.(*http.Transport).Clone()
-	transport.RegisterProtocol("file", fileTransport{})
-
+// connects only where net allows. It downloads through transport, which
+// Transport makes from net.
+func New(dataDir, cacheDir string, net netpolicy.Policy, transport http.RoundTripper) *Store {
 	return &Store{
 		dir:   filepath.Join(dataDir, "store"),
 		cache: cacheDir,
-		http:  &http.Client{Transport: net.Transport(transport), CheckRedirect: forge.CheckRedirect},
+		http:  &http.Client{Transport: transport, CheckRedirect: forge.CheckRedirect},
 		net:   net,
 	}
+}
+
+// Transport returns the transport a Store downloads through, which follows net
+// and also reads file:// URLs. Stores that share one reuse its connections.
+func Transport(net netpolicy.Policy) http.RoundTripper {
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.RegisterProtocol("file", fileTransport{})
+
+	return net.Transport(transport)
 }
 
 // Realized is a package in the store.

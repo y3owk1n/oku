@@ -7,6 +7,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 	"slices"
@@ -443,6 +444,11 @@ type env struct {
 	hosts forge.Hosts
 	// net is where oku may connect, from config.toml.
 	net netpolicy.Policy
+	// transport carries lookups, and storeTransport carries store downloads.
+	// loadEnv makes each once, so the requests of a command reuse connections.
+	transport, storeTransport http.RoundTripper
+	// forgeHosts are the [forge] hosts of config.toml.
+	forgeHosts map[string]string
 	// sigstore checks Sigstore bundles. It loads its trust root once.
 	sigstore *sigstore.Verifier
 	// osvClient asks OSV whether a package is malicious.
@@ -473,8 +479,11 @@ func loadEnv() (env, error) {
 	}
 
 	e.net = config.Policy()
+	e.transport = e.net.Transport(http.DefaultTransport.(*http.Transport).Clone())
+	e.storeTransport = store.Transport(e.net)
+	e.forgeHosts = config.Forge.Hosts
 	e.hosts.Net = e.net
-	e.hosts.HTTP = e.net.Client(forge.CheckRedirect)
+	e.hosts.HTTP = &http.Client{Transport: e.transport, CheckRedirect: forge.CheckRedirect}
 	e.sigstore = sigstore.Public(filepath.Join(e.cache, "sigstore"), e.hosts.HTTP)
 	e.osvClient = osv.Client{Base: osv.API, HTTP: e.hosts.HTTP}
 
@@ -586,7 +595,7 @@ func projectProfile(dir string) string {
 }
 
 func (e env) store() *store.Store {
-	s := store.New(e.root, e.cache, e.net)
+	s := store.New(e.root, e.cache, e.net, e.storeTransport)
 	s.Private = e.hosts.GitHubAsset
 	s.Sigstore, s.Attestations = e.sigstore, e.hosts.GitHubAttestations
 	s.OSV = &e.osvClient
@@ -601,20 +610,16 @@ func (e env) stores() []*store.Store {
 		return []*store.Store{e.store()}
 	}
 
-	return []*store.Store{e.store(), store.New(e.data, e.cache, e.net)}
+	return []*store.Store{e.store(), store.New(e.data, e.cache, e.net, e.storeTransport)}
 }
 
 func (e env) fetcher(opts Options) *ref.Fetcher {
-	f := ref.NewFetcher(e.cache, e.net)
+	f := ref.NewFetcher(e.cache, e.net, e.transport)
 	f.Hosts.GitHubAPI, f.Hosts.GitHubRaw = opts.GitHubAPI, opts.GitHubRaw
 	// The resolver takes these hosts. It reads a git URL on github.com through
 	// the API, so a test's github.com belongs here too.
 	f.Hosts.GitHubWeb = opts.GitHubWeb
-
-	// A config.toml that does not parse fails the command elsewhere.
-	if config, err := source.Read(e.configPath()); err == nil {
-		f.Hosts.Trusted = config.Forge.Hosts
-	}
+	f.Hosts.Trusted = e.forgeHosts
 
 	return f
 }
