@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/y3owk1n/oku/internal/goproxy"
+	"github.com/y3owk1n/oku/internal/manifest"
 )
 
 // goVersions returns the versions of a Go module, newest first. A version with
@@ -38,14 +39,28 @@ func (r *Resolver) goVersions(ctx context.Context, module string) ([]Release, er
 		}
 	})
 
-	// The proxy gives a time per version, one request each, so oku asks from the
-	// newest down to the first one old enough, which is the one Pick takes.
+	return releases, nil
+}
+
+// goTimes returns a copy of releases with the publish times that MinAge needs
+// to pick one for want. The proxy gives one time per request. oku asks from the
+// newest version down and stops at the first that fits want and is old enough,
+// which is the one Pick takes.
+func (r *Resolver) goTimes(ctx context.Context, v manifest.Version, releases []Release, want string) ([]Release, error) {
+	// A version named exactly skips the age.
+	exact := slices.ContainsFunc(releases, func(release Release) bool { return release.Version == want })
+	if r.MinAge == 0 || exact {
+		return releases, nil
+	}
+
+	releases = slices.Clone(releases)
+
 	for i := range releases {
-		if r.MinAge == 0 {
-			break
+		if ok, _ := fits(releases[i], want); !ok {
+			continue
 		}
 
-		at, err := goproxy.Published(ctx, r.Hosts.HTTP, r.GoProxy, module, releases[i].Version)
+		at, err := goproxy.Published(ctx, r.Hosts.HTTP, r.GoProxy, v.Repo, releases[i].Version)
 
 		// A proxy that keeps no times leaves them unknown.
 		if errors.Is(err, goproxy.ErrNotFound) {
@@ -53,7 +68,7 @@ func (r *Resolver) goVersions(ctx context.Context, module string) ([]Release, er
 		}
 
 		if err != nil {
-			return nil, fmt.Errorf("read when %s %s came out: %w", module, releases[i].Version, err)
+			return nil, fmt.Errorf("read when %s %s came out: %w", v.Repo, releases[i].Version, err)
 		}
 
 		releases[i].Published = at
