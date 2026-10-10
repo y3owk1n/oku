@@ -312,7 +312,19 @@ func (g guard) RoundTrip(req *http.Request) (*http.Response, error) {
 	// for the rest once they take a second.
 	defer status.Idle(req.Context(), "waiting for %s", host)()
 
-	return g.next.RoundTrip(req)
+	// The trace leaves out the query and the user part, which may hold a token.
+	traced := *req.URL
+	traced.RawQuery, traced.User = "", nil
+	done := status.Trace(req.Context(), "%s %s", req.Method, traced.String())
+
+	resp, err := g.next.RoundTrip(req)
+	if err != nil {
+		done(err.Error())
+	} else {
+		done(resp.Status)
+	}
+
+	return resp, err
 }
 
 // proxyAddress is the host:port that the transport dials for proxy.

@@ -135,9 +135,15 @@ func Idle(ctx context.Context, format string, args ...any) func() {
 }
 
 func begin(ctx context.Context, idle bool, format string, args ...any) func() {
+	// An idle wait is a request, which the trace has a line for already.
+	traced := func(string) {}
+	if !idle {
+		traced = Trace(ctx, "wait "+format, args...)
+	}
+
 	r, _ := ctx.Value(reporterKey{}).(*Reporter)
 	if r == nil || idle && !r.live {
-		return func() {}
+		return func() { traced("") }
 	}
 
 	text := fmt.Sprintf(format, args...)
@@ -147,7 +153,12 @@ func begin(ctx context.Context, idle bool, format string, args ...any) func() {
 		text = own.label + ": " + text
 	}
 
-	return r.start(text, own.key, idle)
+	stop := r.start(text, own.key, idle)
+
+	return func() {
+		stop()
+		traced("")
+	}
 }
 
 // Reader adds the bytes read from in to the innermost wait of ctx. total is the

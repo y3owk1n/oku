@@ -1626,6 +1626,10 @@ order step in `prd/product.md`.
   then never leaves the screen blank. While the package has a wait of its own,
   such as a download, its line shows that wait instead. A pipe gets no line for
   a request.
+- B562 [11] With `OKU_TRACE` naming a file, every command appends a line to
+  it for each request and each wait: when it started, how long it took, the
+  package, what it was, and for a request the answer. A URL's query and user
+  part stay out.
 - B93 [11] The install script puts one static binary in place and prints the
   hook line for the user's shell. It needs no root and edits no existing file.
 - B220 [11] The install script prints the installed version, and ends with the

@@ -663,6 +663,23 @@ An IPv6 route that drops connections then adds 0.3 s when the host also has an
 IPv4 address. When no address of the host answers, the request fails after 30
 seconds.
 
+## oku is slow
+
+Set `OKU_TRACE` to a file and run the command again:
+
+```
+$ OKU_TRACE=/tmp/oku-trace.txt oku update
+$ sort -k2 -rn /tmp/oku-trace.txt | head -3
+   1.237s    1.284s	cli	wait looking up the versions of cli/cli
+   0.947s    0.876s	fd	wait looking up the versions of sharkdp/fd
+   0.948s    0.867s	fd	GET https://api.github.com/repos/sharkdp/fd/releases	304 Not Modified
+```
+
+Each line starts with when the request or wait started, counted from the start
+of the command, and how long it took. Then come the package, what it was, and
+for a request the answer. oku leaves the query and the user part of a URL out.
+It appends to the file, so delete it between runs.
+
 ## A disk image is mounted
 
 ```
