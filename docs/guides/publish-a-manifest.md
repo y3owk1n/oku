@@ -54,7 +54,7 @@ downloading https://github.com/sharkdp/fd/releases/download/v10.5.0/fd-v10.5.0-x
 wrote oku.pkg.toml
 ```
 
-It opens one asset per archive format to see the layout, and writes an artifact
+It opens one asset per archive format and OS to see the layout, and writes an artifact
 for every platform the release has an asset for. The start of the file:
 
 ```toml
@@ -110,8 +110,8 @@ oku.pkg.toml: ok
 ```
 
 A warning does not fail the run. An error, such as a misspelt key, prints the
-line and makes `lint` exit with status 1. `oku add` ignores keys it does not
-know, so only `lint` catches a typo.
+line and makes `lint` exit with status 1. `oku add` installs without a key it
+does not know, and warns of each one with its line.
 
 ## Test it
 
@@ -213,8 +213,11 @@ What each part does:
   Every path after it is relative to what is left.
 - `bin` lists the programs. `man` lists man pages, and the file name needs its
   section, `.1`.
-- `completions = "autocomplete/"` names a directory. oku links `fd.fish`, `_fd`
-  and `fd.bash` from it, named after the first `bin` entry.
+- `completions = "autocomplete/"` names a directory. oku looks there for
+  `fd.fish`, `_fd`, `fd.bash` and `_fd.ps1`, named after the first `bin`
+  entry, and links the ones it finds. fd names its PowerShell file `fd.ps1`,
+  so a manifest that wants it names the file in a table, as
+  `pwsh = "autocomplete/fd.ps1"`.
 
 Test it again. The completions now appear:
 

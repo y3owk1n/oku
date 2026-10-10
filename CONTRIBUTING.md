@@ -44,8 +44,9 @@ Run these before you open a pull request. CI runs the same checks.
 | `just fmt` | `gofumpt -w .` and `golines -w .`. |
 
 CI in `.github/workflows/ci.yml` runs `go vet ./...` and the tests as `just test`
-does on ubuntu, macOS and Windows runners, lints once per `GOOS` on Linux, and runs the
-live scripts below. It runs on pull requests only. `main` takes merged pull
+does on ubuntu, macOS and Windows runners, lints once per `GOOS` on Linux, runs
+`live-linux.sh` on ubuntu and `live-host.sh` in Fedora and Arch containers, and
+tests the GitHub action. It runs on pull requests only. `main` takes merged pull
 requests, so a merge runs nothing again, and the release pull request, which
 only bumps the version and the changelog, skips every job. It installs its tools with the `oku` action from
 `oku.lock`, with the nightly oku, so a broken commit cannot break the tools
@@ -138,7 +139,7 @@ GitLab and Gitea, the aqua registry, the Homebrew API and the feeds of three
 casks, npm, PyPI, crates.io, the Go module proxy, Scoop and winget. A failure
 means a source changed its format or its address, or is down. The run then
 opens an issue titled "A source that oku reads has changed", or comments on the
-open one. The run log shows each failure with oku's error.
+open one. Only the scheduled run does this. The run log shows each failure with oku's error.
 
 To check the sources now, run the workflow by hand, or run the script:
 

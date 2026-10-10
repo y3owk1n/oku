@@ -367,7 +367,7 @@ atuin-server = { ref = "github:atuinsh/atuin", asset = "atuin-server-*" }
 
 The package takes the other name only when the asset holds a program of that
 name. An asset that is another build of the same program, such as
-`mouseless-portable_v1.0.0.zip` holding `mouseless.exe`, keeps the repo's name:
+`mouseless-portable_v1.0.0.zip` holding `mouseless.exe`, keeps the repo's name.
 `oku add github:cymian/mouseless --asset '*-portable*'` adds `mouseless`.
 
 When an install from an inferred manifest fails, the error names the file oku
@@ -381,8 +381,8 @@ When neither flag fixes it, write a manifest yourself. `oku manifest init
 [manifest reference](../reference/manifest.md) lists the inference rules.
 
 Inference also names the package after the repo, so `github:cli/cli` installs
-a package called `cli` whose program is `gh`. It writes programs and man pages
-only, and completions need a manifest.
+a package called `cli` whose program is `gh`. It writes programs, apps and
+man pages, and completions need a manifest.
 
 ## See what is outdated
 
@@ -490,9 +490,8 @@ listed there. See [tokens per host](../reference/refs.md#tokens-per-host).
 ```
 
 The same tokens install from a private repo on Codeberg, Gitea, Forgejo and
-GitLab. On GitHub a token reads a private repo's manifest and releases, but the
-download of a private release fails, because GitHub serves those files through
-its API only. `oku sync` on another machine needs the token too.
+GitLab. On github.com a token also downloads a private release, through the
+API. A private release on GitHub Enterprise Server still fails to download. `oku sync` on another machine needs the token too.
 
 ## Next
 

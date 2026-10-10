@@ -52,7 +52,8 @@ autohide = true
 
 oku refuses a list that has a table or key it does not know, at the top of
 the file or in a package's entry. It also refuses a value of the wrong type,
-such as `version = 22`. It names the line and changes nothing, so a misspelt
+such as `version = 22`. It names the line, or for a wrong type the key, and
+changes nothing, so a misspelt
 `[package]` cannot empty the list and `verison` cannot drop a pin. `when`,
 `[lock]`, `[runtimes]`, `[env]`, `[host]`, `[files]` and `[secrets]` reject a key
 they do not know too.
@@ -191,8 +192,9 @@ include = [
 
 Rules:
 
-- Includes merge in order, so a later include overrides an earlier one. Your
-  own list overrides every include, table by table and entry by entry.
+- Includes merge in order, so a later include overrides an earlier one when
+  both have the same `when`, or neither has one. Your own list overrides every
+  include, table by table and entry by entry.
 - An included list may include others, up to 8 levels deep. A list included
   twice, or one that includes itself, is an error.
 - oku never edits an included list, and `oku remove` refuses a package that
@@ -301,7 +303,7 @@ each entry and never installs, locks or rolls it back.
 | `path` | A file exists at that path. |
 | `apt`, `dnf`, `pacman`, `apk`, `zypper` | The distribution's package manager has that package installed, with `dpkg-query`, `rpm -q --whatprovides`, `pacman -T` or `apk info -e`. With dnf, zypper and pacman a name that an installed package provides counts, such as `zlib-devel`, which `zlib-ng-compat-devel` provides on Fedora. oku picks the manager from `/etc/os-release` and uses only the key for it. |
 | `install` | Nothing. The text oku prints to say how to get it. |
-| `when` | Limits the entry to some machines, as for a [package](#when). |
+| `when` | Limits the entry to some machines, as for a [package](#when), so `when = { host = "work" }` checks it on that machine alone. |
 
 ```toml
 [host]

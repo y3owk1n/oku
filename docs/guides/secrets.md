@@ -158,7 +158,7 @@ can install sops and decrypt with it.
 |---|---|
 | A [generation](../how-oku-works.md#generation) | A copy of the encrypted file. For a `text` or a template, the content with every other variable filled in and only the name of the secret. Never decrypted bytes. |
 | `~/.local/share/oku/secrets/` | The decrypted files. The path in your home directory is a symlink to one of them. |
-| `oku.lock`, the [ledger](../how-oku-works.md#ledger), what oku prints, an error | Never decrypted bytes. An error names the encrypted file and the `key`. |
+| `oku.lock`, the [ledger](../how-oku-works.md#ledger), what oku prints, an error | Never decrypted bytes. An error names the encrypted file and the `key`. `oku sync --dry-run --diff` shows a secret as `{{secret.<name>}}`. |
 
 Only you can read the decrypted files:
 

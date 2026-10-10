@@ -26,7 +26,7 @@ if (Test-Path "$HOME\AppData\Local\oku\bin\oku.exe") { Invoke-Expression ((& "$H
 ```
 
 It puts `oku.exe` and the programs oku installs on `PATH`, loads the
-completions of `oku`, and applies a [project's](projects.md) programs while you
+completions of `oku` and of the programs you install, and applies a [project's](projects.md) programs while you
 are inside it. It wraps your `prompt` function and keeps `$LASTEXITCODE`. oku
 never edits your profile itself.
 
@@ -36,8 +36,8 @@ works in `profile.ps1` beside it, which every host reads, and in the
 `PowerShell` directory that PowerShell 7 uses. `oku doctor` reads all of them,
 and follows `Documents` to OneDrive when Windows keeps it there.
 
-PowerShell gets the completions of `oku` only, not those of the programs you
-install.
+PowerShell also loads the completions that installed packages ship, from the
+profile's `share\completions\pwsh`.
 
 ## Know why a profile looks different
 
@@ -139,6 +139,7 @@ you, with your normal rights, and only while you are logged on.
 |---|---|
 | Turned on | The task has a trigger for your logon, and oku starts it right away. |
 | Installed, not turned on | The task has no trigger. `oku service start <name>` runs it. |
+| A job, with a `schedule` | The task has a trigger that repeats every so many minutes, or one at the time and weekdays it names. A run that the machine missed starts once it is on. oku does not start a job when it installs it, and `restart` does not apply. |
 | Definition | `%LOCALAPPDATA%\oku\services\<name>.json` |
 | Output | `%LOCALAPPDATA%\oku\logs\<name>.log` |
 
@@ -148,8 +149,8 @@ Task Scheduler restarts a task only after it fails. So `restart = "always"`
 behaves like `restart = "on-failure"`. One minute after a failure the task
 starts again. A program that exits with code 0 stays stopped.
 
-`oku service start` points at no log when a service exits at once, because
-Task Scheduler keeps none.
+When a service exits right after `oku service start`, the error names its log,
+as in `<name> started and then exited, look at %LOCALAPPDATA%\oku\logs\<name>.log`.
 
 ## Install for every user
 
@@ -161,7 +162,7 @@ before it writes.
 |---|---|
 | Apps | `%ProgramData%\Microsoft\Windows\Start Menu\Programs\oku-<name>.lnk` |
 | Fonts | `%SystemRoot%\Fonts\<file>`, and a value `oku <file>` under `HKLM\Software\Microsoft\Windows NT\CurrentVersion\Fonts` |
-| Services | A scheduled task `oku-<name>` that runs as you from boot, through an S4U logon that needs no password. With `run_as = "root"` it runs as the `SYSTEM` account. |
+| Services | A scheduled task `oku-<name>` that runs as you from boot, through an S4U logon that needs no password. With `run_as = "root"` it runs as the `SYSTEM` account. A job runs on its schedule instead. |
 | Service definitions and output | `%ProgramData%\oku\services\`, and the output in your data directory, or in `%ProgramData%\oku\logs\` for a `SYSTEM` task |
 | Shared store root | `%ProgramData%\oku`, from `oku setup --system`. It takes no permission from `%ProgramData%`, Administrators own it, and only `SYSTEM`, Administrators and your user can write in it. |
 
@@ -198,4 +199,4 @@ for Windows does not run a step.
 
 Windows refuses to delete a running program. So `oku self uninstall` renames
 `oku.exe` to `oku.exe.uninstalled` and starts a hidden `cmd` that deletes it
-about four seconds later. Nothing is left after those seconds.
+a few seconds later. Nothing is left after those seconds.

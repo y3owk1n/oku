@@ -47,7 +47,9 @@ generation 2 is active, 2 packages: ripgrep 15.2.0 -> 14.1.1
 
 Without a number, `oku rollback` goes to the generation the active one
 replaced. It downloads nothing, because every generation's packages are still
-in the store.
+in the store. `oku rollback --dry-run` prints what the rollback would change
+and changes nothing, and so does `oku remove --dry-run`. See
+[A dry run](../reference/commands.md#a-dry-run).
 
 A rollback covers everything the generation holds:
 
@@ -105,7 +107,7 @@ $ oku generations
 
 `oku rollback 3` still reaches the other line. A plain `oku rollback` from 4
 goes to 1, the generation 4 replaced, so it undoes the add of qux and nothing
-else. Numbers only go up: a change takes the number after the highest
+else. Numbers only go up. A change takes the number after the highest
 generation, also after `oku gc` deleted older ones, so a number always names
 the same generation.
 
@@ -197,7 +199,8 @@ $ oku gc --keep 2
 - Then gc deletes each store path that no remaining generation uses. A
   [dep](../how-oku-works.md#runtime-dep) counts as used while a package that
   needs it is.
-- `--dry-run` prints what it would delete and deletes nothing.
+- `--dry-run` prints what it would delete and deletes nothing. With `--json` it
+  prints that as JSON.
 - The kept generations keep their numbers, and the next change takes the
   number after the highest.
 

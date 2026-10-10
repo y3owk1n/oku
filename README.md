@@ -59,7 +59,7 @@ color-scheme = "prefer-dark"
 ```bash
 git clone https://github.com/you/machines ~/.config/oku   # a new machine
 oku sync                       # install and apply everything the list and lock name
-oku sync --dry-run             # what would change, and nothing changes
+oku sync --dry-run             # what would change, and nothing on the machine changes
 oku rollback                   # the machine as it was before the last change
 ```
 
@@ -135,7 +135,7 @@ oku doctor                     # checks PATH, the shell line, the sandbox and th
 | Place dotfiles and templates | `[files]` and `[vars]` | [Dotfiles](docs/guides/dotfiles.md) |
 | Keep SSH keys and tokens in the repo, encrypted | `[secrets]` with sops and age | [Secrets](docs/guides/secrets.md) |
 | Set macOS defaults, Windows registry values or GNOME settings | `[defaults]`, `[registry]`, `[dconf]` | [OS settings](docs/guides/os-settings.md) |
-| Run a daemon at login | `service = true` | [Services](docs/guides/services.md) |
+| Run a daemon at login, or a job on a schedule | `service = true` | [Services](docs/guides/services.md) |
 | Give a repo its own tools and environment variables, restored when you leave | an `oku.toml` with `[env]` in the repo and `oku allow` | [Projects](docs/guides/projects.md) |
 | Use the same tools in CI | `uses: y3owk1n/oku@main` | [CI](docs/guides/ci.md) |
 | Say what a machine needs that oku does not install, such as Xcode tools or a distro library | `[host]` | [New machine](docs/guides/new-machine.md#name-what-the-machine-must-have) |
@@ -149,7 +149,7 @@ Every change is a generation that covers packages, files and settings together. 
 
 The install instructions for your software become one line that you control: `oku add github:you/tool`. Nobody submits anything to any registry.
 
-Many repos need no manifest. When release files follow the usual naming, the line above already works, and `oku manifest init --from you/tool` prints the manifest oku inferred so you can commit it. Otherwise a manifest is `oku.pkg.toml` next to your code:
+Many repos need no manifest. When release files follow the usual naming, the line above already works, and `oku manifest init --from you/tool` writes the manifest oku inferred to `oku.pkg.toml`, ready to commit. Otherwise a manifest is `oku.pkg.toml` next to your code:
 
 ```toml
 [package]

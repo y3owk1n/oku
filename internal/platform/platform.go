@@ -211,16 +211,16 @@ type When []Selector
 // ParseWhen reads a when value of a manifest as TOML gives it: one table, or an
 // array of tables. A missing one matches every platform.
 func ParseWhen(value any) (When, error) {
-	w, err := ParseListWhen(value)
-	if err == nil && slices.ContainsFunc(w, func(s Selector) bool { return s.Host != "" }) {
-		return nil, errors.New("when.host names one machine, so it belongs in oku.toml, not in a manifest")
-	}
-
-	return w, err
+	return parseWhen(value, false)
 }
 
 // ParseListWhen is ParseWhen for oku.toml, whose when may also name a host.
 func ParseListWhen(value any) (When, error) {
+	return parseWhen(value, true)
+}
+
+// parseWhen reads a when value, which may name a host when hosts is set.
+func parseWhen(value any, hosts bool) (When, error) {
 	var tables []any
 
 	switch v := value.(type) {
@@ -252,8 +252,14 @@ func ParseListWhen(value any) (When, error) {
 			target, known := map[string]*string{
 				"os": &sel.OS, "arch": &sel.Arch, "libc": &sel.Libc, "host": &sel.Host,
 			}[key]
-			if !known {
+
+			switch {
+			case key == "host" && !hosts:
+				return nil, errors.New("when.host names one machine, so it belongs in oku.toml, not in a manifest")
+			case !known && hosts:
 				return nil, fmt.Errorf("when.%s is not a selector key, use os, arch, libc or host", key)
+			case !known:
+				return nil, fmt.Errorf("when.%s is not a selector key, use os, arch or libc", key)
 			}
 
 			value, ok := field.(string)

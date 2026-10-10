@@ -67,7 +67,7 @@ What oku does not do:
 | A file that chezmoi copies | A `text` entry |
 | A chezmoi template | A `render` entry, with values from `[vars]` |
 | `chezmoi apply` | `oku sync` |
-| `chezmoi diff` | `oku sync --dry-run`, which lists the paths it would write, not a diff |
+| `chezmoi diff` | `oku sync --dry-run --diff`, which prints how the text of each file would change, with secrets left out |
 | `chezmoi add <file>` | Move the file into your repo and write its `[files]` entry by hand |
 | Secrets from age or gpg | `secret` entries and `[secrets]`, from sops or age files |
 | A per-OS file | `when` on the entry |
@@ -112,8 +112,9 @@ What oku does not do:
 - There is no language. `oku.toml` and manifests are TOML with a fixed set of
   keys, and `oku manifest lint` checks them.
 - There is no nixpkgs. Each package comes from its own repo or a registry.
-- oku covers the per-user part of what home-manager and nix-darwin do, and
-  nothing that needs root. It does not set the host name, the firewall or
+- oku covers the per-user part of what home-manager and nix-darwin do, plus
+  apps, fonts and services for every user through
+  [system scope](system-wide.md). It does not set the host name, the firewall or
   Touch ID for sudo, and it never writes `/Library/Preferences`. Keep those in
   a script you run once.
 - oku needs no `/nix` and no root to switch. One generation covers packages,
@@ -154,5 +155,6 @@ Where oku differs:
 - A change that fails partway undoes itself.
 - Per-user settings work on Windows and Linux too, through `[registry]` and
   `[dconf]`.
-- A build from source runs in a sandbox with no network and no access to your
-  home directory, on macOS and Linux.
+- A build from source runs in a sandbox with no access to your home
+  directory, and no network except for its vendor steps and the `run` steps
+  that ask for it, on macOS and Linux.

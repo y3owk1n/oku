@@ -20,7 +20,7 @@ Pick the task you have.
 |---|---|
 | [Add packages](guides/add-packages.md) | Tools from GitHub, GitLab, Codeberg, Gitea, any git repo, a URL or a file, at the version you want |
 | [npm, PyPI, Go and cargo packages](guides/npm-pypi-go-cargo.md) | Tools from package registries, without their toolchain on your `PATH` |
-| [Run a service](guides/services.md) | A package's daemon that starts at login |
+| [Run a service](guides/services.md) | A package's daemon that starts at login, or a job that runs on a schedule |
 | [Install for every user](guides/system-wide.md) | Apps, fonts and services for the whole machine |
 
 **Set up your machine**
@@ -75,7 +75,7 @@ Pick the task you have.
 | CPU | amd64, arm64 | amd64, arm64 | amd64, arm64 |
 | Build sandbox | yes, where the host allows user namespaces | yes | no |
 | Services | systemd | launchd | Task Scheduler |
-| Installers oku unpacks | `.deb`, `.rpm`, AppImage | `.dmg`, `.pkg` | `.msi` |
+| Installers oku unpacks | `.deb`, `.rpm`, and an AppImage kept as the program itself | `.dmg`, `.pkg` | `.msi` |
 | Needs administrator rights | only to [install for every user](guides/system-wide.md) | same | same |
 
 tar, zip and 7z archives, `.deb` and `.rpm` unpack on every OS.

@@ -102,7 +102,7 @@ func TestB516ABuildStopsAtADependencyThatOSVListsAsMalicious(t *testing.T) {
 		[]byte(fmt.Sprintf("[runtimes]\nnode = %q\n", m.fakeNode(t))), 0o644))
 
 	_, err := m.run(t, "", "add", "npm:@scope/tool", "--yes")
-	if err == nil || !strings.Contains(err.Error(), "left-pad 1.3.0, see https://osv.dev/vulnerability/MAL-2025-2") {
+	if err == nil || !strings.Contains(err.Error(), "installed packages that OSV lists as malicious:\n  left-pad 1.3.0, see https://osv.dev/vulnerability/MAL-2025-2") {
 		t.Fatalf("want the build stopped at the malicious dependency, got %v", err)
 	}
 

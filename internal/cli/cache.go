@@ -263,8 +263,9 @@ func runPush(cmd *cobra.Command, dir string, names []string) error {
 			return err
 		}
 
-		// A package with a URL is a download, which every machine can fetch itself.
-		if meta.URL != "" {
+		// A download is one every machine can fetch itself. A build also records
+		// the URL of its source archive.
+		if !meta.Built(path) {
 			continue
 		}
 

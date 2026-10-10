@@ -751,7 +751,7 @@ func (m *Manifest) validate() error {
 	m.Host = nil
 
 	for _, name := range slices.Sorted(maps.Keys(m.RawHost)) {
-		r, err := host.Parse(name, m.RawHost[name])
+		r, err := host.Parse(name, m.RawHost[name], platform.ParseWhen)
 		if err != nil {
 			errs = append(errs, err)
 

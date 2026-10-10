@@ -250,3 +250,40 @@ bin = [%q]
 		t.Fatalf("sync does not name the first packages and count the rest: %v\n%s", err, out)
 	}
 }
+
+func TestB575AHostEntryOfTheListMayNameOneMachine(t *testing.T) {
+	m := newMachine(t)
+	t.Setenv("OKU_HOST", "home")
+
+	ref := m.manifest(t, "tool", map[string]string{"tool": script}, `bin = ["tool"]`)
+	m.writeOwnList(t, fmt.Sprintf("[packages]\ntool = %q\n\n[host]\n"+
+		"vpn = { command = \"oku-no-such-vpn\", install = \"install the VPN client\", when = { host = \"work\" } }\n", ref))
+
+	out, err := m.run(t, "", "sync")
+	if err != nil || strings.Contains(out, "vpn is missing") {
+		t.Fatalf("sync on home should not check the requirement of work: %v\n%s", err, out)
+	}
+
+	t.Setenv("OKU_HOST", "work")
+
+	if out, err := m.run(t, "", "sync"); err != nil || !strings.Contains(out, "vpn is missing\ninstall the VPN client") {
+		t.Fatalf("sync on work should name the missing requirement: %v\n%s", err, out)
+	}
+
+	// A manifest describes every machine.
+	path := filepath.Join(m.fixtures, "bad.toml")
+	must(t, os.WriteFile(path, []byte("[package]\nname = \"bad\"\n[version]\nvalue = \"1.0.0\"\n"+
+		"[host]\nvpn = { command = \"vpn\", when = { host = \"work\" } }\n"), 0o644))
+
+	if out, err := m.run(t, "", "manifest", "lint", path); err == nil || !strings.Contains(out+err.Error(), "belongs in oku.toml") {
+		t.Fatalf("a manifest's [host] should refuse when.host: %v\n%s", err, out)
+	}
+
+	// The keys a manifest's when takes leave host out.
+	must(t, os.WriteFile(path, []byte("[package]\nname = \"bad\"\n[version]\nvalue = \"1.0.0\"\n"+
+		"[host]\nvpn = { command = \"vpn\", when = { cpu = \"x\" } }\n"), 0o644))
+
+	if out, err := m.run(t, "", "manifest", "lint", path); err == nil || !strings.Contains(out+err.Error(), "use os, arch or libc") {
+		t.Fatalf("a manifest's when should name the keys it takes: %v\n%s", err, out)
+	}
+}

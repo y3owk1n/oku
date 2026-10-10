@@ -45,8 +45,9 @@ type Requirement struct {
 	When platform.When `toml:"-"`
 }
 
-// Parse reads the entry name of [host].
-func Parse(name string, value any) (Requirement, error) {
+// Parse reads the entry name of [host]. parseWhen reads its when, which in
+// oku.toml may name a host and in a manifest may not.
+func Parse(name string, value any, parseWhen func(any) (platform.When, error)) (Requirement, error) {
 	table, ok := value.(map[string]any)
 	if !ok {
 		return Requirement{}, fmt.Errorf("host.%s wants a table", name)
@@ -56,7 +57,7 @@ func Parse(name string, value any) (Requirement, error) {
 
 	for key, v := range table {
 		if key == "when" {
-			w, err := platform.ParseWhen(v)
+			w, err := parseWhen(v)
 			if err != nil {
 				return Requirement{}, fmt.Errorf("host.%s: %w", name, err)
 			}

@@ -348,9 +348,28 @@ run `oku sync` without --locked, and commit oku.lock
 
 Run `oku sync` on a machine, commit the lock, and push. To pin other platforms
 from your own machine, name them in `[lock] platforms`, see
-[A new machine](guides/new-machine.md). A `pypi:` package cannot be pinned
-from another kind of machine, so a machine of that platform has to build it
-once.
+[A new machine](guides/new-machine.md). A package whose own manifest has a
+`pip` vendor step with `requirements.txt` cannot be pinned from another kind
+of machine, so a machine of that platform has to build it once.
+
+## oku.lock has merge conflicts
+
+```
+oku: ./oku.lock has git merge conflicts
+run `oku sync` to merge them
+```
+
+Every command but `oku sync` stops at a lock that `git pull`, `git merge` or
+`git rebase` left with conflicts. Resolve any conflicts in `oku.toml` first,
+then run `oku sync`. It merges both sides of the lock, says which version it
+took for each package, and syncs. Commit the result.
+
+- `--locked` refuses to merge, so run it without.
+- Once git no longer holds both sides, for example after `git add oku.lock`,
+  oku says `git holds no copy of <side>'s side to merge`. Resolve the
+  conflicts by hand.
+
+See [A lock with merge conflicts](reference/commands.md#a-lock-with-merge-conflicts).
 
 ## The download is a web page, not a program
 

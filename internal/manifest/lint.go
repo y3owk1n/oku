@@ -130,7 +130,7 @@ func Lint(data []byte) Report {
 	for i, a := range m.Artifacts {
 		for _, key := range a.Completions.Unknown {
 			report.Errors = append(report.Errors, fmt.Sprintf(
-				"artifact[%d]: completions: unknown key %s, a shell is %s",
+				"artifact[%d]: completions: unknown key %s, a shell is %s or powershell",
 				i, key, strings.Join(Shells, ", "),
 			))
 		}
@@ -255,7 +255,7 @@ func Lint(data []byte) Report {
 
 			for _, key := range s.Install.Completions.Unknown {
 				report.Errors = append(report.Errors, fmt.Sprintf(
-					"build.step[%d]: install.completions: unknown key %s, a shell is %s",
+					"build.step[%d]: install.completions: unknown key %s, a shell is %s or powershell",
 					i, key, strings.Join(Shells, ", "),
 				))
 			}

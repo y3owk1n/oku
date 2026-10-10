@@ -37,6 +37,9 @@ AppleLanguages = ["en-SG", "ms-MY"]
 
 Run `oku sync`. It prints one line per setting it wrote, such as
 `set com.apple.dock tilesize`.
+`oku list --settings` shows each setting of this OS, with the value the list
+wants and the value it had before oku wrote it. See
+[oku list](../reference/commands.md#oku-list).
 
 Quote a domain that has a dot. `[defaults.com.apple.dock]` without quotes is a
 table `com` that holds a table `apple`, and not the domain you meant.
@@ -141,8 +144,8 @@ empty file for that domain.
 
 ## Undo a change
 
-`oku rollback` sets every setting to what the generation before had, with the
-packages and files. `oku self uninstall` puts back every value oku changed.
+`oku rollback` sets every setting to what the generation the active one
+replaced had, with the packages and files. `oku self uninstall` puts back every value oku changed.
 
 Settings go through the same check and undo as the rest of a change. When a
 write fails partway, oku puts back the ones it already wrote. See

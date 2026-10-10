@@ -142,7 +142,8 @@ Versions stay fixed until you run `oku update`. Run it on one machine, commit
 `oku.lock`, and the others get the same versions on their next pull and sync.
 `oku update fd` moves one package.
 
-`oku rollback` switches `oku.lock` back to the generation before. Commit the
+`oku rollback` switches `oku.lock` back to the generation the active one
+replaced. Commit the
 lock again afterwards, so that the other machines follow.
 
 When two machines change the lock and `git pull` leaves conflicts in
@@ -178,7 +179,8 @@ Each item is a [ref](../how-oku-works.md#ref) to a list:
 | `git+https://host/repo` | `oku.toml` at the root of the repo. |
 | `git+https://host/repo#dir/base.toml` | That file in the repo. |
 
-- Includes merge in order, so a later include overrides an earlier one.
+- Includes merge in order, so a later include overrides an earlier one when
+  both have the same `when`, or neither has one.
 - A package in your own `[packages]` overrides the same name from any include.
 - An included list may include others, up to 8 levels deep. A list included
   twice, or one that includes itself, is an error.
@@ -226,9 +228,11 @@ patchelf = { ref = "github:you/recipes#patchelf", when = { os = "linux", libc = 
 fd = { ref = "github:sharkdp/fd", when = [{ os = "darwin" }, { os = "linux" }] }
 ```
 
-- The keys are `os`, `arch` and `libc`. A missing key matches anything, and
-  any other key is an error. See [oku.toml](../reference/oku-toml.md) for the
-  values.
+- The keys are `os`, `arch`, `libc` and `host`. `host` is one machine's short
+  host name, as `hostname -s` prints it, in any case, and
+  [`OKU_HOST`](../reference/paths.md#environment-variables) sets another name.
+  A missing key matches anything, and any other key is an error. See
+  [oku.toml](../reference/oku-toml.md#when) for the values.
 - An array of tables matches a machine that any of them matches.
 - `oku sync` does not install a package whose `when` does not match the
   machine. An entry for it in the lock from another machine stays.
