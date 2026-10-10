@@ -2046,3 +2046,19 @@ a machines repo often differs from one machine to the next, such as a work
 laptop that needs a VPN client. A host in the platform key would split the lock by machine and break
 `sync --locked` on a new one. Keeping the pins per platform lets any machine
 of that platform check them.
+
+## D124. A when on an include scopes its entries, and oku still reads the list
+
+An `include` item may carry a `when`. oku adds it to the `when` of every
+package and file the list and its own includes name, and leaves out an entry
+or a nested include that can never match. oku still fetches and pins the list
+on a machine the `when` leaves out. `[vars]`, `[secrets]`, `[host]` and the
+settings tables, which have no `when`, apply only where the include's holds.
+`[runtimes]` is refused under a `when`. Two scoped lists that name one package
+must agree on it, and it then applies where either holds. Why: a machines repo
+can keep one list per machine, such as `work.toml` and `home.toml`, instead of
+writing the same `when` on each entry. Skipping the fetch on another machine
+would make `oku.lock` differ from one machine to the next. A runtime changes
+the manifest oku infers, which the lock pins for every machine. If the later
+scoped list won, oku would stop installing a shared package such as `git` on
+the first machine and say nothing.
