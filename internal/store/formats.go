@@ -17,6 +17,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/bodgit/sevenzip"
@@ -88,7 +89,7 @@ func un7z(f *os.File, root *os.Root, strip int) error {
 		return err
 	}
 
-	files := &fileWriter{root: root}
+	files := newFileWriter(root)
 	defer files.close()
 
 	for _, entry := range archive.File {
@@ -164,7 +165,7 @@ func unrpm(f *os.File, root *os.Root, strip int) error {
 
 	archive := cpio.NewReader(payload)
 
-	files := &fileWriter{root: root}
+	files := newFileWriter(root)
 	defer files.close()
 
 	for {
@@ -293,7 +294,7 @@ func copyImage(mount, dest string) error {
 	}
 	defer root.Close()
 
-	var written int64
+	var written atomic.Int64
 
 	return filepath.WalkDir(mount, func(path string, entry fs.DirEntry, err error) error {
 		if err != nil {

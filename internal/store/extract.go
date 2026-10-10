@@ -13,7 +13,11 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
+
+	"github.com/klauspost/compress/flate"
 )
 
 var errNotArchive = errors.New("not an archive")
@@ -118,7 +122,7 @@ func untar(r io.Reader, root *os.Root, strip int) error {
 func untarLinks(r io.Reader, root *os.Root, strip int, rooted bool) error {
 	tr := tar.NewReader(r)
 
-	files := &fileWriter{root: root}
+	files := newFileWriter(root)
 	defer files.close()
 
 	for {
@@ -184,8 +188,9 @@ func unzip(f *os.File, root *os.Root, strip int) error {
 		return err
 	}
 
-	files := &fileWriter{root: root}
-	defer files.close()
+	zr.RegisterDecompressor(zip.Deflate, func(r io.Reader) io.ReadCloser { return flate.NewReader(r) })
+
+	var entries []zipEntry
 
 	for _, entry := range zr.File {
 		name, ok, err := stripPath(entry.Name, strip)
@@ -193,12 +198,139 @@ func unzip(f *os.File, root *os.Root, strip int) error {
 			return err
 		}
 
-		if !ok {
-			continue
+		if ok {
+			entries = append(entries, zipEntry{name, entry})
+		}
+	}
+
+	if inOrder(entries) {
+		files := newFileWriter(root)
+		defer files.close()
+
+		for _, e := range entries {
+			if err := unpackEntry(files, e.name, e.file); err != nil {
+				return fmt.Errorf("extract %s: %w", e.file.Name, err)
+			}
 		}
 
-		if err := unpackEntry(files, name, entry); err != nil {
-			return fmt.Errorf("extract %s: %w", entry.Name, err)
+		return nil
+	}
+
+	return unzipAtOnce(root, entries)
+}
+
+type zipEntry struct {
+	name string
+	file *zip.File
+}
+
+// inOrder reports whether the entries of a zip must unpack one after another.
+// They must when a name comes twice, since the later entry wins, and when a
+// file is under the name of a link, which must exist before the file.
+func inOrder(entries []zipEntry) bool {
+	seen := map[string]bool{}
+	links := map[string]bool{}
+
+	for _, e := range entries {
+		if seen[e.name] {
+			return true
+		}
+
+		seen[e.name] = true
+
+		if e.file.Mode()&fs.ModeSymlink != 0 {
+			links[e.name] = true
+		}
+	}
+
+	for _, e := range entries {
+		for dir := path.Dir(e.name); dir != "."; dir = path.Dir(dir) {
+			if links[dir] {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
+// unpacksAtOnce is how many directories of a zip unzipAtOnce writes at once.
+const unpacksAtOnce = 8
+
+// unzipAtOnce writes the entries of a zip a directory at a time on several
+// workers, so a large app does not wait on one decompressor. It makes the
+// directories first and the links last. Each worker keeps open the directory it
+// writes, as fileWriter does.
+func unzipAtOnce(root *os.Root, entries []zipEntry) error {
+	var (
+		dirs  []string
+		files = map[string][]zipEntry{}
+		links []zipEntry
+	)
+
+	for _, e := range entries {
+		mode := e.file.Mode()
+
+		switch {
+		case mode.IsDir():
+			if err := root.MkdirAll(e.name, 0o755); err != nil {
+				return fmt.Errorf("extract %s: %w", e.file.Name, err)
+			}
+		case mode&fs.ModeSymlink != 0:
+			links = append(links, e)
+		default:
+			dir := path.Dir(e.name)
+			if _, ok := files[dir]; !ok {
+				if err := root.MkdirAll(dir, 0o755); err != nil {
+					return fmt.Errorf("extract %s: %w", e.file.Name, err)
+				}
+
+				dirs = append(dirs, dir)
+			}
+
+			files[dir] = append(files[dir], e)
+		}
+	}
+
+	written := new(atomic.Int64)
+	errs := make([]error, len(dirs))
+
+	var (
+		wg     sync.WaitGroup
+		next   atomic.Int64
+		failed atomic.Bool
+	)
+
+	for range min(unpacksAtOnce, len(dirs)) {
+		wg.Go(func() {
+			w := &fileWriter{root: root, written: written}
+			defer w.close()
+
+			for i := int(next.Add(1)) - 1; i < len(dirs) && !failed.Load(); i = int(next.Add(1)) - 1 {
+				for _, e := range files[dirs[i]] {
+					if err := unpackEntry(w, e.name, e.file); err != nil {
+						errs[i] = fmt.Errorf("extract %s: %w", e.file.Name, err)
+						failed.Store(true)
+
+						break
+					}
+				}
+			}
+		})
+	}
+
+	wg.Wait()
+
+	if err := errors.Join(errs...); err != nil {
+		return err
+	}
+
+	w := &fileWriter{root: root, written: written}
+	defer w.close()
+
+	for _, e := range links {
+		if err := unpackEntry(w, e.name, e.file); err != nil {
+			return fmt.Errorf("extract %s: %w", e.file.Name, err)
 		}
 	}
 
@@ -288,8 +420,13 @@ type fileWriter struct {
 	root *os.Root
 	name string
 	dir  *os.Root
-	// written counts the bytes of every file so far, against maxUnpacked.
-	written int64
+	// written counts the bytes of every file so far, against maxUnpacked. The
+	// writers of one archive share it.
+	written *atomic.Int64
+}
+
+func newFileWriter(root *os.Root) *fileWriter {
+	return &fileWriter{root: root, written: new(atomic.Int64)}
 }
 
 // maxUnpacked is how many bytes one download may unpack to. The digest pins what
@@ -303,12 +440,12 @@ var errUnpackedTooLarge = fmt.Errorf("the download unpacks to more than %d GiB",
 // one download share. It fails once total passes maxUnpacked.
 type unpackedReader struct {
 	r     io.Reader
-	total *int64
+	total *atomic.Int64
 }
 
 func (u *unpackedReader) Read(p []byte) (int, error) {
 	n, err := u.r.Read(p)
-	if *u.total += int64(n); *u.total > maxUnpacked {
+	if u.total.Add(int64(n)) > maxUnpacked {
 		return n, errUnpackedTooLarge
 	}
 
@@ -343,7 +480,7 @@ func (w *fileWriter) write(name string, mode fs.FileMode, modified time.Time, r 
 		return err
 	}
 
-	_, err = io.Copy(f, &unpackedReader{r: r, total: &w.written})
+	_, err = io.Copy(f, &unpackedReader{r: r, total: w.written})
 
 	if closeErr := f.Close(); err == nil {
 		err = closeErr
