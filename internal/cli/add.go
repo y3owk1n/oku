@@ -222,7 +222,7 @@ func addRequest(
 
 	// A when that leaves out this machine pins the package for the lock
 	// platforms it matches, as sync does.
-	lockOnly := !when.Matches(platform.Host())
+	lockOnly := !when.Here()
 	if lockOnly && len(platforms) == 0 {
 		return e, request{}, nil, fmt.Errorf(
 			"--when leaves out this machine, %s, and matches no platform of [lock], so there is nothing to pin",
@@ -486,7 +486,7 @@ func parseWhenFlags(values []string) (platform.When, error) {
 		tables = append(tables, table)
 	}
 
-	when, err := platform.ParseWhen(tables)
+	when, err := platform.ParseListWhen(tables)
 	if err != nil {
 		return nil, fmt.Errorf("--when: %w", err)
 	}

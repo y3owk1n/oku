@@ -12,7 +12,6 @@ import (
 	"github.com/y3owk1n/oku/internal/expose"
 	"github.com/y3owk1n/oku/internal/list"
 	"github.com/y3owk1n/oku/internal/lock"
-	"github.com/y3owk1n/oku/internal/platform"
 	"github.com/y3owk1n/oku/internal/ui"
 )
 
@@ -144,11 +143,10 @@ func (e env) listFiles(cmd *cobra.Command, opts Options) error {
 		List   string `json:"list"`
 	}
 
-	host := platform.Host()
 	rows := []row{}
 
 	for _, f := range all.files {
-		if !f.file.When.Matches(host) {
+		if !f.file.When.Here() {
 			continue
 		}
 

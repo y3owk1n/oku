@@ -371,6 +371,11 @@ order step in `prd/product.md`.
   shows the whole new list. `--yes` takes a changed list and says so.
 - B17 [2] `sync` does not install an entry whose `when` does not match the
   host, and its lock entry stays for other platforms.
+- B575 [2] `when = { host = "work" }` in `oku.toml` limits a package or a
+  file to the machine whose short host name, or `OKU_HOST`, is `work`, in any
+  case. On another machine of the platform, `sync` installs nothing for it and
+  pins it for the `[lock]` platforms. A manifest with `host` in a `when` or a
+  `match` is refused.
 - B270 [2] `when` in a list is one table or an array of tables, and matches a
   platform when any of its tables does. A `[files]` entry takes both forms.
 - B271 [2] `add` leaves out the host and each `[lock]` platform that the

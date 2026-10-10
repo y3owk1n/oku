@@ -587,7 +587,7 @@ func choose(
 		pkg = cmp.Or(stem(named[0]), pkg)
 
 		chosen = append(chosen, choice{
-			Selector: platform.Selector(host),
+			Selector: host.Selector(),
 			asset:    named[0],
 		})
 	}
@@ -618,7 +618,7 @@ func choose(
 	if slices.ContainsFunc(chosen, func(c choice) bool { return sibling(c.asset, pkg) == 0 }) {
 		chosen = slices.DeleteFunc(chosen, func(c choice) bool {
 			return sibling(c.asset, pkg) == 1 && installerOS(strings.ToLower(c.asset)) == "" &&
-				(glob == "" || c.Selector != platform.Selector(host))
+				(glob == "" || c.Selector != host.Selector())
 		})
 	}
 

@@ -553,7 +553,7 @@ func toFile(value any) (File, error) {
 
 	var err error
 
-	f.When, err = platform.ParseWhen(table["when"])
+	f.When, err = platform.ParseListWhen(table["when"])
 
 	return f, err
 }
@@ -646,7 +646,7 @@ func toEntry(value any) (Entry, error) {
 
 		var err error
 
-		e.When, err = platform.ParseWhen(v["when"])
+		e.When, err = platform.ParseListWhen(v["when"])
 
 		return e, err
 	default:
