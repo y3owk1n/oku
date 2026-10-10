@@ -2098,3 +2098,19 @@ opt-in because B167 promises that a dry run in a pipe prints only its would
 lines, and the diff of a long file would put hundreds of lines between them. A text whose old and new line
 counts multiply past four million prints a note in place of a diff, because
 the line diff keeps a table of that size.
+
+## D128. sync merges a conflicted oku.lock from git's index
+
+`oku sync` merges an `oku.lock` that holds git merge conflicts. It reads each
+side whole with `git show :2:` and `:3:`, takes the newer version of a package
+that both sides pin, the union of platforms and deps at the same version, and
+the first side's pin of an included list. It writes the result as an adopted
+lock, so a dry run or a failed sync restores the conflicts, and then syncs,
+which checks every pin as any sync does. Why: when two machines each run
+`oku update` and push, the second pull conflicts in the lock, and merging
+pins by hand means matching versions, URLs and checksums across both sides. The lines outside the markers are already a
+line merge of both sides, so rebuilding each side from the markers can pair
+one side's version with the other side's download and checksum. A live test
+did that, and the sync then trusted fd on first use. git's index holds the two
+files intact until the conflict is resolved, so oku refuses when it no longer
+does.

@@ -219,6 +219,7 @@ run `oku update` to accept it
 | `oku update` | Resolves again and rewrites the entries it touched. It clears the platform entries of a package whose manifest changed, because they described the old one. Each machine adds its entry again on its next sync. With no names it also reads includes fresh, and asks before it takes one that changed. |
 | `oku rollback` | Replaces the lock with the copy saved in that generation. |
 | `oku sync <list-ref>` | Writes a new global lock from the published one, see [Adopt a published list](commands.md#adopt-a-published-list). |
+| `oku sync` on a lock with git merge conflicts | Merges both sides, the newer version of each package first, then syncs. See [A lock with merge conflicts](commands.md#a-lock-with-merge-conflicts). |
 
 A machine whose platform is missing from the lock adds its entry the first
 time it runs `oku sync`, and leaves the other entries alone. Commit the lock

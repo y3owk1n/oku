@@ -745,6 +745,36 @@ profile now holds 23 packages, generation 1, 41s
 - A list ref takes no `@version`.
 - When the install fails, oku removes the two files again.
 
+#### A lock with merge conflicts
+
+When `git merge`, `git rebase` or `git pull` leaves conflicts in `oku.lock`,
+`oku sync` merges them. It reads each side whole from git's index, merges the
+two locks, writes the result and then syncs as usual, which checks every pin.
+
+```
+$ oku sync
+~/.config/oku/oku.lock has git merge conflicts, so oku merged HEAD and feature, and the sync checks the result
+  fd: took 10.5.0 from feature over 10.3.0
+```
+
+- A package on one side only stays.
+- A package on both sides takes the side with the newer version. At the same
+  version it takes the platforms and deps that either side pins.
+- An included list on both sides keeps the commit of the first side, since
+  two commits have no order. `oku update` reads the newest.
+- Packages that `oku.toml` no longer names leave the lock as in any sync, and
+  a version that `oku.toml` leaves out resolves again.
+- `--dry-run` shows the sync of the merged lock and then puts the conflicts
+  back. A failed sync puts them back too.
+- `--locked` refuses to merge.
+- Once git no longer holds the two sides, such as after `git add oku.lock`,
+  oku refuses and asks you to resolve the conflicts by hand. It does not
+  rebuild the sides from the markers, because the lines between them are
+  already a line merge of both.
+- Every other command that reads the lock stops and says to run `oku sync`.
+- Resolve conflicts in `oku.toml` by hand first, since oku cannot tell which
+  side of a list you want.
+
 ### oku service
 
 ```

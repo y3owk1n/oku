@@ -207,12 +207,40 @@ func Read(path string) (*Lock, error) {
 		return nil, fmt.Errorf("read %s: %w", path, err)
 	}
 
+	return ParseFile(data, path)
+}
+
+// ParseFile parses data as the lock at path, whose refs to files are relative
+// to its directory.
+func ParseFile(data []byte, path string) (*Lock, error) {
 	l, err := Parse(data, path)
 	if err != nil {
 		return nil, err
 	}
 
 	return l.mapRefs(func(s string) string { return ref.FromDir(filepath.Dir(path), s) }), nil
+}
+
+// Conflicted reports whether data holds git merge conflicts, and the names git
+// gave the two sides, such as HEAD and the branch merged in.
+func Conflicted(data []byte) ([2]string, bool) {
+	var (
+		names [2]string
+		found bool
+	)
+
+	for line := range strings.Lines(string(data)) {
+		marker, label := line[:min(7, len(line))], strings.TrimSpace(line[min(7, len(line)):])
+
+		switch marker {
+		case "<<<<<<<":
+			names[0], found = cmp.Or(label, "ours"), true
+		case ">>>>>>>":
+			names[1] = cmp.Or(label, "theirs")
+		}
+	}
+
+	return names, found
 }
 
 // mapRefs returns a copy of l with f applied to every ref in it.
@@ -237,6 +265,10 @@ func mapPackageRefs(pkgs []Package, f func(string) string) []Package {
 
 // Parse reads lock data. origin names the data in error messages.
 func Parse(data []byte, origin string) (*Lock, error) {
+	if _, ok := Conflicted(data); ok {
+		return nil, fmt.Errorf("%s has git merge conflicts\nrun `oku sync` to merge them", origin)
+	}
+
 	var l Lock
 	if err := toml.Unmarshal(data, &l); err != nil {
 		return nil, fmt.Errorf("parse %s: %w", origin, err)

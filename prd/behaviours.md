@@ -1729,6 +1729,13 @@ order step in `prd/product.md`.
   secret prints as `{{secret.<name>}}` and never as its value. A file with
   secrets that is written again reads as one `would change` line. `--diff`
   without `--dry-run` fails before it does anything.
+- B579 [12] `sync` on an `oku.lock` with git merge conflicts reads both sides
+  from git's index, merges them, says which side it took for each package
+  whose versions differ, and syncs. A package on one side stays, a package on
+  both takes the newer version, and at the same version the platforms and
+  deps of both. A dry run or a failed sync puts the conflicts back,
+  `--locked` refuses to merge, and a lock whose sides git no longer holds is
+  refused. Any other command that reads the lock says to run `oku sync`.
 - B132 [12] When a step of the apply fails, oku undoes the steps it made and
   reports the error of the failed step.
 - B133 [12] After an oku process was killed during a change, the next command

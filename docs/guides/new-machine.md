@@ -145,6 +145,11 @@ Versions stay fixed until you run `oku update`. Run it on one machine, commit
 `oku rollback` switches `oku.lock` back to the generation before. Commit the
 lock again afterwards, so that the other machines follow.
 
+When two machines change the lock and `git pull` leaves conflicts in
+`oku.lock`, resolve any in `oku.toml`, then run `oku sync`. It merges the two
+locks, keeping the newer version of each package, and syncs. Commit the result.
+See [A lock with merge conflicts](../reference/commands.md#a-lock-with-merge-conflicts).
+
 ## Split the list with include
 
 `include` merges other lists under yours. Use it to keep packages, files and
