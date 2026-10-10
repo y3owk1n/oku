@@ -36,6 +36,14 @@ const (
 
 const lockedHint = "run `oku sync` without --locked, and commit oku.lock"
 
+// exitCodeFlag makes a check exit with exitChanges when there is something to
+// do, for a script or CI.
+const (
+	exitCodeFlag  = "exit-code"
+	exitCodeUsage = "with --dry-run, exit with 2 when something would change"
+	exitChanges   = 2
+)
+
 func newSyncCmd(opts Options) *cobra.Command {
 	var flags buildFlags
 
@@ -98,6 +106,7 @@ oku.toml yet.`,
 	flags.register(cmd)
 	cmd.Flags().Bool(systemFlag, false, systemUsage)
 	cmd.Flags().Bool(dryRunFlag, false, dryRunUsage)
+	cmd.Flags().Bool(exitCodeFlag, false, exitCodeUsage)
 	cmd.Flags().Bool(lockedFlag, false, "fail when oku.lock would change, for use in CI")
 	cmd.Flags().StringSlice(
 		rebuildFlag, nil, "build these packages again, even though the store holds their builds",
@@ -125,6 +134,7 @@ func newUpdateCmd(opts Options) *cobra.Command {
 	flags.register(cmd)
 	cmd.Flags().Bool(systemFlag, false, systemUsage)
 	cmd.Flags().Bool(dryRunFlag, false, dryRunUsage)
+	cmd.Flags().Bool(exitCodeFlag, false, exitCodeUsage)
 
 	return cmd
 }
@@ -192,7 +202,12 @@ func reconcile(
 	}
 
 	// A rebuild replaces a build in the store, which a dry run must not do.
-	if dryRun, _ := cmd.Flags().GetBool(dryRunFlag); dryRun && len(rebuild) > 0 {
+	dryRun, _ := cmd.Flags().GetBool(dryRunFlag)
+	if exitCode, _ := cmd.Flags().GetBool(exitCodeFlag); exitCode && !dryRun {
+		return fmt.Errorf("--%s goes with --%s", exitCodeFlag, dryRunFlag)
+	}
+
+	if dryRun && len(rebuild) > 0 {
 		return errors.New("--rebuild builds a package again, so it does not go with --dry-run")
 	}
 
@@ -353,7 +368,6 @@ func reconcile(
 		// table at the end, as before.
 		live      = style.On()
 		liveOut   = status.Writer(ctx, out)
-		dryRun, _ = cmd.Flags().GetBool(dryRunFlag)
 		liveMu    sync.Mutex
 		nameWidth = 0
 		// rowsShown records that a terminal got a row for a finished package.
@@ -569,8 +583,10 @@ func reconcile(
 
 	system, _ := cmd.Flags().GetBool(systemFlag)
 
+	var changes bool
+
 	c := change{
-		to: staged, staged: true, system: system, yes: flags.yes, dryRun: dryRun,
+		to: staged, staged: true, system: system, yes: flags.yes, dryRun: dryRun, changes: &changes,
 		commit: func() error {
 			for _, j := range narrowed {
 				entry := all.own.Packages[j.name]
@@ -612,6 +628,11 @@ func reconcile(
 	}
 
 	if dryRun {
+		// A failure says more than the exit code, so it wins.
+		if exitCode, _ := cmd.Flags().GetBool(exitCodeFlag); exitCode && changes && len(unfit) == 0 {
+			return ExitError{Code: exitChanges}
+		}
+
 		return errors.Join(unfit...)
 	}
 

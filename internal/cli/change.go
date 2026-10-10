@@ -69,6 +69,8 @@ type change struct {
 	commit func() error
 	// dryRun stops after the plan and prints what the apply would do.
 	dryRun bool
+	// changes, when set, records whether the dry run found anything to change.
+	changes *bool
 }
 
 func (e env) readSavedLists() (savedLists, error) {
@@ -309,6 +311,10 @@ func (e env) describe(cmd *cobra.Command, c change, plan exposePlan) error {
 				say("would write the %s %s", item.Kind, item.Target)
 			}
 		}
+	}
+
+	if c.changes != nil {
+		*c.changes = lines > 0
 	}
 
 	if lines == 0 {

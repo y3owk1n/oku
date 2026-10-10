@@ -135,6 +135,17 @@ eval "$(oku env --shell bash)"
 `~/.cache/oku/downloads` keyed by `oku.lock` for the same effect as the
 action's cache.
 
+## Fail a job when something is out of date
+
+`--exit-code` makes a check exit with `2` when there is something to do, and
+with `1` when it fails:
+
+```sh
+oku outdated --exit-code              # a newer version that oku update takes
+oku sync --dry-run --exit-code        # the machine does not match oku.toml
+oku self update --check --exit-code   # a newer oku
+```
+
 ## Open pull requests for new versions
 
 `oku outdated --json` lists each package with a newer version than the lock

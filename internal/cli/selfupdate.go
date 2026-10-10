@@ -39,8 +39,8 @@ var commitRe = regexp.MustCompile(`^[0-9a-f]{40}$`)
 
 func newSelfUpdateCmd(opts Options) *cobra.Command {
 	var (
-		check, nightly, release bool
-		to                      string
+		check, nightly, release, exitCode bool
+		to                                string
 	)
 
 	cmd := &cobra.Command{
@@ -72,12 +72,18 @@ says otherwise, or --min-release-age for one run. --to and --nightly skip it.`,
 				return errors.New("--to names the release, so it excludes --nightly and --release")
 			}
 
-			return runSelfUpdate(cmd, opts, check, nightly, release, to)
+			if exitCode && !check {
+				return fmt.Errorf("--%s goes with --check", exitCodeFlag)
+			}
+
+			return runSelfUpdate(cmd, opts, check, exitCode, nightly, release, to)
 		},
 	}
 
 	cmd.Flags().
 		BoolVar(&check, "check", false, "say whether a newer release exists, and change nothing")
+	cmd.Flags().
+		BoolVar(&exitCode, exitCodeFlag, false, "with --check, exit with 2 when a newer release exists")
 	cmd.Flags().
 		BoolVar(&nightly, "nightly", false, "take the build of the newest commit on main")
 	cmd.Flags().
@@ -161,7 +167,7 @@ func releaseAsset() string {
 	return name
 }
 
-func runSelfUpdate(cmd *cobra.Command, opts Options, check, nightly, release bool, to string) error {
+func runSelfUpdate(cmd *cobra.Command, opts Options, check, exitCode, nightly, release bool, to string) error {
 	// A bare run on a nightly build would go back to the release, which
 	// is older than the build. Only an explicit flag does that.
 	if strings.HasPrefix(opts.Version, nightlyTag) && !nightly && !release && to == "" {
@@ -264,6 +270,10 @@ func runSelfUpdate(cmd *cobra.Command, opts Options, check, nightly, release boo
 		}
 
 		hint(out, "run `"+run+"` to take it")
+
+		if exitCode {
+			return ExitError{Code: exitChanges}
+		}
 
 		return nil
 	}

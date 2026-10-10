@@ -21,7 +21,7 @@ import (
 )
 
 func newOutdatedCmd(opts Options) *cobra.Command {
-	return &cobra.Command{
+	cmd := &cobra.Command{
 		Use:   "outdated",
 		Short: "List the packages that have a newer version than oku.lock pins",
 		Long: `List the packages that have a newer version than oku.lock pins.
@@ -40,6 +40,10 @@ version in oku.toml. oku downloads no package and changes nothing.`,
 			return e.outdated(cmd, opts)
 		},
 	}
+
+	cmd.Flags().Bool(exitCodeFlag, false, "exit with 2 when oku update would take a newer version")
+
+	return cmd
 }
 
 // staleness is one package of the lock, the newest version that the list
@@ -120,7 +124,16 @@ func (e env) outdated(cmd *cobra.Command, opts Options) error {
 		return err
 	}
 
-	return errors.Join(failed...)
+	if len(failed) > 0 {
+		return errors.Join(failed...)
+	}
+
+	newer := slices.ContainsFunc(stale, func(f staleness) bool { return f.newest != f.pkg.Version })
+	if exitCode, _ := cmd.Flags().GetBool(exitCodeFlag); exitCode && newer {
+		return ExitError{Code: exitChanges}
+	}
+
+	return nil
 }
 
 // newest finds the newest version of pkg that want allows and age lets in, as

@@ -36,6 +36,7 @@ per command. These are `add`, `remove`, `list`, `sync`, `update`, `outdated`,
 |---|---|
 | `0` | The command succeeded. |
 | `1` | The command failed. oku prints `oku: <reason>` on stderr, and the lines after it say what to do when there is something to do. |
+| `2` | With `--exit-code`, there is something to do: `outdated` found a version `oku update` would take, a `sync --dry-run` or `update --dry-run` would change something, or `self update --check` found a newer release. The output is the same as without the flag. A failure still exits with `1`. |
 | the command's code | `oku exec`, `oku run` and `oku shell -- <command>` exit with the code of the program they ran, and add no message. |
 
 `oku doctor`, `oku verify` and `oku manifest lint` exit with `1` when they
@@ -229,6 +230,7 @@ With no names it updates every package of the list.
 | Flag | Effect |
 |---|---|
 | `--dry-run` | Checks everything and prints what would change. It changes only the store and the cache. See [A dry run](#a-dry-run). |
+| `--exit-code` | With `--dry-run`, exits with `2` when something would change. See [Exit codes](#exit-codes). |
 | `--system` | Also applies system-scope apps, fonts and services, which needs administrator rights. oku lists them and asks first, and `--yes` answers yes. |
 | `--yes`, `-y` | Approves a manifest's commands and `[env]` without asking, takes a changed included list, and in a project trusts the [sources](security.md#trusted-sources) its `oku.toml` installs from. |
 | `--accept-key` | Accepts a changed `signing_key` or `signer_workflow`. |
@@ -270,11 +272,12 @@ When nothing changed it prints `already in sync`.
 ### oku outdated
 
 ```
-oku outdated
+oku outdated [--exit-code]
 ```
 
 Lists the packages that have a newer version than `oku.lock` pins. It
-downloads no package and changes nothing.
+downloads no package and changes nothing. With `--exit-code` it exits with `2`
+when `oku update` would take a newer version, for a scheduled job.
 
 ```
 $ oku outdated
@@ -529,6 +532,7 @@ tables.
 | Flag | Effect |
 |---|---|
 | `--dry-run` | Checks everything and prints what would change. It changes only the store and the cache. See [A dry run](#a-dry-run). |
+| `--exit-code` | With `--dry-run`, exits with `2` when something would change. See [Exit codes](#exit-codes). |
 | `--locked` | Fails when `oku.lock` would change. For CI. |
 | `--rebuild <name>` | Builds the package again even though the store holds its build. Repeat the flag, or separate names with commas. |
 | `--system` | Also applies system-scope apps, fonts and services, which needs administrator rights. oku lists them and asks first, and `--yes` answers yes. |
@@ -1507,6 +1511,7 @@ Replaces the `oku` binary with the newest release from
 | Flag | Effect |
 |---|---|
 | `--check` | Says whether a newer release exists, and changes nothing. |
+| `--exit-code` | With `--check`, exits with `2` when a newer release exists. |
 | `--nightly` | Takes the build of the newest commit on `main`, the prerelease `nightly`. |
 | `--release` | Goes from a nightly build back to the newest release. |
 | `--to <tag>` | Takes the release with that tag, such as `v0.4.0`, older or newer. |
