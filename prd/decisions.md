@@ -2072,3 +2072,18 @@ Why: #452 gave `remove` and `rollback` `--dry-run`, so every command that
 changes the machine now takes the same flag for a preview. A second flag on
 `add` for the same output added a line to the help and nothing else. oku is
 alpha, so a script that still passes `--plan` gets an unknown flag error.
+
+## D126. oku diff compares generations or locks, and reads versions per platform
+
+`oku diff` takes generation numbers or lock paths, never one of each, and
+prints rows of kind, name, change, before, after and a note, as text,
+`--json` or `--markdown`. `oku generations` builds its short change column
+from the same rows, so the two never disagree. For a lock it compares the
+version each platform pins, so a version that moved on one platform and not
+the others still gets a row. It compares deps by ref under their package. A package whose manifest,
+commit, tag commit or downloads changed at the same version reads `repinned`.
+Why: a bot that runs `oku update` wants the changes for the pull request body,
+which the lock in git before and after gives without a generation. Comparing
+the package's version alone would hide a platform pin or a dep that moved
+under an unchanged package. `--exit-code` is left out, since `sync --dry-run
+--exit-code` already tells CI that something differs.

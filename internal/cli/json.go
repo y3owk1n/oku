@@ -60,7 +60,7 @@ func minArgs(n int) cobra.PositionalArgs {
 // jsonCommands are the commands that print JSON with --json. Any other command
 // refuses the flag, so that a script never reads text as JSON.
 var jsonCommands = []string{
-	"oku add", "oku cache list", "oku doctor", "oku du", "oku env", "oku gc", "oku generations",
+	"oku add", "oku cache list", "oku diff", "oku doctor", "oku du", "oku env", "oku gc", "oku generations",
 	"oku info", "oku key list", "oku list", "oku manifest lint", "oku outdated", "oku remove",
 	"oku rollback", "oku search", "oku self update", "oku service list", "oku service restart",
 	"oku service start", "oku service status", "oku service stop", "oku source list", "oku sync",

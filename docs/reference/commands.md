@@ -7,7 +7,7 @@ behind the commands, see the [guides](../README.md).
 |---|---|
 | [Packages](#packages) | [`add`](#oku-add), [`remove`](#oku-remove), [`update`](#oku-update), [`outdated`](#oku-outdated), [`list`](#oku-list), [`info`](#oku-info), [`why`](#oku-why), [`which`](#oku-which), [`shell`](#oku-shell), [`run`](#oku-run) |
 | [The machine](#the-machine) | [`sync`](#oku-sync), [`service`](#oku-service), [`setup`](#oku-setup) |
-| [History](#history) | [`generations`](#oku-generations), [`rollback`](#oku-rollback), [`gc`](#oku-gc), [`du`](#oku-du) |
+| [History](#history) | [`generations`](#oku-generations), [`diff`](#oku-diff), [`rollback`](#oku-rollback), [`gc`](#oku-gc), [`du`](#oku-du) |
 | [Projects](#projects) | [`allow`, `deny`](#oku-allow-oku-deny), [`hook`](#oku-hook), [`env`](#oku-env), [`exec`](#oku-exec) |
 | [Manifests](#manifests) | [`manifest init`](#oku-manifest-init), [`lint`](#oku-manifest-lint), [`test`](#oku-manifest-test), [`bump`](#oku-manifest-bump), [`hash`](#oku-manifest-hash) |
 | [Sources, caches and keys](#sources-caches-and-keys) | [`source`](#oku-source), [`search`](#oku-search), [`cache`](#oku-cache), [`key`](#oku-key) |
@@ -826,6 +826,54 @@ generation it replaced.
 
 Generations from an older oku do not record what they replaced, so they
 compare with the one numbered before.
+
+### oku diff
+
+```
+oku diff [<from> [<to>]] [--markdown]
+```
+
+Shows every difference between two generations or two `oku.lock` files. A
+number names a generation. Anything else is a lock file, or a directory that
+holds `oku.lock`. Both arguments must be the same kind.
+
+| Command | Compares |
+|---|---|
+| `oku diff` | The active generation with the one it replaced, as `oku generations` shows it. |
+| `oku diff 4` | Generation 4 with the active one. |
+| `oku diff 4 7` | Generation 4 with generation 7. |
+| `oku diff old.lock` | `old.lock` with the list's `oku.lock`. |
+| `oku diff a.lock b.lock` | `a.lock` with `b.lock`. |
+
+```
+$ oku diff
+~  package  fd  10.3.0 -> 10.5.0
+```
+
+Each row has a mark, a kind, a name and the change. The marks are those of
+[`oku generations`](#oku-generations).
+
+| Kind | Rows |
+|---|---|
+| `package` | A package that came or went, or changed version. A rebuild of the same version reads `rebuilt`. A changed ref shows the old and the new one. In a lock, when the version moved on some platforms and not others, each of those platforms gets a row, such as `1.0.0 -> 1.1.0, on linux-amd64-glibc`. A new manifest, download or tag at the same version reads `repinned`. |
+| `dep` | A dep of a package in a lock, by the package's name and the dep's ref. A dep pinned at several versions lists each. |
+| `file` | A file that came or went, a link with another target, or a file with other `content` or another `mode`. |
+| `setting` | A setting that came or went, or its value before and after. |
+| `list` | An included list in a lock that came or went, or the commit it moved from and to. A list at a URL, which has no commit, reads `content`. |
+
+`--markdown` prints a table to paste in a pull request, such as one that a
+bot opens after `oku update`:
+
+```
+$ git show main:oku.lock > /tmp/main.lock
+$ oku diff /tmp/main.lock --markdown
+| Change | Kind | Name | Before | After |
+|---|---|---|---|---|
+| changed | package | `fd` | 10.3.0 | 10.5.0 |
+```
+
+With no difference, it prints `no change`, or `No changes.` with
+`--markdown`. `--json` prints the rows, see [JSON output](#json-output).
 
 ### oku rollback
 
@@ -1646,7 +1694,8 @@ The commands in this table take `--json` and then print JSON on stdout in
 place of text. Messages and errors still go to stderr as text. Any other
 command fails with `oku <command> has no --json output` and does nothing.
 `oku add`, `sync`, `update`, `remove`, `rollback` and `gc` take `--json` only
-with `--dry-run`, and `self update` only with `--check`, since without those flags they change the machine.
+with `--dry-run`, and `self update` only with `--check`, since without those
+flags they change the machine.
 
 | Command | JSON |
 |---|---|
@@ -1657,6 +1706,7 @@ with `--dry-run`, and `self update` only with `--check`, since without those fla
 | `oku why <name>` | `name`, `version`, `in_list` (the listed ref, or empty for a package that is only a dep), and `needed_by`, a list of `name`, `version`, `dep_versions`. |
 | `oku which <program>` | `program`, `package`, `version`, `path`, `shadowed_by`. |
 | `oku generations` | A list of `number`, `from`, `current`, `created`, `packages` (`name`, `version`), `files` (`target`, `link`) and `settings` (`domain`, `key`, `value`). |
+| `oku diff` | A list of `kind`, `name`, `change` (`added`, `removed` or `changed`), and `before`, `after` and `note` where the row has them. |
 | `oku outdated` | A list of `name`, `version`, `newest`, `latest`, `ref`, for each package with a newer version, and `waiting` and `waits_until` for one whose newer version waits for the minimum release age. |
 | `oku search <term>` | A list of `ref`, `description`. |
 | `oku source list` | A list of `alias`, `ref`. |

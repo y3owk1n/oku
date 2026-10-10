@@ -382,6 +382,16 @@ order step in `prd/product.md`.
   included under different `when` that name one package with the same
   settings install it where either matches, and with other settings fail the
   merge. A list included under a `when` may not set `[runtimes]`.
+- B577 [1] `oku diff` lists every change between two generations, or two
+  `oku.lock` files, as rows of kind, name and change. With no number it
+  compares the active generation with the one it replaced, and with one
+  number that generation with the active one. One lock compares with the
+  list's `oku.lock`, and a directory means the `oku.lock` in it. In a lock, a
+  version that moved on some platforms and not others gets a row for each of
+  them. A dep gets its own row, and new pins at the same version read
+  `repinned`.
+  `--markdown` prints a table and `--json` the rows. A generation and a lock
+  together, a missing generation and a missing file each fail.
 - B270 [2] `when` in a list is one table or an array of tables, and matches a
   platform when any of its tables does. A `[files]` entry takes both forms.
 - B271 [2] `add` leaves out the host and each `[lock]` platform that the
