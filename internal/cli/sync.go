@@ -123,7 +123,7 @@ func newUpdateCmd(opts Options) *cobra.Command {
 		Use:               "update [name...]",
 		Aliases:           []string{"upgrade"},
 		ValidArgsFunction: completePackages(opts),
-		Short:             "Re-resolve packages from their refs and rewrite oku.lock",
+		Short:             "Re-resolve packages from their refs, install them and rewrite oku.lock",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := recoverFirst(cmd, opts); err != nil {
 				return err

@@ -44,14 +44,14 @@ one of:
   ./pkg.toml                          a local file
   https://host/pkg.toml               a URL of a manifest
   https://host/tool-1.2.3.tar.gz      a URL of the download itself
-  github:owner/repo                   oku.pkg.toml in a GitHub repo
+  github:owner/repo                   oku.pkg.toml in a GitHub repo, or one oku infers from its releases
   github:owner/repo#name              name.toml or packages/name.toml in it
   github:host/owner/repo              the same on a GitHub Enterprise Server
   codeberg:owner/repo                 the same on codeberg.org
   gitea:host/owner/repo               the same on a Gitea or Forgejo server
   gitlab:group/project                the same on gitlab.com
   git+https://host/repo#path/pkg.toml a file in any git repo
-  npm:@scope/name                     a command-line tool in the npm registry
+  npm:name, npm:@scope/name           a command-line tool in the npm registry
   pypi:name                           a package in the Python Package Index
   go:host/path                        a Go program, such as go:golang.org/x/tools/gopls
   cargo:name                          a crate on crates.io

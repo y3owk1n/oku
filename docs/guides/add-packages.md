@@ -79,7 +79,8 @@ manifest   inferred by oku, because the ref has none
 asset      fd-v10.5.0-aarch64-apple-darwin.tar.gz
 install    download for darwin-arm64
 url        https://github.com/sharkdp/fd/releases/download/v10.5.0/fd-v10.5.0-aarch64-apple-darwin.tar.gz
-verify     sha256 the release publishes
+verify     Sigstore signature by the manifest's signer workflow
+signed     Sigstore, by the workflow sharkdp/fd/.github/workflows/CICD.yml
 programs   fd
 installed  no
 ...

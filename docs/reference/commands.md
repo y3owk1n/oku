@@ -27,7 +27,7 @@ These work on every command.
 Inside a directory tree that has an `oku.toml`, the commands that read or
 change a list act on that project and print `project <dir>` on stderr, once
 per command. These are `add`, `remove`, `list`, `sync`, `update`, `outdated`,
-`info`, `why`, `which`, `verify`, `generations` and `rollback`. `gc`, `source`, `search`,
+`info`, `why`, `which`, `exec`, `verify`, `generations` and `rollback`. `gc`, `source`, `search`,
 `manifest` and `self` use no list. See [Projects](../guides/projects.md).
 
 ## Exit codes
@@ -148,10 +148,12 @@ version    10.5.0
 homepage   https://github.com/sharkdp/fd
 ref        github:sharkdp/fd
 manifest   inferred by oku, because the ref has none
+commit     14dcd92fb76ca0ebc2e82671a275f67c790d25fc
 asset      fd-v10.5.0-aarch64-apple-darwin.tar.gz
 install    download for darwin-arm64
 url        https://github.com/sharkdp/fd/releases/download/v10.5.0/fd-v10.5.0-aarch64-apple-darwin.tar.gz
-verify     sha256 the release publishes
+verify     Sigstore signature by the manifest's signer workflow
+signed     Sigstore, by the workflow sharkdp/fd/.github/workflows/CICD.yml
 programs   fd
 platforms  darwin-amd64, darwin-arm64, linux-amd64-glibc, linux-amd64-musl, linux-arm64-glibc, linux-arm64-musl
 installed  no
@@ -360,9 +362,9 @@ version    14.1.1
 ref        github:BurntSushi/ripgrep
 commit     3fce3b5bb0236da2df6d99672afb8a719642eca7
 installed  artifact
-store      /home/you/.local/share/oku/store/ripgrep-14.1.1-77da99cdceeb3140
+store      /home/you/.local/share/oku/store/ripgrep-14.1.1-0eeda6a14fd8165d
 manifest   inferred by oku from the repo's releases
-verified   the digest that its source publishes
+verified   the checksum file at the manifest's sha256_url
 programs   rg
 ```
 
