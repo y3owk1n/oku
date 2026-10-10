@@ -465,6 +465,9 @@ order step in `prd/product.md`.
   again for a file that had none. It also asks again before it refuses a file
   when none of the kept attestations is the signer workflow's. It still
   verifies each bundle it uses.
+- B569 [3] oku asks a GitLab project for its commit at `HEAD`, an address
+  that gitlab.com answers without a token. When a forge answers with a
+  Cloudflare bot check, the error says so in place of a bare `403 Forbidden`.
 - B385 [3] An answer that an older oku kept in another format makes oku ask the
   host for the whole answer again, and the lookup gives the same versions.
 - B361 [3] oku reads an npm answer of up to 128 MiB and a PyPI answer of up
