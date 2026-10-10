@@ -8,8 +8,9 @@ default:
 build:
     CGO_ENABLED=0 go build -ldflags "-X main.version={{ version }}" -o bin/oku ./cmd/oku
 
+# The cli tests run as parallel processes, which Windows skips.
 test:
-    go test ./...
+    {{ if os() == "windows" { "go test ./..." } else { ".github/scripts/go-test.sh" } }}
 
 lint:
     golangci-lint run

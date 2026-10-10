@@ -6657,9 +6657,12 @@ func TestB72UnpacksMacOSDiskImagesAndInstallerPackages(t *testing.T) {
 	writable, mount := filepath.Join(m.fixtures, "tool-rw.dmg"), filepath.Join(m.fixtures, "mount")
 	dmg := filepath.Join(m.fixtures, "tool.dmg")
 
+	// A blank image has room for the FIFO, and filling it is faster than
+	// hdiutil create -srcfolder.
 	for _, args := range [][]string{
-		{"hdiutil", "create", "-quiet", "-volname", "Tool", "-srcfolder", payload, "-format", "UDRW", writable},
+		{"hdiutil", "create", "-quiet", "-volname", "Tool", "-size", "4m", "-fs", "HFS+", "-type", "UDIF", writable},
 		{"hdiutil", "attach", "-quiet", "-nobrowse", "-mountpoint", mount, writable},
+		{"ditto", payload, mount},
 		{"mkfifo", filepath.Join(mount, "Tool.app", "Contents", "pipe")},
 		{"hdiutil", "detach", "-quiet", mount},
 		{"hdiutil", "convert", "-quiet", writable, "-format", "UDZO", "-o", dmg},
@@ -6723,6 +6726,27 @@ func TestB72UnpacksMacOSDiskImagesAndInstallerPackages(t *testing.T) {
 
 	if left, _ := filepath.Glob("/Volumes/Tool*"); len(left) != 0 {
 		t.Fatalf("a disk image is still mounted: %v", left)
+	}
+}
+
+// diskImage writes the folder src as a compressed disk image at out, the UDZO
+// that a release ships. hdiutil create -srcfolder takes five seconds per image,
+// and makehybrid followed by convert takes under two. It skips the test on a
+// machine that cannot make one.
+func diskImage(t *testing.T, src, out string) {
+	t.Helper()
+
+	// makehybrid adds .iso to a name that does not end in .dmg or .iso.
+	hybrid := strings.TrimSuffix(out, ".dmg") + "-hybrid.dmg"
+	defer os.Remove(hybrid)
+
+	for _, args := range [][]string{
+		{"makehybrid", "-quiet", "-hfs", "-hfs-volume-name", "Tool", "-o", hybrid, src},
+		{"convert", "-quiet", hybrid, "-format", "UDZO", "-o", out},
+	} {
+		if output, err := exec.Command("/usr/bin/hdiutil", args...).CombinedOutput(); err != nil {
+			t.Skipf("cannot create a disk image here: %v\n%s", err, output)
+		}
 	}
 }
 
@@ -9086,10 +9110,7 @@ func TestB301ADiskImageThatOnlyCarriesAPackageUnpacksThePackage(t *testing.T) {
 	}
 
 	dmg := filepath.Join(m.fixtures, "tool.dmg")
-	if out, err := exec.Command("/usr/bin/hdiutil", "create", "-quiet", "-volname", "Tool", "-srcfolder", image, "-format", "UDZO", dmg).
-		CombinedOutput(); err != nil {
-		t.Skipf("cannot create a disk image here: %v\n%s", err, out)
-	}
+	diskImage(t, image, dmg)
 
 	data, err := os.ReadFile(dmg)
 	must(t, err)
@@ -9103,10 +9124,7 @@ func TestB301ADiskImageThatOnlyCarriesAPackageUnpacksThePackage(t *testing.T) {
 		[]byte("#!/bin/sh\necho from app\n"), 0o755))
 
 	withApp := filepath.Join(m.fixtures, "with-app.dmg")
-	if out, err := exec.Command("/usr/bin/hdiutil", "create", "-quiet", "-volname", "Tool", "-srcfolder", image, "-format", "UDZO", withApp).
-		CombinedOutput(); err != nil {
-		t.Skipf("cannot create a disk image here: %v\n%s", err, out)
-	}
+	diskImage(t, image, withApp)
 
 	data, err = os.ReadFile(withApp)
 	must(t, err)
