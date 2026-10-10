@@ -2846,8 +2846,8 @@ func TestB426AGitLabReleaseDatedInThePastCountsFromWhenItWasMade(t *testing.T) {
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.EscapedPath() {
-		case project + "/repository/commits":
-			_, _ = w.Write([]byte(`[{"id": "5555555555555555555555555555555555555555"}]`))
+		case project + "/repository/commits/HEAD":
+			_, _ = w.Write([]byte(`{"id": "5555555555555555555555555555555555555555"}`))
 		case project + "/releases/permalink/latest":
 			_, _ = w.Write([]byte(release))
 		case project + "/releases":
@@ -2916,8 +2916,8 @@ func TestB116AddInfersFromAGitLabProjectInASubgroup(t *testing.T) {
 		mu.Unlock()
 
 		switch r.URL.EscapedPath() {
-		case project + "/repository/commits":
-			_, _ = w.Write([]byte(`[{"id": "5555555555555555555555555555555555555555"}]`))
+		case project + "/repository/commits/HEAD":
+			_, _ = w.Write([]byte(`{"id": "5555555555555555555555555555555555555555"}`))
 		case project + "/releases/permalink/latest":
 			_, _ = w.Write([]byte(release))
 		case project + "/releases":

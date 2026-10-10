@@ -666,6 +666,17 @@ An IPv6 route that drops connections then adds 0.3 s when the host also has an
 IPv4 address. When no address of the host answers, the request fails after 30
 seconds.
 
+## A forge sent a bot check
+
+```
+oku: resolve gitlab:owner/tool: https://gitlab.com sent a Cloudflare bot check in place of an answer (403 Forbidden)
+```
+
+The host put a browser check in front of an API address, which a program
+cannot pass. Try again later. A request with the host's token, such as
+`GITLAB_TOKEN`, may get through, see
+[tokens per host](reference/refs.md#tokens-per-host).
+
 ## oku is slow
 
 Set `OKU_TRACE` to a file and run the command again:
