@@ -458,6 +458,7 @@ order step in `prd/product.md`.
   between them. So do inference and the version lookup of one package, and the
   two lookups of `outdated`. Inference reads a release once when the version
   oku picks is the one it inferred from, also under a minimum release age.
+  The requests of one command to a host share connections.
 - B556 [3] One command downloads each checksum file once and shows one wait
   line for it. Inference checks a shared file such as `checksums.txt` against
   every asset of a release, and the install after it reads the same file.
