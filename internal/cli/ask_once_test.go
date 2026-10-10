@@ -1,6 +1,7 @@
 package cli_test
 
 import (
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/http/httputil"
@@ -99,5 +100,43 @@ func TestB359InferenceReadsTheReleaseItPicksOnce(t *testing.T) {
 		if strings.Contains(path, "/releases/tags/") {
 			t.Fatalf("add inferred again from %s, the release it had read:\n%s", path, strings.Join(asked, "\n"))
 		}
+	}
+}
+
+func TestB359OneCommandReusesItsConnectionsToAHost(t *testing.T) {
+	m := newMachine(t)
+	archive, _ := m.archive(t, strings.TrimSuffix(hostAssetName(), ".tar.gz"), map[string]string{
+		"tool-1.4.0/tool": "#!/bin/sh\necho inferred\n",
+	})
+	inferServer(t, &m, map[string]string{hostAssetName(): archive})
+
+	upstream, err := url.Parse(m.opts.GitHubAPI)
+	must(t, err)
+
+	var conns, requests atomic.Int32
+
+	api := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests.Add(1)
+		r.URL.Path = upstream.Path + r.URL.Path
+		httputil.NewSingleHostReverseProxy(&url.URL{Scheme: upstream.Scheme, Host: upstream.Host}).ServeHTTP(w, r)
+	}))
+	api.Config.ConnState = func(_ net.Conn, state http.ConnState) {
+		if state == http.StateNew {
+			conns.Add(1)
+		}
+	}
+	api.Start()
+	t.Cleanup(api.Close)
+
+	m.opts.GitHubAPI = api.URL
+
+	out, err := m.run(t, "", "add", "github:owner/tool")
+	if err != nil {
+		t.Fatalf("add: %v\n%s", err, out)
+	}
+
+	// add asks the API one request after another, so one connection carries them.
+	if requests.Load() < 2 || conns.Load() != 1 {
+		t.Fatalf("add made %d requests over %d connections, want one", requests.Load(), conns.Load())
 	}
 }

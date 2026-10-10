@@ -58,14 +58,13 @@ type Fetched struct {
 var ErrNotFound = errors.New("not found")
 
 // NewFetcher returns a Fetcher that clones under cacheDir, keeps the answers of
-// forge APIs there, and connects only where net allows.
-func NewFetcher(cacheDir string, net netpolicy.Policy) *Fetcher {
-	api := net.Transport(http.DefaultTransport.(*http.Transport).Clone())
-
+// forge APIs there, and connects only where net allows. Its requests go
+// through transport, which must follow net.
+func NewFetcher(cacheDir string, net netpolicy.Policy, transport http.RoundTripper) *Fetcher {
 	return &Fetcher{
-		HTTP: net.Client(forge.CheckRedirect),
+		HTTP: &http.Client{Transport: transport, CheckRedirect: forge.CheckRedirect},
 		Hosts: forge.Hosts{
-			HTTP: forge.Revalidating(filepath.Join(cacheDir, "api"), api),
+			HTTP: forge.Revalidating(filepath.Join(cacheDir, "api"), transport),
 			Net:  net,
 		},
 		GitCache: filepath.Join(cacheDir, "git"),
