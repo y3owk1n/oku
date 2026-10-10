@@ -1665,6 +1665,10 @@ order step in `prd/product.md`.
   `service`, and the sources, caches and keys of `config.toml` for their
   `remove` and `revoke`. It offers the shells for `hook` and `--shell`, and the
   ref schemes and source aliases for `add`, `run` and `shell`.
+- B574 [11] Under its table, `oku outdated` says `oku update` takes the
+  newest versions only when a package's newest is newer than its locked
+  version, and names the packages whose `version` in `oku.toml` keeps them
+  below the latest.
 - B565 [11] `--exit-code` makes `oku outdated` exit with 2 when `oku update`
   would take a newer version. `sync --dry-run` and `update --dry-run` exit
   with 2 when something would change, and `self update --check` when a newer

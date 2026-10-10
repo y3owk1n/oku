@@ -290,7 +290,7 @@ when `oku update` would take a newer version, for a scheduled job.
 $ oku outdated
 name     locked  newest  latest  ref
 ripgrep  14.1.1  14.1.1  15.2.0  github:BurntSushi/ripgrep
-`oku update` takes the newest versions. To take a latest beyond them, change its version in oku.toml
+the version in oku.toml keeps ripgrep below the latest. To take the latest, change that version
 ```
 
 | Column | Meaning |

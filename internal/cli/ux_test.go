@@ -545,3 +545,33 @@ func TestB573PowerShellIsPwshOrPowershell(t *testing.T) {
 		t.Fatalf("completion of an unknown shell should fail, got %v", err)
 	}
 }
+
+func TestB574OutdatedSaysUpdateTakesAVersionOnlyWhenItWould(t *testing.T) {
+	m := newMachine(t)
+	server := newReleaseServer(t, "v1.0.0")
+	m.opts.GitHubAPI = server.URL + "/api"
+
+	ref := m.discoveredManifest(t, "1.0.0", "1.1.0")
+
+	_, err := m.run(t, "", "add", ref)
+	must(t, err)
+
+	server.tags = []string{"v1.1.0", "v1.0.0"}
+
+	// The exact version keeps tool at 1.0.0, so update takes nothing.
+	m.writeFilesList(t, fmt.Sprintf("[packages]\ntool = { ref = %q, version = \"1.0.0\" }\n", ref))
+
+	out, err := m.run(t, "", "outdated")
+	if err != nil || strings.Contains(out, "`oku update` takes") ||
+		!strings.Contains(out, "keeps tool below the latest") {
+		t.Fatalf("outdated of a pinned package: %v\n%s", err, out)
+	}
+
+	m.writeFilesList(t, fmt.Sprintf("[packages]\ntool = %q\n", ref))
+
+	out, err = m.run(t, "", "outdated")
+	if err != nil || !strings.Contains(out, "`oku update` takes the newest versions") ||
+		strings.Contains(out, "below the latest") {
+		t.Fatalf("outdated of a package update moves: %v\n%s", err, out)
+	}
+}

@@ -313,7 +313,24 @@ func printStale(cmd *cobra.Command, stale []staleness, checked, all int) error {
 		return err
 	}
 
-	hint(out, "`oku update` takes the newest versions. To take a latest beyond them, change its version in oku.toml")
+	// update moves a package to its newest, and only the list's version moves
+	// it past that to the latest.
+	if slices.ContainsFunc(stale, func(f staleness) bool { return f.newest != f.pkg.Version }) {
+		hint(out, "`oku update` takes the newest versions")
+	}
+
+	var held []string
+
+	for _, f := range stale {
+		if f.latest != f.newest {
+			held = append(held, f.pkg.Name)
+		}
+	}
+
+	if len(held) > 0 {
+		hint(out, "the version in oku.toml keeps "+strings.Join(held, ", ")+
+			" below the latest. To take the latest, change that version")
+	}
 
 	if waits {
 		hint(out, "a waiting version is newer than the minimum release age. "+
