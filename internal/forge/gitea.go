@@ -255,7 +255,7 @@ func (g *gitea) read(ctx context.Context, repo, path string) ([]byte, string, er
 	case resp.StatusCode == http.StatusNotFound:
 		return nil, "", ErrNotFound
 	case resp.StatusCode != http.StatusOK:
-		return nil, "", fmt.Errorf("%s returned %s", g.host, resp.Status)
+		return nil, "", statusError(g.host, resp)
 	}
 
 	body, err := limit.Read(resp.Body, maxBody)

@@ -3,6 +3,7 @@ package cli_test
 import (
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -113,5 +114,28 @@ func TestB562OKUTraceWritesEachRequestAndWaitWithItsTime(t *testing.T) {
 			!strings.HasSuffix(fields[1], "s") {
 			t.Fatalf("a line lacks its start and its duration: %q", line)
 		}
+	}
+}
+
+func TestB569ABotCheckOfAForgeIsNamed(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Cf-Mitigated", "challenge")
+		http.Error(w, "<!DOCTYPE html><title>Just a moment...</title>", http.StatusForbidden)
+	}))
+	t.Cleanup(server.Close)
+
+	target, err := url.Parse(server.URL)
+	must(t, err)
+
+	client := http.DefaultClient.Transport
+	http.DefaultClient.Transport = rewriteHost{host: "gitlab.com", server: target}
+
+	t.Cleanup(func() { http.DefaultClient.Transport = client })
+
+	m := newMachine(t)
+
+	_, err = m.run(t, "", "add", "gitlab:owner/tool")
+	if err == nil || !strings.Contains(err.Error(), "https://gitlab.com sent a Cloudflare bot check in place of an answer") {
+		t.Fatalf("want the bot check named, got %v", err)
 	}
 }

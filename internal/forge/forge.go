@@ -24,6 +24,17 @@ import (
 // release.
 var ErrNotFound = errors.New("not found")
 
+// statusError says that host answered resp in place of the API's answer. A
+// host behind Cloudflare may send a bot check, which no client but a browser
+// passes, and the error says so.
+func statusError(host string, resp *http.Response) error {
+	if resp.Header.Get("Cf-Mitigated") == "challenge" {
+		return fmt.Errorf("%s sent a Cloudflare bot check in place of an answer (%s)", host, resp.Status)
+	}
+
+	return fmt.Errorf("%s returned %s", host, resp.Status)
+}
+
 // ErrTooLarge reports that an answer was over maxBody, so the forge did not
 // read it.
 var ErrTooLarge = limit.ErrTooLarge

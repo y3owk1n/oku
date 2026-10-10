@@ -97,19 +97,21 @@ func (g *gitlab) Home(repo string) string {
 }
 
 func (g *gitlab) Head(ctx context.Context, repo string) (string, error) {
-	var found []struct {
+	var found struct {
 		ID string `json:"id"`
 	}
 
-	if _, err := g.json(ctx, g.project(repo)+"/repository/commits?per_page=1", &found); err != nil {
+	// gitlab.com sends a bot check in place of the list of commits to a request
+	// without a token, and answers for the one commit at HEAD.
+	if _, err := g.json(ctx, g.project(repo)+"/repository/commits/HEAD", &found); err != nil {
 		return "", err
 	}
 
-	if len(found) == 0 {
+	if found.ID == "" {
 		return "", fmt.Errorf("%s has no commits", repo)
 	}
 
-	return found[0].ID, nil
+	return found.ID, nil
 }
 
 func (g *gitlab) File(ctx context.Context, repo, commit, path string) ([]byte, error) {
@@ -281,7 +283,7 @@ func (g *gitlab) get(ctx context.Context, at string) ([]byte, string, error) {
 	case resp.StatusCode == http.StatusNotFound:
 		return nil, "", ErrNotFound
 	case resp.StatusCode != http.StatusOK:
-		return nil, "", fmt.Errorf("%s returned %s", g.web(), resp.Status)
+		return nil, "", statusError(g.web(), resp)
 	}
 
 	body, err := limit.Read(resp.Body, maxBody)
