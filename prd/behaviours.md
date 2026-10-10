@@ -71,13 +71,17 @@ order step in `prd/product.md`.
   before what they took away. A note of what they left starts with `!`.
 - B440 [1] `--json` on a command that has no JSON output fails with
   `oku <command> has no --json output` before it does anything. `oku add`
-  takes it only with `--plan` or `--dry-run`, `sync`, `update`, `remove` and
-  `rollback` only with `--dry-run`, and `self update` only with `--check`. `manifest lint --json` prints a list of
+  takes it only with `--plan` or `--dry-run`, `sync`, `update`, `remove`,
+  `rollback` and `gc` only with `--dry-run`, and `self update` only with
+  `--check`. `manifest lint --json` prints a list of
   `file`, `errors` and `warnings`, and still exits with 1 on an error.
 - B571 [1] With `--json`, a dry run of `sync`, `update`, `remove` or
   `rollback` prints a list of what would change, `[]` for nothing, and
   `self update --check` prints the running and the newest version and whether
   a newer one is available.
+- B572 [1] `oku gc --dry-run --json` prints what gc would remove, by projects,
+  generations, store paths, temporary files and cached files, with the bytes
+  of each and in all. An empty part is `[]`.
 - B465 [1] A list in `--json` output is `[]` when it is empty, never `null`,
   and `why --json` of a name nothing uses fails as the text form does.
 - B441 [1] On a terminal `manifest lint` starts an error with a red cross, a

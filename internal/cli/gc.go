@@ -3,6 +3,7 @@ package cli
 import (
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"maps"
 	"os"
@@ -155,6 +156,14 @@ func runGC(cmd *cobra.Command, r profile.Retention, retain ages, dryRun, cache b
 	s := ui.For(out)
 	verb := "removed"
 
+	// --json prints the report at the end in place of a line per item.
+	report := gcReport{
+		Projects: []string{}, Generations: []gcGeneration{}, StorePaths: []gcPath{}, Temporary: []gcPath{},
+	}
+	if wantJSON(cmd) {
+		out = io.Discard
+	}
+
 	// A removal gets a minus and the closing line a check. A dry run changes
 	// nothing, so each of its lines gets a tilde.
 	gone, done := s.Gone, s.Done
@@ -190,6 +199,7 @@ func runGC(cmd *cobra.Command, r profile.Retention, retain ages, dryRun, cache b
 			}
 
 			for _, n := range pruned[prof] {
+				report.Generations = append(report.Generations, gcGeneration{Profile: prof.Name(), Number: n})
 				fmt.Fprintln(out, gone(fmt.Sprintf("%s generation %d", verb, n)))
 			}
 		}
@@ -229,6 +239,7 @@ func runGC(cmd *cobra.Command, r profile.Retention, retain ages, dryRun, cache b
 
 			unused[path] = found[path]
 			freed += found[path]
+			report.StorePaths = append(report.StorePaths, gcPath{Path: path, Bytes: found[path]})
 			fmt.Fprintln(out, gone(fmt.Sprintf(
 				"%s %s (%s)", verb, filepath.Base(path), status.Size(found[path]),
 			)))
@@ -311,6 +322,7 @@ func runGC(cmd *cobra.Command, r profile.Retention, retain ages, dryRun, cache b
 		}
 
 		freed += size
+		report.Temporary = append(report.Temporary, gcPath{Path: path, Bytes: size})
 		fmt.Fprintln(out, gone(fmt.Sprintf(
 			"%s %s, left by an oku process that ended (%s)", verb, path, status.Size(size),
 		)))
@@ -331,12 +343,13 @@ func runGC(cmd *cobra.Command, r profile.Retention, retain ages, dryRun, cache b
 		// A cache holds hundreds of files, named after their digests, so one line
 		// counts each kind.
 		for _, part := range []struct {
-			files map[string]int64
-			what  string
-			noun  string
+			files  map[string]int64
+			what   string
+			noun   string
+			report *gcFiles
 		}{
-			{downloads, "download cache", "file"},
-			{answers, "API cache", "answer"},
+			{downloads, "download cache", "file", &report.Downloads},
+			{answers, "API cache", "answer", &report.Answers},
 		} {
 			var size int64
 
@@ -350,6 +363,8 @@ func runGC(cmd *cobra.Command, r profile.Retention, retain ages, dryRun, cache b
 				size += n
 			}
 
+			*part.report = gcFiles{Files: len(part.files), Bytes: size}
+
 			if len(part.files) > 0 {
 				freed += size
 				fmt.Fprintln(out, gone(fmt.Sprintf(
@@ -358,6 +373,16 @@ func runGC(cmd *cobra.Command, r profile.Retention, retain ages, dryRun, cache b
 				)))
 			}
 		}
+	}
+
+	for _, project := range goneProjects {
+		report.Projects = append(report.Projects, project.dir)
+	}
+
+	report.Shared, report.Bytes = sharedPaths, freed
+
+	if wantJSON(cmd) {
+		return printJSON(cmd, report)
 	}
 
 	if len(unused) == 0 && len(leftovers) == 0 && len(downloads) == 0 && len(answers) == 0 &&
@@ -417,6 +442,35 @@ func runGC(cmd *cobra.Command, r profile.Retention, retain ages, dryRun, cache b
 	fmt.Fprintln(out, done(fmt.Sprintf("%s %s from %s", summary, status.Size(freed), noun)))
 
 	return nil
+}
+
+// gcReport is what `oku gc --dry-run --json` prints: what gc would remove, and
+// the bytes that frees.
+type gcReport struct {
+	Projects    []string       `json:"projects"`
+	Generations []gcGeneration `json:"generations"`
+	StorePaths  []gcPath       `json:"store_paths"`
+	Temporary   []gcPath       `json:"temporary"`
+	Downloads   gcFiles        `json:"downloads"`
+	Answers     gcFiles        `json:"answers"`
+	// Shared counts the store paths whose identical files gc would share.
+	Shared int   `json:"shared"`
+	Bytes  int64 `json:"bytes"`
+}
+
+type gcGeneration struct {
+	Profile string `json:"profile"`
+	Number  int    `json:"number"`
+}
+
+type gcPath struct {
+	Path  string `json:"path"`
+	Bytes int64  `json:"bytes"`
+}
+
+type gcFiles struct {
+	Files int   `json:"files"`
+	Bytes int64 `json:"bytes"`
 }
 
 // staleDownloads returns the files of the download cache that no store path in
