@@ -448,8 +448,11 @@ order step in `prd/product.md`.
   path alone, and not for the missing file.
 - B385 [3] An answer that an older oku kept in another format makes oku ask the
   host for the whole answer again, and the lookup gives the same versions.
-- B361 [3] oku reads a registry answer of up to 64 MB whole, with or without
-  an ETag, so an npm or PyPI package with thousands of versions resolves.
+- B361 [3] oku reads an npm answer of up to 128 MiB and a PyPI answer of up
+  to 64 MiB whole, with or without an ETag, so a package with thousands of
+  versions resolves. Any answer over the size oku reads, such as a checksum
+  file over 1 MiB, fails with `response is larger than the limit`. oku never
+  reads part of one.
 - B359 [3] One command asks each version source once. Packages that share a
   repo, a registry package or a git URL make one request or one git call
   between them. So do inference and the version lookup of one package, and the
