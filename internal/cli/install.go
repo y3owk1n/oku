@@ -486,84 +486,150 @@ func (e env) installFrom(
 	req request,
 	fetched ref.Fetched,
 	inferred string,
-) (got installed, err error) {
-	r, previous := req.ref, req.previous
-
+) (installed, error) {
 	m, release, keep, unchecked, err := e.pickRelease(ctx, opts, req, fetched)
 	if err != nil {
 		return installed{}, err
 	}
 
-	defer func() {
-		if err == nil {
-			got.ageUnknown = unchecked
-		}
-	}()
-
-	// A version named exactly skips the age, as it does in resolve.
-	exact := r.Version != "" && release.Version == r.Version
-
-	if !keep && !exact && req.releaseAge > 0 && release.Published.IsZero() &&
-		ageKnowable(m.Version) && release.Version != previous.Version {
-		// A package that has a locked version keeps it when oku does not take the
-		// new one, and the rest of the command goes on.
-		locked := ""
-		if allowed, _ := resolve.Matches(previous.Version, r.Version); allowed && !m.PerArtifact() {
-			locked = previous.Version
-		}
-
-		note := true
-		if req.checkAge != nil {
-			note, err = req.checkAge(m.Package.Name, release.Version, locked)
-		}
-
-		switch {
-		case errors.Is(err, errNotTaken) && locked != "":
-			notTaken := release.Version
-			release = resolve.Release{
-				Version: previous.Version, Tag: cmp.Or(previous.Tag, previous.Version),
-				Commit: previous.TagCommit,
-			}
-			m.Version.Value, m.Tag, m.TagCommit = release.Version, release.Tag, release.Commit
-
-			defer func() {
-				if err == nil {
-					got.notTaken = notTaken
-				}
-			}()
-		case err != nil:
-			return installed{}, err
-		case note:
-			unchecked = append(unchecked, release.Version)
-		}
+	notTaken, unchecked, err := gateAge(req, m, &release, keep, unchecked)
+	if err != nil {
+		return installed{}, err
 	}
 
-	// A new version of a registry package must not be one that OSV lists as
-	// malicious. oku goes on, and says so, when it cannot ask.
-	if ecosystem := osvEcosystems[r.Kind]; ecosystem != "" && !keep && release.Version != previous.Version {
-		ids, osvErr := e.osv(opts).Malicious(ctx, ecosystem, r.Location, release.Version)
-
-		switch {
-		case osvErr != nil:
-			version := release.Version
-
-			defer func() {
-				if err == nil {
-					got.malwareUnchecked = fmt.Sprintf("%s: %v", version, osvErr)
-				}
-			}()
-		case len(ids) > 0:
-			return installed{}, maliciousError(r, release.Version, ids)
-		}
+	malwareUnchecked, err := e.checkMalware(ctx, opts, req, release, keep)
+	if err != nil {
+		return installed{}, err
 	}
 
 	ctx = status.Scope(ctx, m.Package.Name+" "+m.Version.Value)
 
+	var got installed
 	if req.lockOnly {
-		return e.resolveOnly(ctx, opts, req, m, release, fetched, inferred)
+		got, err = e.resolveOnly(ctx, opts, req, m, release, fetched, inferred)
+	} else {
+		got, err = e.installHere(ctx, opts, req, m, release, keep, fetched, inferred)
 	}
 
-	host := platform.Host()
+	if err != nil {
+		return got, err
+	}
+
+	got.ageUnknown, got.notTaken, got.malwareUnchecked = unchecked, notTaken, malwareUnchecked
+
+	return got, nil
+}
+
+// gateAge applies the minimum release age to a release that has no publish
+// time. When oku keeps the locked version in its place, gateAge returns the
+// version it did not take. When oku takes the release without knowing its age,
+// it adds the release's version to unchecked.
+func gateAge(
+	req request,
+	m *manifest.Manifest,
+	release *resolve.Release,
+	keep bool,
+	unchecked []string,
+) (string, []string, error) {
+	r, previous := req.ref, req.previous
+
+	// A version named exactly skips the age, as it does in resolve.
+	exact := r.Version != "" && release.Version == r.Version
+
+	due := !keep && !exact && req.releaseAge > 0 && release.Published.IsZero() &&
+		ageKnowable(m.Version) && release.Version != previous.Version
+	if !due {
+		return "", unchecked, nil
+	}
+
+	// A package that has a locked version keeps it when oku does not take the
+	// new one, and the rest of the command goes on.
+	locked := ""
+	if allowed, _ := resolve.Matches(previous.Version, r.Version); allowed && !m.PerArtifact() {
+		locked = previous.Version
+	}
+
+	note := true
+
+	var err error
+	if req.checkAge != nil {
+		note, err = req.checkAge(m.Package.Name, release.Version, locked)
+	}
+
+	switch {
+	case errors.Is(err, errNotTaken) && locked != "":
+		notTaken := release.Version
+		*release = resolve.Release{
+			Version: previous.Version, Tag: cmp.Or(previous.Tag, previous.Version),
+			Commit: previous.TagCommit,
+		}
+		m.Version.Value, m.Tag, m.TagCommit = release.Version, release.Tag, release.Commit
+
+		return notTaken, unchecked, nil
+	case err != nil:
+		return "", nil, err
+	case note:
+		unchecked = append(unchecked, release.Version)
+	}
+
+	return "", unchecked, nil
+}
+
+// checkMalware refuses a new version of a registry package that OSV lists as
+// malicious. When oku cannot ask, it returns why, and the install goes on.
+func (e env) checkMalware(
+	ctx context.Context,
+	opts Options,
+	req request,
+	release resolve.Release,
+	keep bool,
+) (string, error) {
+	r := req.ref
+
+	ecosystem := osvEcosystems[r.Kind]
+	if ecosystem == "" || keep || release.Version == req.previous.Version {
+		return "", nil
+	}
+
+	ids, err := e.osv(opts).Malicious(ctx, ecosystem, r.Location, release.Version)
+
+	switch {
+	case err != nil:
+		return fmt.Sprintf("%s: %v", release.Version, err), nil
+	case len(ids) > 0:
+		return "", maliciousError(r, release.Version, ids)
+	}
+
+	return "", nil
+}
+
+// hostInstall is what the ways of installing a release on this machine share.
+type hostInstall struct {
+	ctx     context.Context
+	opts    Options
+	req     request
+	m       *manifest.Manifest
+	release resolve.Release
+	host    platform.Platform
+	deps    *depSet
+	// pinnedVendor and pinnedSource are the digests oku.lock pins for a build's
+	// vendor step and source archive, and sourceCheck how oku checks the source.
+	pinnedVendor, pinnedSource, sourceCheck string
+}
+
+// installHere installs release of m on this machine: its deps, then the
+// package from a cache, by a build or by a download.
+func (e env) installHere(
+	ctx context.Context,
+	opts Options,
+	req request,
+	m *manifest.Manifest,
+	release resolve.Release,
+	keep bool,
+	fetched ref.Fetched,
+	inferred string,
+) (installed, error) {
+	r, previous, host := req.ref, req.previous, platform.Host()
 
 	artifact, build, err := hostStrategy(m, req, host)
 	if err != nil {
@@ -589,27 +655,26 @@ func (e env) installFrom(
 		return installed{}, err
 	}
 
+	h := &hostInstall{ctx: ctx, opts: opts, req: req, m: m, release: release, host: host, deps: &deps}
+
 	var (
 		realized store.Realized
 		entry    lock.Platform
+		cached   bool
 	)
 
-	var cached bool
-
 	// A locked build must download the same packages again. Update drops the pin.
-	pinnedVendor := ""
 	if at := previous.Platforms[host.String()]; req.keepVersion &&
 		previous.ManifestSHA256 == m.SHA256 {
-		pinnedVendor = at.VendorSHA256
+		h.pinnedVendor = at.VendorSHA256
 	}
 
 	// The digest of a source archive stays pinned for the version it was pinned
 	// for. Update drops it only together with the version, or when the manifest
 	// now states a digest itself.
-	pinnedSource := ""
 	if at := previous.Platforms[host.String()]; previous.VersionOn(host.String()) == m.Version.Value &&
 		at.Strategy == strategyBuild && !req.acceptDigest {
-		pinnedSource = at.SHA256
+		h.pinnedSource = at.SHA256
 	}
 
 	if req.rebuild && !build {
@@ -621,14 +686,13 @@ func (e env) installFrom(
 
 	// A build checks its source archive the same way whether it runs here or
 	// comes from a cache.
-	sourceCheck := ""
 	if build {
-		sourceCheck = sourceVerified(m, release, host, pinnedSource != "", previous.Platforms[host.String()])
-		if err := req.checkVerified(host, sourceCheck); err != nil {
+		h.sourceCheck = sourceVerified(m, release, host, h.pinnedSource != "", previous.Platforms[host.String()])
+		if err := req.checkVerified(host, h.sourceCheck); err != nil {
 			return installed{}, err
 		}
 
-		if sourceCheck == lock.VerifiedFirstUse && pinnedSource == "" {
+		if h.sourceCheck == lock.VerifiedFirstUse && h.pinnedSource == "" {
 			if err := req.trust(m.Package.Name, m.Version.Value, host); err != nil {
 				return installed{}, err
 			}
@@ -652,204 +716,18 @@ func (e env) installFrom(
 
 	switch {
 	case cached:
-		// A package from a cache runs none of the manifest's commands. Only its
-		// [env] needs approval, and an empty artifact makes the approver ask about
-		// that alone. A cache never holds an impure package.
-		if err := req.approve(m, host, &manifest.Artifact{}); err != nil {
-			return installed{}, err
-		}
-
-		deps.substituted = append(deps.substituted, m.Package.Name)
-
-		// The cache entry holds the pins of the build that made it.
-		meta, _ := store.ReadMeta(realized.Path)
-		if pinnedVendor != "" && meta.VendorSHA256 != "" && pinnedVendor != meta.VendorSHA256 {
-			return installed{}, fmt.Errorf(
-				"%s: %w: oku.lock pinned %s, the build in the cache downloaded %s",
-				m.Package.Name, store.ErrVendorChanged, pinnedVendor, meta.VendorSHA256,
-			)
-		}
-
-		entry = keepPins(lock.Platform{
-			Strategy:     strategyBuild,
-			VendorSHA256: meta.VendorSHA256,
-			URL:          meta.URL,
-			SHA256:       meta.SHA256,
-			Verified:     sourceCheck,
-		}, previous, m, host)
+		entry, err = e.fromCache(h, realized.Path)
 	case build:
-		// The tree of an npm: package may hold install scripts. oku installs it in
-		// a temporary directory with no scripts to find them, then translates the
-		// package again with them named. The one approval lists them, and the one
-		// build runs them. oku looked for them when it made a build that is in the
-		// store.
-		_, stored := store.ReadMeta(realized.Path)
-		if req.ref.Kind == ref.NPM && req.npmScripts == nil && (stored != nil || req.rebuild) &&
-			store.CanCrossVendor(m.Build, host) {
-			found, err := e.store().Build(ctx, m, host, store.BuildOptions{
-				Deps: deps.prefixes, Log: req.log, NPMRegistry: opts.NPMRegistry, VendorOnly: true,
-			})
-			if err != nil {
-				return installed{}, fmt.Errorf("%s: %w", m.Package.Name, err)
-			}
-
-			if len(found.UnnamedScripts) > 0 {
-				return installed{unnamedScripts: found.UnnamedScripts}, nil
-			}
-		}
-
-		if err := req.approve(m, host, nil); err != nil {
-			return installed{}, err
-		}
-
-		// crates.io and GitHub publish the digest of each version's source, which
-		// the manifest cannot state for every version.
-		if src := &m.Build.Source; src.URL != "" && src.SHA256 == "" && src.SHA256URL == "" {
-			vars := map[string]string{"version": m.Version.Value, "tag": m.Tag}
-			if at, err := manifest.Expand(src.URL, vars); err == nil {
-				src.SHA256 = release.Digests[at]
-			}
-		}
-
-		// A failed build names what the host lacks.
-		missing, err := hostSystem(opts).Check(hostHere(m.Host))
-		if err != nil {
-			return installed{}, err
-		}
-
-		realized, err = e.store().Build(ctx, m, host, store.BuildOptions{
-			Deps: deps.prefixes, Log: req.log, PinnedVendor: pinnedVendor, Progress: req.progress,
-			NPMRegistry: opts.NPMRegistry, PyPIIndex: opts.PyPIIndex, GoProxy: opts.GoProxy,
-			PinnedSource: pinnedSource, Rebuild: req.rebuild,
-			RuntimeDeps: deps.prefixes[buildDeps:],
-		})
-		if err != nil {
-			for _, lack := range missing {
-				err = fmt.Errorf("%w\n%s", err, missingLine(lack, nil))
-			}
-
-			return installed{}, fmt.Errorf("%s: %w", m.Package.Name, err)
-		}
-
-		if realized.MalwareUnchecked != "" {
-			deps.notes = append(deps.notes, fmt.Sprintf(
-				"%s: oku could not ask OSV about the packages of the %s", m.Package.Name, realized.MalwareUnchecked,
-			))
-		}
-
-		// A manifest of the user's names its scripts itself, so oku only says so.
-		if len(realized.UnnamedScripts) > 0 && req.ref.Kind != ref.NPM {
-			deps.notes = append(deps.notes, fmt.Sprintf(
-				"%s: the install scripts of %s did not run, since the npm step's scripts does not name them",
-				m.Package.Name, strings.Join(realized.UnnamedScripts, ", "),
-			))
-		}
-
-		for _, missing := range realized.MissingDeps {
-			deps.notes = append(deps.notes, fmt.Sprintf(
-				"%s: %s loads %s, which is not in runtime.deps, so it breaks after `oku gc` or on another machine",
-				m.Package.Name,
-				missing.File,
-				missing.Package,
-			))
-		}
-
-		entry = keepPins(lock.Platform{
-			Strategy: strategyBuild, Impure: realized.Impure, VendorSHA256: realized.VendorSHA256,
-			URL: realized.SourceURL, SHA256: realized.SHA256, Verified: sourceCheck,
-		}, previous, m, host)
-
-		// A build from before oku recorded the source archive has no pin for it.
-		if entry.SHA256 == "" {
-			pin, err := e.store().PinBuild(ctx, m, host, store.BuildPin{})
-			if err != nil {
-				return installed{}, fmt.Errorf("%s: %w", m.Package.Name, err)
-			}
-
-			entry.URL, entry.SHA256, entry.Verified = pin.SourceURL, pin.SHA256, sourceCheck
-			realized.FirstUse = realized.FirstUse || pin.FirstUse
+		var scripts []string
+		if realized, entry, scripts, err = e.buildHere(h, realized.Path, buildDeps); len(scripts) > 0 {
+			return installed{unnamedScripts: scripts}, nil
 		}
 	default:
-		// A digest that oku.lock pinned for this version and URL still applies,
-		// even when the manifest gives none.
-		pinned := ""
-		if at := previous.Platforms[host.String()]; previous.VersionOn(host.String()) == m.Version.Value &&
-			at.URL == artifact.URL {
-			pinned = at.SHA256
-		}
+		realized, entry, err = e.download(h, artifact, keep)
+	}
 
-		// The locked build of a moving tag is gone once upstream moved the tag, so
-		// a download would be a newer build under the locked version.
-		if keep && m.Version.Tag != "" && !e.store().Has(m, artifact, host, pinned, deps.prefixes) {
-			now, err := e.resolver(opts).Pick(ctx, m.Version, "")
-			if err != nil {
-				return installed{}, fmt.Errorf("%s: %w", r, err)
-			}
-
-			if now.Commit != previous.TagCommit {
-				return installed{}, fmt.Errorf(
-					"upstream moved the tag %s to %s since oku.lock was written, "+
-						"and the locked build %s is gone\nrun `oku update %s` to take the new build",
-					m.Version.Tag, now.Version, previous.Version, m.Package.Name,
-				)
-			}
-
-			release.Digests = now.Digests
-		}
-
-		stated := artifactVerified(m, artifact, release)
-
-		if artifact.SHA256 == "" && artifact.SHA256URL == "" {
-			artifact.SHA256 = release.Digests[artifact.URL]
-		}
-
-		// The npm registry publishes a sha512 for every version's download.
-		if artifact.SHA256 == "" && artifact.SHA256URL == "" && artifact.Integrity == "" {
-			artifact.Integrity = release.Integrity[artifact.URL]
-		}
-
-		if req.acceptDigest && (artifact.SHA256 != "" || artifact.SHA256URL != "") {
-			pinned = ""
-		}
-
-		verified := pinVerified(stated, pinned != "", previous.Platforms[host.String()])
-		if err := req.checkVerified(host, verified); err != nil {
-			return installed{}, err
-		}
-
-		if verified == lock.VerifiedFirstUse && pinned == "" {
-			if err := req.trust(m.Package.Name, m.Version.Value, host); err != nil {
-				return installed{}, err
-			}
-		}
-
-		auth := e.fetcher(opts).Hosts.AuthFor(m.Version.From, m.Version.Repo)
-
-		if artifact.Completions.Generate != "" || len(m.Env) > 0 {
-			if err := req.approve(m, host, &artifact); err != nil {
-				return installed{}, err
-			}
-		}
-
-		if realized, err = e.store().As(auth).SignedAfter(req.signedAfter(host, m.Version.Value)).Realize(
-			ctx, m, artifact, host, pinned, deps.prefixes,
-		); err != nil {
-			return installed{}, err
-		}
-
-		entry = lock.Platform{
-			Strategy: strategyArtifact,
-			URL:      artifact.URL,
-			SHA256:   realized.SHA256,
-			Verified: verified,
-			Commands: artifact.Completions.Generate != "",
-			SignedAt: realized.SignedAt,
-		}
-
-		// A download that the lock pins, which the store had, keeps its time.
-		if was := previous.Platforms[host.String()]; entry.SignedAt == 0 && was.SHA256 == entry.SHA256 {
-			entry.SignedAt = was.SignedAt
-		}
+	if err != nil {
+		return installed{}, err
 	}
 
 	if m.PerArtifact() {
@@ -880,7 +758,7 @@ func (e env) installFrom(
 	platforms := keptPlatforms(previous, m, r)
 	platforms[host.String()] = entry
 
-	firstUseOthers, err := e.lockOthers(ctx, opts, req, m, release, platforms, hostBuild{
+	firstUseOthers, err := e.lockOthers(ctx, opts, req, m, h.release, platforms, hostBuild{
 		entry: entry, deps: deps.prefixes, npmRegistry: opts.NPMRegistry,
 		pypiIndex: opts.PyPIIndex, goProxy: opts.GoProxy, log: req.log,
 	})
@@ -913,6 +791,240 @@ func (e env) installFrom(
 		notes:          deps.notes,
 		host:           append(hostHere(m.Host), deps.host...),
 	}, nil
+}
+
+// fromCache takes the build at path that a cache had, and returns its lock
+// entry.
+func (e env) fromCache(h *hostInstall, path string) (lock.Platform, error) {
+	m, req, host, previous, deps := h.m, h.req, h.host, h.req.previous, h.deps
+
+	// A package from a cache runs none of the manifest's commands. Only its
+	// [env] needs approval, and an empty artifact makes the approver ask about
+	// that alone. A cache never holds an impure package.
+	if err := req.approve(m, host, &manifest.Artifact{}); err != nil {
+		return lock.Platform{}, err
+	}
+
+	deps.substituted = append(deps.substituted, m.Package.Name)
+
+	// The cache entry holds the pins of the build that made it.
+	meta, _ := store.ReadMeta(path)
+	if h.pinnedVendor != "" && meta.VendorSHA256 != "" && h.pinnedVendor != meta.VendorSHA256 {
+		return lock.Platform{}, fmt.Errorf(
+			"%s: %w: oku.lock pinned %s, the build in the cache downloaded %s",
+			m.Package.Name, store.ErrVendorChanged, h.pinnedVendor, meta.VendorSHA256,
+		)
+	}
+
+	return keepPins(lock.Platform{
+		Strategy:     strategyBuild,
+		VendorSHA256: meta.VendorSHA256,
+		URL:          meta.URL,
+		SHA256:       meta.SHA256,
+		Verified:     h.sourceCheck,
+	}, previous, m, host), nil
+}
+
+// buildHere builds the package at path on this machine. When the tree of an
+// npm: package holds install scripts that the manifest does not name, it
+// returns them instead, so the package can be translated again with them.
+func (e env) buildHere(
+	h *hostInstall,
+	path string,
+	buildDeps int,
+) (store.Realized, lock.Platform, []string, error) {
+	ctx, opts, m, req, host, previous, deps := h.ctx, h.opts, h.m, h.req, h.host, h.req.previous, h.deps
+
+	// The tree of an npm: package may hold install scripts. oku installs it in
+	// a temporary directory with no scripts to find them, then translates the
+	// package again with them named. The one approval lists them, and the one
+	// build runs them. oku looked for them when it made a build that is in the
+	// store.
+	_, stored := store.ReadMeta(path)
+	if req.ref.Kind == ref.NPM && req.npmScripts == nil && (stored != nil || req.rebuild) &&
+		store.CanCrossVendor(m.Build, host) {
+		found, err := e.store().Build(ctx, m, host, store.BuildOptions{
+			Deps: deps.prefixes, Log: req.log, NPMRegistry: opts.NPMRegistry, VendorOnly: true,
+		})
+		if err != nil {
+			return store.Realized{}, lock.Platform{}, nil, fmt.Errorf("%s: %w", m.Package.Name, err)
+		}
+
+		if len(found.UnnamedScripts) > 0 {
+			return store.Realized{}, lock.Platform{}, found.UnnamedScripts, nil
+		}
+	}
+
+	if err := req.approve(m, host, nil); err != nil {
+		return store.Realized{}, lock.Platform{}, nil, err
+	}
+
+	// crates.io and GitHub publish the digest of each version's source, which
+	// the manifest cannot state for every version.
+	if src := &m.Build.Source; src.URL != "" && src.SHA256 == "" && src.SHA256URL == "" {
+		vars := map[string]string{"version": m.Version.Value, "tag": m.Tag}
+		if at, err := manifest.Expand(src.URL, vars); err == nil {
+			src.SHA256 = h.release.Digests[at]
+		}
+	}
+
+	// A failed build names what the host lacks.
+	missing, err := hostSystem(opts).Check(hostHere(m.Host))
+	if err != nil {
+		return store.Realized{}, lock.Platform{}, nil, err
+	}
+
+	realized, err := e.store().Build(ctx, m, host, store.BuildOptions{
+		Deps: deps.prefixes, Log: req.log, PinnedVendor: h.pinnedVendor, Progress: req.progress,
+		NPMRegistry: opts.NPMRegistry, PyPIIndex: opts.PyPIIndex, GoProxy: opts.GoProxy,
+		PinnedSource: h.pinnedSource, Rebuild: req.rebuild,
+		RuntimeDeps: deps.prefixes[buildDeps:],
+	})
+	if err != nil {
+		for _, lack := range missing {
+			err = fmt.Errorf("%w\n%s", err, missingLine(lack, nil))
+		}
+
+		return store.Realized{}, lock.Platform{}, nil, fmt.Errorf("%s: %w", m.Package.Name, err)
+	}
+
+	if realized.MalwareUnchecked != "" {
+		deps.notes = append(deps.notes, fmt.Sprintf(
+			"%s: oku could not ask OSV about the packages of the %s", m.Package.Name, realized.MalwareUnchecked,
+		))
+	}
+
+	// A manifest of the user's names its scripts itself, so oku only says so.
+	if len(realized.UnnamedScripts) > 0 && req.ref.Kind != ref.NPM {
+		deps.notes = append(deps.notes, fmt.Sprintf(
+			"%s: the install scripts of %s did not run, since the npm step's scripts does not name them",
+			m.Package.Name, strings.Join(realized.UnnamedScripts, ", "),
+		))
+	}
+
+	for _, missing := range realized.MissingDeps {
+		deps.notes = append(deps.notes, fmt.Sprintf(
+			"%s: %s loads %s, which is not in runtime.deps, so it breaks after `oku gc` or on another machine",
+			m.Package.Name,
+			missing.File,
+			missing.Package,
+		))
+	}
+
+	entry := keepPins(lock.Platform{
+		Strategy: strategyBuild, Impure: realized.Impure, VendorSHA256: realized.VendorSHA256,
+		URL: realized.SourceURL, SHA256: realized.SHA256, Verified: h.sourceCheck,
+	}, previous, m, host)
+
+	// A build from before oku recorded the source archive has no pin for it.
+	if entry.SHA256 == "" {
+		pin, err := e.store().PinBuild(ctx, m, host, store.BuildPin{})
+		if err != nil {
+			return store.Realized{}, lock.Platform{}, nil, fmt.Errorf("%s: %w", m.Package.Name, err)
+		}
+
+		entry.URL, entry.SHA256, entry.Verified = pin.SourceURL, pin.SHA256, h.sourceCheck
+		realized.FirstUse = realized.FirstUse || pin.FirstUse
+	}
+
+	return realized, entry, nil, nil
+}
+
+// download installs artifact, the download that fits this machine. keep
+// reports that the release is the one oku.lock pins.
+func (e env) download(
+	h *hostInstall,
+	artifact manifest.Artifact,
+	keep bool,
+) (store.Realized, lock.Platform, error) {
+	ctx, opts, m, req, host, deps := h.ctx, h.opts, h.m, h.req, h.host, h.deps
+	// When upstream left a locked moving tag in place, download refreshes the
+	// release's digests, and the pins of the other platforms use them too.
+	r, previous, release := req.ref, req.previous, &h.release
+
+	// A digest that oku.lock pinned for this version and URL still applies,
+	// even when the manifest gives none.
+	pinned := ""
+	if at := previous.Platforms[host.String()]; previous.VersionOn(host.String()) == m.Version.Value &&
+		at.URL == artifact.URL {
+		pinned = at.SHA256
+	}
+
+	// The locked build of a moving tag is gone once upstream moved the tag, so
+	// a download would be a newer build under the locked version.
+	if keep && m.Version.Tag != "" && !e.store().Has(m, artifact, host, pinned, deps.prefixes) {
+		now, err := e.resolver(opts).Pick(ctx, m.Version, "")
+		if err != nil {
+			return store.Realized{}, lock.Platform{}, fmt.Errorf("%s: %w", r, err)
+		}
+
+		if now.Commit != previous.TagCommit {
+			return store.Realized{}, lock.Platform{}, fmt.Errorf(
+				"upstream moved the tag %s to %s since oku.lock was written, "+
+					"and the locked build %s is gone\nrun `oku update %s` to take the new build",
+				m.Version.Tag, now.Version, previous.Version, m.Package.Name,
+			)
+		}
+
+		release.Digests = now.Digests
+	}
+
+	stated := artifactVerified(m, artifact, *release)
+
+	if artifact.SHA256 == "" && artifact.SHA256URL == "" {
+		artifact.SHA256 = release.Digests[artifact.URL]
+	}
+
+	// The npm registry publishes a sha512 for every version's download.
+	if artifact.SHA256 == "" && artifact.SHA256URL == "" && artifact.Integrity == "" {
+		artifact.Integrity = release.Integrity[artifact.URL]
+	}
+
+	if req.acceptDigest && (artifact.SHA256 != "" || artifact.SHA256URL != "") {
+		pinned = ""
+	}
+
+	verified := pinVerified(stated, pinned != "", previous.Platforms[host.String()])
+	if err := req.checkVerified(host, verified); err != nil {
+		return store.Realized{}, lock.Platform{}, err
+	}
+
+	if verified == lock.VerifiedFirstUse && pinned == "" {
+		if err := req.trust(m.Package.Name, m.Version.Value, host); err != nil {
+			return store.Realized{}, lock.Platform{}, err
+		}
+	}
+
+	auth := e.fetcher(opts).Hosts.AuthFor(m.Version.From, m.Version.Repo)
+
+	if artifact.Completions.Generate != "" || len(m.Env) > 0 {
+		if err := req.approve(m, host, &artifact); err != nil {
+			return store.Realized{}, lock.Platform{}, err
+		}
+	}
+
+	realized, err := e.store().As(auth).SignedAfter(req.signedAfter(host, m.Version.Value)).Realize(
+		ctx, m, artifact, host, pinned, deps.prefixes,
+	)
+	if err != nil {
+		return store.Realized{}, lock.Platform{}, err
+	}
+
+	entry := lock.Platform{
+		Strategy: strategyArtifact,
+		URL:      artifact.URL,
+		SHA256:   realized.SHA256,
+		Verified: verified,
+		Commands: artifact.Completions.Generate != "",
+		SignedAt: realized.SignedAt,
+	}
+
+	// A download that the lock pins, which the store had, keeps its time.
+	if was := previous.Platforms[host.String()]; entry.SignedAt == 0 && was.SHA256 == entry.SHA256 {
+		entry.SignedAt = was.SignedAt
+	}
+
+	return realized, entry, nil
 }
 
 // pickRelease parses the manifest in fetched and picks the release of it that
