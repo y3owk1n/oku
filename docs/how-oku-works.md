@@ -125,7 +125,8 @@ its own.
 
 One numbered version of a profile. Every change that installs, removes or
 changes a package, a home file or a setting writes a new generation.
-`oku generations` lists them and `oku rollback` switches between them. See
+`oku generations` lists them, `oku diff` compares two, and `oku rollback`
+switches between them. See
 [Undo a change](guides/undo-and-clean-up.md).
 
 ### sync

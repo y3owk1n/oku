@@ -182,35 +182,29 @@ func holds(gen profile.Generation) string {
 func changes(s ui.Style, from, to profile.Generation) string {
 	const show = 6
 
-	find := func(pkgs []profile.Package, name string) int {
-		return slices.IndexFunc(pkgs, func(p profile.Package) bool { return p.Name == name })
-	}
-
 	var parts []string
 
-	for _, pkg := range from.Packages {
-		if find(to.Packages, pkg.Name) < 0 {
-			parts = append(parts, s.Bad("-")+" "+pkg.Name)
+	for _, d := range generationDeltas(from, to) {
+		name := d.Name
+		if d.Kind == "file" {
+			name = s.Home(name)
 		}
-	}
-
-	for _, pkg := range to.Packages {
-		i := find(from.Packages, pkg.Name)
 
 		switch {
-		case i < 0:
-			parts = append(parts, s.Good("+")+" "+pkg.Name+" "+pkg.Version)
-		case from.Packages[i].Version != pkg.Version:
-			parts = append(
-				parts, pkg.Name+" "+from.Packages[i].Version+" "+s.Arrow()+" "+pkg.Version,
-			)
-		case from.Packages[i].StorePath != pkg.StorePath:
-			parts = append(parts, pkg.Name+" rebuilt")
+		case d.Kind == "package" && d.Change == wasAdded:
+			parts = append(parts, s.Good("+")+" "+name+" "+d.After)
+		case d.Kind == "package" && d.Note != "":
+			parts = append(parts, name+" "+d.Note)
+		case d.Kind == "package" && d.Change == wasChanged:
+			parts = append(parts, name+" "+d.Before+" "+s.Arrow()+" "+d.After)
+		case d.Change == wasAdded:
+			parts = append(parts, s.Good("+")+" "+name)
+		case d.Change == wasRemoved:
+			parts = append(parts, s.Bad("-")+" "+name)
+		default:
+			parts = append(parts, s.Warn("~")+" "+name)
 		}
 	}
-
-	parts = append(parts, fileChanges(s, from.Files, to.Files)...)
-	parts = append(parts, settingChanges(s, from.Settings, to.Settings)...)
 
 	switch {
 	case len(parts) == 0 && from.Number == 0:

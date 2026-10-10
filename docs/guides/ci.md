@@ -190,6 +190,14 @@ done
 
 Call `oku update` with names only. With no names it moves every package.
 
+`oku diff` with the lock from before the updates prints a table of what moved,
+for the body of the pull request:
+
+```sh
+git show HEAD:oku.lock > /tmp/before.lock
+oku diff /tmp/before.lock --markdown > /tmp/body.md
+```
+
 ## See a real workflow
 
 oku's own [ci.yml](../../.github/workflows/ci.yml) uses the action on Linux,

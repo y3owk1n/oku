@@ -34,6 +34,10 @@ next generation replaces an older one, and its line starts with that number,
 such as `from 1, + hello 1.0.0`. When `oku gc` deleted the generation a line
 replaced, the line says so, as in `replaced 2, which is deleted`.
 
+`oku diff` lists every change of the active generation without cutting it
+short, and `oku diff 1 3` compares any two. See
+[`oku diff`](../reference/commands.md#oku-diff).
+
 ## Roll back the last change
 
 ```
