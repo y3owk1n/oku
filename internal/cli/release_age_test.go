@@ -131,6 +131,22 @@ func TestB372AddTakesTheNewestVersionOlderThanTheMinimumReleaseAge(t *testing.T)
 	}
 }
 
+func TestB372AnAgeTooLongToCountIsRefused(t *testing.T) {
+	m := newMachine(t)
+	tool := ageServer(t, &m, map[string]time.Duration{"1.0.0": 10 * 24 * time.Hour})
+
+	_, err := m.run(t, "", "add", tool, "--min-release-age", "15251w")
+	if err == nil || !strings.Contains(err.Error(), "the most is 15250w") {
+		t.Fatalf("want --min-release-age 15251w refused, got %v", err)
+	}
+
+	m.writeFilesList(t, fmt.Sprintf("[lock]\nmin_release_age = \"200000d\"\n[packages]\ntool = %q\n", tool))
+
+	if _, err := m.run(t, "", "sync"); err == nil || !strings.Contains(err.Error(), "the most is 106751d") {
+		t.Fatalf("want min_release_age 200000d refused, got %v", err)
+	}
+}
+
 func TestB372ListAndEntrySetTheMinimumReleaseAge(t *testing.T) {
 	for _, tc := range []struct {
 		name, list, want string
