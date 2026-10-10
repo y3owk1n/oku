@@ -32,6 +32,21 @@ service running too.
 
 To turn it off, remove `service = true` and run `oku sync`.
 
+## Run a job on a schedule
+
+A service whose manifest has a [`schedule`](../reference/manifest.md#scheduled-jobs)
+is a job. It runs at set times and ends on its own. `service = true` turns its
+schedule on, the same way:
+
+```
+$ oku service status backup
+backup: idle, runs every 1h
+```
+
+A job between its runs is `idle`. `oku service start backup` runs it once now,
+and `oku service stop backup` ends a run, without changing the schedule. Its
+output goes to the same log as a service's.
+
 ## Control a service
 
 ```
@@ -88,7 +103,7 @@ runs.
 
 | | macOS | Linux |
 |---|---|---|
-| Turned on | `~/Library/LaunchAgents/dev.oku.<name>.plist`, loaded into your login session | `~/.config/systemd/user/oku-<name>.service`, enabled and started |
+| Turned on | `~/Library/LaunchAgents/dev.oku.<name>.plist`, loaded into your login session | `~/.config/systemd/user/oku-<name>.service`, enabled and started. A job also has `oku-<name>.timer`, which is enabled in its place. |
 | Installed, not turned on | `~/.local/share/oku/services/dev.oku.<name>.plist`, which launchd does not read | the same unit file, disabled |
 | Output | `~/.local/share/oku/logs/<name>.log` | the user journal, `journalctl --user -u oku-<name>` |
 

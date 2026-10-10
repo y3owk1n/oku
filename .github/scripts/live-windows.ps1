@@ -474,6 +474,49 @@ Check 'remove deletes the task' { -not (Get-ScheduledTask -TaskName 'oku-ticker'
 Start-Sleep -Seconds 2
 Check 'remove stops the program' { -not (Get-Process ticker -ErrorAction SilentlyContinue) }
 
+# A job, which runs on its schedule and ends on its own.
+Set-Content (Join-Path $fixtures 'job.go') @'
+package main
+
+import "fmt"
+
+func main() { fmt.Println("job ran") }
+'@
+$jobGo = (Join-Path $fixtures 'job.go') -replace '\\', '/'
+
+Set-Content (Join-Path $fixtures 'job.toml') @"
+[package]
+name = "job"
+[version]
+value = "1.0.0"
+[build]
+needs = ["go"]
+[[build.step]]
+run = "Copy-Item '$jobGo' main.go; Set-Content go.mod 'module job'; go build -o job.exe ."
+shell = "pwsh"
+[[build.step]]
+install = { bin = ["job.exe"] }
+[[service]]
+name = "job"
+command = "bin/job.exe"
+schedule = { every = "15m" }
+"@
+
+function JobStatus { (& $oku service status job) -join ' ' }
+
+Oku add (Join-Path $fixtures 'job.toml') --yes --service
+Check 'an enabled job is idle and says when it runs' { (JobStatus) -match 'idle' -and (JobStatus) -match 'runs every 15m' }
+Check 'its task repeats every 15 minutes' {
+    $task = Get-ScheduledTask -TaskName 'oku-job'
+    ($task.Triggers.Count -eq 1) -and ($task.Triggers[0].Repetition.Interval -eq 'PT15M')
+}
+Oku service start job
+Start-Sleep -Seconds 3
+Check 'start runs the job once now' { ((& $oku service logs job) -join ' ') -match 'job ran' }
+
+Oku remove job
+Check 'remove deletes the job task' { -not (Get-ScheduledTask -TaskName 'oku-job' -ErrorAction SilentlyContinue) }
+
 # System scope: an app, a font and a service for the whole machine. The runner is
 # already an administrator, so oku runs the privileged step directly.
 Set-Content (Join-Path $fixtures 'sysdemo.toml') @"

@@ -119,19 +119,52 @@ func (l *launchd) Start(ctx context.Context, d Definition) error {
 		return nil
 	}
 
+	// A loaded job keeps its schedule, and kickstart runs it once now.
+	if d.Schedule != nil && l.loaded(ctx, d) {
+		return l.launchctl(ctx, "kickstart", l.domain+"/"+d.Label())
+	}
+
 	_ = l.bootout(ctx, d)
 
 	for _, path := range []string{l.File(d), l.held(d)} {
-		if _, err := os.Stat(path); err == nil {
-			return l.bootstrap(ctx, path)
+		if _, err := os.Stat(path); err != nil {
+			continue
 		}
+
+		if err := l.bootstrap(ctx, path); err != nil || d.Schedule == nil {
+			return err
+		}
+
+		return l.launchctl(ctx, "kickstart", l.domain+"/"+d.Label())
 	}
 
 	return fmt.Errorf("%s is not installed", d.Name)
 }
 
+// Stop ends the program. A job stays loaded, so it keeps its schedule.
 func (l *launchd) Stop(ctx context.Context, d Definition) error {
-	return l.bootout(ctx, d)
+	if d.Schedule == nil {
+		return l.bootout(ctx, d)
+	}
+
+	if status, _ := l.Status(ctx, d); !status.Running {
+		return nil
+	}
+
+	return l.launchctl(ctx, "kill", "SIGTERM", l.domain+"/"+d.Label())
+}
+
+// loaded reports whether launchd has the service's definition now.
+func (l *launchd) loaded(ctx context.Context, d Definition) bool {
+	return exec.CommandContext(ctx, "/bin/launchctl", "print", l.domain+"/"+d.Label()).Run() == nil
+}
+
+func (l *launchd) launchctl(ctx context.Context, args ...string) error {
+	if out, err := exec.CommandContext(ctx, "/bin/launchctl", args...).CombinedOutput(); err != nil {
+		return commandError("launchctl", args, out, err)
+	}
+
+	return nil
 }
 
 func (l *launchd) Status(ctx context.Context, d Definition) (Status, error) {
@@ -178,14 +211,7 @@ func (l *launchd) Logs(_ context.Context, d Definition, lines int) (string, erro
 }
 
 func (l *launchd) bootstrap(ctx context.Context, path string) error {
-	args := []string{"bootstrap", l.domain, path}
-
-	if out, err := exec.CommandContext(ctx, "/bin/launchctl", args...).
-		CombinedOutput(); err != nil {
-		return commandError("launchctl", args, out, err)
-	}
-
-	return nil
+	return l.launchctl(ctx, "bootstrap", l.domain, path)
 }
 
 // bootout unloads the service. launchd reports an error for a service that is
@@ -206,7 +232,7 @@ func (l *launchd) bootout(ctx context.Context, d Definition) error {
 
 	deadline := time.Now().Add(bootoutWait)
 
-	for exec.CommandContext(ctx, "/bin/launchctl", "print", target).Run() == nil {
+	for l.loaded(ctx, d) {
 		if time.Now().After(deadline) {
 			return fmt.Errorf("%s is still loaded %s after launchctl bootout", target, bootoutWait)
 		}
@@ -245,7 +271,32 @@ func plist(d Definition) []byte {
 		fmt.Fprintf(&b, "\t\t<string>%s</string>\n", esc(arg))
 	}
 
-	b.WriteString("\t</array>\n\t<key>RunAtLoad</key>\n\t<true/>\n")
+	b.WriteString("\t</array>\n")
+
+	// A job runs on its schedule, and not each time launchd loads it at login.
+	if s := d.Schedule; s == nil {
+		b.WriteString("\t<key>RunAtLoad</key>\n\t<true/>\n")
+	} else if s.Interval > 0 {
+		fmt.Fprintf(&b, "\t<key>StartInterval</key>\n\t<integer>%d</integer>\n", int(s.Interval.Seconds()))
+	} else {
+		at := func(day string) string {
+			return fmt.Sprintf("<dict>%s<key>Hour</key><integer>%d</integer><key>Minute</key><integer>%d</integer></dict>",
+				day, s.Hour, s.Minute)
+		}
+
+		b.WriteString("\t<key>StartCalendarInterval</key>\n\t<array>\n")
+
+		if len(s.Days) == 0 {
+			b.WriteString("\t\t" + at("") + "\n")
+		}
+
+		// launchd counts weekdays from Sunday, as 0, the same as time.Weekday.
+		for _, day := range s.Days {
+			b.WriteString("\t\t" + at(fmt.Sprintf("<key>Weekday</key><integer>%d</integer>", day)) + "\n")
+		}
+
+		b.WriteString("\t</array>\n")
+	}
 
 	// A daemon runs as root unless it names its user.
 	if d.User != "" {

@@ -1,5 +1,6 @@
-// Package service runs a package's long-running programs under the OS's own
-// service manager: launchd on macOS and systemd on Linux.
+// Package service runs a package's long-running programs and scheduled jobs
+// under the OS's own service manager: launchd on macOS, systemd on Linux and
+// the Task Scheduler on Windows.
 package service
 
 import (
@@ -29,6 +30,40 @@ type Definition struct {
 	// User is the account a system service runs as. Empty runs it as root, or
 	// as SYSTEM on Windows. A user service runs as its user either way.
 	User string
+	// Schedule makes the service a job that runs at set times and ends on its
+	// own. It is nil for a program that runs until it is stopped.
+	Schedule *Schedule `json:",omitempty"`
+}
+
+// Schedule is when a job runs: every Interval, or at Hour and Minute local time
+// each day, or on Days only.
+type Schedule struct {
+	Interval     time.Duration
+	Hour, Minute int
+	Days         []time.Weekday
+}
+
+// String says when s runs, such as "every 15m" or "at 03:00 on mon, fri".
+func (s Schedule) String() string {
+	if s.Interval > 0 {
+		if s.Interval%time.Hour == 0 {
+			return fmt.Sprintf("every %dh", s.Interval/time.Hour)
+		}
+
+		return fmt.Sprintf("every %dm", s.Interval/time.Minute)
+	}
+
+	at := fmt.Sprintf("at %02d:%02d", s.Hour, s.Minute)
+	if len(s.Days) == 0 {
+		return "daily " + at
+	}
+
+	days := make([]string, len(s.Days))
+	for i, day := range s.Days {
+		days[i] = strings.ToLower(day.String()[:3])
+	}
+
+	return at + " on " + strings.Join(days, ", ")
 }
 
 // Label is the name the OS knows the service by.

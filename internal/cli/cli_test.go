@@ -84,7 +84,8 @@ func (f *fakeServices) Install(_ context.Context, d service.Definition, enabled 
 		return fmt.Errorf("the service manager refused %s", d.Name)
 	}
 
-	f.state[d.Name] = &fakeService{def: d, enabled: enabled, running: enabled}
+	// A job waits for its schedule.
+	f.state[d.Name] = &fakeService{def: d, enabled: enabled, running: enabled && d.Schedule == nil}
 
 	return nil
 }

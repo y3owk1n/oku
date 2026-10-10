@@ -813,6 +813,11 @@ postgres: stopped
   exited by then, the command fails and says where to look, such as
   `oku: atuin started and then exited, look at ~/.local/share/oku/logs/atuin.log`.
   On Linux the hint is a `journalctl` command.
+- A [scheduled job](manifest.md#scheduled-jobs) is `idle` between its runs,
+  and an enabled one says when it runs, as in `backup: idle, runs every 1h`.
+  `start` runs it once now and `stop` ends a run, and neither changes its
+  schedule. `start` does not report a job that ends, since a job ends on its
+  own. `list --json` gives its `schedule`.
 - `list` and `status` mark a system service with `system scope`.
 
 ### oku setup
@@ -1770,7 +1775,7 @@ flags they change the machine.
 | `oku source list` | A list of `alias`, `ref`. |
 | `oku cache list` | A list of locations. |
 | `oku key list` | `yours` and `trusted`. |
-| `oku service list` | A list of `name`, `package`, `installed`, `enabled`, `running`, `system`, `detail`. |
+| `oku service list` | A list of `name`, `package`, `installed`, `enabled`, `running`, `system`, `detail`, and `schedule` for a job. |
 | `oku service status <name>` | One such object. `start`, `stop` and `restart` print it too. |
 | `oku verify` | A list of `name`, `version`, `path`, `status` and `changes`. |
 | `oku add --dry-run` | A list with one object per ref, with fields such as `ref`, `name`, `version`, `inferred`, `asset`, `install`, `platform`, `commands`, `needs`, `deps` and `build_deps`. |

@@ -57,6 +57,19 @@ func (s *systemd) Unavailable() string {
 
 func (s *systemd) unit(d Definition) string { return "oku-" + d.Name + ".service" }
 
+// timer is the unit that starts a job on its schedule.
+func (s *systemd) timer(d Definition) string { return "oku-" + d.Name + ".timer" }
+
+// enabler is the unit that enable and disable act on: the timer of a job, and
+// the service itself otherwise.
+func (s *systemd) enabler(d Definition) string {
+	if d.Schedule != nil {
+		return s.timer(d)
+	}
+
+	return s.unit(d)
+}
+
 func (s *systemd) File(d Definition) string { return filepath.Join(s.units, s.unit(d)) }
 
 func (s *systemd) Install(ctx context.Context, d Definition, enabled bool) error {
@@ -68,28 +81,49 @@ func (s *systemd) Install(ctx context.Context, d Definition, enabled bool) error
 		return err
 	}
 
+	if d.Schedule != nil {
+		if err := os.WriteFile(filepath.Join(s.units, s.timer(d)), s.timerFile(d), 0o644); err != nil {
+			return err
+		}
+	}
+
 	if err := s.ctl(ctx, "daemon-reload"); err != nil {
 		return err
 	}
 
 	if !enabled {
-		return s.ctl(ctx, "disable", "--now", s.unit(d))
+		return s.ctl(ctx, "disable", "--now", s.enabler(d))
 	}
 
-	return s.ctl(ctx, "enable", "--now", s.unit(d))
+	return s.ctl(ctx, "enable", "--now", s.enabler(d))
 }
 
+// Remove takes away the service and, for a job, its timer. Remove gets only
+// the name, so it looks for a timer either way.
 func (s *systemd) Remove(ctx context.Context, d Definition) error {
+	timer := filepath.Join(s.units, s.timer(d))
+	if _, err := os.Stat(timer); err == nil {
+		_ = s.ctl(ctx, "disable", "--now", s.timer(d))
+	}
+
 	_ = s.ctl(ctx, "disable", "--now", s.unit(d))
 
-	if err := os.Remove(s.File(d)); err != nil && !os.IsNotExist(err) {
-		return err
+	for _, path := range []string{s.File(d), timer} {
+		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+			return err
+		}
 	}
 
 	return s.ctl(ctx, "daemon-reload")
 }
 
+// Start runs the program. A job runs once now, and oku does not wait for it to
+// end.
 func (s *systemd) Start(ctx context.Context, d Definition) error {
+	if d.Schedule != nil {
+		return s.ctl(ctx, "start", "--no-block", s.unit(d))
+	}
+
 	return s.ctl(ctx, "start", s.unit(d))
 }
 
@@ -103,7 +137,7 @@ func (s *systemd) Status(ctx context.Context, d Definition) (Status, error) {
 	_, err := os.Stat(s.File(d))
 	status.Installed = err == nil
 
-	enabled, _ := exec.CommandContext(ctx, "systemctl", s.scope, "is-enabled", s.unit(d)).Output()
+	enabled, _ := exec.CommandContext(ctx, "systemctl", s.scope, "is-enabled", s.enabler(d)).Output()
 	status.Enabled = strings.TrimSpace(string(enabled)) == "enabled"
 
 	pid, _ := exec.CommandContext(ctx, "systemctl", s.scope, "show", "--property=MainPID", "--value", s.unit(d)).
@@ -169,6 +203,11 @@ func (s *systemd) unitFile(d Definition) []byte {
 		restart = "no"
 	}
 
+	// A job runs once each time its timer starts it.
+	if d.Schedule != nil {
+		b.WriteString("Type=oneshot\n")
+	}
+
 	fmt.Fprintf(&b, "Restart=%s\n", restart)
 
 	// A system unit runs as root unless it names its user. systemd unquotes
@@ -190,14 +229,44 @@ func (s *systemd) unitFile(d Definition) []byte {
 		fmt.Fprintf(&b, "Environment=%s\n", quoteUnit(name+"="+d.Env[name]))
 	}
 
-	// A user manager has no multi-user.target, and the system manager does not
-	// start default.target's user units.
+	// A job has no [Install], since its timer is what starts it. A user manager
+	// has no multi-user.target, and the system manager does not start
+	// default.target's user units.
+	if d.Schedule != nil {
+		return []byte(b.String())
+	}
+
 	target := "default.target"
 	if s.scope == "--system" {
 		target = "multi-user.target"
 	}
 
 	fmt.Fprintf(&b, "\n[Install]\nWantedBy=%s\n", target)
+
+	return []byte(b.String())
+}
+
+// timerFile renders the timer that starts the job d. With Persistent, systemd
+// starts a run that the machine slept through once it wakes.
+func (s *systemd) timerFile(d Definition) []byte {
+	var b strings.Builder
+
+	fmt.Fprintf(&b, "[Unit]\nDescription=%s on its schedule, installed by oku\n\n[Timer]\n", d.Name)
+
+	if sch := d.Schedule; sch.Interval > 0 {
+		seconds := int(sch.Interval.Seconds())
+		fmt.Fprintf(&b, "OnActiveSec=%d\nOnUnitActiveSec=%d\n", seconds, seconds)
+	} else {
+		days := make([]string, len(sch.Days))
+		for i, day := range sch.Days {
+			days[i] = day.String()[:3]
+		}
+
+		calendar := strings.TrimSpace(strings.Join(days, ",") + fmt.Sprintf(" *-*-* %02d:%02d:00", sch.Hour, sch.Minute))
+		fmt.Fprintf(&b, "OnCalendar=%s\nPersistent=true\n", calendar)
+	}
+
+	fmt.Fprintf(&b, "Unit=%s\n\n[Install]\nWantedBy=timers.target\n", s.unit(d))
 
 	return []byte(b.String())
 }
