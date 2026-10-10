@@ -2087,3 +2087,14 @@ which the lock in git before and after gives without a generation. Comparing
 the package's version alone would hide a platform pin or a dep that moved
 under an unchanged package. `--exit-code` is left out, since `sync --dry-run
 --exit-code` already tells CI that something differs.
+
+## D127. A dry run shows file diffs with --diff, from the generation's text
+
+`--diff` on a dry run compares the text that the active generation and the
+planned one hold for each file, so the diff never needs a secret's value. A
+generation keeps a placeholder where a secret goes, and oku prints it as the
+template names it. Two lines of context surround each change. The diff is
+opt-in because B167 promises that a dry run in a pipe prints only its would
+lines, and the diff of a long file would put hundreds of lines between them. A text whose old and new line
+counts multiply past four million prints a note in place of a diff, because
+the line diff keeps a table of that size.
