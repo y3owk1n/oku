@@ -1635,6 +1635,9 @@ order step in `prd/product.md`.
   then never leaves the screen blank. While the package has a wait of its own,
   such as a download, its line shows that wait instead. A pipe gets no line for
   a request.
+- B567 [11] `oku -v` on its own prints the version, as `oku --version` does.
+  Before a command, `-v` is that command's `--verbose`, so `oku -v sync` is
+  `oku sync -v`.
 - B566 [11] Shell completion reads files on the machine only. It offers the
   packages of `oku.lock` for `remove`, `update`, `info`, `why` and
   `--rebuild`, and the generations for `rollback`. It offers the services for
