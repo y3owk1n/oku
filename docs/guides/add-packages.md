@@ -390,7 +390,7 @@ only, and completions need a manifest.
 ```
 $ oku outdated
 ripgrep  14.1.1  14.1.1  15.2.0  github:BurntSushi/ripgrep
-`oku update` takes the newest versions. To take a latest beyond them, change its version in oku.toml
+the version in oku.toml keeps ripgrep below the latest. To take the latest, change that version
 ```
 
 The columns are the name, the locked version, the newest version that the
