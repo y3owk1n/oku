@@ -1410,6 +1410,14 @@ order step in `prd/product.md`.
 - B170 [8] The `args` and `env` of a service expand `{{home}}`, `{{config}}` and
   `{{data}}`. On macOS and Linux a service of the user finds the programs of
   the global profile on its `PATH`, unless its `env` sets `PATH`.
+- B581 [8] A `[[service]]` with `schedule = { every = "15m" }` or
+  `{ at = "03:00", weekdays = [...] }` is a job. With `service = true` the OS
+  runs it on that schedule, through launchd, a systemd timer or a Task
+  Scheduler trigger, and never at install or login. `service status` says
+  `idle, runs every 15m`, `service start` runs it once now without reporting
+  its end as a failure, and a changed schedule reaches the OS with the next
+  update. A schedule with both `every` and `at`, with a `restart`, or with a
+  value outside its form fails `manifest lint` and the install.
 - B74 [8] `oku service start|stop|restart|status|logs` behave the same on all
   three OSes.
   `start` of a name that no package ships says so, and says when no package

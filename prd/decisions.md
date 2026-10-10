@@ -2126,3 +2126,18 @@ shell completions from packages, and PowerShell loaded only oku's own. A
 manifest written for three shells installed before, and a program that knows
 no PowerShell must not start to fail. The hook dot-sources each script in a
 foreach statement, because a pipeline would run each one in a scope of its own.
+
+## D130. A service with a schedule is a job, in two forms every manager has
+
+`[[service]]` takes `schedule = { every = "<n>m|<n>h" }` or
+`{ at = "HH:MM", weekdays = [...] }`, and nothing richer. launchd renders them
+as `StartInterval` or `StartCalendarInterval` without `RunAtLoad`, systemd as a
+oneshot unit and an `oku-<name>.timer` with `Persistent=true`, and Task
+Scheduler as a repeating `TimeTrigger` or a `CalendarTrigger` with
+`StartWhenAvailable`. `service = true` turns the schedule on, `service start`
+runs the job once now, and `service stop` ends a run, so neither changes the
+schedule. A job takes no `restart`, and `service status` calls it `idle`
+between runs. Why: these two forms are what all three managers express, and
+Task Scheduler, the narrowest, has no cron syntax, so a richer grammar would
+work on two OSes only. On macOS a job whose schedule is off loads its schedule
+for the session when started, because launchd runs a job only by loading it.
