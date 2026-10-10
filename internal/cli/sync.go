@@ -67,8 +67,8 @@ oku.toml yet.`,
 					)
 				}
 
-				// adopt writes the list and the lock, so a sync that then fails has
-				// to take them away again.
+				// adopt writes the list and the lock, so a sync that fails before
+				// its change commits has to take them away again.
 				before, err := e.readSavedLists()
 				if err != nil {
 					return err
@@ -78,14 +78,17 @@ oku.toml yet.`,
 					return err
 				}
 
-				err = reconcile(cmd, opts, &flags, nil, false, &before)
+				a := adoption{before: before}
+				err = reconcile(cmd, opts, &flags, nil, false, &a)
 
 				// A dry run adopts nothing either.
-				if dryRun, _ := cmd.Flags().GetBool(dryRunFlag); err != nil || dryRun {
-					return errors.Join(err, e.restoreSavedLists(before))
+				if dryRun, _ := cmd.Flags().GetBool(dryRunFlag); dryRun || err != nil && !a.committed {
+					_, restoreErr := e.restoreLists(pending{Before: before, Committing: true})
+
+					return errors.Join(err, restoreErr)
 				}
 
-				return nil
+				return err
 			}
 
 			return reconcile(cmd, opts, &flags, nil, false, nil)
@@ -126,9 +129,16 @@ func newUpdateCmd(opts Options) *cobra.Command {
 	return cmd
 }
 
+// adoption holds the list and the lock as they were before "oku sync <list-ref>"
+// wrote them, and whether the change that followed committed.
+type adoption struct {
+	before    savedLists
+	committed bool
+}
+
 // reconcile installs every package of oku.toml, activates a generation holding
-// exactly those, and rewrites oku.lock to match. before is the list and the lock
-// to restore when the change fails, or nil for the ones on disk.
+// exactly those, and rewrites oku.lock to match. adopted holds the list and the
+// lock to restore when the change fails, or is nil for the ones on disk.
 //
 // Without update, a locked package is read at its locked commit and must still
 // have its locked manifest hash. With update, the packages in names, or all of
@@ -139,7 +149,7 @@ func reconcile(
 	flags *buildFlags,
 	names []string,
 	update bool,
-	before *savedLists,
+	adopted *adoption,
 ) error {
 	started := time.Now()
 
@@ -560,7 +570,7 @@ func reconcile(
 	system, _ := cmd.Flags().GetBool(systemFlag)
 
 	c := change{
-		to: staged, staged: true, system: system, yes: flags.yes, before: before, dryRun: dryRun,
+		to: staged, staged: true, system: system, yes: flags.yes, dryRun: dryRun,
 		commit: func() error {
 			for _, j := range narrowed {
 				entry := all.own.Packages[j.name]
@@ -571,8 +581,19 @@ func reconcile(
 				}
 			}
 
-			return next.Write(e.lockPath())
+			if err := next.Write(e.lockPath()); err != nil {
+				return err
+			}
+
+			if adopted != nil {
+				adopted.committed = true
+			}
+
+			return nil
 		},
+	}
+	if adopted != nil {
+		c.before = &adopted.before
 	}
 	if staged == 0 {
 		c.to, c.staged = e.profile().Current(), false

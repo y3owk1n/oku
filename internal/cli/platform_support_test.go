@@ -200,6 +200,48 @@ func TestB273SyncLeavesOutAPackageWithNothingForTheHostAndSaysWhatToWrite(t *tes
 	}
 }
 
+func TestB18AnAdoptionKeepsItsListsOnceTheChangeCommitted(t *testing.T) {
+	m := newMachine(t)
+	here := m.onlyFor(t, "here", platform.Host())
+	there := m.onlyFor(t, "there", otherPlatform())
+
+	team := filepath.Join(m.fixtures, "team.toml")
+	must(t, os.WriteFile(team, fmt.Appendf(nil, "[packages]\nhere = %q\nthere = %q\n", here, there), 0o644))
+
+	_, err := m.run(t, "", "sync", team)
+	if err == nil || !strings.Contains(err.Error(), "there has no artifact or build") {
+		t.Fatalf("want the sync to fail on there, got %v", err)
+	}
+
+	for _, name := range []string{"oku.toml", "oku.lock"} {
+		if !exists(filepath.Join(m.config, name)) {
+			t.Fatalf("the sync installed here and then deleted %s", name)
+		}
+	}
+
+	// The next sync starts from the adopted list, so it keeps here.
+	_, _ = m.run(t, "", "sync")
+	if !exists(m.profile("bin", "here")) {
+		t.Fatal("the next sync removed here")
+	}
+
+	// A sync that fails before it changes the machine takes the lists away.
+	fresh := newMachine(t)
+	broken := filepath.Join(fresh.fixtures, "team.toml")
+	missing := filepath.Join(fresh.fixtures, "missing.toml")
+	must(t, os.WriteFile(broken, fmt.Appendf(nil, "[packages]\nnone = %q\n", missing), 0o644))
+
+	if _, err := fresh.run(t, "", "sync", broken); err == nil {
+		t.Fatal("want the sync of a missing package to fail")
+	}
+
+	for _, name := range []string{"oku.toml", "oku.lock"} {
+		if exists(filepath.Join(fresh.config, name)) {
+			t.Fatalf("a sync that changed nothing kept %s", name)
+		}
+	}
+}
+
 func TestB274ABuildAppliesOnlyToThePlatformsOfItsWhen(t *testing.T) {
 	m := newMachine(t)
 	other := otherPlatform()

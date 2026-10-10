@@ -352,8 +352,10 @@ fresh.
 
 This works only on a machine whose global `oku.toml` is missing or empty. On
 any other machine oku refuses and tells you to add the ref to your `include`
-instead. A list ref takes no `@version`. If the install fails, oku removes the
-two files again, so the same command works once you fix the cause.
+instead. A list ref takes no `@version`. If the install fails before it changes
+the machine, oku removes the two files again, so the same command works once
+you fix the cause. If it fails after, as it does when a package has nothing
+for this platform, oku keeps them, and a plain `oku sync` starts from them.
 
 > [!WARNING]
 > The published lock counts only once, at adoption. After that, `oku update` on
