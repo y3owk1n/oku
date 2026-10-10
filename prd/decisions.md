@@ -2035,3 +2035,14 @@ every package they keep. Each `github:` package with its own manifest cost a
 304 round trip, and each `git+` package cost a `git fetch` of about 0.9 s, for
 an answer that cannot change. On a terminal each of those reads drew a line for
 a moment, so updating one package flashed lines for the others.
+
+## D123. A list's when may name a host, and the lock stays per platform
+
+`when` in `oku.toml` takes `host`, the machine's short host name or `OKU_HOST`.
+It limits a package or a file to that machine. The lock keys its pins by
+platform as before, and a package for another host is pinned for this
+platform too when `[lock] platforms` names it. A manifest refuses `host`. Why:
+a machines repo often differs from one machine to the next, such as a work
+laptop that needs a VPN client. A host in the platform key would split the lock by machine and break
+`sync --locked` on a new one. Keeping the pins per platform lets any machine
+of that platform check them.
