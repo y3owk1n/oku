@@ -446,6 +446,11 @@ order step in `prd/product.md`.
   `packages/name.toml` after `name.toml`. oku then records which path held it
   at that full commit SHA. A later read at that commit asks the forge for that
   path alone, and not for the missing file.
+- B560 [3] oku keeps the GitHub attestations it found for a file's digest, so
+  a later command reads them from the cache and asks GitHub nothing. It asks
+  again for a file that had none. It also asks again before it refuses a file
+  when none of the kept attestations is the signer workflow's. It still
+  verifies each bundle it uses.
 - B385 [3] An answer that an older oku kept in another format makes oku ask the
   host for the whole answer again, and the lookup gives the same versions.
 - B361 [3] oku reads an npm answer of up to 128 MiB and a PyPI answer of up

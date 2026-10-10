@@ -26,6 +26,19 @@ type signing struct {
 	provenance   bool
 }
 
+// attestedBy returns the workflow of the first GitHub attestation of digest
+// that names a run for repo, or "".
+func (inf *Inferrer) attestedBy(ctx context.Context, repo, digest string) string {
+	bundles, _ := inf.Hosts.GitHubAttestations(ctx, repo, digest)
+	for _, b := range bundles {
+		if signer, err := sigstore.SignerOf(b); err == nil && signer.Repo == repo && signer.Workflow != "" {
+			return signer.Workflow
+		}
+	}
+
+	return ""
+}
+
 // signaturesOf reads the signatures of asset, the host's file of the release of
 // repo, and of sums, its checksum file. oku keeps a signature only when its
 // certificate names a workflow run for repo, and provenance only from a
@@ -41,14 +54,14 @@ func (inf *Inferrer) signaturesOf(
 	var s signing
 
 	if digest != "" {
-		bundles, _ := inf.Hosts.GitHubAttestations(ctx, repo, digest)
-		for _, b := range bundles {
-			if signer, err := sigstore.SignerOf(b); err == nil && signer.Repo == repo && signer.Workflow != "" {
-				s.workflow, s.attestations = signer.Workflow, true
+		s.workflow = inf.attestedBy(ctx, repo, digest)
 
-				break
-			}
+		// The attestations oku kept may predate one for the repo.
+		if s.workflow == "" {
+			s.workflow = inf.attestedBy(forge.Fresh(ctx), repo, digest)
 		}
+
+		s.attestations = s.workflow != ""
 	}
 
 	for _, file := range []string{sums, asset} {
