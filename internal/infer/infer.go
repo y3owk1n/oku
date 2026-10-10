@@ -11,6 +11,8 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"unicode"
 
 	xdg "github.com/y3owk1n/oku/internal/desktop"
@@ -337,31 +339,12 @@ func (inf *Inferrer) Manifest(
 		versionRepo = server.Host() + "/" + repo
 	}
 
-	// The checksum file of each asset, which oku reads once.
-	sumsOf := map[string]string{}
-	sumsFor := func(asset string) string {
-		if sums, ok := sumsOf[asset]; ok {
-			return sums
-		}
-
-		sumsOf[asset] = inf.checksumFile(ctx, server.Auth(), names, urls, digests[asset], asset)
-
-		return sumsOf[asset]
+	type artifact struct {
+		choice
+		layout
 	}
 
-	// A release on github.com may carry Sigstore signatures of its files.
-	var sign signing
-	if server.Kind() == forge.KindGitHub && server.Host() == "" {
-		sign = inf.signaturesOf(ctx, server.Auth(), repo, names, urls, result.Asset, sumsFor(result.Asset),
-			digests[result.Asset])
-	}
-
-	fmt.Fprintf(&b, "[package]\nname = %q\nhomepage = %q\n%s\n", name, server.Home(repo), sign.packageTOML())
-	fmt.Fprintf(&b, "[version]\nfrom = %q\nrepo = %q\n", server.Kind()+"-releases", versionRepo)
-
-	if prefix != "" {
-		fmt.Fprintf(&b, "strip_prefix = %q\n", prefix)
-	}
+	var artifacts []artifact
 
 	for _, c := range chosen {
 		kind := ending(c.asset)
@@ -385,11 +368,46 @@ func (inf *Inferrer) Manifest(
 			continue
 		}
 
+		artifacts = append(artifacts, artifact{c, l})
+	}
+
+	// A release on github.com may carry Sigstore signatures of its files.
+	signed := server.Kind() == forge.KindGitHub && server.Host() == ""
+
+	assets := make([]string, 0, len(artifacts)+1)
+	if signed {
+		assets = append(assets, result.Asset)
+	}
+
+	for _, a := range artifacts {
+		if !slices.Contains(assets, a.asset) {
+			assets = append(assets, a.asset)
+		}
+	}
+
+	sumsOf := inf.checksumFiles(ctx, server.Auth(), names, urls, digests, assets)
+
+	var sign signing
+	if signed {
+		sign = inf.signaturesOf(ctx, server.Auth(), repo, names, urls, result.Asset, sumsOf[result.Asset],
+			digests[result.Asset])
+	}
+
+	fmt.Fprintf(&b, "[package]\nname = %q\nhomepage = %q\n%s\n", name, server.Home(repo), sign.packageTOML())
+	fmt.Fprintf(&b, "[version]\nfrom = %q\nrepo = %q\n", server.Kind()+"-releases", versionRepo)
+
+	if prefix != "" {
+		fmt.Fprintf(&b, "strip_prefix = %q\n", prefix)
+	}
+
+	for _, a := range artifacts {
+		c, l := a.choice, a.layout
+
 		b.WriteString("\n")
 		fmt.Fprintf(&b, "[[artifact]]\nmatch = %s\n", selectorTOML(c.Selector))
 		fmt.Fprintf(&b, "url = %q\n", template(urls[c.asset], rel.Tag, version))
 
-		sums := sumsFor(c.asset)
+		sums := sumsOf[c.asset]
 		if sums != "" {
 			fmt.Fprintf(&b, "sha256_url = %q\n", template(urls[sums], rel.Tag, version))
 		}
@@ -1031,6 +1049,44 @@ func hasAnySuffix(s string, suffixes []string) bool {
 
 	return false
 }
+
+// checksumFiles returns the checksum file of each of assets, as checksumFile
+// finds it. Each asset may have a checksum file of its own, so it reads them
+// several at once.
+func (inf *Inferrer) checksumFiles(
+	ctx context.Context,
+	auth forge.Auth,
+	names []string,
+	urls, digests map[string]string,
+	assets []string,
+) map[string]string {
+	sums := make([]string, len(assets))
+
+	var (
+		wg   sync.WaitGroup
+		next atomic.Int64
+	)
+
+	for range min(checksumsAtOnce, len(assets)) {
+		wg.Go(func() {
+			for i := int(next.Add(1)) - 1; i < len(assets); i = int(next.Add(1)) - 1 {
+				sums[i] = inf.checksumFile(ctx, auth, names, urls, digests[assets[i]], assets[i])
+			}
+		})
+	}
+
+	wg.Wait()
+
+	sumsOf := make(map[string]string, len(assets))
+	for i, asset := range assets {
+		sumsOf[asset] = sums[i]
+	}
+
+	return sumsOf
+}
+
+// checksumsAtOnce is how many checksum files checksumFiles reads at once.
+const checksumsAtOnce = 8
 
 // checksumFile returns the asset that holds asset's sha256, as checksumAsset
 // picks it. When the host reports digest for asset, oku skips a checksum file
