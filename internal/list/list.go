@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io/fs"
 	"maps"
+	"math"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -318,6 +319,9 @@ func Parse(data []byte, origin string) (*List, error) {
 // DefaultReleaseAge is the minimum release age of a list that sets none.
 const DefaultReleaseAge = 24 * time.Hour
 
+// ErrAgeTooLong reports an age longer than a time.Duration holds.
+var ErrAgeTooLong = errors.New("the age is too long")
+
 // ParseAge reads a minimum release age: a whole number of hours, days or weeks,
 // such as 12h, 1d or 2w, or 0 for none.
 func ParseAge(text string) (time.Duration, error) {
@@ -332,6 +336,10 @@ func ParseAge(text string) (time.Duration, error) {
 
 	if err != nil || !ok || n < 1 {
 		return 0, fmt.Errorf("want a number of hours, days or weeks, such as 12h, 1d or 2w, or 0, got %q", text)
+	}
+
+	if most := math.MaxInt64 / int64(unit); int64(n) > most {
+		return 0, fmt.Errorf("%w, the most is %d%s, got %q", ErrAgeTooLong, most, text[len(text)-1:], text)
 	}
 
 	return time.Duration(n) * unit, nil

@@ -107,6 +107,10 @@ so the disk keeps each of them once.`,
 // --min-release-age does. An error names the flag the age came from.
 func parseAge(flag, text string) (time.Duration, error) {
 	age, err := list.ParseAge(text)
+	if errors.Is(err, list.ErrAgeTooLong) {
+		return 0, fmt.Errorf("%s: %w", flag, err)
+	}
+
 	if err != nil || age == 0 {
 		return 0, fmt.Errorf(
 			"%s takes a number of hours, days or weeks, such as 12h, 30d or 2w, got %q", flag, text,

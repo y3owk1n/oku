@@ -614,8 +614,9 @@ order step in `prd/product.md`.
 - B372 [3] `add`, `update`, `sync` and `oku shell` take the newest version
   that came out at least `min_release_age` ago, 1 day unless `[lock]`
   `min_release_age` or the package's own says otherwise, and `"0"` turns it
-  off. `--min-release-age` replaces it for one run. A version named exactly
-  and a locked version skip it, and so do a moving tag and a branch. It never
+  off. An age longer than about 292 years is an error, which names the most
+  in its unit. `--min-release-age` replaces it for one run. A version named
+  exactly and a locked version skip it, and so do a moving tag and a branch. It never
   takes a package back from the version the lock holds. When every version
   that fits is too new and the lock holds none, the command fails and names
   the version that passes first and when. `oku outdated` shows a newer version
@@ -650,7 +651,7 @@ order step in `prd/product.md`.
 - B371 [3] `oku gc --older-than 30d` first deletes the generations older than
   30 days, except the newest of them, which was active 30 days ago, and the
   active one. It takes hours (`h`), days (`d`) or weeks (`w`) and refuses
-  anything else.
+  anything else, and an age longer than about 292 years.
   With `--keep N`, a generation stays when either flag keeps it.
 - B348 [3] `oku gc --cache` also deletes each download in the cache that no
   kept store path was made from, and the index of downloads by url. It skips a
