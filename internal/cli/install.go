@@ -1529,11 +1529,12 @@ func (e env) manifestData(
 	}
 
 	if write := e.inferrerOf(req.ref.Kind); write != nil {
-		text, err := e.inferAt(ctx, opts, cmp.Or(req.ref.Version, req.constraint), req.releaseAge, func(version string) (string, error) {
+		text, err := e.inferAt(ctx, opts, cmp.Or(req.ref.Version, req.constraint), req.releaseAge, func(version string) (string, string, error) {
 			at := req
 			at.ref.Version = version
+			text, err := write(ctx, opts, at)
 
-			return write(ctx, opts, at)
+			return text, "", err
 		})
 
 		return ref.Fetched{Data: []byte(text)}, infer.Inferred{Text: text}, err
@@ -1578,7 +1579,7 @@ func (e env) manifestData(
 	}
 
 	for i, target := range targets {
-		_, err = e.inferAt(ctx, opts, cmp.Or(req.ref.Version, req.constraint), req.releaseAge, func(version string) (string, error) {
+		_, err = e.inferAt(ctx, opts, cmp.Or(req.ref.Version, req.constraint), req.releaseAge, func(version string) (string, string, error) {
 			var err error
 
 			inferred, err = e.inferrer(opts).Manifest(
@@ -1591,7 +1592,7 @@ func (e env) manifestData(
 				},
 			)
 
-			return inferred.Text, err
+			return inferred.Text, inferred.Tag, err
 		})
 
 		if i == 0 && err != nil {
@@ -1618,20 +1619,23 @@ func (e env) manifestData(
 
 // inferAt infers a manifest with write for the version that want selects. An
 // inferrer reads one exact version, and a forge inferrer falls back to the
-// newest release when no tag matches. inferAt picks the version from the
-// versions of the first manifest, and infers again when the pick differs from
-// the version the first inference read, as it does for a range or a prefix
-// such as "22".
+// newest release when no tag matches. write returns the manifest, and the tag
+// of the release it read when it knows it. inferAt then picks a version from
+// the first manifest's versions. It infers again only when the pick is not the
+// release the first inference read, as for a range, a prefix such as "22", or a
+// newest release that is too new.
 func (e env) inferAt(
 	ctx context.Context,
 	opts Options,
 	want string,
 	age time.Duration,
-	write func(version string) (string, error),
+	write func(version string) (string, string, error),
 ) (string, error) {
 	// The newest release may be too new, so the pick from the versions decides.
 	if want == "" && age == 0 {
-		return write("")
+		text, _, err := write("")
+
+		return text, err
 	}
 
 	first := want
@@ -1639,10 +1643,10 @@ func (e env) inferAt(
 		first = ""
 	}
 
-	text, err := write(first)
+	text, tag, err := write(first)
 	if errors.Is(err, infer.ErrNoVersion) {
 		first = ""
-		text, err = write(first)
+		text, tag, err = write(first)
 	}
 
 	if err != nil {
@@ -1662,11 +1666,20 @@ func (e env) inferAt(
 		return text, nil
 	}
 
-	if err != nil || release.Version == first {
+	if err != nil || release.Version == first || tag != "" && release.Tag == tag {
 		return text, err
 	}
 
-	return write(release.Version)
+	// Forge inference gets the tag, which names the release exactly. The version
+	// would make it try a bare tag and then a "v" tag.
+	version := release.Version
+	if tag != "" {
+		version = release.Tag
+	}
+
+	text, _, err = write(version)
+
+	return text, err
 }
 
 // isDownload reports whether a URL is the package itself and not a manifest.
