@@ -11,6 +11,8 @@ import (
 	"runtime"
 	"slices"
 	"strings"
+	"sync"
+	"sync/atomic"
 )
 
 // treeFile records every file of a store path when oku made it, so that
@@ -58,6 +60,15 @@ func Record(path string) error {
 func readTree(dir string) (map[string]string, error) {
 	tree := map[string]string{}
 
+	// The walk lists the files. Hashing them is the slow part, so that runs a few
+	// files at a time.
+	type file struct {
+		rel, path string
+		runs      bool
+	}
+
+	var files []file
+
 	err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -100,23 +111,51 @@ func readTree(dir string) (map[string]string, error) {
 			return err
 		}
 
-		sum, err := fileSHA256(path)
-		if err != nil {
-			return err
-		}
-
 		// Windows has no mode that runs a file.
-		if info.Mode()&0o111 != 0 && runtime.GOOS != "windows" {
-			sum += "x"
-		}
-
-		tree[rel] = sum
+		files = append(files, file{rel, path, info.Mode()&0o111 != 0 && runtime.GOOS != "windows"})
 
 		return nil
 	})
+	if err != nil {
+		return nil, err
+	}
 
-	return tree, err
+	sums := make([]string, len(files))
+	errs := make([]error, len(files))
+
+	var (
+		wg   sync.WaitGroup
+		next atomic.Int64
+	)
+
+	for range min(hashesAtOnce, len(files)) {
+		wg.Go(func() {
+			for i := int(next.Add(1)) - 1; i < len(files); i = int(next.Add(1)) - 1 {
+				sums[i], errs[i] = fileSHA256(files[i].path)
+			}
+		})
+	}
+
+	wg.Wait()
+
+	for i, f := range files {
+		if errs[i] != nil {
+			return nil, errs[i]
+		}
+
+		if f.runs {
+			sums[i] += "x"
+		}
+
+		tree[f.rel] = sums[i]
+	}
+
+	return tree, nil
 }
+
+// hashesAtOnce is how many files readTree hashes at once. Reading files from
+// the page cache stops getting faster past about 8.
+const hashesAtOnce = 8
 
 // Change is a file of a store path that differs from what oku recorded.
 type Change struct {
