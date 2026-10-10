@@ -383,6 +383,12 @@ order step in `prd/product.md`.
   A sync that fails before it changes the machine removes the adopted list
   and lock again. One that fails after, as B273 does for a package with
   nothing for the host, keeps them, so the next `sync` starts from them.
+- B564 [2] Some arguments of `add`, `run` and `shell` read as a GitHub repo
+  without a scheme, such as `sharkdp/fd`, `BurntSushi/ripgrep` or
+  `github.com/sharkdp/fd`. When such an argument is neither a source nor a
+  file, the error ends with a line that names its `github:` ref. oku does not
+  try that ref itself. `oku which` points at `oku search` only when there are
+  sources.
 - B19 [2] A relative file ref in a list resolves against that list's
   directory. A list from a URL or a repo that names an absolute path is an
   error.
