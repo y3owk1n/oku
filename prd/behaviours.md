@@ -448,6 +448,9 @@ order step in `prd/product.md`.
   `packages/name.toml` after `name.toml`. oku then records which path held it
   at that full commit SHA. A later read at that commit asks the forge for that
   path alone, and not for the missing file.
+- B563 [3] An update of a package that oku inferred before asks for its newest
+  release and its list of releases while it checks the repo for a manifest,
+  and inference and the version pick use those answers.
 - B560 [3] oku keeps the GitHub attestations it found for a file's digest, so
   a later command reads them from the cache and asks GitHub nothing. It asks
   again for a file that had none. It also asks again before it refuses a file
