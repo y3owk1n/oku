@@ -1414,13 +1414,17 @@ any of them does. `local` and `pkg` name no environment, since
 ## D87. oku keeps a copy of XZ Embedded's Go port for xz filter chains
 
 `internal/xz` is a copy of the decoder of `github.com/therootcompany/xz`
-v1.0.1, the Go translation of XZ Embedded, under CC0. oku reads an xz file
-with `github.com/ulikunitz/xz`, and with the copy when the first block uses
-more than one filter. Why: ulikunitz reads LZMA2 alone and fails with
+v1.0.1, the Go translation of XZ Embedded, under CC0, and oku reads every xz
+file with it. Why: `github.com/ulikunitz/xz` reads LZMA2 alone and fails with
 "unsupported filter count" on a BCJ chain, which 7-Zip's own Linux releases
 use. The Go port is the only pure-Go decoder with BCJ and Delta, and it has
 not changed since 2020, so oku keeps a copy it can patch in place of a module
 nobody maintains. It has no ARM64 or RISC-V BCJ filter.
+
+Revisited 2026-10-10. oku patched the copy once, so that a match copies in
+runs rather than a byte at a time. On three real downloads it decoded 4 to 19% faster with
+the same output, most for the file that expands most, 148 MB to 1.6 GB. Its
+round-trip test checks the copy against what ulikunitz encodes.
 
 ## D88. A pypi: build asks uv for the wheels of a fixed platform
 
