@@ -161,15 +161,28 @@ Instant, because 0.11.2 never left the store (B22).
 
 ### Trust moments
 
-oku stops in four cases. Everything else is silent because the lock already
-recorded the decision.
+oku stops when a decision is the user's. On a terminal it asks, without one it
+refuses, and a flag answers for one run. Everything else is silent because the
+lock already recorded the decision.
 
-1. A manifest with `run` steps, the first time. It shows the commands and
-   whether any wants network (B41, B53).
-2. A manifest that changed under a locked ref. `sync` refuses until `update`
+1. A manifest with `run` steps or an `[env]`, the first time. It shows the
+   commands and whether any wants network (B41, B53, D29). `--yes` approves.
+2. The install scripts of an npm package's dependencies (D93).
+3. A manifest that changed under a locked ref. `sync` refuses until `update`
    (B13).
-3. A signing key that changed. oku refuses until `--accept-key` (B89).
-4. Anything needing elevation, which only happens with `--system` (B75).
+4. An included list that changed since the lock, at `update` (D113).
+5. A project that installs from a source the user has not trusted (D112).
+6. A signing key or signer workflow that changed. oku refuses until
+   `--accept-key` (B89).
+7. A check weaker than the one the lock recorded, until
+   `--accept-weaker-check`.
+8. A download with nothing to check it against, by `[lock] unverified`, until
+   `--accept-unverified`.
+9. A new version with no release time, by `[lock] unknown_release_age`, until
+   `--accept-unknown-age` (D99).
+10. Anything needing elevation, which only happens with `--system` (B75).
+
+oku refuses a version that OSV lists as malicious, and asks nothing.
 
 ### Leaving
 
