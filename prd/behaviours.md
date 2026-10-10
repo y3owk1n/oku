@@ -378,6 +378,9 @@ order step in `prd/product.md`.
   such as `[vars]` or `[files]` alone, it refuses and changes nothing. A list
   with nothing in it, not even an entry under `[packages]`, counts as none.
   A list file that does not exist fails with `there is no list at`.
+  A sync that fails before it changes the machine removes the adopted list
+  and lock again. One that fails after, as B273 does for a package with
+  nothing for the host, keeps them, so the next `sync` starts from them.
 - B19 [2] A relative file ref in a list resolves against that list's
   directory. A list from a URL or a repo that names an absolute path is an
   error.
