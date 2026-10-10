@@ -39,12 +39,12 @@ Run these before you open a pull request. CI runs the same checks.
 | Recipe | Runs |
 |---|---|
 | `just build` | `go build` of `./cmd/oku` into `bin/oku`. |
-| `just test` | `go test ./...`. |
+| `just test` | `go test` of every package, through `.github/scripts/go-test.sh`, which splits the tests of `internal/cli` across 4 parallel processes. `OKU_TEST_SHARDS` sets another number. On Windows it is `go test ./...`. |
 | `just lint` | `golangci-lint run`, with the settings in `.golangci.yml`. |
 | `just fmt` | `gofumpt -w .` and `golines -w .`. |
 
-CI in `.github/workflows/ci.yml` runs `go vet ./...` and `go test ./...` on
-ubuntu, macOS and Windows runners, lints once per `GOOS` on Linux, and runs the
+CI in `.github/workflows/ci.yml` runs `go vet ./...` and the tests as `just test`
+does on ubuntu, macOS and Windows runners, lints once per `GOOS` on Linux, and runs the
 live scripts below. It runs on pull requests only. `main` takes merged pull
 requests, so a merge runs nothing again, and the release pull request, which
 only bumps the version and the changelog, skips every job. It installs its tools with the `oku` action from

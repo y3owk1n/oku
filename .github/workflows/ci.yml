@@ -33,7 +33,14 @@ jobs:
         with:
           version: nightly
       - run: go vet ./...
-      - run: go test ./...
+      # The cli tests set HOME for the whole process, so the script runs them as
+      # parallel processes, split by name. Windows skips them.
+      - name: go test
+        if: runner.os != 'Windows'
+        run: .github/scripts/go-test.sh
+      - name: go test
+        if: runner.os == 'Windows'
+        run: go test ./...
       - name: Live test on Linux
         if: runner.os == 'Linux'
         # The dconf service needs a D-Bus session, which the script starts itself.

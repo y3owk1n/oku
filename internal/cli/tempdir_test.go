@@ -89,10 +89,7 @@ func TestB287AnImageThatAKilledRunLeftMountedIsDetached(t *testing.T) {
 	))
 
 	dmg := filepath.Join(m.fixtures, "tool.dmg")
-	if out, err := exec.Command("/usr/bin/hdiutil", "create", "-quiet", "-volname", "Tool", "-srcfolder", payload, "-format", "UDZO", dmg).
-		CombinedOutput(); err != nil {
-		t.Skipf("cannot create a disk image here: %v\n%s", err, out)
-	}
+	diskImage(t, payload, dmg)
 
 	image, err := os.ReadFile(dmg)
 	must(t, err)
