@@ -95,29 +95,6 @@ func readIfExists(path string) (string, bool, error) {
 	return string(data), err == nil, err
 }
 
-func (e env) restoreSavedLists(files savedLists) error {
-	for _, file := range []struct {
-		path, text string
-		had        bool
-	}{
-		{e.listPath(), files.List, files.HadList},
-		{e.lockPath(), files.Lock, files.HadLock},
-	} {
-		var err error
-		if file.had {
-			err = list.WriteFile(file.path, []byte(file.text))
-		} else if err = os.Remove(file.path); errors.Is(err, fs.ErrNotExist) {
-			err = nil
-		}
-
-		if err != nil {
-			return fmt.Errorf("restore %s: %w", file.path, err)
-		}
-	}
-
-	return nil
-}
-
 // apply makes the machine match generation c.to. It checks what it can before
 // the first change. When a later step fails it puts the machine back as it was
 // and returns the error of that step.
