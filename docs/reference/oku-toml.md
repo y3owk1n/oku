@@ -39,7 +39,7 @@ autohide = true
 
 | Key | Type | Page section |
 |---|---|---|
-| `include` | array of refs | [include](#include) |
+| `include` | array of refs or tables | [include](#include) |
 | `[packages]` | table | [\[packages\]](#packages) |
 | `[lock]` | table | [\[lock\]](#lock) |
 | `[runtimes]` | table | [\[runtimes\]](#runtimes) |
@@ -118,7 +118,8 @@ file beside the list there, see [relative paths](refs.md#relative-paths-in-a-rem
 
 ### when
 
-`when` limits a package or a `[files]` entry to some machines.
+`when` limits a package, a `[files]` entry or an [include](#include) to some
+machines.
 
 | Key | Values |
 |---|---|
@@ -176,6 +177,18 @@ include = [
 ]
 ```
 
+An item may also be a table with `ref` and a [`when`](#when). Every package
+and `[files]` entry of that list, and of the lists it includes, then takes
+the `when` on top of its own:
+
+```toml
+include = [
+  "github:you/machines#base",
+  { ref = "./work.toml", when = { host = "work" } },
+  { ref = "./home.toml", when = { host = "home" } },
+]
+```
+
 Rules:
 
 - Includes merge in order, so a later include overrides an earlier one. Your
@@ -189,6 +202,25 @@ Rules:
   a sha256, and does not pin a local file, see [the lock](lock.md#include-entries).
 - A relative path in a list from a repo names a file of the same repo at the
   same commit. An absolute path, or one that leaves the repo, is an error.
+
+With `when` on an include:
+
+- oku reads and pins the list on every machine, so `oku.lock` is the same
+  everywhere. On a machine the `when` leaves out, oku pins the list's packages
+  and installs none of them.
+- An entry whose own `when` can never hold together with the include's, such
+  as `os = "darwin"` under `os = "linux"`, is left out. So is an include whose
+  `when` can never hold with the one above it.
+- `[vars]`, `[secrets]`, `[host]` and the settings tables of the list apply
+  only on a machine the `when` matches.
+- The list may not set `[runtimes]`, because a runtime changes what `oku.lock`
+  pins.
+- Two lists included under different `when` may both name a package. With
+  the same settings, it applies on a machine that either one matches.
+  Otherwise the merge is an error. A package in the list that includes both
+  overrides both.
+- A `[files]` entry overrides an earlier list's entry for the same target
+  only when the two `when` values match after oku adds the include's `when`.
 
 ### [lock]
 
@@ -247,7 +279,8 @@ go = { ref = "./packages/go.toml", version = "1.26" }
   manifest of each package that uses it. After you change a runtime, run
   `oku update <name>` for those packages.
 - An included list may set `[runtimes]`, and a later list overrides an
-  earlier one. A relative path starts at the list that names it.
+  earlier one. A list included under a `when` may not. A relative path starts
+  at the list that names it.
 - `oku.lock` stores a runtime inside the list's directory relative to it, so
   the lock works in another checkout.
 - [`examples/runtimes`](../../examples/runtimes) has manifests for node,

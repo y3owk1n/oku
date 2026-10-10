@@ -376,6 +376,12 @@ order step in `prd/product.md`.
   case. On another machine of the platform, `sync` installs nothing for it and
   pins it for the `[lock]` platforms. A manifest with `host` in a `when` or a
   `match` is refused.
+- B576 [2] An `include` item may be `{ ref = "...", when = {...} }`. Every
+  package and file of that list, and of the lists it includes, takes the
+  `when` on top of its own, and oku pins the list on every machine. Two lists
+  included under different `when` that name one package with the same
+  settings install it where either matches, and with other settings fail the
+  merge. A list included under a `when` may not set `[runtimes]`.
 - B270 [2] `when` in a list is one table or an array of tables, and matches a
   platform when any of its tables does. A `[files]` entry takes both forms.
 - B271 [2] `add` leaves out the host and each `[lock]` platform that the

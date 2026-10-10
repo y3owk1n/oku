@@ -179,6 +179,10 @@ Each item is a [ref](../how-oku-works.md#ref) to a list:
   twice, or one that includes itself, is an error.
 - An included list may not hold `[env]`. Only the list that includes it sets
   variables.
+- An item may be a table with `ref` and `when`, such as
+  `{ ref = "./work.toml", when = { host = "work" } }`. Everything in that list
+  then applies only on the machine called `work`, see
+  [include](../reference/oku-toml.md#include).
 - In a list from a repo or a URL, a relative path names a file in the same
   repo at the same commit, or the URL beside the list. An absolute path is an
   error, because it names a file on the author's machine, and so is a path

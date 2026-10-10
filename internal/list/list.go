@@ -81,6 +81,14 @@ type File struct {
 	Vars map[string]string
 }
 
+// Include is one item of include: another list to merge under this one.
+type Include struct {
+	Ref string
+	// When limits every entry of the list to matching machines. The empty When
+	// matches all.
+	When platform.When
+}
+
 // Secret is one entry of [secrets]: a name for one encrypted value.
 type Secret struct {
 	// File is the path of a sops or an age file.
@@ -104,8 +112,8 @@ var Backends = map[string]string{"defaults": "darwin", "registry": "windows", "d
 
 // List is a parsed oku.toml.
 type List struct {
-	// Include holds refs of other lists to merge under this one.
-	Include  []string
+	// Include holds the other lists to merge under this one.
+	Include  []Include
 	Packages map[string]Entry
 	// Files is sorted by target.
 	Files []File
@@ -165,7 +173,7 @@ func Read(path string) (*List, error) {
 // Parse reads list data. origin names the data in error messages.
 func Parse(data []byte, origin string) (*List, error) {
 	var raw struct {
-		Include  []string       `toml:"include"`
+		Include  []any          `toml:"include"`
 		Packages map[string]any `toml:"packages"`
 		Files    map[string]any `toml:"files"`
 		Vars     map[string]any `toml:"vars"`
@@ -201,8 +209,17 @@ func Parse(data []byte, origin string) (*List, error) {
 	}
 
 	l := &List{
-		Include: raw.Include, Packages: map[string]Entry{}, Vars: map[string]string{},
+		Packages: map[string]Entry{}, Vars: map[string]string{},
 		Runtimes: map[string]manifest.Dep{},
+	}
+
+	for _, item := range raw.Include {
+		include, err := parseInclude(item)
+		if err != nil {
+			return nil, fmt.Errorf("%s: include: %w", origin, err)
+		}
+
+		l.Include = append(l.Include, include)
 	}
 
 	for name, value := range raw.Runtimes {
@@ -887,6 +904,30 @@ func ReadOverlay(path string) (*List, error) {
 	}
 
 	return Parse(data, path)
+}
+
+// parseInclude reads one item of include: a ref, or a table with ref and when.
+func parseInclude(item any) (Include, error) {
+	if s, ok := item.(string); ok {
+		return Include{Ref: s}, nil
+	}
+
+	table, _ := item.(map[string]any)
+	ref, _ := table["ref"].(string)
+
+	for key := range table {
+		if key != "ref" && key != "when" {
+			return Include{}, fmt.Errorf("%s is not a key of an include, use ref and when", key)
+		}
+	}
+
+	if ref == "" {
+		return Include{}, errors.New(`an item is a ref, or a table such as { ref = "...", when = { host = "work" } }`)
+	}
+
+	when, err := platform.ParseListWhen(table["when"])
+
+	return Include{Ref: ref, When: when}, err
 }
 
 // position returns "line N, column M: " for a TOML syntax error, so the user

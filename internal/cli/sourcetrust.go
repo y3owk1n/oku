@@ -104,7 +104,7 @@ func (e env) untrusted() (map[string][]string, error) {
 	}
 
 	for _, include := range own.Include {
-		if err := check("include "+include, include); err != nil {
+		if err := check("include "+include.Ref, include.Ref); err != nil {
 			return nil, err
 		}
 	}
