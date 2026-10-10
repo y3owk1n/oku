@@ -670,9 +670,14 @@ func TestB440JSONIsRefusedWhereACommandHasNone(t *testing.T) {
 	m := newMachine(t)
 	ref := m.manifest(t, "tool", map[string]string{"tool": script}, `bin = ["tool"]`)
 
-	out, err := m.run(t, "", "sync", "--json")
-	if err == nil || !strings.Contains(err.Error(), "oku sync has no --json output") {
-		t.Fatalf("sync --json should fail: %v\n%s", err, out)
+	out, err := m.run(t, "", "gc", "--json")
+	if err == nil || !strings.Contains(err.Error(), "oku gc has no --json output") {
+		t.Fatalf("gc --json should fail: %v\n%s", err, out)
+	}
+
+	if _, err := m.run(t, "", "sync", "--json"); err == nil ||
+		!strings.Contains(err.Error(), "oku sync prints JSON only with --dry-run") {
+		t.Fatalf("sync --json without --dry-run should fail: %v", err)
 	}
 
 	if _, err := m.run(t, "", "add", ref, "--json"); err == nil ||

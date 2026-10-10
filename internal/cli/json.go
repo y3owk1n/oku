@@ -61,13 +61,25 @@ func minArgs(n int) cobra.PositionalArgs {
 // refuses the flag, so that a script never reads text as JSON.
 var jsonCommands = []string{
 	"oku add", "oku cache list", "oku doctor", "oku du", "oku env", "oku generations",
-	"oku info", "oku key list", "oku list", "oku manifest lint", "oku outdated",
-	"oku search", "oku service list", "oku service restart", "oku service start",
-	"oku service status", "oku service stop", "oku source list", "oku verify", "oku which", "oku why",
+	"oku info", "oku key list", "oku list", "oku manifest lint", "oku outdated", "oku remove",
+	"oku rollback", "oku search", "oku self update", "oku service list", "oku service restart",
+	"oku service start", "oku service status", "oku service stop", "oku source list", "oku sync",
+	"oku update", "oku verify", "oku which", "oku why",
 }
 
-// checkJSON refuses --json on a command that has no JSON output. "oku add"
-// prints JSON only for --plan.
+// jsonOnlyWith names the flags that make a command which changes the machine or
+// the oku binary print JSON. Without one of them it prints none.
+var jsonOnlyWith = map[string][]string{
+	"oku add":         {"plan", dryRunFlag},
+	"oku remove":      {dryRunFlag},
+	"oku rollback":    {dryRunFlag},
+	"oku self update": {"check"},
+	"oku sync":        {dryRunFlag},
+	"oku update":      {dryRunFlag},
+}
+
+// checkJSON refuses --json on a command that has no JSON output, or that
+// prints it only with a flag the command line lacks.
 func checkJSON(cmd *cobra.Command) error {
 	if !wantJSON(cmd) {
 		return nil
@@ -77,8 +89,13 @@ func checkJSON(cmd *cobra.Command) error {
 		return fmt.Errorf("%s has no --json output", cmd.CommandPath())
 	}
 
-	if plan, err := cmd.Flags().GetBool("plan"); err == nil && !plan {
-		return fmt.Errorf("%s prints JSON only with --plan", cmd.CommandPath())
+	flags, ok := jsonOnlyWith[cmd.CommandPath()]
+	if ok && !slices.ContainsFunc(flags, func(flag string) bool {
+		on, _ := cmd.Flags().GetBool(flag)
+
+		return on
+	}) {
+		return fmt.Errorf("%s prints JSON only with --%s", cmd.CommandPath(), flags[0])
 	}
 
 	return nil

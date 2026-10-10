@@ -1643,7 +1643,9 @@ the network:
 The commands in this table take `--json` and then print JSON on stdout in
 place of text. Messages and errors still go to stderr as text. Any other
 command fails with `oku <command> has no --json output` and does nothing.
-`oku add` takes `--json` only with `--plan`.
+`oku add` takes `--json` only with `--plan` or `--dry-run`, `sync`, `update`,
+`remove` and `rollback` only with `--dry-run`, and `self update` only with
+`--check`, since without those flags they change the machine.
 
 | Command | JSON |
 |---|---|
@@ -1663,6 +1665,8 @@ command fails with `oku <command> has no --json output` and does nothing.
 | `oku service status <name>` | One such object. `start`, `stop` and `restart` print it too. |
 | `oku verify` | A list of `name`, `version`, `path`, `status` and `changes`. |
 | `oku add --plan` | A list with one object per ref, with fields such as `ref`, `name`, `version`, `inferred`, `asset`, `install`, `platform`, `commands`, `needs`, `deps` and `build_deps`. |
+| `oku sync --dry-run`, `oku update --dry-run`, `oku remove --dry-run`, `oku rollback --dry-run` | A list of the changes, each with `would` (`install`, `remove`, `change` or `write`) and `package`, `from` and `to` for a package, or `kind` and `target` for a file, setting, app, font or service. An empty list means nothing would change. |
+| `oku self update --check` | `running`, `newest` and `available`. |
 | `oku env` | Every variable the directory sets, with `null` for one it unsets. |
 | `oku manifest lint` | A list of `file`, `errors`, `warnings`. It still exits with `1` when a file has an error. |
 | `oku doctor` | `problems`, and `checks`, a list of `status` and `message`. |

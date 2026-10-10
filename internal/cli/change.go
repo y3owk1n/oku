@@ -252,16 +252,8 @@ func (e env) rewritten(to int) ([]string, error) {
 // describe prints what the apply of c would do, for a dry run. The plan has
 // already run, so everything it checks is known to work.
 func (e env) describe(cmd *cobra.Command, c change, plan exposePlan) error {
-	out := cmd.OutOrStdout()
-	s := ui.For(out)
 	prof := e.profile()
-	lines := 0
-
-	say := func(format string, args ...any) {
-		lines++
-
-		fmt.Fprintln(out, s.Would(s.Homes(fmt.Sprintf(format, args...))))
-	}
+	all := []wouldChange{}
 
 	have, err := prof.PackagesOf(prof.Current())
 	if err != nil {
@@ -275,7 +267,7 @@ func (e env) describe(cmd *cobra.Command, c change, plan exposePlan) error {
 
 	for _, pkg := range have {
 		if !slices.ContainsFunc(want, func(p profile.Package) bool { return p.Name == pkg.Name }) {
-			say("would remove the package %s", pkg.Name)
+			all = append(all, wouldChange{Would: "remove", Package: pkg.Name, From: pkg.Version})
 		}
 	}
 
@@ -284,14 +276,14 @@ func (e env) describe(cmd *cobra.Command, c change, plan exposePlan) error {
 
 		switch {
 		case i < 0:
-			say("would install %s %s", pkg.Name, pkg.Version)
+			all = append(all, wouldChange{Would: "install", Package: pkg.Name, To: pkg.Version})
 		case have[i].StorePath != pkg.StorePath:
-			say("would change %s from %s to %s", pkg.Name, have[i].Version, pkg.Version)
+			all = append(all, wouldChange{Would: "change", Package: pkg.Name, From: have[i].Version, To: pkg.Version})
 		}
 	}
 
 	for _, target := range plan.rewritten {
-		say("would change the content of %s", target)
+		all = append(all, wouldChange{Would: "change", Kind: "file", Target: target})
 	}
 
 	if e.project == "" {
@@ -302,22 +294,33 @@ func (e env) describe(cmd *cobra.Command, c change, plan exposePlan) error {
 
 		for _, item := range ledger.Items {
 			if !expose.Holds(plan.wanted, item) {
-				say("would remove the %s %s", item.Kind, item.Target)
+				all = append(all, wouldChange{Would: "remove", Kind: string(item.Kind), Target: item.Target})
 			}
 		}
 
 		for _, item := range plan.wanted {
 			if !expose.Holds(ledger.Items, item) {
-				say("would write the %s %s", item.Kind, item.Target)
+				all = append(all, wouldChange{Would: "write", Kind: string(item.Kind), Target: item.Target})
 			}
 		}
 	}
 
 	if c.changes != nil {
-		*c.changes = lines > 0
+		*c.changes = len(all) > 0
 	}
 
-	if lines == 0 {
+	if wantJSON(cmd) {
+		return printJSON(cmd, all)
+	}
+
+	out := cmd.OutOrStdout()
+	s := ui.For(out)
+
+	for _, w := range all {
+		fmt.Fprintln(out, s.Would(s.Homes(w.String())))
+	}
+
+	if len(all) == 0 {
 		fmt.Fprintln(out, s.Dim("dry run: already in sync"))
 
 		return nil
@@ -326,6 +329,34 @@ func (e env) describe(cmd *cobra.Command, c change, plan exposePlan) error {
 	fmt.Fprintln(out, s.Dim("dry run: nothing was changed"))
 
 	return nil
+}
+
+// wouldChange is one change a dry run found: a package to install, remove or
+// change, the content of a file, or a link, app, file or setting to write or
+// remove.
+type wouldChange struct {
+	Would   string `json:"would"`
+	Package string `json:"package,omitempty"`
+	From    string `json:"from,omitempty"`
+	To      string `json:"to,omitempty"`
+	Kind    string `json:"kind,omitempty"`
+	Target  string `json:"target,omitempty"`
+}
+
+// String is the line a dry run prints for w.
+func (w wouldChange) String() string {
+	switch {
+	case w.Package != "" && w.Would == "install":
+		return fmt.Sprintf("would install %s %s", w.Package, w.To)
+	case w.Package != "" && w.Would == "remove":
+		return "would remove the package " + w.Package
+	case w.Package != "":
+		return fmt.Sprintf("would change %s from %s to %s", w.Package, w.From, w.To)
+	case w.Kind == "file" && w.Would == "change":
+		return "would change the content of " + w.Target
+	default:
+		return fmt.Sprintf("would %s the %s %s", w.Would, w.Kind, w.Target)
+	}
 }
 
 // restoreLists puts oku.toml and oku.lock back as they were before p, and

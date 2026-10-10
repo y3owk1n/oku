@@ -167,6 +167,13 @@ func releaseAsset() string {
 	return name
 }
 
+// releaseCheck is what `oku self update --check --json` prints.
+type releaseCheck struct {
+	Running   string `json:"running"`
+	Newest    string `json:"newest"`
+	Available bool   `json:"available"`
+}
+
 func runSelfUpdate(cmd *cobra.Command, opts Options, check, exitCode, nightly, release bool, to string) error {
 	// A bare run on a nightly build would go back to the release, which
 	// is older than the build. Only an explicit flag does that.
@@ -238,6 +245,19 @@ func runSelfUpdate(cmd *cobra.Command, opts Options, check, exitCode, nightly, r
 	if !nightly {
 		newest = strings.TrimPrefix(found.Tag, "v")
 		current = newest == strings.TrimPrefix(opts.Version, "v")
+	}
+
+	// --json goes only with --check, which changes nothing.
+	if wantJSON(cmd) {
+		if err := printJSON(cmd, releaseCheck{Running: opts.Version, Newest: newest, Available: !current}); err != nil {
+			return err
+		}
+
+		if exitCode && !current {
+			return ExitError{Code: exitChanges}
+		}
+
+		return nil
 	}
 
 	if current {
