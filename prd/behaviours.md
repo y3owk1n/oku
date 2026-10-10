@@ -33,7 +33,7 @@ order step in `prd/product.md`.
   A name given twice counts once, and an empty name fails.
 - B570 [1] `remove` and `rollback` take `--dry-run`, which prints what would
   change and changes nothing, and `--system` with `--yes`, which applies
-  system scope as `sync --system` does. `add --dry-run` is `add --plan`.
+  system scope as `sync --system` does.
 - B227 [1] On a terminal a table fits the width: the last column wraps under
   itself, oku cuts another column that must give room and ends it with an
   ellipsis, and under 60 columns a table whose rows do not fit side by side
@@ -70,10 +70,10 @@ order step in `prd/product.md`.
   `setup` and `self uninstall` print a check before what they did and a minus
   before what they took away. A note of what they left starts with `!`.
 - B440 [1] `--json` on a command that has no JSON output fails with
-  `oku <command> has no --json output` before it does anything. `oku add`
-  takes it only with `--plan` or `--dry-run`, `sync`, `update`, `remove`,
-  `rollback` and `gc` only with `--dry-run`, and `self update` only with
-  `--check`. `manifest lint --json` prints a list of
+  `oku <command> has no --json output` before it does anything. `oku add`,
+  `sync`, `update`, `remove`, `rollback` and `gc` take it only with
+  `--dry-run`, and `self update` only with `--check`. `manifest lint --json`
+  prints a list of
   `file`, `errors` and `warnings`, and still exits with 1 on an error.
 - B571 [1] With `--json`, a dry run of `sync`, `update`, `remove` or
   `rollback` prints a list of what would change, `[]` for nothing, and
@@ -169,7 +169,7 @@ order step in `prd/product.md`.
   that the global list names.
 - B9 [1] Two packages exposing the same `bin` name fail the second install
   with an error naming both.
-- B289 [1] `oku add <ref> --plan` prints the version, the download or build
+- B289 [1] `oku add <ref> --dry-run` prints the version, the download or build
   for this machine, how oku checks it, the programs, and whether the manifest
   runs commands. It checks that the files add downloads are there, and fails
   where add would fail. It writes no list, lock, store entry or generation,
@@ -607,7 +607,7 @@ order step in `prd/product.md`.
   source gives no release time goes through `unknown_release_age` for each
   platform that `add`, `update` or `sync` pins. oku names a platform other
   than the host in the question and the note.
-- B462 [4] `oku add --plan` expands `{{os}}`, `{{arch}}` and `{{libc}}` in a
+- B462 [4] `oku add --dry-run` expands `{{os}}`, `{{arch}}` and `{{libc}}` in a
   build's source as the build does.
 - B463 [4] A `match` or a `when` value that names no platform, such as
   `os = "macos"`, is an error that names the value to use.
@@ -856,7 +856,7 @@ order step in `prd/product.md`.
   none, and suggests an older release with `@<version>` or a manifest.
 - B490 [4] Programs beside an inferred package's program that B278 leaves
   out stay out of the manifest. `add` names them and prints the
-  `oku add <ref> --bin ...` command that adds them. `add --plan` lists them
+  `oku add <ref> --bin ...` command that adds them. `add --dry-run` lists them
   under `also holds`, and in `other_programs` with `--json`. `manifest init`
   names them on stderr.
 - B491 [4] On Windows, inference takes an `msvc` build before a `gnu` build of
@@ -1160,7 +1160,7 @@ order step in `prd/product.md`.
   platform, not only of this machine.
 - B413 [5] oku prints each control character in a package's text, other than
   a tab or a newline, as `\x1b` and the like: in the approval prompt, in
-  `--plan`, in `oku info`, in search results and in error messages. oku drops a
+  `add --dry-run`, in `oku info`, in search results and in error messages. oku drops a
   carriage return that comes before a newline.
 - B411 [5] A package that sets `[env]` asks for approval as a build does, even
   from a download, and the prompt lists each variable with its value. Without
@@ -1484,7 +1484,7 @@ order step in `prd/product.md`.
   ref that oku checks more weakly than the lock recorded, and name the
   platform and both checks. `--accept-weaker-check` takes it. A checksum file
   and a published digest rank the same.
-- B498 [10] `add --plan` shows the check, with `verified` in `--json`, and
+- B498 [10] `add --dry-run` shows the check, with `verified` in `--json`, and
   `info` shows the check the lock recorded for the machine.
 - B499 [10] With `[lock]` `unverified = "refuse"`, `add`, `update`, `sync`,
   `shell` and `run` do not trust a download that nothing states a digest for,
@@ -1562,7 +1562,7 @@ order step in `prd/product.md`.
   certificate. A check that skips the log, or whose key oku cannot read,
   stays out.
 - B513 [10] oku does not install a new version of an `npm:`, `pypi:`, `cargo:`
-  or `go:` package that OSV lists with a `MAL-` advisory, and `add --plan`
+  or `go:` package that OSV lists with a `MAL-` advisory, and `add --dry-run`
   stops the same way. A package the lock holds stays at its locked version,
   and the command goes on, naming the advisory.
 - B514 [10] When oku cannot reach OSV, it installs the version and warns that

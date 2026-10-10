@@ -305,7 +305,7 @@ internal/ui/        styled terminal output
 ## CLI
 
 ```
-oku add <ref>[@version] [--from-source] [--yes] [--verbose] [--plan | --manifest] [--global]
+oku add <ref>[@version] [--from-source] [--yes] [--verbose] [--dry-run | --manifest] [--global]
 oku remove <name> [--global]
 oku sync [list-ref] [--dry-run] [--locked] [--system]
 oku update [name] [--dry-run]
