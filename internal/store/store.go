@@ -21,6 +21,7 @@ import (
 	"runtime"
 	"slices"
 	"strings"
+	"sync/atomic"
 
 	"github.com/pelletier/go-toml/v2"
 
@@ -633,7 +634,7 @@ func unpack(download, tmp string, a manifest.Artifact) error {
 		return err
 	}
 
-	var written int64
+	var written atomic.Int64
 
 	return writeNew(&unpackedReader{r: buffered, total: &written}, filepath.Join(pkg, filepath.FromSlash(name)))
 }
