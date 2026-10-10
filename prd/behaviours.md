@@ -19,6 +19,8 @@ order step in `prd/product.md`.
   files, which for an artifact is the unpacked download.
 - B2 [1] An artifact whose download does not match its sha256 is rejected and
   nothing enters the store or profile.
+- B561 [1] A zip unpacks every file with its mode and the time the archive
+  gives it, and its links. When it names a file twice, the later entry wins.
 - B247 [1] An archive with a symlink that leads outside the package, when
   followed through the other links of the package, is refused and nothing
   enters the store.
