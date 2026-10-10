@@ -112,7 +112,7 @@ add another version with @<version>
 
 - A package that `oku.lock` holds stays at its locked version, oku says why,
   and the rest of the command goes on.
-- `oku add --plan` stops the same way.
+- `oku add --dry-run` stops the same way.
 - A build asks about every package its `vendor` step installs too: the npm
   tree, the PyPI packages uv or pip got, the crates of `Cargo.lock` and the Go
   modules. oku asks once the step downloaded them, before any install script
@@ -204,7 +204,7 @@ a release would remove them too, so check before you pass
 - `oku sync` installs the pins of `oku.lock`, so it never stops for this.
 - oku does not compare a package whose ref you changed, since you chose the
   new source.
-- `oku add --plan` stops the same way.
+- `oku add --dry-run` stops the same way.
 - A lock written before oku recorded the check has nothing to compare. The
   first `oku update` records the check without comparing it.
 
@@ -443,7 +443,7 @@ tree 2.3.2 builds from source and runs these commands on your machine:
   asks `run it?`, and `oku.lock` records `commands = true`.
 - A step marked `(wants network)` in the prompt gets the network.
 - oku prints a control character in a package's text as `\x1b` and the like,
-  in the prompt, in `--plan`, in `oku info`, in search results and in errors.
+  in the prompt, in `oku add --dry-run`, in `oku info`, in search results and in errors.
   A manifest cannot hide part of a command it asks you to approve, move the
   cursor over the prompt, or write to your terminal's clipboard.
 - A package from a trusted cache needs no approval for its commands, because

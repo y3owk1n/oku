@@ -978,14 +978,14 @@ func TestB490OkuNamesTheProgramsItLeftOutAndHowToAddThem(t *testing.T) {
 		t.Fatalf("init should leave toolx out and say so:\n%s", out)
 	}
 
-	out, err = m.run(t, "", "add", "github:owner/tool", "--plan")
+	out, err = m.run(t, "", "add", "github:owner/tool", "--dry-run")
 	must(t, err)
 
 	if !strings.Contains(out, "also holds") || !strings.Contains(out, "oku add github:owner/tool --bin tool --bin toolx") {
 		t.Fatalf("the plan should list toolx and the command:\n%s", out)
 	}
 
-	out, err = m.run(t, "", "add", "github:owner/tool", "--plan", "--json")
+	out, err = m.run(t, "", "add", "github:owner/tool", "--dry-run", "--json")
 	must(t, err)
 
 	if !regexp.MustCompile(`"other_programs":\s*\[\s*"toolx"\s*\]`).MatchString(out) {

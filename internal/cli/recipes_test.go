@@ -1238,7 +1238,7 @@ url = "file://%s"
 bin = ["tool"]
 `, strings.ReplaceAll(source, "SERVER", server.URL), archive)), 0o644))
 
-		out, err := m.run(t, "", "add", ref, "--plan")
+		out, err := m.run(t, "", "add", ref, "--dry-run")
 		if err != nil || !strings.Contains(out, "version    "+want) {
 			t.Fatalf("%s: want version %s, got %v\n%s", source, want, err, out)
 		}

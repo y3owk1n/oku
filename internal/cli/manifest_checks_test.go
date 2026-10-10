@@ -25,7 +25,7 @@ source = { url = "file://%s/tool-{{version}}-{{os}}-{{arch}}.tar.gz", sha256 = %
 install = { bin = ["tool"] }
 `, m.fixtures, sum), 0o644))
 
-	out, err := m.run(t, "", "add", path, "--plan")
+	out, err := m.run(t, "", "add", path, "--dry-run")
 
 	if err != nil || !strings.Contains(out, want) {
 		t.Fatalf("the plan does not show the source for this machine, %s: %v\n%s", want, err, out)

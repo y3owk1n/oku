@@ -681,8 +681,8 @@ func TestB440JSONIsRefusedWhereACommandHasNone(t *testing.T) {
 	}
 
 	if _, err := m.run(t, "", "add", ref, "--json"); err == nil ||
-		!strings.Contains(err.Error(), "oku add prints JSON only with --plan") {
-		t.Fatalf("add --json without --plan should fail: %v", err)
+		!strings.Contains(err.Error(), "oku add prints JSON only with --dry-run") {
+		t.Fatalf("add --json without --dry-run should fail: %v", err)
 	}
 
 	if exists(m.profile("bin", "tool")) {

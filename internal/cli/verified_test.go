@@ -146,7 +146,7 @@ func TestB497AWeakerCheckStopsUpdateUntilAccepted(t *testing.T) {
 		t.Fatalf("a refused update changed the lock:\n%s", after)
 	}
 
-	if _, err := m.run(t, "", "add", tool, "--plan"); err == nil ||
+	if _, err := m.run(t, "", "add", tool, "--dry-run"); err == nil ||
 		!strings.Contains(err.Error(), "--accept-weaker-check") {
 		t.Fatalf("want the plan to stop like add, got %v", err)
 	}
@@ -167,7 +167,7 @@ func TestB498PlanAndInfoShowTheCheck(t *testing.T) {
 	m := newMachine(t)
 	tool, _ := digestReleases(t, &m, map[string]bool{"v1.0.0": true})
 
-	out, err := m.run(t, "", "add", tool, "--plan", "--json")
+	out, err := m.run(t, "", "add", tool, "--dry-run", "--json")
 	must(t, err)
 
 	var plans []map[string]any

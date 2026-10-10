@@ -171,7 +171,7 @@ func runPlan(cmd *cobra.Command, opts Options, args []string, flags planFlags) e
 		}
 	}
 
-	fmt.Fprintln(out, s.Dim("plan: nothing was changed"))
+	fmt.Fprintln(out, s.Dim("dry run: nothing was changed"))
 
 	return nil
 }

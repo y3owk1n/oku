@@ -53,13 +53,13 @@ func TestB359OneCommandReadsARegistryDocumentOnce(t *testing.T) {
 	m.opts.NPMRegistry = registry.URL
 
 	// Inference and the version lookup both read the package's document.
-	out, err := m.run(t, "", "add", "npm:@scope/tool", "--plan")
+	out, err := m.run(t, "", "add", "npm:@scope/tool", "--dry-run")
 	if err != nil {
-		t.Fatalf("add --plan: %v\n%s", err, out)
+		t.Fatalf("add --dry-run: %v\n%s", err, out)
 	}
 
 	if got := hits.Load(); got != 1 {
-		t.Fatalf("add --plan read the registry %d times, want 1\n%s", got, out)
+		t.Fatalf("add --dry-run read the registry %d times, want 1\n%s", got, out)
 	}
 }
 

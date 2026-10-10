@@ -2062,3 +2062,13 @@ would make `oku.lock` differ from one machine to the next. A runtime changes
 the manifest oku infers, which the lock pins for every machine. If the later
 scoped list won, oku would stop installing a shared package such as `git` on
 the first machine and say nothing.
+
+## D125. add has --dry-run alone, and --plan is gone
+
+`oku add --dry-run` prints what oku found for a ref and what `add` would do,
+and changes nothing. oku drops `--plan`, which did the same, with no alias.
+The output ends with `dry run: nothing was changed`, as on the other commands.
+Why: #452 gave `remove` and `rollback` `--dry-run`, so every command that
+changes the machine now takes the same flag for a preview. A second flag on
+`add` for the same output added a line to the help and nothing else. oku is
+alpha, so a script that still passes `--plan` gets an unknown flag error.

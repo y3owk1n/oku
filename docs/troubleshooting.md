@@ -186,7 +186,7 @@ with `--bin`. See [Fix a wrong pick](guides/add-packages.md#fix-a-wrong-pick-wit
 | `<name> has no artifact for darwin-arm64` | The manifest has no download for this machine and no build. |
 | `<name> has no [build], so it cannot be built from source` | Drop `--from-source`. |
 | `fetch git+https://...: no such repo, or git cannot read it without a login` | Check the URL. For a private repo, give git a login, such as a credential helper or an SSH key and a `git+ssh://` ref. |
-| `download <url>: server returned 404 Not Found` | The manifest names a file that the release does not have, often for an older `@version`. `oku add <ref> --plan` finds this before anything installs. |
+| `download <url>: server returned 404 Not Found` | The manifest names a file that the release does not have, often for an older `@version`. `oku add <ref> --dry-run` finds this before anything installs. |
 
 ## The manifest changed since oku.lock was written
 
