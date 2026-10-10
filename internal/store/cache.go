@@ -15,6 +15,7 @@ import (
 	"aead.dev/minisign"
 	"github.com/klauspost/compress/zstd"
 
+	"github.com/y3owk1n/oku/internal/limit"
 	"github.com/y3owk1n/oku/internal/status"
 )
 
@@ -101,7 +102,7 @@ func (s *Store) substituteFrom(
 		return fmt.Sprintf("ignored %s, it has no signature", url), nil //nolint:nilerr
 	}
 
-	signature, err := io.ReadAll(io.LimitReader(resp.Body, 1<<16))
+	signature, err := limit.Read(resp.Body, 1<<16)
 	resp.Body.Close()
 
 	if err != nil {

@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/y3owk1n/oku/internal/forge"
+	"github.com/y3owk1n/oku/internal/limit"
 	"github.com/y3owk1n/oku/internal/status"
 )
 
@@ -348,7 +349,7 @@ func (s *Store) readChecksums(ctx context.Context, url string) ([]byte, error) {
 	}
 	defer resp.Body.Close()
 
-	data, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	data, err := limit.Read(resp.Body, 1<<20)
 	if err != nil {
 		return nil, fmt.Errorf("download %s: %w", url, err)
 	}

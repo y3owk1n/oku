@@ -9,7 +9,6 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"strings"
 
@@ -18,6 +17,8 @@ import (
 	protodsse "github.com/sigstore/protobuf-specs/gen/pb-go/dsse"
 	protorekor "github.com/sigstore/protobuf-specs/gen/pb-go/rekor/v1"
 	"github.com/sigstore/sigstore-go/pkg/bundle"
+
+	"github.com/y3owk1n/oku/internal/limit"
 )
 
 // PublicRekor is the transparency log of Sigstore's public instance.
@@ -184,9 +185,9 @@ func (v *Verifier) rekorJSON(ctx context.Context, method, path string, body []by
 	}
 	defer resp.Body.Close()
 
-	data, err := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
+	data, err := limit.Read(resp.Body, 4<<20)
 	if err != nil {
-		return err
+		return fmt.Errorf("%s %s: %w", method, path, err)
 	}
 
 	if resp.StatusCode != http.StatusOK {

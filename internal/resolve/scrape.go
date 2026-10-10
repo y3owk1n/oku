@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"regexp"
 	"slices"
@@ -14,6 +13,7 @@ import (
 	"time"
 
 	"github.com/y3owk1n/oku/internal/forge"
+	"github.com/y3owk1n/oku/internal/limit"
 	"github.com/y3owk1n/oku/internal/manifest"
 )
 
@@ -120,13 +120,9 @@ func (r *Resolver) fetchText(ctx context.Context, v manifest.Version, re *regexp
 		return "", fmt.Errorf("the server answered %s", resp.Status)
 	}
 
-	body, err := io.ReadAll(io.LimitReader(resp.Body, maxPage+1))
+	body, err := limit.Read(resp.Body, maxPage)
 	if err != nil {
-		return "", err
-	}
-
-	if len(body) > maxPage {
-		return "", fmt.Errorf("the page is larger than %d bytes", maxPage)
+		return "", fmt.Errorf("read the page: %w", err)
 	}
 
 	return string(body), nil

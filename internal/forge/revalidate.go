@@ -259,9 +259,8 @@ func StaleAnswers(dir string, now time.Time, keepFor time.Duration) (map[string]
 type answersKey struct{}
 
 // maxAnswer is the most of an answer that the client reads and keeps. It is
-// the largest limit of any reader of this client, which the npm and PyPI
-// readers have.
-const maxAnswer = 64 << 20
+// the largest limit of any reader of this client, which the npm reader has.
+const maxAnswer = 128 << 20
 
 // answers holds the GET answers of one command, by URL and Accept.
 type answers struct {

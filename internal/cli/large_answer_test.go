@@ -2,10 +2,13 @@ package cli_test
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/http/httputil"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -66,5 +69,24 @@ func TestB361ARegistryAnswerOfUpTo64MBIsReadWholeWithOrWithoutAnETag(t *testing.
 				t.Fatalf("add --plan did not find version 1.0.0:\n%s", out)
 			}
 		})
+	}
+}
+
+func TestB361AChecksumFileOverItsLimitIsNotReadInPart(t *testing.T) {
+	m := newMachine(t)
+	archive, sum := m.archive(t, "tool", map[string]string{"tool": script})
+
+	// The download's line comes after 2 MiB of others, past what oku reads.
+	padding := strings.Repeat(strings.Repeat("0", 64)+"  other.tar.gz\n", 2<<20/80)
+	sums := filepath.Join(m.fixtures, "checksums.txt")
+	must(t, os.WriteFile(sums, []byte(padding+sum+"  tool.tar.gz\n"), 0o644))
+
+	ref := m.rawManifest(t, "tool", fmt.Sprintf(
+		"[[artifact]]\nurl = \"file://%s\"\nsha256_url = \"file://%s\"\nbin = [\"tool\"]\n",
+		archive, sums,
+	))
+
+	if _, err := m.run(t, "", "add", ref); err == nil || !strings.Contains(err.Error(), "larger than the limit") {
+		t.Fatalf("want the checksum file refused as too large, got %v", err)
 	}
 }

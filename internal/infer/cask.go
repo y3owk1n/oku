@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"path"
 	"regexp"
@@ -14,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/y3owk1n/oku/internal/forge"
+	"github.com/y3owk1n/oku/internal/limit"
 	"github.com/y3owk1n/oku/internal/manifest"
 	"github.com/y3owk1n/oku/internal/platform"
 	"github.com/y3owk1n/oku/internal/shape"
@@ -152,12 +152,12 @@ func getRecipe(ctx context.Context, client *http.Client, url string) ([]byte, er
 		return nil, fmt.Errorf("%s returned %s", url, resp.Status)
 	}
 
-	data, err := io.ReadAll(io.LimitReader(resp.Body, maxRecipe+1))
-	if err == nil && len(data) > maxRecipe {
-		err = fmt.Errorf("%s answered with more than %d bytes", url, maxRecipe)
+	data, err := limit.Read(resp.Body, maxRecipe)
+	if err != nil {
+		return nil, fmt.Errorf("read %s: %w", url, err)
 	}
 
-	return data, err
+	return data, nil
 }
 
 // recipe translates the cask. source is its Ruby file, which holds the URL

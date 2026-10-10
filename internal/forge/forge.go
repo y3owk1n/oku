@@ -16,6 +16,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/y3owk1n/oku/internal/limit"
 	"github.com/y3owk1n/oku/internal/netpolicy"
 )
 
@@ -25,7 +26,7 @@ var ErrNotFound = errors.New("not found")
 
 // ErrTooLarge reports that an answer was over maxBody, so the forge did not
 // read it.
-var ErrTooLarge = errors.New("response is larger than the limit")
+var ErrTooLarge = limit.ErrTooLarge
 
 // The kinds of forge. A manifest's version.from is a kind plus "-releases".
 const (

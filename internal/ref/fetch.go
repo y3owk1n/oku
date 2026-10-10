@@ -24,6 +24,7 @@ import (
 
 	"github.com/y3owk1n/oku/internal/forge"
 	"github.com/y3owk1n/oku/internal/gitcmd"
+	"github.com/y3owk1n/oku/internal/limit"
 	"github.com/y3owk1n/oku/internal/netpolicy"
 	"github.com/y3owk1n/oku/internal/status"
 )
@@ -247,16 +248,7 @@ func (f *Fetcher) get(ctx context.Context, url string) ([]byte, error) {
 		return nil, fmt.Errorf("server returned %s", resp.Status)
 	}
 
-	data, err := io.ReadAll(io.LimitReader(resp.Body, maxManifest+1))
-	if err != nil {
-		return nil, err
-	}
-
-	if len(data) > maxManifest {
-		return nil, fmt.Errorf("response is larger than %d bytes", maxManifest)
-	}
-
-	return data, nil
+	return limit.Read(resp.Body, maxManifest)
 }
 
 // clones holds a lock for each clone in the cache, by the location of its ref.

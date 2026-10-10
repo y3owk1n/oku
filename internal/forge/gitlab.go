@@ -4,11 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/y3owk1n/oku/internal/limit"
 )
 
 // gitlab is gitlab.com or a GitLab server of one's own.
@@ -283,13 +284,9 @@ func (g *gitlab) get(ctx context.Context, at string) ([]byte, string, error) {
 		return nil, "", fmt.Errorf("%s returned %s", g.web(), resp.Status)
 	}
 
-	body, err := io.ReadAll(io.LimitReader(resp.Body, maxBody+1))
+	body, err := limit.Read(resp.Body, maxBody)
 	if err != nil {
 		return nil, "", err
-	}
-
-	if len(body) > maxBody {
-		return nil, "", fmt.Errorf("%w of %d bytes", ErrTooLarge, maxBody)
 	}
 
 	return body, resp.Header.Get("Link"), nil

@@ -6,12 +6,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"regexp"
 	"strings"
 	"time"
 
+	"github.com/y3owk1n/oku/internal/limit"
 	"github.com/y3owk1n/oku/internal/shape"
 )
 
@@ -202,13 +202,9 @@ func get(ctx context.Context, client *http.Client, url, accept string, into any)
 		return "", fmt.Errorf("the index returned %s", resp.Status)
 	}
 
-	body, err := io.ReadAll(io.LimitReader(resp.Body, maxBody+1))
+	body, err := limit.Read(resp.Body, maxBody)
 	if err != nil {
-		return "", err
-	}
-
-	if len(body) > maxBody {
-		return "", fmt.Errorf("the index answered with more than %d bytes", maxBody)
+		return "", fmt.Errorf("read the answer of the index: %w", err)
 	}
 
 	kind := resp.Header.Get("Content-Type")

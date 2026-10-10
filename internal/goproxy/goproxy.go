@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"path"
 	"regexp"
@@ -14,6 +13,7 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/y3owk1n/oku/internal/limit"
 	"github.com/y3owk1n/oku/internal/shape"
 )
 
@@ -153,13 +153,9 @@ func get(ctx context.Context, client *http.Client, proxy, at string) ([]byte, er
 		return nil, fmt.Errorf("the module proxy returned %s", resp.Status)
 	}
 
-	body, err := io.ReadAll(io.LimitReader(resp.Body, maxBody+1))
+	body, err := limit.Read(resp.Body, maxBody)
 	if err != nil {
-		return nil, err
-	}
-
-	if len(body) > maxBody {
-		return nil, fmt.Errorf("the module proxy answered with more than %d bytes", maxBody)
+		return nil, fmt.Errorf("read the answer of the module proxy: %w", err)
 	}
 
 	return body, nil
