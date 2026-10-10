@@ -142,7 +142,8 @@ func (t *taskScheduler) Install(ctx context.Context, d Definition, enabled bool)
 		return err
 	}
 
-	if !enabled {
+	// A job runs on its schedule, not when oku installs it.
+	if !enabled || d.Schedule != nil {
 		return nil
 	}
 
@@ -280,6 +281,17 @@ func taskXML(d Definition, self, stored, account string, enabled, system bool) s
 		restart = "<RestartOnFailure><Interval>PT1M</Interval><Count>999</Count></RestartOnFailure>"
 	}
 
+	// A job has its schedule as the trigger, and runs a run it missed once the
+	// machine is on again.
+	if d.Schedule != nil {
+		trigger = ""
+		if enabled {
+			trigger = scheduleTrigger(*d.Schedule)
+		}
+
+		restart = "<StartWhenAvailable>true</StartWhenAvailable>"
+	}
+
 	return `<?xml version="1.0" encoding="UTF-16"?>
 <Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
   <RegistrationInfo><Description>` + esc(d.Name) + `, installed by oku</Description></RegistrationInfo>
@@ -300,6 +312,32 @@ func taskXML(d Definition, self, stored, account string, enabled, system bool) s
   </Exec></Actions>
 </Task>
 `
+}
+
+// scheduleTrigger renders the trigger of a job. The start boundary is a past
+// date, so the schedule holds from now on, at local time.
+func scheduleTrigger(s Schedule) string {
+	if s.Interval > 0 {
+		return fmt.Sprintf(
+			"<TimeTrigger><Repetition><Interval>PT%dM</Interval></Repetition>"+
+				"<StartBoundary>2000-01-01T00:00:00</StartBoundary><Enabled>true</Enabled></TimeTrigger>",
+			int(s.Interval.Minutes()),
+		)
+	}
+
+	start := fmt.Sprintf("<StartBoundary>2000-01-01T%02d:%02d:00</StartBoundary><Enabled>true</Enabled>", s.Hour, s.Minute)
+
+	if len(s.Days) == 0 {
+		return "<CalendarTrigger>" + start + "<ScheduleByDay><DaysInterval>1</DaysInterval></ScheduleByDay></CalendarTrigger>"
+	}
+
+	days := ""
+	for _, day := range s.Days {
+		days += "<" + day.String() + "/>"
+	}
+
+	return "<CalendarTrigger>" + start + "<ScheduleByWeek><WeeksInterval>1</WeeksInterval><DaysOfWeek>" +
+		days + "</DaysOfWeek></ScheduleByWeek></CalendarTrigger>"
 }
 
 // protect lets only SYSTEM, Administrators and the user who installs system

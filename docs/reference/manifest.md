@@ -1514,6 +1514,7 @@ restart = "on-failure"
 | `args` | no | Arguments. They expand `{{prefix}}`, `{{version}}`, `{{home}}`, `{{config}}` and `{{data}}`, so a service can name its config file, as in `["--config", "{{config}}/tool/rc"]`. |
 | `env` | no | Variables for the service. Values expand the same variables as `args`. |
 | `restart` | no | `never`, `on-failure` or `always`. Default `never`. |
+| `schedule` | no | Makes the service a job that runs at set times and ends on its own, see [Scheduled jobs](#scheduled-jobs). |
 | `when` | no | Limits the service to matching machines, see [Match and when](#match-and-when). oku installs no service on a machine that `when` leaves out. |
 
 A program that runs from inside an app bundle on macOS and from `bin` on Linux
@@ -1542,6 +1543,40 @@ when = { os = "linux" }
   [system scope](../how-oku-works.md#system-scope) keeps the bare `PATH`.
 - Installing a package never starts its service. The user turns it on with
   `service = true` in their list.
+
+### Scheduled jobs
+
+A service with `schedule` runs on its schedule and ends on its own, such as a
+backup or a sync that runs every hour:
+
+```toml
+[[service]]
+name = "backup"
+command = "bin/backup"
+schedule = { every = "1h" }
+
+[[service]]
+name = "report"
+command = "bin/report"
+schedule = { at = "03:00", weekdays = ["mon", "fri"] }
+```
+
+| Key | Meaning |
+|---|---|
+| `every` | Runs every that many minutes or hours, such as `15m` or `6h`, from `1m` to `24h`. |
+| `at` | Runs at that local time of day, as `HH:MM`, every day. |
+| `weekdays` | With `at`, runs on those days only: `sun`, `mon`, `tue`, `wed`, `thu`, `fri`, `sat`. |
+
+- A schedule takes `every` or `at`, not both, and the service takes no
+  `restart`.
+- oku writes the schedule into the OS's own definition: `StartInterval` or
+  `StartCalendarInterval` for launchd, a `oku-<name>.timer` beside a oneshot
+  unit for systemd, and the task's trigger for Task Scheduler.
+- A run that the machine slept through runs once it wakes, on all three.
+- With `service = true` the schedule is on. `oku service start` runs the job
+  once now and `oku service stop` ends a run, and neither changes the
+  schedule. On macOS, starting a job whose schedule is off also turns its
+  schedule on until you log out.
 
 ## Match and when
 

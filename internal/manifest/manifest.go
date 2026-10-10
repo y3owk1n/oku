@@ -263,6 +263,9 @@ type Service struct {
 	Args    []string          `toml:"args"`
 	Env     map[string]string `toml:"env"`
 	Restart string            `toml:"restart"`
+	// Schedule makes the service a job that runs at set times. It is nil for a
+	// program that runs until it is stopped.
+	Schedule *Schedule `toml:"schedule,omitempty"`
 	// RawWhen is "when" as TOML gives it. Parse converts it into When, which
 	// limits the service to matching platforms. The empty When matches all.
 	RawWhen any           `toml:"when,omitempty"`
@@ -518,6 +521,14 @@ func (m *Manifest) validate() error {
 			errs = append(errs, fmt.Errorf(
 				"service[%d]: restart %q must be never, on-failure or always", i, svc.Restart,
 			))
+		case svc.Schedule != nil && svc.Restart != "" && svc.Restart != "never":
+			errs = append(errs, fmt.Errorf(
+				"service[%d]: a service with a schedule runs and ends, so it takes no restart", i,
+			))
+		case svc.Schedule != nil:
+			if err := svc.Schedule.Parse(); err != nil {
+				errs = append(errs, fmt.Errorf("service[%d]: %w", i, err))
+			}
 		}
 	}
 

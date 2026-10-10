@@ -71,6 +71,17 @@ func (e env) definition(pkg profile.Package, svc manifest.Service) (service.Defi
 		}
 	}
 
+	if svc.Schedule != nil {
+		if err := svc.Schedule.Parse(); err != nil {
+			return d, fmt.Errorf("service %s: %w", svc.Name, err)
+		}
+
+		d.Schedule = &service.Schedule{
+			Interval: svc.Schedule.Interval, Hour: svc.Schedule.Hour, Minute: svc.Schedule.Minute,
+			Days: svc.Schedule.Days,
+		}
+	}
+
 	// A service also takes the locations that a [files] target takes, so it can
 	// name a config file in the home directory.
 	vars, err := e.locations()
@@ -292,7 +303,7 @@ func listServices(cmd *cobra.Command, opts Options) error {
 				return err
 			}
 
-			rows = append(rows, newServiceRow(item, status))
+			rows = append(rows, newServiceRow(item, defs[item.Name], status))
 		}
 
 		return printJSON(cmd, rows)
@@ -325,7 +336,7 @@ func listServices(cmd *cobra.Command, opts Options) error {
 		}
 
 		tab.Styled(
-			[]string{item.Name, item.Package, describeStatus(status, item.System)},
+			[]string{item.Name, item.Package, describeStatus(status, defs[item.Name], item.System)},
 			s.Bold, nil, mark,
 		)
 	}
@@ -342,13 +353,21 @@ type serviceRow struct {
 	Running   bool   `json:"running"`
 	System    bool   `json:"system"`
 	Detail    string `json:"detail,omitempty"`
+	// Schedule says when a job runs, such as "every 15m".
+	Schedule string `json:"schedule,omitempty"`
 }
 
-func newServiceRow(item expose.Item, status service.Status) serviceRow {
-	return serviceRow{
+func newServiceRow(item expose.Item, d service.Definition, status service.Status) serviceRow {
+	row := serviceRow{
 		item.Name, item.Package, status.Installed, status.Enabled, status.Running,
-		item.System, status.Detail,
+		item.System, status.Detail, "",
 	}
+
+	if d.Schedule != nil {
+		row.Schedule = d.Schedule.String()
+	}
+
+	return row
 }
 
 // rootManager starts and stops a system service through "oku system-apply".
@@ -360,13 +379,21 @@ type rootManager struct {
 func (m rootManager) Start(context.Context, service.Definition) error { return m.run("start") }
 func (m rootManager) Stop(context.Context, service.Definition) error  { return m.run("stop") }
 
-func describeStatus(status service.Status, system bool) string {
+// describeStatus says what status means for d. A job between its runs is idle,
+// and an enabled one says when it runs.
+func describeStatus(status service.Status, d service.Definition, system bool) string {
 	parts := []string{"stopped"}
-	if status.Running {
+
+	switch {
+	case status.Running:
 		parts = []string{"running"}
+	case d.Schedule != nil:
+		parts = []string{"idle"}
 	}
 
 	switch {
+	case status.Enabled && d.Schedule != nil:
+		parts = append(parts, "runs "+d.Schedule.String())
 	case status.Enabled && system:
 		parts = append(parts, "starts at boot")
 	case status.Enabled:
@@ -469,7 +496,8 @@ func controlService(cmd *cobra.Command, opts Options, action, name string) error
 
 	// A program that exits right after start, such as one that finds a stale
 	// socket, still has a pid when Start returns, so oku waits and looks again.
-	if (action == "start" || action == "restart") && status.Running {
+	// A job ends on its own.
+	if (action == "start" || action == "restart") && status.Running && d.Schedule == nil {
 		sleep := opts.Sleep
 		if sleep == nil {
 			sleep = time.Sleep
@@ -491,10 +519,10 @@ func controlService(cmd *cobra.Command, opts Options, action, name string) error
 	}
 
 	if wantJSON(cmd) {
-		return printJSON(cmd, newServiceRow(item, status))
+		return printJSON(cmd, newServiceRow(item, d, status))
 	}
 
-	fmt.Fprintf(out, "%s: %s\n", name, describeStatus(status, item.System))
+	fmt.Fprintf(out, "%s: %s\n", name, describeStatus(status, d, item.System))
 
 	return nil
 }
