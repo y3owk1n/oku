@@ -14,7 +14,7 @@ import (
 )
 
 func newRemoveCmd(opts Options) *cobra.Command {
-	return &cobra.Command{
+	cmd := &cobra.Command{
 		Use:               "remove <name>...",
 		Aliases:           []string{"rm", "uninstall"},
 		Short:             "Remove packages from the profile",
@@ -101,7 +101,7 @@ func newRemoveCmd(opts Options) *cobra.Command {
 			}
 
 			// Nothing to take out of the profile, so the active generation stays.
-			c := change{to: e.profile().Current()}
+			c := changeOf(cmd, e.profile().Current())
 
 			if len(installed) > 0 {
 				staged, err := e.profile().Remove(installed, lockData)
@@ -109,7 +109,7 @@ func newRemoveCmd(opts Options) *cobra.Command {
 					return err
 				}
 
-				c = change{to: staged, staged: true}
+				c.to, c.staged = staged, true
 			}
 
 			c.commit = func() error {
@@ -122,7 +122,7 @@ func newRemoveCmd(opts Options) *cobra.Command {
 				return locked.Write(e.lockPath())
 			}
 
-			if err := e.apply(cmd, opts, c); err != nil {
+			if err := e.apply(cmd, opts, c); err != nil || c.dryRun {
 				return err
 			}
 
@@ -132,4 +132,8 @@ func newRemoveCmd(opts Options) *cobra.Command {
 			return nil
 		},
 	}
+
+	changeFlags(cmd)
+
+	return cmd
 }

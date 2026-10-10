@@ -79,6 +79,8 @@ your data directory. `oku service logs` finds either.
 Only these commands use `sudo`:
 
 - `oku add --system`
+- `oku remove --system`
+- `oku rollback --system`
 - `oku sync --system`
 - `oku update --system`
 - `oku service <action> <name> --system`
@@ -99,7 +101,7 @@ removed postgres
 ```
 
 The package is out of your profile, and its service keeps running until you
-run `oku sync --system`. The same happens after `oku rollback`, after a plain
+run `oku sync --system`. `oku remove postgres --system` removes both at once. The same happens after `oku rollback`, after a plain
 `oku sync` on a new machine whose list has `system = true` entries, and when
 you answer no to the question.
 

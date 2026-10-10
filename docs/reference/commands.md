@@ -79,6 +79,7 @@ Installs the package that a [ref](refs.md) points at, and writes it to
 | `--verbose`, `-v` | Shows the output of build commands as they run, and prints a manifest that oku inferred. |
 | `--when <key=value,...>` | Limits the package to matching platforms and writes `when` to `oku.toml`, such as `--when os=linux,libc=glibc`. Give it once per table of an array. When it leaves out this machine, `add` pins the package for the `[lock]` platforms it matches and installs nothing. |
 | `--plan` | Prints what oku found for the ref and what `add` would do, and changes nothing. See [A plan](#a-plan). |
+| `--dry-run` | The same as `--plan`, the name the other commands use. |
 | `--manifest` | Prints the manifest `add` would use and changes nothing. See [A plan](#a-plan). |
 
 What it does, in order:
@@ -195,13 +196,19 @@ asset. Neither runs a build step or a command from the manifest.
 ### oku remove
 
 ```
-oku remove <name>...
+oku remove <name>... [--dry-run] [--system] [--yes]
 ```
 
 Aliases: `rm`, `uninstall`.
 
 Drops packages from the profile, from `oku.toml` and from `oku.lock`, in one
 generation.
+
+| Flag | Effect |
+|---|---|
+| `--dry-run` | Prints what would change, and changes nothing. See [A dry run](#a-dry-run). |
+| `--system` | Also removes the package's system-scope apps, fonts and services, which needs administrator rights. oku lists them and asks first. |
+| `--yes`, `-y` | Answers yes to the system-scope question. |
 
 The packages' files stay in the store, so adding one again needs no download.
 `oku gc` deletes them once no generation uses them.
@@ -822,8 +829,10 @@ compare with the one numbered before.
 ### oku rollback
 
 ```
-oku rollback [generation]
+oku rollback [generation] [--dry-run] [--system] [--yes]
 ```
+
+`--dry-run`, `--system` and `--yes` work as in [`oku remove`](#oku-remove).
 
 Switches the profile and `oku.lock` back to an earlier generation. Without a
 number it goes to the generation the active one replaced. After a rollback,
