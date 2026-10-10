@@ -1674,7 +1674,7 @@ message, see [Troubleshooting](../troubleshooting.md).
 | `build.step[N] (run) failed` | A build step failed. The last 40 lines of its output follow. |
 | `<entry> is missing` | Ends a failed build, once for each [`[host]`](oku-toml.md#host) entry of the package that the machine lacks, with the package manager's command or the entry's `install` text. |
 | `checksum mismatch for <url>` | The download differs from the expected sha256. oku installed nothing. |
-| `<alias> is not a source and <arg> is not a file` | The argument looks like `alias/name`, but no such source exists. |
+| `<alias> is not a source and <arg> is not a file` | The argument looks like `alias/name`, but no such source exists. The next line gives the `github:` ref of the repo it may name. |
 | `<path> already exists and oku did not put it there` | A package's app or font, or a `[files]` entry, would overwrite a file of yours. Move it away. |
 | `<a> and <b> both provide bin/<x>` | Two packages ship a file of the same name. oku refuses the second install. |
 | `the manifest provides version X, not Y` | The `@version` does not match a manifest with a fixed version. |

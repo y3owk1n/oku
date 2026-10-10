@@ -6,6 +6,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 
@@ -145,10 +146,36 @@ func (e env) parseRef(arg string) (ref.Ref, error) {
 
 	expanded, err := sources.Expand(arg)
 	if err != nil {
-		return ref.Ref{}, err
+		return ref.Ref{}, withRepoHint(err, arg)
 	}
 
-	return ref.Parse(expanded)
+	r, err := ref.Parse(expanded)
+	if err != nil || r.Kind != ref.File || expanded != arg || !repoRe.MatchString(arg) {
+		return r, err
+	}
+
+	// "owner/repo" with capitals, or with github.com before it, reads as a path.
+	if _, err := os.Stat(r.Location); err != nil {
+		return ref.Ref{}, withRepoHint(fmt.Errorf("there is no file at %s", r.Location), arg)
+	}
+
+	return r, nil
+}
+
+// repoRe matches an argument that names a GitHub repo without a scheme, as
+// "BurntSushi/ripgrep" or "github.com/sharkdp/fd@10.2.0".
+var repoRe = regexp.MustCompile(`^(?:github\.com/)?([A-Za-z0-9][A-Za-z0-9_.-]*/[A-Za-z0-9_.-]+?)(?:\.git)?(@[^/@]+)?$`)
+
+// withRepoHint adds to err the github: ref of arg, when arg reads as a repo on
+// GitHub. oku does not try that ref itself, since a source of the same name
+// may be what the user meant.
+func withRepoHint(err error, arg string) error {
+	parts := repoRe.FindStringSubmatch(arg)
+	if parts == nil {
+		return err
+	}
+
+	return fmt.Errorf("%w\nfor the repo on GitHub, use github:%s%s", err, parts[1], parts[2])
 }
 
 // addRequest reads the ref of arg and what oku.toml and oku.lock say about it
