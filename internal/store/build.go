@@ -416,7 +416,7 @@ func (s *Store) Build(
 		Name: m.Package.Name, Version: m.Version.Value, Platform: p.String(),
 		Impure: result.Impure, Launchers: apps, Services: m.ServicesFor(p),
 		URL: result.SourceURL, SHA256: result.SHA256, VendorSHA256: result.VendorSHA256,
-		DepDLLs: depDLLs,
+		DepDLLs: depDLLs, Build: true,
 	})
 	if err == nil {
 		err = inside(prefix, metaFile)

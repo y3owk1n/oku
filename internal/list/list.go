@@ -268,7 +268,7 @@ func Parse(data []byte, origin string) (*List, error) {
 	}
 
 	for name, value := range raw.Host {
-		r, err := host.Parse(name, value)
+		r, err := host.Parse(name, value, platform.ParseListWhen)
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", origin, err)
 		}

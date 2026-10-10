@@ -61,3 +61,20 @@ func TestB580PackagesDeliverPowerShellCompletionsThatTheHookLoads(t *testing.T) 
 		t.Fatalf("the PowerShell hook should dot-source each script in %s:\n%s", dir, out)
 	}
 }
+
+func TestB580LintNamesPowershellAndRefusesBothNames(t *testing.T) {
+	m := newMachine(t)
+
+	for completions, want := range map[string]string{
+		`{ fsh = "c/tool.fish" }`:                      "unknown key fsh, a shell is fish, zsh, bash, pwsh or powershell",
+		`{ pwsh = "c/a.ps1", powershell = "c/b.ps1" }`: "pwsh and powershell name the same shell",
+	} {
+		path := filepath.Join(m.fixtures, "tool.toml")
+		must(t, os.WriteFile(path, []byte("[package]\nname = \"tool\"\n[version]\nvalue = \"1.0.0\"\n"+
+			"[[artifact]]\nurl = \"https://example.com/tool.tar.gz\"\nbin = [\"tool\"]\ncompletions = "+completions+"\n"), 0o644))
+
+		if out, err := m.run(t, "", "manifest", "lint", path); err == nil || !strings.Contains(out+err.Error(), want) {
+			t.Fatalf("lint of completions %s should say %q: %v\n%s", completions, want, err, out)
+		}
+	}
+}

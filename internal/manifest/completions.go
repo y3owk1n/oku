@@ -84,6 +84,11 @@ func parseCompletions(raw any, bins []string) (Completions, error) {
 	case map[string]any:
 		paths := map[string]string{}
 
+		_, pwsh := v["pwsh"]
+		if _, powershell := v["powershell"]; pwsh && powershell {
+			return c, errors.New("completions: pwsh and powershell name the same shell, so keep one")
+		}
+
 		for key, value := range v {
 			text, ok := value.(string)
 			if !ok {

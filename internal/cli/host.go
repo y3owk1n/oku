@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/y3owk1n/oku/internal/host"
-	"github.com/y3owk1n/oku/internal/platform"
 )
 
 // hostSystem returns the package manager of this machine and how to query it,
@@ -24,7 +23,7 @@ func hostSystem(opts Options) host.System {
 // hostHere keeps the requirements whose when matches this machine.
 func hostHere(reqs []host.Requirement) []host.Requirement {
 	return slices.DeleteFunc(slices.Clone(reqs), func(r host.Requirement) bool {
-		return !r.When.Matches(platform.Host())
+		return !r.When.Here()
 	})
 }
 

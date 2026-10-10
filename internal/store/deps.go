@@ -19,7 +19,7 @@ import (
 )
 
 // ErrMalicious reports a package that OSV lists as malicious.
-var ErrMalicious = errors.New("OSV lists it as malicious")
+var ErrMalicious = errors.New("OSV lists as malicious")
 
 // checkVendored asks OSV whether a package that the vendor step of kind put in
 // output is malicious, and fails when one is. When oku cannot ask, it says so

@@ -104,6 +104,8 @@ type Meta struct {
 	// VendorSHA256 is the digest of what the vendor steps of a build downloaded.
 	// For a build, URL and SHA256 are its source archive.
 	VendorSHA256 string `toml:"vendor_sha256,omitempty"`
+	// Build marks a package that oku built from source.
+	Build bool `toml:"build,omitempty"`
 	// Launchers are the package's desktop launchers for Linux and Windows.
 	Launchers []expose.Launcher `toml:"launcher,omitempty"`
 	// Services are the package's long-running programs.
@@ -111,6 +113,20 @@ type Meta struct {
 	// DepDLLs are the links to DLLs of deps that oku put beside the programs on
 	// Windows. They are for the loader, and a profile leaves them out of its bin.
 	DepDLLs []string `toml:"dep_dlls,omitempty"`
+}
+
+// Built reports whether oku built the package at path, whose meta is m, from
+// source. oku unpacks a download under "pkg" and a build at the top of its
+// store path, so a missing "pkg" marks a build from an oku that did not record
+// Build yet.
+func (m Meta) Built(path string) bool {
+	if m.Build {
+		return true
+	}
+
+	_, err := os.Stat(filepath.Join(path, "pkg"))
+
+	return err != nil
 }
 
 // New returns the store under dataDir that caches downloads under cacheDir and
