@@ -2,11 +2,15 @@ package cli_test
 
 import (
 	"bytes"
+	"crypto/rand"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"aead.dev/minisign"
 
 	"github.com/y3owk1n/oku/internal/cli"
 )
@@ -417,5 +421,62 @@ func TestB570RemoveWithSystemTakesTheSystemScopeAwayInOneStep(t *testing.T) {
 	out, err := m.run(t, "", "remove", "foo", "--system", "--yes")
 	if err != nil || exists(font) || *elevations == before {
 		t.Fatalf("remove --system --yes should take the font away: %v\n%s", err, out)
+	}
+}
+
+func TestB571DryRunsAndTheReleaseCheckPrintJSON(t *testing.T) {
+	m := newMachine(t)
+	server := newReleaseServer(t, "v1.0.0")
+	m.opts.GitHubAPI = server.URL + "/api"
+
+	_, err := m.run(t, "", "add", m.discoveredManifest(t, "1.0.0", "1.1.0"))
+	must(t, err)
+
+	decode := func(args ...string) []map[string]string {
+		t.Helper()
+
+		var got []map[string]string
+		if err := json.Unmarshal([]byte(m.stdout(t, args...)), &got); err != nil {
+			t.Fatalf("%v --json printed no JSON list: %v", args, err)
+		}
+
+		return got
+	}
+
+	if got := decode("sync", "--dry-run", "--json"); len(got) != 0 {
+		t.Fatalf("a sync with nothing to do printed %v", got)
+	}
+
+	server.tags = []string{"v1.1.0", "v1.0.0"}
+
+	got := decode("update", "--dry-run", "--json")
+	if len(got) != 1 || got[0]["would"] != "change" || got[0]["package"] != "tool" ||
+		got[0]["from"] != "1.0.0" || got[0]["to"] != "1.1.0" {
+		t.Fatalf("update --dry-run --json printed %v", got)
+	}
+
+	if got := decode("remove", "tool", "--dry-run", "--json"); len(got) != 1 || got[0]["would"] != "remove" {
+		t.Fatalf("remove --dry-run --json printed %v", got)
+	}
+
+	if _, err := m.run(t, "", "update", "--json"); err == nil || !strings.Contains(err.Error(), "only with --dry-run") {
+		t.Fatalf("update --json without --dry-run should be refused, got %v", err)
+	}
+
+	if _, err := m.run(t, "", "add", m.namedManifest(t, "two", "two", "two"), "--dry-run", "--json"); err != nil {
+		t.Fatalf("add --dry-run --json is add --plan --json: %v", err)
+	}
+
+	public, secret, err := minisign.GenerateKey(rand.Reader)
+	must(t, err)
+
+	m.opts.ReleaseKey = public.String()
+	m.releaseWith(t, "the new oku", "v1.4.0", secret)
+
+	var check map[string]any
+	must(t, json.Unmarshal([]byte(m.stdout(t, "self", "update", "--check", "--json")), &check))
+
+	if check["newest"] != "1.4.0" || check["available"] != true || check["running"] != "test" {
+		t.Fatalf("self update --check --json printed %v", check)
 	}
 }
