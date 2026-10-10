@@ -601,7 +601,8 @@ order step in `prd/product.md`.
 - B285 [4] An artifact `version` given as a string, such as `"1.0.0"`, fails
   `manifest lint` and `add` with an error that says it must be a table.
 - B22 [3] Every profile change creates a generation. `oku rollback` restores
-  the previous one, `oku rollback <n>` a named one. Rollback restores
+  the generation the active one replaced, or the one numbered before when gc
+  deleted it. `oku rollback <n>` restores a named one. Rollback restores
   `oku.lock` with it, so a following `sync` changes nothing, and it never
   edits `oku.toml`.
 - B23 [3] `oku gc` deletes store paths referenced by no generation of any

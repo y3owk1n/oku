@@ -217,6 +217,11 @@ rollback. That is one more state for the user to learn, and `git revert` then
 generation, `from <n>` shows the fork, and generation numbers only go up, as
 in Nix.
 
+Revisited 2026-10-10. A plain rollback goes to the generation the active one
+replaced, and to the one numbered before only when gc deleted it. Why: after a
+fork the generation numbered before belongs to the line the user left, so
+undoing one change also undid or redid others.
+
 ## D23. gc deletes only unused store paths, and only --keep deletes generations
 
 `oku gc` deletes only store paths that no generation uses. Generations are
