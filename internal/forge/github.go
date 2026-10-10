@@ -142,10 +142,21 @@ func (g *github) Release(ctx context.Context, repo, tag string) (Release, error)
 // gives. Each page is one request of the rate limit.
 const releasePage = 100
 
-// Releases reads the newest maxReleases releases.
+// firstReleases is the size of the page a lookup reads first. GitHub builds the
+// whole page before it answers, also for a 304, so a smaller page answers
+// sooner. The version to install is almost always among the newest 30, see D104.
+const firstReleases = 30
+
+// Releases reads the newest maxReleases releases, or with all false the newest
+// firstReleases.
 func (g *github) Releases(ctx context.Context, repo string, all bool) ([]Release, bool, error) {
-	return readReleases(ctx, releasePage, all, func(ctx context.Context, page int) ([]Release, int, error) {
-		at := fmt.Sprintf("%s/repos/%s/releases?per_page=%d", g.api, repo, releasePage)
+	size := releasePage
+	if !all {
+		size = firstReleases
+	}
+
+	return readReleases(ctx, size, all, func(ctx context.Context, page int) ([]Release, int, error) {
+		at := fmt.Sprintf("%s/repos/%s/releases?per_page=%d", g.api, repo, size)
 		if page > 1 {
 			at += fmt.Sprintf("&page=%d", page)
 		}

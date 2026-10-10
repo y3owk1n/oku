@@ -428,8 +428,8 @@ order step in `prd/product.md`.
 - B360 [3] When the first page of a host's release list names the last page,
   oku asks for the other pages at once, four at a time. When it names only the
   next page, oku reads one page after another.
-- B386 [3] A version lookup reads the newest page of a host's release list and
-  stops there when it holds the version to install. It reads the other pages only
+- B386 [3] A version lookup reads the newest page of a host's release list, 30
+  releases on GitHub, and stops there when it holds the version to install. It reads the other pages only
   when that page holds no version the list allows, which happens when a repo's
   newest releases are all of another stream, and then picks from the whole list.
   A tag list is always read whole, since a host does not promise to put the

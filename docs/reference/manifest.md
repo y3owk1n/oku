@@ -101,9 +101,9 @@ finds, for a version a recipe pins, and for a version in `oku.lock`.
 
 | `from` | `repo` | Reads |
 |---|---|---|
-| `github-releases` | `owner/repo`, or `host/owner/repo` on a GitHub Enterprise Server | The newest page of releases, 100 of them. When none of those holds a version the list allows, oku reads the other pages too, up to 1000 releases. Skips drafts and prereleases. |
-| `gitea-releases` | `host/owner/repo`, such as `codeberg.org/owner/repo` | The same on a Gitea or Forgejo server, 50 releases to a page. |
-| `gitlab-releases` | `group/project`, or `host/group/project` on a GitLab server of your own | The same on a GitLab server. Skips a release dated in the future, which GitLab calls upcoming. |
+| `github-releases` | `owner/repo`, or `host/owner/repo` on a GitHub Enterprise Server | The newest 30 releases. When none of those holds a version the list allows, oku reads the whole list, up to 1000 releases. Skips drafts and prereleases. |
+| `gitea-releases` | `host/owner/repo`, such as `codeberg.org/owner/repo` | The same on a Gitea or Forgejo server, with the newest 50 releases first. |
+| `gitlab-releases` | `group/project`, or `host/group/project` on a GitLab server of your own | The same on a GitLab server, with the newest 100 releases first. Skips a release dated in the future, which GitLab calls upcoming. |
 | `git-tags` | a git URL | Every tag, up to 2000. On github.com, gitlab.com and codeberg.org oku reads them from the host's API. On any other host it runs `git ls-remote`, which needs `git` on `PATH`. |
 | `git-branch` | a git URL | The newest commit of `branch`. On github.com, gitlab.com and codeberg.org oku reads it from the host's API. On any other host it clones the branch without files, which needs `git` on `PATH`. |
 | `npm` | a package name, such as `@scope/name` | Every version in `registry.npmjs.org`. Skips a prerelease, which has a `-` in its version, and a version above the one the package's `latest` tag names. |
