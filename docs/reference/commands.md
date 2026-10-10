@@ -1613,6 +1613,18 @@ oku completion <bash|zsh|fish|powershell>
 works on every command and sorts the commands into sections. `completion`
 prints a completion script. The hook loads the completions of `oku` already.
 
+The completions read only files on this machine, so a tab press never waits on
+the network:
+
+| Where | Completes |
+|---|---|
+| `remove`, `update`, `info`, `why`, `sync --rebuild` | The packages in `oku.lock` |
+| `rollback` | The generations, newest first, with the date of each |
+| `service start`, `stop`, `restart`, `status`, `logs` | The services of installed packages |
+| `source remove`, `cache remove`, `key revoke` | The sources, caches and keys in `config.toml` |
+| `hook`, `env --shell` | The shells oku writes code for |
+| `add`, `run`, `shell` | The ref schemes, such as `github:`, and `alias/` for each source, or a path |
+
 ## JSON output
 
 The commands in this table take `--json` and then print JSON on stdout in

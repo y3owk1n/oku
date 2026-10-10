@@ -34,10 +34,11 @@ func newHookCmd(opts Options) *cobra.Command {
 		"oku is not installed, so it is safe to leave behind."
 
 	return &cobra.Command{
-		Use:   "hook <bash|zsh|fish|pwsh>",
-		Short: "Print the shell code that sets oku up in a shell",
-		Long:  long,
-		Args:  exactArgs(1),
+		Use:               "hook <bash|zsh|fish|pwsh>",
+		Short:             "Print the shell code that sets oku up in a shell",
+		Long:              long,
+		Args:              exactArgs(1),
+		ValidArgsFunction: completeShells,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			e, err := loadEnv()
 			if err != nil {
@@ -138,6 +139,7 @@ as null, and a .env file leaves it out.`,
 
 	cmd.Flags().
 		StringVar(&shell, "shell", "bash", "the shell to write for: "+strings.Join(shellhook.Shells, ", "))
+	_ = cmd.RegisterFlagCompletionFunc("shell", completeShells)
 
 	return cmd
 }

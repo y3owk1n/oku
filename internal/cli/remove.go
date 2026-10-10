@@ -15,10 +15,11 @@ import (
 
 func newRemoveCmd(opts Options) *cobra.Command {
 	return &cobra.Command{
-		Use:     "remove <name>...",
-		Aliases: []string{"rm", "uninstall"},
-		Short:   "Remove packages from the profile",
-		Args:    minArgs(1),
+		Use:               "remove <name>...",
+		Aliases:           []string{"rm", "uninstall"},
+		Short:             "Remove packages from the profile",
+		Args:              minArgs(1),
+		ValidArgsFunction: completePackages(opts),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if slices.Contains(args, "") {
 				return errors.New("an empty name is no package name")

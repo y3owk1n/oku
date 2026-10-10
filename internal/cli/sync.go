@@ -111,6 +111,7 @@ oku.toml yet.`,
 	cmd.Flags().StringSlice(
 		rebuildFlag, nil, "build these packages again, even though the store holds their builds",
 	)
+	_ = cmd.RegisterFlagCompletionFunc(rebuildFlag, completePackages(opts))
 
 	return cmd
 }
@@ -119,9 +120,10 @@ func newUpdateCmd(opts Options) *cobra.Command {
 	var flags buildFlags
 
 	cmd := &cobra.Command{
-		Use:     "update [name...]",
-		Aliases: []string{"upgrade"},
-		Short:   "Re-resolve packages from their refs and rewrite oku.lock",
+		Use:               "update [name...]",
+		Aliases:           []string{"upgrade"},
+		ValidArgsFunction: completePackages(opts),
+		Short:             "Re-resolve packages from their refs and rewrite oku.lock",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := recoverFirst(cmd, opts); err != nil {
 				return err

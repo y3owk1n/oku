@@ -61,10 +61,11 @@ with no sources.`,
 	}
 
 	remove := &cobra.Command{
-		Use:     "remove <alias>",
-		Aliases: []string{"rm"},
-		Short:   "Forget an alias",
-		Args:    exactArgs(1),
+		Use:               "remove <alias>",
+		Aliases:           []string{"rm"},
+		Short:             "Forget an alias",
+		Args:              exactArgs(1),
+		ValidArgsFunction: completeConfig(func(c *source.Config) []string { return slices.Sorted(maps.Keys(c.Sources)) }),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			e, err := loadEnv()
 			if err != nil {
