@@ -1635,6 +1635,12 @@ order step in `prd/product.md`.
   then never leaves the screen blank. While the package has a wait of its own,
   such as a download, its line shows that wait instead. A pipe gets no line for
   a request.
+- B565 [11] `--exit-code` makes `oku outdated` exit with 2 when `oku update`
+  would take a newer version. `sync --dry-run` and `update --dry-run` exit
+  with 2 when something would change, and `self update --check` when a newer
+  release exists. A failure still exits with 1, and without the flag each
+  exits with 0. On `sync`, `update` and `self update`, `--exit-code` needs
+  `--dry-run` or `--check`.
 - B562 [11] With `OKU_TRACE` naming a file, every command appends a line to
   it for each request and each wait: when it started, how long it took, the
   package, what it was, and for a request the answer. A URL's query and user
