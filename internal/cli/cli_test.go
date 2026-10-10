@@ -1563,6 +1563,8 @@ type releaseServer struct {
 	hits      int
 	unchanged int
 	nextOnly  bool
+	// sizes are the page sizes the requests asked for, in order.
+	sizes []int
 	// latest is the tag of the release the server marks as latest.
 	latest string
 	// prereleases are tags whose names read as releases but that the server
@@ -1601,6 +1603,10 @@ func newReleaseServer(t *testing.T, tags ...string) *releaseServer {
 		tags := rs.tags
 
 		if size, err := strconv.Atoi(r.URL.Query().Get("per_page")); err == nil {
+			rs.mu.Lock()
+			rs.sizes = append(rs.sizes, size)
+			rs.mu.Unlock()
+
 			page := max(1, atoi(r.URL.Query().Get("page")))
 			from := min((page-1)*size, len(tags))
 			tags = tags[from:min(from+size, len(tags))]

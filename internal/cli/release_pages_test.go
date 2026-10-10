@@ -24,8 +24,9 @@ func TestB386ALookupReadsTheNewestPageOfReleasesAndNoMore(t *testing.T) {
 		t.Fatalf("add installed %s, want 2.0.150", got)
 	}
 
-	if server.hits != 1 {
-		t.Fatalf("add asked for %d pages of releases, want 1", server.hits)
+	// GitHub builds the whole page before it answers, so the first is small.
+	if server.hits != 1 || server.sizes[0] != 30 {
+		t.Fatalf("add asked for %d pages of releases of sizes %v, want 1 of 30", server.hits, server.sizes)
 	}
 }
 
@@ -51,8 +52,8 @@ func TestB386ALookupReadsTheOtherPagesWhenTheNewestHoldsNoVersionItWants(t *test
 		t.Fatalf("add installed %s, want 1.2.0 from a later page", got)
 	}
 
-	if server.hits < 2 {
-		t.Fatalf("add asked for %d pages, want every page of the list", server.hits)
+	if server.hits < 2 || server.sizes[len(server.sizes)-1] != 100 {
+		t.Fatalf("add asked for pages of sizes %v, want every page of the list at 100", server.sizes)
 	}
 }
 
