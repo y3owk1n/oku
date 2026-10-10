@@ -17,7 +17,7 @@ func newRemoveCmd(opts Options) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:               "remove <name>...",
 		Aliases:           []string{"rm", "uninstall"},
-		Short:             "Remove packages from the profile",
+		Short:             "Remove packages from the profile, oku.toml and oku.lock",
 		Args:              minArgs(1),
 		ValidArgsFunction: completePackages(opts),
 		RunE: func(cmd *cobra.Command, args []string) error {

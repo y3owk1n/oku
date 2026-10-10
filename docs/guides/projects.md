@@ -38,7 +38,7 @@ and uses the nearest one. With none, it uses your global list. Your config
 directory holds the global list and never counts as a project.
 
 `add`, `remove`, `list`, `sync`, `update`, `outdated`, `info`, `which`, `why`,
-`exec`, `generations` and `rollback` act on the project. Pass `--global`, or
+`exec`, `verify`, `generations` and `rollback` act on the project. Pass `--global`, or
 `-g`, to use the global list from inside a project:
 
 ```
