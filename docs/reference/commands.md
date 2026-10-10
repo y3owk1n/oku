@@ -208,6 +208,7 @@ generation.
 | Flag | Effect |
 |---|---|
 | `--dry-run` | Prints what would change, and changes nothing. See [A dry run](#a-dry-run). |
+| `--diff` | With `--dry-run`, also prints how the text of each file would change. See [A dry run](#a-dry-run). |
 | `--system` | Also removes the package's system-scope apps, fonts and services, which needs administrator rights. oku lists them and asks first. |
 | `--yes`, `-y` | Answers yes to the system-scope question. |
 
@@ -238,6 +239,7 @@ With no names it updates every package of the list.
 | Flag | Effect |
 |---|---|
 | `--dry-run` | Checks everything and prints what would change. It changes only the store and the cache. See [A dry run](#a-dry-run). |
+| `--diff` | With `--dry-run`, also prints how the text of each file would change. See [A dry run](#a-dry-run). |
 | `--exit-code` | With `--dry-run`, exits with `2` when something would change. See [Exit codes](#exit-codes). |
 | `--system` | Also applies system-scope apps, fonts and services, which needs administrator rights. oku lists them and asks first, and `--yes` answers yes. |
 | `--yes`, `-y` | Approves a manifest's commands and `[env]` without asking, takes a changed included list, and in a project trusts the [sources](security.md#trusted-sources) its `oku.toml` installs from. |
@@ -540,6 +542,7 @@ tables.
 | Flag | Effect |
 |---|---|
 | `--dry-run` | Checks everything and prints what would change. It changes only the store and the cache. See [A dry run](#a-dry-run). |
+| `--diff` | With `--dry-run`, also prints how the text of each file would change. See [A dry run](#a-dry-run). |
 | `--exit-code` | With `--dry-run`, exits with `2` when something would change. See [Exit codes](#exit-codes). |
 | `--locked` | Fails when `oku.lock` would change. For CI. |
 | `--rebuild <name>` | Builds the package again even though the store holds its build. Repeat the flag, or separate names with commas. |
@@ -684,6 +687,31 @@ dry run: nothing was changed
 - When an earlier change did not finish, it stops and says to run `oku sync`
   first.
 - With nothing to change it prints `dry run: already in sync`.
+- A file with secrets that oku writes again reads as one line, such as
+  `would change the secret /home/you/.config/gh/hosts.yml`.
+
+`--diff` prints the lines that change under each file oku would write. Two
+unchanged lines surround each change, and `...` marks the lines it skips:
+
+```
+$ oku sync --dry-run --diff
+~ would change the content of /home/you/.gitconfig
+     email = you@example.com
+     [core]
+    -editor = nvim
+    +editor = hx
+     [pull]
+     rebase = true
+dry run: nothing was changed
+```
+
+- A new file prints all its lines with `+`.
+- A secret prints as `{{secret.<name>}}`, or `{{secret}}` for a file that is
+  one secret, and never as its value. A file whose secret alone changed
+  prints no lines.
+- A link prints no lines, since oku does not write its content.
+- `--diff` goes with `--dry-run`, on `sync`, `update`, `remove` and
+  `rollback`.
 
 #### Adopt a published list
 
@@ -1716,7 +1744,7 @@ flags they change the machine.
 | `oku service status <name>` | One such object. `start`, `stop` and `restart` print it too. |
 | `oku verify` | A list of `name`, `version`, `path`, `status` and `changes`. |
 | `oku add --dry-run` | A list with one object per ref, with fields such as `ref`, `name`, `version`, `inferred`, `asset`, `install`, `platform`, `commands`, `needs`, `deps` and `build_deps`. |
-| `oku sync --dry-run`, `oku update --dry-run`, `oku remove --dry-run`, `oku rollback --dry-run` | A list of the changes, each with `would` (`install`, `remove`, `change` or `write`) and `package`, `from` and `to` for a package, or `kind` and `target` for a file, setting, app, font or service. An empty list means nothing would change. |
+| `oku sync --dry-run`, `oku update --dry-run`, `oku remove --dry-run`, `oku rollback --dry-run` | A list of the changes, each with `would` (`install`, `remove`, `change` or `write`) and `package`, `from` and `to` for a package, or `kind` and `target` for a file, setting, app, font or service. With `--diff`, a file has `diff`, its lines as `--diff` prints them. An empty list means nothing would change. |
 | `oku self update --check` | `running`, `newest` and `available`. |
 | `oku gc --dry-run` | `projects`, `generations` with each `profile` and `number`, `store_paths` and `temporary` with each `path` and `bytes`, and `downloads` and `answers` with their `files` and `bytes`, which `--cache` fills. Then `shared`, the number of store paths whose identical files gc would share, and `bytes`, all it would free. |
 | `oku env` | Every variable the directory sets, with `null` for one it unsets. |

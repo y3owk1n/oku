@@ -120,6 +120,11 @@ func NewRootCmd(opts Options) *cobra.Command {
 				return err
 			}
 
+			diff, _ := cmd.Flags().GetBool(diffFlag)
+			if dryRun, _ := cmd.Flags().GetBool(dryRunFlag); diff && !dryRun {
+				return fmt.Errorf("--%s goes with --%s", diffFlag, dryRunFlag)
+			}
+
 			ctx := status.With(cmd.Context(), status.New(cmd.ErrOrStderr()))
 			cmd.SetContext(store.WithChecksums(resolve.WithMemo(forge.WithAnswers(ctx))))
 

@@ -29,8 +29,9 @@ profile now holds 0 packages, 2 files, generation 1, 40ms
 `~/.config/nvim` is now a symlink to `~/.config/oku/files/nvim`. oku created
 `~/.ssh` with mode `0700` because the entry has a mode of `0600`.
 
-`oku sync --dry-run` shows what a sync would write and changes nothing. See
-[Commands](../reference/commands.md).
+`oku sync --dry-run` shows what a sync would write and changes nothing.
+`oku sync --dry-run --diff` also shows how the text of each file would change,
+with secrets left out. See [A dry run](../reference/commands.md#a-dry-run).
 
 ### Start a path with a location
 

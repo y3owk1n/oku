@@ -245,6 +245,7 @@ the store. Rollback does not change oku.toml.`,
 // installing anything: a dry run, and system scope with or without asking.
 func changeFlags(cmd *cobra.Command) {
 	cmd.Flags().Bool(dryRunFlag, false, "print what would change, and change nothing")
+	cmd.Flags().Bool(diffFlag, false, diffUsage)
 	cmd.Flags().Bool(systemFlag, false, systemUsage)
 	cmd.Flags().BoolP("yes", "y", false, "apply system scope without asking")
 }
