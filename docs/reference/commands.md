@@ -822,7 +822,9 @@ oku rollback [generation]
 ```
 
 Switches the profile and `oku.lock` back to an earlier generation. Without a
-number it goes to the generation before the active one.
+number it goes to the generation the active one replaced. After a rollback,
+`oku generations` shows that one as `from <n>`. When `oku gc` deleted it,
+rollback goes to the one numbered before.
 
 ```
 $ oku rollback

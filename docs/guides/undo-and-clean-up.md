@@ -41,9 +41,9 @@ $ oku rollback
 generation 2 is active, 2 packages: ripgrep 15.2.0 -> 14.1.1
 ```
 
-Without a number, `oku rollback` goes to the generation before the active one.
-It downloads nothing, because every generation's packages are still in the
-store.
+Without a number, `oku rollback` goes to the generation the active one
+replaced. It downloads nothing, because every generation's packages are still
+in the store.
 
 A rollback covers everything the generation holds:
 
@@ -95,9 +95,11 @@ $ oku generations
 * 4  2026-09-25 12:02  2 packages  from 1, + qux 1.0.0
 ```
 
-`oku rollback 3` still reaches the other line. Numbers only go up: a change
-takes the number after the highest generation, also after `oku gc` deleted
-older ones, so a number always names the same generation.
+`oku rollback 3` still reaches the other line. A plain `oku rollback` from 4
+goes to 1, the generation 4 replaced, so it undoes the add of qux and nothing
+else. Numbers only go up: a change takes the number after the highest
+generation, also after `oku gc` deleted older ones, so a number always names
+the same generation.
 
 A rollback fails, and changes nothing, when:
 
