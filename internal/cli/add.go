@@ -63,7 +63,8 @@ one of:
 
 --plan prints what oku found for a ref and what add would do, and changes
 nothing. --manifest prints the manifest add would use, ready to save as a file.`,
-		Args: minArgs(1),
+		Args:              minArgs(1),
+		ValidArgsFunction: completeRefs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			when, err := parseWhenFlags(whens)
 			if err != nil {

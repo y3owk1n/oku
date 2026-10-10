@@ -267,3 +267,60 @@ func TestB564ARepoWithoutASchemeGetsItsGitHubRef(t *testing.T) {
 		t.Fatalf("which should name `oku search` once a source exists: %v", err)
 	}
 }
+
+func TestB566ShellCompletionsNameWhatOkuHasLocally(t *testing.T) {
+	m := newMachine(t)
+
+	for _, name := range []string{"one", "two"} {
+		_, err := m.run(t, "", "add", m.namedManifest(t, name, name, name))
+		must(t, err)
+	}
+
+	_, err := m.run(t, "", "source", "add", "mine", m.fixtures)
+	must(t, err)
+
+	// __complete is what the shell's completion script runs. It prints one
+	// candidate a line and then the directive after a colon.
+	complete := func(args ...string) string {
+		t.Helper()
+
+		out, err := m.run(t, "", append([]string{"__complete"}, args...)...)
+		must(t, err)
+
+		return out
+	}
+
+	for _, tc := range []struct {
+		args      []string
+		want, not []string
+		directive string
+	}{
+		{[]string{"remove", ""}, []string{"one", "two"}, nil, ":4"},
+		{[]string{"remove", "one", ""}, []string{"two"}, []string{"one\n"}, ":4"},
+		{[]string{"update", ""}, []string{"one", "two"}, nil, ":4"},
+		{[]string{"info", ""}, []string{"one"}, nil, ":4"},
+		{[]string{"rollback", ""}, []string{"1\t"}, []string{"2\t"}, ":36"},
+		{[]string{"hook", ""}, []string{"bash", "zsh", "fish", "pwsh"}, nil, ":4"},
+		{[]string{"source", "remove", ""}, []string{"mine"}, nil, ":4"},
+		{[]string{"add", ""}, []string{"github:", "npm:", "mine/"}, nil, ":2"},
+		{[]string{"add", "./"}, nil, []string{"github:"}, ":0"},
+	} {
+		out := complete(tc.args...)
+
+		for _, want := range tc.want {
+			if !strings.Contains(out, want) {
+				t.Fatalf("%v: want %q in\n%s", tc.args, want, out)
+			}
+		}
+
+		for _, not := range tc.not {
+			if strings.Contains(out, not) {
+				t.Fatalf("%v: did not want %q in\n%s", tc.args, not, out)
+			}
+		}
+
+		if !strings.Contains(out, tc.directive+"\n") {
+			t.Fatalf("%v: want the directive %s in\n%s", tc.args, tc.directive, out)
+		}
+	}
+}

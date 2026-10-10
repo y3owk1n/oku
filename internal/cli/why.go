@@ -20,7 +20,8 @@ func newWhyCmd(opts Options) *cobra.Command {
 A dep is not linked into your profile, so "oku list" does not show it. "why"
 names the installed packages that depend on it, directly or through another
 dep.`,
-		Args: exactArgs(1),
+		Args:              exactArgs(1),
+		ValidArgsFunction: completePackages(opts),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			e, err := scopedEnv(cmd, opts)
 			if err != nil {

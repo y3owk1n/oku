@@ -226,9 +226,10 @@ start and stop act on this login session only.`,
 		{"logs", "Show the last lines a service printed"},
 	} {
 		sub := &cobra.Command{
-			Use:   action.name + " <name>",
-			Short: action.short,
-			Args:  exactArgs(1),
+			Use:               action.name + " <name>",
+			Short:             action.short,
+			Args:              exactArgs(1),
+			ValidArgsFunction: completeServices(opts),
 			RunE: func(cmd *cobra.Command, args []string) error {
 				return controlService(cmd, opts, action.name, args[0])
 			},

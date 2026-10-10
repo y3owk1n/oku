@@ -1635,6 +1635,12 @@ order step in `prd/product.md`.
   then never leaves the screen blank. While the package has a wait of its own,
   such as a download, its line shows that wait instead. A pipe gets no line for
   a request.
+- B566 [11] Shell completion reads files on the machine only. It offers the
+  packages of `oku.lock` for `remove`, `update`, `info`, `why` and
+  `--rebuild`, and the generations for `rollback`. It offers the services for
+  `service`, and the sources, caches and keys of `config.toml` for their
+  `remove` and `revoke`. It offers the shells for `hook` and `--shell`, and the
+  ref schemes and source aliases for `add`, `run` and `shell`.
 - B565 [11] `--exit-code` makes `oku outdated` exit with 2 when `oku update`
   would take a newer version. `sync --dry-run` and `update --dry-run` exit
   with 2 when something would change, and `self update --check` when a newer

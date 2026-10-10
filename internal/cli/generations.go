@@ -234,7 +234,8 @@ func newRollbackCmd(opts Options) *cobra.Command {
 Without a number, rollback goes to the generation the current one replaced.
 The switch is one link change, because every generation's packages are still in
 the store. Rollback does not change oku.toml.`,
-		Args: maxArgs(1),
+		Args:              maxArgs(1),
+		ValidArgsFunction: completeGenerations(opts),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runRollback(cmd, opts, args)
 		},

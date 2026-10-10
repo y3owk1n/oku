@@ -124,10 +124,11 @@ an entry only when a key from "oku key trust" signed it.`,
 			},
 		},
 		&cobra.Command{
-			Use:     "remove <directory-or-url>",
-			Aliases: []string{"rm"},
-			Short:   "Stop looking in this cache",
-			Args:    exactArgs(1),
+			Use:               "remove <directory-or-url>",
+			Aliases:           []string{"rm"},
+			Short:             "Stop looking in this cache",
+			Args:              exactArgs(1),
+			ValidArgsFunction: completeConfig(func(c *source.Config) []string { return c.Caches }),
 			RunE: func(cmd *cobra.Command, args []string) error {
 				return editConfig(func(c *source.Config) error {
 					abs, _ := filepath.Abs(args[0])
@@ -371,9 +372,10 @@ func newKeyCmd() *cobra.Command {
 			},
 		},
 		&cobra.Command{
-			Use:   "revoke <public-key>",
-			Short: "Stop accepting cache entries that this key signed",
-			Args:  exactArgs(1),
+			Use:               "revoke <public-key>",
+			Short:             "Stop accepting cache entries that this key signed",
+			Args:              exactArgs(1),
+			ValidArgsFunction: completeConfig(func(c *source.Config) []string { return c.TrustedKeys }),
 			RunE: func(cmd *cobra.Command, args []string) error {
 				return editConfig(func(c *source.Config) error {
 					before := len(c.TrustedKeys)

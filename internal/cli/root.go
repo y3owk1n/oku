@@ -498,6 +498,28 @@ func loadEnv() (env, error) {
 // scopedEnv is loadEnv for commands that act on a list. Inside a directory tree
 // with an oku.toml they act on that project, unless --global is set.
 func scopedEnv(cmd *cobra.Command, opts Options) (env, error) {
+	e, err := quietScopedEnv(cmd, opts)
+	if err != nil {
+		return e, err
+	}
+
+	// A command can load its env more than once, and says which project once.
+	if e.project != "" && cmd.Annotations[projectShown] == "" {
+		if cmd.Annotations == nil {
+			cmd.Annotations = map[string]string{}
+		}
+
+		cmd.Annotations[projectShown] = "yes"
+		s := ui.For(cmd.ErrOrStderr())
+		fmt.Fprintln(cmd.ErrOrStderr(), s.Dim("project "+s.Home(e.project)))
+	}
+
+	return e, nil
+}
+
+// quietScopedEnv is scopedEnv without the line that names the project, for a
+// shell completion, which prints only candidates.
+func quietScopedEnv(cmd *cobra.Command, opts Options) (env, error) {
 	e, err := loadEnv()
 	if err != nil {
 		return e, err
@@ -517,17 +539,6 @@ func scopedEnv(cmd *cobra.Command, opts Options) (env, error) {
 	}
 
 	e.project = findProject(dir, e.config)
-
-	// A command can load its env more than once, and says which project once.
-	if e.project != "" && cmd.Annotations[projectShown] == "" {
-		if cmd.Annotations == nil {
-			cmd.Annotations = map[string]string{}
-		}
-
-		cmd.Annotations[projectShown] = "yes"
-		s := ui.For(cmd.ErrOrStderr())
-		fmt.Fprintln(cmd.ErrOrStderr(), s.Dim("project "+s.Home(e.project)))
-	}
 
 	return e, nil
 }

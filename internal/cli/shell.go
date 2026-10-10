@@ -34,7 +34,8 @@ on PATH and their [env] set. It changes no oku.toml, no oku.lock and no
 profile. Leave the shell with "exit". "oku gc" deletes the packages later.
 
 After "--", oku runs that command in place of a shell and exits with its code.`,
-		Args: minArgs(1),
+		Args:              minArgs(1),
+		ValidArgsFunction: completeRefs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			refs, command := args, []string(nil)
 			if at := cmd.ArgsLenAtDash(); at >= 0 {
