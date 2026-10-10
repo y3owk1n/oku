@@ -40,8 +40,9 @@ The action does this:
 
 1. It installs oku, unless an `oku` is already on `PATH`. It runs the install
    script of the action's own tag, which checks the release's minisign
-   signature with a minisign the action pins by its sha256. A tag of the action
-   therefore pins the script too.
+   signature with a minisign the action pins by its sha256. On an Intel Mac
+   runner it installs minisign with Homebrew. A tag of the action therefore
+   pins the script too.
 2. It restores the store and the downloads from the Actions cache.
 3. It runs `oku sync --yes --locked` in the directory of your `oku.toml`.
    `--yes` trusts the sources the project installs from, as well as its
@@ -107,8 +108,8 @@ left the list, or lacks a platform that `[lock]` names. Line endings do not
 count, so a lock and a local manifest that git checked out with CRLF on Windows
 pass.
 
-A package that builds with a `pip` vendor step cannot be pinned from another
-platform. `oku sync --locked` fails on that platform until a machine of that
+A package whose own manifest has a `pip` vendor step with `requirements.txt`
+cannot be pinned from another platform. A `pypi:` package can. `oku sync --locked` fails on that platform until a machine of that
 platform has built it and you have committed the lock.
 
 `--yes` approves the build steps of packages that build from source. Without a
@@ -143,6 +144,7 @@ with `1` when it fails:
 ```sh
 oku outdated --exit-code              # a newer version that oku update takes
 oku sync --dry-run --exit-code        # the machine does not match oku.toml
+oku update --dry-run --exit-code      # oku update would change the lock
 oku self update --check --exit-code   # a newer oku
 ```
 

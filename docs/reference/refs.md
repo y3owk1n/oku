@@ -161,8 +161,9 @@ oku keeps each API answer in its cache and asks next time only whether it
 changed. With `GITHUB_TOKEN` set, GitHub does not count an unchanged answer
 against the rate limit. One command asks for each answer, each list of versions
 and each checksum file once, however many packages share the repo or the
-registry package. oku reads a repo's GitHub releases 100 at a time, up to
-1000, and asks for the pages after the first at once, four at a time. When
+registry package. oku first reads a repo's newest 30 GitHub releases, and
+only when none fits reads the whole list 100 at a time, up to 1000, asking for
+the pages after the first at once, four at a time. When
 GitHub says oku sent too many requests too fast, oku stops and says how many
 seconds to wait.
 

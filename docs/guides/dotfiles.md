@@ -32,6 +32,9 @@ profile now holds 0 packages, 2 files, generation 1, 40ms
 `oku sync --dry-run` shows what a sync would write and changes nothing.
 `oku sync --dry-run --diff` also shows how the text of each file would change,
 with secrets left out. See [A dry run](../reference/commands.md#a-dry-run).
+`oku list --files` shows each entry that applies to this machine, with its
+kind, its source and the list that declares it. See
+[oku list](../reference/commands.md#oku-list).
 
 ### Start a path with a location
 
@@ -136,7 +139,8 @@ The rules of a template:
 - `{{home}}`, `{{config}}` and `{{data}}` are variables too.
 - `{{pkg.<name>}}` is the directory of a package of the list, and
   `{{secret.<name>}}` a named secret.
-- A name of `[vars]` may not start with `pkg.` or `secret.`.
+- A name of `[vars]` may not be `home`, `config` or `data`, and may not start
+  with `pkg.` or `secret.`.
 - Write `\{{` for the two braces themselves, for a config that has its own
   `{{...}}` syntax.
 - There are no conditionals and no loops.
@@ -192,7 +196,8 @@ that machine's own list.
 "{{config}}/kanata" = { link = "./files/kanata", when = { os = "darwin" } }
 ```
 
-The keys are `os`, `arch` and `libc`. For several platforms, write an array of
+The keys are `os`, `arch`, `libc` and `host`, which names one machine, such
+as `when = { host = "work" }`. For several platforms, write an array of
 tables, such as `when = [{ os = "darwin" }, { os = "linux" }]`. See
 [oku.toml](../reference/oku-toml.md) for the values.
 
@@ -326,8 +331,8 @@ that file alone. `oku self uninstall` removes every file oku placed.
 
 ## Undo a change
 
-`oku rollback` puts back the files of the generation before, with the rest of
-the machine:
+`oku rollback` puts back the files of the generation the active one replaced,
+with the rest of the machine:
 
 ```
 $ oku rollback

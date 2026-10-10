@@ -1056,7 +1056,7 @@ Names what the machine must already have for this package, which oku does not
 install. Examples are the Xcode command line tools for a build on macOS, or a
 graphics library of the Linux distribution. An entry takes the keys of
 [`[host]` in `oku.toml`](oku-toml.md#host): `command`, `path`, `apt`, `dnf`,
-`pacman`, `apk`, `zypper`, `install` and `when`.
+`pacman`, `apk`, `zypper`, `install` and `when`, whose `when` takes no `host`.
 
 ```toml
 [host]
@@ -1233,8 +1233,8 @@ deps = ["github:someone/recipes#ca-certificates"]
 
 A dep is a ref string, or a table with `ref`, an optional `version` and an
 optional `when`. `when` takes the form of a package's
-[`when` in oku.toml](oku-toml.md#when), and limits the dep to matching
-platforms. The same dep may appear twice with a version for each platform:
+[`when` in oku.toml](oku-toml.md#when), without `host`, and limits the dep to
+matching platforms. The same dep may appear twice with a version for each platform:
 
 ```toml
 [runtime]
@@ -1511,7 +1511,7 @@ restart = "on-failure"
 |---|---|---|
 | `name` | yes | What the user types in `oku service start <name>`. Same characters as a package name. Two installed packages cannot ship a service of the same name. |
 | `command` | yes | A path inside the installed package, normally `bin/<program>`. |
-| `args` | no | Arguments. They expand `{{prefix}}`, `{{version}}`, `{{home}}`, `{{config}}` and `{{data}}`, so a service can name its config file, as in `["--config", "{{config}}/tool/rc"]`. |
+| `args` | no | Arguments. They expand `{{prefix}}`, `{{version}}`, `{{home}}`, `{{config}}` and `{{data}}`, and `{{appdata}}` and `{{localappdata}}` on Windows, so a service can name its config file, as in `["--config", "{{config}}/tool/rc"]`. |
 | `env` | no | Variables for the service. Values expand the same variables as `args`. |
 | `restart` | no | `never`, `on-failure` or `always`. Default `never`. |
 | `schedule` | no | Makes the service a job that runs at set times and ends on its own, see [Scheduled jobs](#scheduled-jobs). |
@@ -1572,7 +1572,9 @@ schedule = { at = "03:00", weekdays = ["mon", "fri"] }
 - oku writes the schedule into the OS's own definition: `StartInterval` or
   `StartCalendarInterval` for launchd, a `oku-<name>.timer` beside a oneshot
   unit for systemd, and the task's trigger for Task Scheduler.
-- A run that the machine slept through runs once it wakes, on all three.
+- A run of an `at` schedule that the machine slept through runs once it
+  wakes, on all three. An `every` schedule on macOS and Linux skips a run the
+  machine slept through and goes on at the next interval.
 - With `service = true` the schedule is on. `oku service start` runs the job
   once now and `oku service stop` ends a run, and neither changes the
   schedule. On macOS, starting a job whose schedule is off also turns its
@@ -1588,6 +1590,10 @@ machines with the same keys:
 | `os` | `linux`, `darwin`, `windows` |
 | `arch` | `amd64` or `arm64`, Go's names |
 | `libc` | `glibc` or `musl`. Linux only. oku reads which loader `/bin/sh` runs on. The musl loader means `musl` and any other means `glibc`, so a glibc system with the musl package installed is `glibc`. When `/bin/sh` is static, oku reports `musl` if `/lib/ld-musl-*.so.1` exists. |
+
+`match` and `when` take no `host`. A manifest serves every machine, so oku
+refuses one with `match.host` or `when.host`. Name a host in the
+[`when` of oku.toml](oku-toml.md#when) instead.
 
 A missing key matches anything. A value that names no platform, such as
 `os = "macos"`, is an error that names the right one, here `darwin`. oku accepts
@@ -1608,7 +1614,7 @@ platforms, named as `oku.lock` names them: `darwin-amd64`, `darwin-arm64`,
 
 `{{name}}` in a value expands to the variable's value. An unknown variable is an
 error when oku expands the value. `oku manifest lint` reports one in an
-artifact's `url` and `sha256_url`, a `bin` table of an artifact or an
+artifact's URLs, a `bin` table of an artifact or an
 `install` step, `completions.generate`, a `run` step and
 `build.source.sha256_url`.
 
@@ -1626,7 +1632,7 @@ artifact's `url` and `sha256_url`, a `bin` table of an artifact or an
 | `{{jobs}}` | The number of CPUs. |
 | `{{dep.<name>.prefix}}` | The store directory of a dep, by its package name. A dep's programs are in its `bin`. |
 | `{{shell}}` | `fish`, `zsh`, `bash` or `powershell`, in `completions.generate` only. |
-| `{{home}}`, `{{config}}`, `{{data}}` | The user's home, config and data directories, in a service only. |
+| `{{home}}`, `{{config}}`, `{{data}}` | The user's home, config and data directories, in a service only. On Windows a service also takes `{{appdata}}` and `{{localappdata}}`. |
 
 The variables derived from the version work wherever `{{version}}` does.
 
@@ -1634,7 +1640,7 @@ Where each one works:
 
 | Value | Variables |
 |---|---|
-| artifact `url`, `sha256_url` | `version`, `tag`, `os`, `arch`, `libc` |
+| artifact `url`, `sha256_url`, the signature and certificate URLs, `provenance` | `version`, `tag`, `os`, `arch`, `libc` |
 | `bin` table `run`, `args` | the artifact variables, `pkg`, `prefix`, `dep.<name>.prefix` |
 | `completions.generate` | `shell` |
 | `[env]` values | `version`, `tag`, `pkg`, `prefix` |

@@ -156,7 +156,7 @@ store path leaves the copy whole.
 |---|---|---|---|
 | Apps | `~/Applications/` | `<data home>/applications/oku-<name>.desktop` | `%APPDATA%\Microsoft\Windows\Start Menu\Programs\oku-<name>.lnk` |
 | Fonts | `~/Library/Fonts/` | `<data home>/fonts/oku/` | `%LOCALAPPDATA%\Microsoft\Windows\Fonts\`, and a value under `HKCU\Software\Microsoft\Windows NT\CurrentVersion\Fonts` |
-| Enabled services | `~/Library/LaunchAgents/dev.oku.<name>.plist` | `<config home>/systemd/user/oku-<name>.service` | a scheduled task `oku-<name>` |
+| Enabled services | `~/Library/LaunchAgents/dev.oku.<name>.plist` | `<config home>/systemd/user/oku-<name>.service`, and `oku-<name>.timer` for a job | a scheduled task `oku-<name>` |
 
 `<data home>` is `$XDG_DATA_HOME`, else `~/.local/share`. `<config home>` is
 `$XDG_CONFIG_HOME`, else `~/.config`.
@@ -167,7 +167,7 @@ With `system = true` they go to the machine-wide places:
 |---|---|---|---|
 | Apps | `/Applications/` | `/usr/local/share/applications/oku-<name>.desktop` | `%ProgramData%\Microsoft\Windows\Start Menu\Programs\oku-<name>.lnk` |
 | Fonts | `/Library/Fonts/` | `/usr/local/share/fonts/oku/` | `%SystemRoot%\Fonts\`, and a value under `HKLM\Software\Microsoft\Windows NT\CurrentVersion\Fonts` |
-| Enabled services | `/Library/LaunchDaemons/dev.oku.<name>.plist` | `/etc/systemd/system/oku-<name>.service` | a scheduled task `oku-<name>` that runs as you, or as `SYSTEM` with `run_as = "root"` |
+| Enabled services | `/Library/LaunchDaemons/dev.oku.<name>.plist` | `/etc/systemd/system/oku-<name>.service`, and `oku-<name>.timer` for a job | a scheduled task `oku-<name>` that runs as you, or as `SYSTEM` with `run_as = "root"` |
 | Other service files | `/Library/Application Support/oku/services/`, `/Library/Logs/oku/<name>.log` | the system journal | `%ProgramData%\oku\services\`, `%ProgramData%\oku\logs\` |
 | Shared store root | `/opt/oku` | `/opt/oku` | `%ProgramData%\oku` |
 
@@ -214,12 +214,12 @@ oku sets these for others:
 
 | Variable | Set in |
 |---|---|
-| `OKU_SHELL` | The shell of `oku shell`, to the refs it holds. |
+| `OKU_SHELL`, `OKU_SHELL_PATH` | The shell of `oku shell`, to the refs it holds and the directories it put on `PATH`. |
 | `OKU_PREFIX`, `OKU_SRC`, `OKU_JOBS` | A build's steps, see the [manifest reference](manifest.md). |
 | `GIT_TERMINAL_PROMPT=0` | Every `git` oku runs. |
 | `GIT_SSH_COMMAND` | Every `git` oku runs, as your ssh command with `-o BatchMode=yes`, unless `GIT_SSH` is set or the command is not OpenSSH. |
 | `OKU_PROJECT` | Your shell, by the hook, while a project applies, and the command of `oku exec` in a project. It holds the project's directory, for a prompt to show. |
-| `OKU_HOOK_SAVED`, `OKU_HOOK_ADDED`, `OKU_HOOK_HINT` | Your shell, by the hook, to undo what it applied. The hook removes `OKU_HOOK_PATH` and `OKU_HOOK_KEYS`, the state of an older oku. |
+| `OKU_HOOK_ADDED`, `OKU_HOOK_CHANGED`, `OKU_HOOK_HINT` | Your shell, by the hook, to undo what it applied. The old values stay in `_oku_hook_saved`, a shell variable the hook does not export. The hook removes `OKU_HOOK_SAVED`, `OKU_HOOK_PATH` and `OKU_HOOK_KEYS`, the state of an older oku. |
 
 The install scripts read `OKU_INSTALL_DIR` and `OKU_VERSION`, see
 [Getting started](../getting-started.md), and `OKU_REQUIRE_SIGNATURE`, see

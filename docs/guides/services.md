@@ -54,7 +54,7 @@ $ oku service list
 postgres  postgres  running, starts at login, pid 9449
 
 $ oku service stop postgres
-postgres: stopped
+postgres: stopped, starts at login
 $ oku service start postgres
 postgres: running, starts at login, pid 9501
 ```

@@ -56,8 +56,9 @@ it.
 - A moving tag such as `nightly` and a `git-branch` are new by design and skip
   the check.
 - `oku self update` follows the global list's age too, so by default a new
-  oku release waits a day. `--to <tag>` and `--nightly` skip it. The install scripts, which
-  run before oku exists on the machine, take the newest release.
+  oku release waits a day. `--min-release-age 0`, `--to <tag>` and `--nightly`
+  skip it. The install scripts, which run before oku exists on the machine,
+  take the newest release.
 
 oku reads when each version came out from its source: the publish time of a
 GitHub, GitLab, Gitea or Forgejo release, the npm registry, PyPI, crates.io and
@@ -175,7 +176,8 @@ run the command with --accept-unverified, or ask the developer to publish a chec
 - When oku does not trust the new version of a package that `oku.lock` holds,
   the package stays at its locked version, oku says so, and the rest of the
   command goes on. A package that is new to the lock stops the command.
-- `--accept-unverified` on `add`, `update`, `sync`, `shell` or `run` trusts
+- `--accept-unverified` on `add`, `update`, `sync`, `shell`, `run` or
+  `manifest test` trusts
   such downloads for one run without asking.
 - oku never asks about a digest that `oku.lock` already pins.
 

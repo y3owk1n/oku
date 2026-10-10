@@ -105,7 +105,7 @@ downloads, because every machine can fetch those itself. When nothing is left,
 it prints `nothing to push, none of these packages was built from source`.
 
 `push` refuses a package whose build had network access, which is a `run` step
-with `network = true`. Such a build can differ from run to run, so oku does not
+with `network = true` or a vendor step that runs install scripts. Such a build can differ from run to run, so oku does not
 give its result to another machine in place of a build.
 
 `oku key generate` refuses to overwrite an existing `signing.key`. Delete the

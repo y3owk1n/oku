@@ -136,14 +136,16 @@ $ oku generations
 
 $ oku rollback
 generation 1 is active, 1 package: ripgrep 15.2.0 -> 14.1.1
+! ~/.config/oku/oku.toml asks version "15" of ripgrep, which leaves out 14.1.1, so oku sync will move it again. Set version = "14.1.1" to keep it.
 ```
 
 `rg --version` prints 14.1.1 again. Rollback downloads nothing, because the old
 version is still on disk.
 
-Rollback does not edit `oku.toml`. It still asks for version 15, so the next
-`oku sync` would move to 15.2.0 again. To stay on 14.1.1, change the version
-in `oku.toml` back to `"14.1.1"`:
+Rollback does not edit `oku.toml`, and it says so. The list still asks for
+version 15, so the next `oku sync` would move to 15.2.0 again. To stay on
+14.1.1, do what the note says and change the version in `oku.toml` to
+`"14.1.1"`:
 
 ```
 $ oku sync

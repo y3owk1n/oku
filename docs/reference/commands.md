@@ -27,7 +27,7 @@ These work on every command.
 Inside a directory tree that has an `oku.toml`, the commands that read or
 change a list act on that project and print `project <dir>` on stderr, once
 per command. These are `add`, `remove`, `list`, `sync`, `update`, `outdated`,
-`info`, `why`, `which`, `exec`, `verify`, `generations` and `rollback`. `gc`, `source`, `search`,
+`info`, `why`, `which`, `exec`, `verify`, `generations`, `diff` and `rollback`. `gc`, `source`, `search`,
 `manifest` and `self` use no list. See [Projects](../guides/projects.md).
 
 ## Exit codes
@@ -1745,7 +1745,7 @@ the network:
 | Where | Completes |
 |---|---|
 | `remove`, `update`, `info`, `why`, `sync --rebuild` | The packages in `oku.lock` |
-| `rollback` | The generations, newest first, with the date of each |
+| `rollback`, `diff` | The generations other than the active one, newest first, with the date of each |
 | `service start`, `stop`, `restart`, `status`, `logs` | The services of installed packages |
 | `source remove`, `cache remove`, `key revoke` | The sources, caches and keys in `config.toml` |
 | `hook`, `env --shell` | The shells oku writes code for |

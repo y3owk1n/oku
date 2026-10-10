@@ -113,7 +113,7 @@ you answer no to the question.
 | Fonts | `/Library/Fonts/` | `/usr/local/share/fonts/oku/` |
 | Services that are turned on | `/Library/LaunchDaemons/dev.oku.<name>.plist` | `/etc/systemd/system/oku-<name>.service` |
 | Services that are installed, not turned on | `/Library/Application Support/oku/services/` | the same unit file, disabled |
-| Service output | `/Library/Logs/oku/<name>.log` | the system journal |
+| Service output | `~/.local/share/oku/logs/<name>.log`, or `/Library/Logs/oku/<name>.log` with `run_as = "root"` | the system journal |
 
 oku records each file in its [ledger](../how-oku-works.md#ledger), marked as
 system scope. A system service runs a program from the store in your user's
@@ -127,7 +127,7 @@ mark the service with `system scope`. `start`, `stop` and `restart` need
 
 ```
 $ oku service stop postgres
-oku: postgres runs in system scope, so stop needs administrator rights: run "oku service stop postgres --system"
+oku: postgres runs in system scope, so stop needs administrator rights: run oku service stop postgres --system
 $ oku service stop postgres --system
 postgres: stopped, starts at boot, system scope
 ```
