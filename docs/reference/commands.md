@@ -1665,6 +1665,7 @@ message, see [Troubleshooting](../troubleshooting.md).
 | `it chose the asset <name> for this machine` | An install from an inferred manifest failed. The lines after it list the other assets that fit and the `--asset` command that picks one. `--verbose` adds the manifest. |
 | `--asset and --bin apply when oku infers a manifest` | The ref has a manifest. |
 | `<name> has no [build], so it cannot be built from source` | `--from-source` on a manifest with artifacts only. |
+| `response is larger than the limit of <n> bytes` | An answer from a registry, a forge, a checksum file or a signature file is over the size oku reads, which is 128 MiB for npm and 1 MiB for a checksum file. oku reads none of it. |
 | `the build needs "<tool>", which is not on PATH` | Install that tool yourself. oku does not install `needs`. |
 | `<name> <version> needs approval to <what>, and this is not a terminal` | The manifest runs commands or sets `[env]` variables, and stdin is not a terminal. `<what>` is `run them`, `run it`, `set its variables`, or one of the first two with `and set its variables`. The next line says `pass --yes to approve`. Pass `--yes` after reading them. |
 | `dep <ref>: no version satisfies ">=9"` | A dep's version constraint matches nothing upstream. The versions found follow. |

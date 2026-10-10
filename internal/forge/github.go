@@ -5,12 +5,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"strings"
 	"time"
 
 	"github.com/klauspost/compress/snappy"
+
+	"github.com/y3owk1n/oku/internal/limit"
 )
 
 // githubVersion is the version of GitHub's REST API that oku asks github.com
@@ -279,13 +280,9 @@ func (g *github) page(ctx context.Context, url, accept string) ([]byte, string, 
 		return nil, "", fmt.Errorf("server returned %s", resp.Status)
 	}
 
-	body, err := io.ReadAll(io.LimitReader(resp.Body, maxBody+1))
+	body, err := limit.Read(resp.Body, maxBody)
 	if err != nil {
 		return nil, "", err
-	}
-
-	if len(body) > maxBody {
-		return nil, "", fmt.Errorf("%w of %d bytes", ErrTooLarge, maxBody)
 	}
 
 	return body, resp.Header.Get("Link"), nil

@@ -6,12 +6,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"regexp"
 	"strings"
 	"time"
 
+	"github.com/y3owk1n/oku/internal/limit"
 	"github.com/y3owk1n/oku/internal/shape"
 )
 
@@ -95,13 +95,9 @@ func Read(ctx context.Context, client *http.Client, api, name string) (Crate, er
 		return Crate{}, fmt.Errorf("crates.io returned %s", resp.Status)
 	}
 
-	body, err := io.ReadAll(io.LimitReader(resp.Body, maxBody+1))
+	body, err := limit.Read(resp.Body, maxBody)
 	if err != nil {
-		return Crate{}, err
-	}
-
-	if len(body) > maxBody {
-		return Crate{}, fmt.Errorf("crates.io answered with more than %d bytes", maxBody)
+		return Crate{}, fmt.Errorf("read the answer of crates.io: %w", err)
 	}
 
 	var found struct {

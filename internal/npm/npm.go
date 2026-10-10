@@ -6,12 +6,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"maps"
 	"net/http"
 	"slices"
 	"time"
 
+	"github.com/y3owk1n/oku/internal/limit"
 	"github.com/y3owk1n/oku/internal/shape"
 )
 
@@ -19,8 +19,9 @@ import (
 const Registry = "https://registry.npmjs.org"
 
 // maxBody is the most bytes read from the registry. A package with thousands of
-// versions has a list of several MiB.
-const maxBody = 64 << 20
+// versions has a list of several MiB, and renovate's full document was 72 MiB
+// in October 2026.
+const maxBody = 128 << 20
 
 // ErrNotFound reports that the registry has no such package.
 var ErrNotFound = errors.New("the registry has no such package")
@@ -94,7 +95,12 @@ func Read(ctx context.Context, client *http.Client, registry, name string) (Pack
 		} `json:"versions"`
 	}
 
-	if err := json.NewDecoder(io.LimitReader(resp.Body, maxBody)).Decode(&found); err != nil {
+	body, err := limit.Read(resp.Body, maxBody)
+	if err != nil {
+		return Package{}, fmt.Errorf("read the answer of the registry: %w", err)
+	}
+
+	if err := json.Unmarshal(body, &found); err != nil {
 		return Package{}, err
 	}
 
@@ -226,8 +232,13 @@ func readFull(ctx context.Context, client *http.Client, registry, name string) (
 		return full{}, fmt.Errorf("the registry returned %s", resp.Status)
 	}
 
+	body, err := limit.Read(resp.Body, maxBody)
+	if err != nil {
+		return full{}, fmt.Errorf("read the answer of the registry: %w", err)
+	}
+
 	var found full
-	if err := json.NewDecoder(io.LimitReader(resp.Body, maxBody)).Decode(&found); err != nil {
+	if err := json.Unmarshal(body, &found); err != nil {
 		return full{}, err
 	}
 

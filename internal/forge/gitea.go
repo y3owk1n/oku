@@ -4,11 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"strconv"
 	"time"
+
+	"github.com/y3owk1n/oku/internal/limit"
 )
 
 // gitea is a Gitea or Forgejo server, such as codeberg.org. Both serve the same
@@ -257,13 +258,9 @@ func (g *gitea) read(ctx context.Context, repo, path string) ([]byte, string, er
 		return nil, "", fmt.Errorf("%s returned %s", g.host, resp.Status)
 	}
 
-	body, err := io.ReadAll(io.LimitReader(resp.Body, maxBody+1))
+	body, err := limit.Read(resp.Body, maxBody)
 	if err != nil {
 		return nil, "", err
-	}
-
-	if len(body) > maxBody {
-		return nil, "", fmt.Errorf("%w of %d bytes", ErrTooLarge, maxBody)
 	}
 
 	return body, resp.Header.Get("Link"), nil

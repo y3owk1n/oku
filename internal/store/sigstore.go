@@ -6,10 +6,10 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"io"
 	"path"
 	"strings"
 
+	"github.com/y3owk1n/oku/internal/limit"
 	"github.com/y3owk1n/oku/internal/manifest"
 	"github.com/y3owk1n/oku/internal/sigstore"
 )
@@ -203,15 +203,15 @@ func (s *Store) ReadSmall(ctx context.Context, url string) ([]byte, error) {
 	return s.fetchSmall(ctx, url, 16<<20)
 }
 
-// fetchSmall downloads the signature file at url, of at most limit bytes.
-func (s *Store) fetchSmall(ctx context.Context, url string, limit int64) ([]byte, error) {
+// fetchSmall downloads the signature file at url, of at most size bytes.
+func (s *Store) fetchSmall(ctx context.Context, url string, size int64) ([]byte, error) {
 	resp, err := s.get(ctx, url)
 	if err != nil {
 		return nil, fmt.Errorf("%w: the manifest names a Sigstore signature, and %w", ErrSignature, err)
 	}
 	defer resp.Body.Close()
 
-	data, err := io.ReadAll(io.LimitReader(resp.Body, limit))
+	data, err := limit.Read(resp.Body, size)
 	if err != nil {
 		return nil, fmt.Errorf("download %s: %w", url, err)
 	}

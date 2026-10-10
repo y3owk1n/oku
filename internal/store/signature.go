@@ -14,6 +14,8 @@ import (
 	"time"
 
 	"aead.dev/minisign"
+
+	"github.com/y3owk1n/oku/internal/limit"
 )
 
 // ErrSignature reports an artifact that its manifest's signing key did not sign.
@@ -36,7 +38,7 @@ func (s *Store) verifySignature(ctx context.Context, keyText, url, version, down
 		return 0, fmt.Errorf("%w: the manifest has a signing_key, and %w", ErrSignature, err)
 	}
 
-	signature, err := io.ReadAll(io.LimitReader(resp.Body, 1<<16))
+	signature, err := limit.Read(resp.Body, 1<<16)
 	resp.Body.Close()
 
 	if err != nil {

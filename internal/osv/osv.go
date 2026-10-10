@@ -6,9 +6,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"strings"
+
+	"github.com/y3owk1n/oku/internal/limit"
 )
 
 // API is the address of the OSV database.
@@ -160,9 +161,9 @@ func (c Client) do(req *http.Request, into any) error {
 	}
 	defer resp.Body.Close()
 
-	data, err := io.ReadAll(io.LimitReader(resp.Body, 32<<20))
+	data, err := limit.Read(resp.Body, 32<<20)
 	if err != nil {
-		return err
+		return fmt.Errorf("read the answer of %s: %w", c.Base, err)
 	}
 
 	if resp.StatusCode != http.StatusOK {
