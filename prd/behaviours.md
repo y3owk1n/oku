@@ -31,6 +31,9 @@ order step in `prd/product.md`.
 - B195 [1] `oku remove` takes several names and drops them in one generation.
   A name that is not installed stops the command before anything changes.
   A name given twice counts once, and an empty name fails.
+- B570 [1] `remove` and `rollback` take `--dry-run`, which prints what would
+  change and changes nothing, and `--system` with `--yes`, which applies
+  system scope as `sync --system` does. `add --dry-run` is `add --plan`.
 - B227 [1] On a terminal a table fits the width: the last column wraps under
   itself, oku cuts another column that must give room and ends it with an
   ellipsis, and under 60 columns a table whose rows do not fit side by side
