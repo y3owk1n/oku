@@ -423,8 +423,9 @@ func (s *Store) Build(
 	}
 
 	// The meta file marks a finished build, so the record comes first.
+	var tree map[string]string
 	if err == nil {
-		err = writeTree(prefix)
+		tree, err = writeTree(prefix)
 	}
 
 	if err == nil {
@@ -445,7 +446,7 @@ func (s *Store) Build(
 	result.MissingDeps = s.missingDeps(prefix, opts.RuntimeDeps)
 
 	// A store path that shares nothing still works, and gc shares it later.
-	_, _ = s.Share(prefix)
+	s.shareNew(prefix, tree)
 
 	if err := freeze(prefix); err != nil {
 		return Realized{}, fmt.Errorf("make %s read-only: %w", filepath.Base(prefix), err)

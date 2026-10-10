@@ -57,6 +57,22 @@ func (s *Store) Share(path string) (int64, error) {
 
 	defer func() { _ = freeze(path) }()
 
+	return s.share(path, nil)
+}
+
+// shareNew is Share for a store path that oku just made and freezes next. tree
+// is what writeTree recorded. Its entry for a file is the key Share would
+// compute, so shareNew reads no file twice.
+func (s *Store) shareNew(path string, tree map[string]string) {
+	// A build may leave a directory without write permission.
+	if thaw(path) == nil {
+		_, _ = s.share(path, tree)
+	}
+}
+
+// share does the work of Share. known gives the keys of files by slash path,
+// and share reads only the files it lacks.
+func (s *Store) share(path string, known map[string]string) (int64, error) {
 	sh := sharer{links: filepath.Join(s.dir, LinksDir)}
 
 	var (
@@ -88,9 +104,16 @@ func (s *Store) Share(path string) (int64, error) {
 			return nil
 		}
 
-		key, err := contentKey(file, info.Mode())
+		rel, err := filepath.Rel(path, file)
 		if err != nil {
-			return nil //nolint:nilerr
+			return err
+		}
+
+		key, ok := known[filepath.ToSlash(rel)]
+		if !ok {
+			if key, err = contentKey(file, info.Mode()); err != nil {
+				return nil //nolint:nilerr
+			}
 		}
 
 		if err := os.MkdirAll(sh.links, 0o755); err != nil {
@@ -103,11 +126,6 @@ func (s *Store) Share(path string) (int64, error) {
 		}
 
 		saved += n
-
-		rel, err := filepath.Rel(path, file)
-		if err != nil {
-			return err
-		}
 
 		fmt.Fprintf(&record, "%s %o %s\n", key, info.Mode().Perm(), filepath.ToSlash(rel))
 
