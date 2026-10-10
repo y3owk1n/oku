@@ -164,7 +164,8 @@ order step in `prd/product.md`.
 - B580 [1] A package delivers PowerShell completions: a table takes `pwsh` or
   `powershell`, a directory finds `_<bin>.ps1`, and generate runs with
   `powershell`. They land under the profile `share/completions/pwsh`, and the
-  PowerShell hook dot-sources each one.
+  PowerShell hook dot-sources each one. A table that names both `pwsh` and
+  `powershell` is refused.
 - B206 [1] A man page that a build installs under `{{prefix}}/man` appears
   under the profile `share/man`, the same as one under `{{prefix}}/share/man`.
 - B8 [1] oku never requires root outside system scope, and writes only under
@@ -375,11 +376,12 @@ order step in `prd/product.md`.
   shows the whole new list. `--yes` takes a changed list and says so.
 - B17 [2] `sync` does not install an entry whose `when` does not match the
   host, and its lock entry stays for other platforms.
-- B575 [2] `when = { host = "work" }` in `oku.toml` limits a package or a
-  file to the machine whose short host name, or `OKU_HOST`, is `work`, in any
-  case. On another machine of the platform, `sync` installs nothing for it and
-  pins it for the `[lock]` platforms. A manifest with `host` in a `when` or a
-  `match` is refused.
+- B575 [2] `when = { host = "work" }` in `oku.toml` limits a package, a
+  file or a `[host]` entry to the machine whose short host name, or
+  `OKU_HOST`, is `work`, in any case. On another machine of the platform,
+  `sync` installs nothing for the package and pins it for the `[lock]`
+  platforms, and checks nothing for the `[host]` entry. A manifest with `host`
+  in a `when` or a `match` is refused.
 - B576 [2] An `include` item may be `{ ref = "...", when = {...} }`. Every
   package and file of that list, and of the lists it includes, takes the
   `when` on top of its own, and oku pins the list on every machine. Two lists
@@ -1484,7 +1486,8 @@ order step in `prd/product.md`.
 - B86 [10] A cache entry with a missing, invalid or untrusted signature is
   ignored and the package builds locally.
 - B87 [10] `oku cache push` writes the signed closure of the named packages
-  into a directory. Impure packages are refused.
+  into a directory. It takes every build, one from a source archive too, and
+  leaves out downloads. Impure packages are refused.
 - B365 [10] `oku cache push` writes each shared file with the mode it had
   before the store shared it, so an entry does not depend on what else the
   store held.
