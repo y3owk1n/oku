@@ -60,13 +60,13 @@ func TestB361ARegistryAnswerOfUpTo64MBIsReadWholeWithOrWithoutAnETag(t *testing.
 
 			m.opts.NPMRegistry = registry.URL
 
-			out, err := m.run(t, "", "add", "npm:@scope/tool", "--plan")
+			out, err := m.run(t, "", "add", "npm:@scope/tool", "--dry-run")
 			if err != nil {
-				t.Fatalf("add --plan of a 40 MB document: %v\n%s", err, out)
+				t.Fatalf("add --dry-run of a 40 MB document: %v\n%s", err, out)
 			}
 
 			if !strings.Contains(out, "1.0.0") {
-				t.Fatalf("add --plan did not find version 1.0.0:\n%s", out)
+				t.Fatalf("add --dry-run did not find version 1.0.0:\n%s", out)
 			}
 		})
 	}

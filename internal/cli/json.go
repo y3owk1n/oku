@@ -70,7 +70,7 @@ var jsonCommands = []string{
 // jsonOnlyWith names the flags that make a command which changes the machine or
 // the oku binary print JSON. Without one of them it prints none.
 var jsonOnlyWith = map[string][]string{
-	"oku add":         {"plan", dryRunFlag},
+	"oku add":         {dryRunFlag},
 	"oku gc":          {dryRunFlag},
 	"oku remove":      {dryRunFlag},
 	"oku rollback":    {dryRunFlag},

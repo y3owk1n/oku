@@ -38,11 +38,12 @@ var exclusive = [][]string{
 func oneAtATime(cmd *cobra.Command) {
 	run := cmd.RunE
 	cmd.RunE = func(cmd *cobra.Command, args []string) error {
-		// "add --plan" and "add --manifest" only read, so they do not wait.
-		plan, _ := cmd.Flags().GetBool("plan")
+		// "add --dry-run" and "add --manifest" only read, so they do not wait. A dry
+		// run of another command writes the store, so it waits.
+		dryRun, _ := cmd.Flags().GetBool(dryRunFlag)
 		printed, _ := cmd.Flags().GetBool("manifest")
 
-		if plan || printed {
+		if cmd.Name() == "add" && (dryRun || printed) {
 			return run(cmd, args)
 		}
 

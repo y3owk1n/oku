@@ -1702,7 +1702,7 @@ another program's asset gets no artifact. An installer such as a `.deb` is
 named after the distro's package, so its name does not count.
 
 When other assets fit your machine as well, in any format, `oku manifest init`
-lists them on stderr and `oku add --plan` lists them under `also fits`. The
+lists them on stderr and `oku add --dry-run` lists them under `also fits`. The
 manifest does not name them, so its text is the same on every machine. An
 `oku update` on another machine does not change it in `oku.lock`.
 
@@ -1756,7 +1756,7 @@ manifest does not name them, so its text is the same on every machine. An
   Windows zip an `.exe` of such a name counts.
 - Other programs next to it stay out, such as `uvx` next to `uv`. `oku add`
   names them and prints the command that adds them, such as
-  `oku add github:astral-sh/uv --bin uv --bin uvx`. `oku add --plan` lists them
+  `oku add github:astral-sh/uv --bin uv --bin uvx`. `oku add --dry-run` lists them
   under `also holds`, and `oku manifest init` names them on stderr.
 - With `--bin`, the programs are the files it names instead.
 - A single top-level directory becomes `strip = 1`.

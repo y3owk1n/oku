@@ -69,10 +69,10 @@ every version that `oku update` takes. `--min-release-age` and
 
 ## Look before you add
 
-`--plan` shows what `oku add` would install and changes nothing:
+`--dry-run` shows what `oku add` would install and changes nothing:
 
 ```
-$ oku add github:sharkdp/fd --plan
+$ oku add github:sharkdp/fd --dry-run
 name       fd
 version    10.5.0
 manifest   inferred by oku, because the ref has none
@@ -84,13 +84,13 @@ signed     Sigstore, by the workflow sharkdp/fd/.github/workflows/CICD.yml
 programs   fd
 installed  no
 ...
-plan: nothing was changed
+dry run: nothing was changed
 ```
 
 It names the version, the download or the build, how oku checks it, the
 programs, and whether the manifest runs commands. It takes the same ref,
 `@version`, `--asset` and `--bin` as `add`, so you can check a version or an
-asset before you install it. [A plan](../reference/commands.md#a-plan) lists
+asset before you install it. [A dry run of add](../reference/commands.md#a-dry-run-of-add) lists
 every row.
 
 `--manifest` prints the manifest instead. For a repo with no manifest, it

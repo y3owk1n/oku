@@ -78,9 +78,8 @@ Installs the package that a [ref](refs.md) points at, and writes it to
 | `--accept-unverified` | Trusts a download that nothing states a digest for without asking, whatever `[lock]` `unverified` says. See [Trust on first use](security.md#trust-on-first-use). |
 | `--verbose`, `-v` | Shows the output of build commands as they run, and prints a manifest that oku inferred. |
 | `--when <key=value,...>` | Limits the package to matching platforms and writes `when` to `oku.toml`, such as `--when os=linux,libc=glibc` or `--when host=work`. Give it once per table of an array. When it leaves out this machine, `add` pins the package for the `[lock]` platforms it matches and installs nothing. |
-| `--plan` | Prints what oku found for the ref and what `add` would do, and changes nothing. See [A plan](#a-plan). |
-| `--dry-run` | The same as `--plan`, the name the other commands use. |
-| `--manifest` | Prints the manifest `add` would use and changes nothing. See [A plan](#a-plan). |
+| `--dry-run` | Prints what oku found for the ref and what `add` would do, and changes nothing. See [A dry run of add](#a-dry-run-of-add). |
+| `--manifest` | Prints the manifest `add` would use and changes nothing. See [A dry run of add](#a-dry-run-of-add). |
 
 What it does, in order:
 
@@ -134,15 +133,15 @@ A failed `add` leaves the previous generation active, and the list, the lock
 and every app, font and service unchanged. The messages it can stop with are
 in [Error messages](#error-messages).
 
-#### A plan
+#### A dry run of add
 
-`oku add <ref> --plan` fetches the manifest, or infers one, picks the version
+`oku add <ref> --dry-run` fetches the manifest, or infers one, picks the version
 and the download or build for this machine, and prints what it found. It
 takes the other flags of `add`, such as `@version`, `--from-source`, `--asset`
 and `--bin`, and plans what they would do.
 
 ```
-$ oku add github:sharkdp/fd --plan
+$ oku add github:sharkdp/fd --dry-run
 name       fd
 version    10.5.0
 homepage   https://github.com/sharkdp/fd
@@ -159,7 +158,7 @@ platforms  darwin-amd64, darwin-arm64, linux-amd64-glibc, linux-amd64-musl, linu
 installed  no
 list       ~/.config/oku/oku.toml
 `oku add github:sharkdp/fd --manifest` prints the inferred manifest
-plan: nothing was changed
+dry run: nothing was changed
 ```
 
 - `install` is `download`, `build from source`, or `pin in oku.lock only`
@@ -167,7 +166,7 @@ plan: nothing was changed
 - `verify` says how oku checks the download. `none` means oku
   [trusts the first download](security.md#trust-on-first-use). `--json`
   also gives `verified`, the value `oku.lock` records, see
-  [What oku checked](lock.md#what-oku-checked). The plan stops as `add` does
+  [What oku checked](lock.md#what-oku-checked). The dry run stops as `add` does
   when the check is [weaker](security.md#weaker-checks) than the one in
   `oku.lock`.
 - `commands` appears when the manifest runs commands, in a build or to
@@ -186,13 +185,13 @@ as a file. A manifest that oku infers covers every platform, as
 [`oku manifest init`](#oku-manifest-init) does, and a published one prints as
 fetched.
 
-A plan fails where `add` would fail. That covers a ref, a version or an asset
+A dry run fails where `add` would fail. That covers a ref, a version or an asset
 that does not exist, and a download, checksum file or signature that the
 server does not have. oku checks those files without downloading them.
 
 Neither writes to the list, the lock, the store or a generation, and neither
 waits for another oku process. Inference still opens a release asset to find
-the programs inside it, so a plan of a repo with no manifest downloads that
+the programs inside it, so a dry run of a repo with no manifest downloads that
 asset. Neither runs a build step or a command from the manifest.
 
 ### oku remove
@@ -1646,9 +1645,8 @@ the network:
 The commands in this table take `--json` and then print JSON on stdout in
 place of text. Messages and errors still go to stderr as text. Any other
 command fails with `oku <command> has no --json output` and does nothing.
-`oku add` takes `--json` only with `--plan` or `--dry-run`, `sync`, `update`,
-`remove`, `rollback` and `gc` only with `--dry-run`, and `self update` only
-with `--check`, since without those flags they change the machine.
+`oku add`, `sync`, `update`, `remove`, `rollback` and `gc` take `--json` only
+with `--dry-run`, and `self update` only with `--check`, since without those flags they change the machine.
 
 | Command | JSON |
 |---|---|
@@ -1667,7 +1665,7 @@ with `--check`, since without those flags they change the machine.
 | `oku service list` | A list of `name`, `package`, `installed`, `enabled`, `running`, `system`, `detail`. |
 | `oku service status <name>` | One such object. `start`, `stop` and `restart` print it too. |
 | `oku verify` | A list of `name`, `version`, `path`, `status` and `changes`. |
-| `oku add --plan` | A list with one object per ref, with fields such as `ref`, `name`, `version`, `inferred`, `asset`, `install`, `platform`, `commands`, `needs`, `deps` and `build_deps`. |
+| `oku add --dry-run` | A list with one object per ref, with fields such as `ref`, `name`, `version`, `inferred`, `asset`, `install`, `platform`, `commands`, `needs`, `deps` and `build_deps`. |
 | `oku sync --dry-run`, `oku update --dry-run`, `oku remove --dry-run`, `oku rollback --dry-run` | A list of the changes, each with `would` (`install`, `remove`, `change` or `write`) and `package`, `from` and `to` for a package, or `kind` and `target` for a file, setting, app, font or service. An empty list means nothing would change. |
 | `oku self update --check` | `running`, `newest` and `available`. |
 | `oku gc --dry-run` | `projects`, `generations` with each `profile` and `number`, `store_paths` and `temporary` with each `path` and `bytes`, and `downloads` and `answers` with their `files` and `bytes`, which `--cache` fills. Then `shared`, the number of store paths whose identical files gc would share, and `bytes`, all it would free. |

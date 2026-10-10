@@ -29,16 +29,16 @@ func TestB289AddPlanSaysWhatAddWouldDoAndChangesNothing(t *testing.T) {
 	release, err := busy.Lock(context.Background(), m.data, func(int) {})
 	must(t, err)
 
-	out, err := m.run(t, "", "add", "github:owner/tool", "--plan")
+	out, err := m.run(t, "", "add", "github:owner/tool", "--dry-run")
 	release()
 
 	if err != nil {
-		t.Fatalf("add --plan: %v\n%s", err, out)
+		t.Fatalf("add --dry-run: %v\n%s", err, out)
 	}
 
 	for _, want := range []string{
 		"1.4.0", "inferred by oku", hostAssetName(), "download for " + platform.Host().String(),
-		"programs", "installed", "--manifest", "plan: nothing was changed",
+		"programs", "installed", "--manifest", "dry run: nothing was changed",
 	} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("the plan lacks %q:\n%s", want, out)
@@ -47,15 +47,15 @@ func TestB289AddPlanSaysWhatAddWouldDoAndChangesNothing(t *testing.T) {
 
 	for _, path := range []string{filepath.Join(m.config, "oku.toml"), filepath.Join(m.config, "oku.lock")} {
 		if exists(path) {
-			t.Fatalf("add --plan wrote %s:\n%s", path, out)
+			t.Fatalf("add --dry-run wrote %s:\n%s", path, out)
 		}
 	}
 
 	if got := m.storeEntries(t); len(got) != 0 {
-		t.Fatalf("add --plan filled the store with %v", got)
+		t.Fatalf("add --dry-run filled the store with %v", got)
 	}
 
-	out, err = m.run(t, "", "add", "github:owner/tool", "--plan", "--json")
+	out, err = m.run(t, "", "add", "github:owner/tool", "--dry-run", "--json")
 	must(t, err)
 
 	var plans []struct {
@@ -69,7 +69,7 @@ func TestB289AddPlanSaysWhatAddWouldDoAndChangesNothing(t *testing.T) {
 
 	if len(plans) != 1 || plans[0].Install != "download" || plans[0].Version != "1.4.0" ||
 		len(plans[0].Programs) != 1 || plans[0].Programs[0] != "tool" {
-		t.Fatalf("add --plan --json printed %+v", plans)
+		t.Fatalf("add --dry-run --json printed %+v", plans)
 	}
 }
 
@@ -91,12 +91,12 @@ url = "`+server.URL+`/gone.tar.gz"
 bin = ["gone"]
 `), 0o644))
 
-	out, err := m.run(t, "", "add", gone, "--plan")
+	out, err := m.run(t, "", "add", gone, "--dry-run")
 	if err == nil || !strings.Contains(err.Error(), "404") {
 		t.Fatalf("want the plan of a missing download to fail with 404, got %v\n%s", err, out)
 	}
 
-	_, err = m.run(t, "", "add", "missing", "--plan")
+	_, err = m.run(t, "", "add", "missing", "--dry-run")
 	if err == nil || !strings.Contains(err.Error(), "there is no file named missing here") {
 		t.Fatalf("want a bare word to fail as no file, got %v", err)
 	}
