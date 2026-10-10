@@ -9,6 +9,7 @@ import (
 	"maps"
 	"path"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"strings"
 
@@ -33,6 +34,10 @@ type listed struct {
 	// commit is the commit of the remote list that names the package by a
 	// relative path, where oku reads the manifest when the lock pins none.
 	commit string
+	// list numbers the list that names the package in the order merge reads
+	// them, and scope is the when of the includes that lead to that list.
+	list  int
+	scope platform.When
 }
 
 // merger resolves includes into one package set.
@@ -70,6 +75,8 @@ type merger struct {
 	host     map[string]host.Requirement
 	includes []lock.Include
 	seen     map[string]bool
+	// lists counts the lists merge has read.
+	lists int
 }
 
 // merged is a list with its includes merged under it.
@@ -157,7 +164,7 @@ func (e env) loadList(
 		seen:     map[string]bool{},
 	}
 
-	if err := m.merge(own, e.listPath(), filepath.Dir(e.listPath()), nil, "", 0); err != nil {
+	if err := m.merge(own, e.listPath(), filepath.Dir(e.listPath()), nil, "", nil, 0); err != nil {
 		return merged{}, err
 	}
 
@@ -199,17 +206,22 @@ type remoteList struct {
 // the same name from anything l includes. dir is where l's relative paths start,
 // and it is empty for a list that came from a URL or a repo. For such a list,
 // remote says where oku read it, and a relative path in it names a file beside
-// it there.
+// it there. when is the when of the includes that lead to l, which each
+// package and file of l takes on top of its own.
 func (m *merger) merge(
 	l *list.List,
 	origin, dir string,
 	remote *remoteList,
 	from string,
+	when platform.When,
 	depth int,
 ) error {
 	if depth > maxIncludeDepth {
 		return fmt.Errorf("%s: includes are nested more than %d deep", origin, maxIncludeDepth)
 	}
+
+	id := m.lists
+	m.lists++
 
 	parse := func(s string) (ref.Ref, error) {
 		if remote != nil && ref.IsRelative(s) {
@@ -229,13 +241,23 @@ func (m *merger) merge(
 	}
 
 	for _, include := range l.Include {
-		r, err := parse(include)
+		r, err := parse(include.Ref)
 		if err != nil {
 			return fmt.Errorf("%s: include: %w", origin, err)
 		}
 
 		if r.Version != "" {
-			return fmt.Errorf("%s: include %s takes no @version, since oku follows the list it names", origin, include)
+			return fmt.Errorf(
+				"%s: include %s takes no @version, since oku follows the list it names", origin, include.Ref,
+			)
+		}
+
+		// oku skips a list whose when no machine can match. It reads every other
+		// one, even on a machine its when leaves out, so oku.lock pins the same
+		// lists everywhere.
+		scope, applies := when.And(include.When)
+		if !applies {
+			continue
 		}
 
 		if m.seen[r.String()] {
@@ -252,7 +274,7 @@ func (m *merger) merge(
 		}
 
 		// A list beside a remote one is read at the same commit.
-		if remote != nil && ref.IsRelative(include) {
+		if remote != nil && ref.IsRelative(include.Ref) {
 			pin.Commit = remote.got.Commit
 		}
 
@@ -310,7 +332,7 @@ func (m *merger) merge(
 			subDir, subRemote = filepath.Dir(r.Location), nil
 		}
 
-		if err := m.merge(sub, r.String(), subDir, subRemote, r.String(), depth+1); err != nil {
+		if err := m.merge(sub, r.String(), subDir, subRemote, r.String(), scope, depth+1); err != nil {
 			return err
 		}
 	}
@@ -336,7 +358,16 @@ func (m *merger) merge(
 			commit = remote.got.Commit
 		}
 
-		m.packages[name] = listed{entry: entry, ref: r, from: from, commit: commit}
+		// oku leaves out a package whose when no machine can match.
+		var applies bool
+		if entry.When, applies = when.And(entry.When); !applies {
+			continue
+		}
+
+		pkg := listed{entry: entry, ref: r, from: from, commit: commit, list: id, scope: when}
+		if err := m.addPackage(name, pkg, origin); err != nil {
+			return err
+		}
 	}
 
 	// A list at a URL has no directory oku can download, only single files.
@@ -377,16 +408,37 @@ func (m *merger) merge(
 		return fmt.Errorf("%s has [secrets], and only the global list may hold secrets", origin)
 	}
 
-	for name, s := range l.Secrets {
-		m.secrets[name] = listedSecret{secret: s, dir: dir, remote: remote, repoDir: repoDir}
-	}
-
 	if m.project != "" && len(l.Settings) > 0 {
 		return fmt.Errorf(
 			"%s has [%s], and only the global list may change settings",
 			origin,
 			l.Settings[0].Backend,
 		)
+	}
+
+	// A runtime decides how oku infers a package, which oku.lock pins for every
+	// machine, so it cannot depend on the machine.
+	if len(when) > 0 && len(l.Runtimes) > 0 {
+		return fmt.Errorf("%s has [runtimes], and a list included under a when may not set them", origin)
+	}
+
+	for _, file := range l.Files {
+		var applies bool
+		if file.When, applies = when.And(file.When); applies {
+			m.files[fileKey{file.Target, file.When.TOML()}] = listedFile{
+				file: file, dir: dir, remote: remote, repoDir: repoDir,
+			}
+		}
+	}
+
+	// Secrets, variables, settings and [host] have no when of their own, so
+	// those of a list included under a when apply only where it holds.
+	if !when.Here() {
+		return nil
+	}
+
+	for name, s := range l.Secrets {
+		m.secrets[name] = listedSecret{secret: s, dir: dir, remote: remote, repoDir: repoDir}
 	}
 
 	// A later list overrides a variable or a setting of an earlier one, like a
@@ -408,13 +460,46 @@ func (m *merger) merge(
 		m.settings[[3]string{s.Backend, s.Domain, s.Key}] = s
 	}
 
-	for _, file := range l.Files {
-		m.files[fileKey{file.Target, file.When.TOML()}] = listedFile{
-			file: file, dir: dir, remote: remote, repoDir: repoDir,
-		}
+	return nil
+}
+
+// addPackage puts pkg, which the list origin names, in the merged list. It
+// overrides the same name from a list that origin includes, or from a list
+// included under the same when. Two lists included under different when must
+// agree on the package, which then applies wherever either does.
+func (m *merger) addPackage(name string, pkg listed, origin string) error {
+	before, named := m.packages[name]
+	if !named || before.list > pkg.list || before.scope.TOML() == pkg.scope.TOML() {
+		m.packages[name] = pkg
+
+		return nil
 	}
 
+	a, b := before.entry, pkg.entry
+	a.When, b.When = nil, nil
+
+	if !reflect.DeepEqual(a, b) || before.ref.String() != pkg.ref.String() || before.commit != pkg.commit {
+		return fmt.Errorf(
+			"%s: packages.%s differs from the one in %s, which is included under another when\n"+
+				"give both the same settings, or name %s in the list that includes them",
+			origin, name, before.from, name,
+		)
+	}
+
+	pkg.entry.When = either(before.entry.When, pkg.entry.When)
+	pkg.scope = either(before.scope, pkg.scope)
+	m.packages[name] = pkg
+
 	return nil
+}
+
+// either returns the When that matches where a or b does.
+func either(a, b platform.When) platform.When {
+	if len(a) == 0 || len(b) == 0 {
+		return nil
+	}
+
+	return append(slices.Clone(a), b...)
 }
 
 // inRepo fails when a path of the [files] or [secrets] of l, a list in the

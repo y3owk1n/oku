@@ -2,6 +2,7 @@
 package platform
 
 import (
+	"cmp"
 	"debug/elf"
 	"errors"
 	"fmt"
@@ -300,6 +301,43 @@ func hostName() string {
 // ignores host, so a package for another machine is still pinned for p.
 func (w When) Matches(p Platform) bool {
 	return len(w) == 0 || slices.ContainsFunc(w, func(s Selector) bool { return s.Matches(p) })
+}
+
+// And returns the When that matches where both w and o do. It returns false
+// when no machine matches both, because an empty When would match every one.
+func (w When) And(o When) (When, bool) {
+	switch {
+	case len(w) == 0:
+		return o, true
+	case len(o) == 0:
+		return w, true
+	}
+
+	// both merges two fields, which agree when they are equal or one is empty.
+	both := func(a, b string) (string, bool) {
+		if a == "" || strings.EqualFold(a, b) {
+			return cmp.Or(a, b), true
+		}
+
+		return a, b == ""
+	}
+
+	var and When
+
+	for _, a := range w {
+		for _, b := range o {
+			sys, okOS := both(a.OS, b.OS)
+			arch, okArch := both(a.Arch, b.Arch)
+			libc, okLibc := both(a.Libc, b.Libc)
+			host, okHost := both(a.Host, b.Host)
+
+			if okOS && okArch && okLibc && okHost {
+				and = append(and, Selector{OS: sys, Arch: arch, Libc: libc, Host: host})
+			}
+		}
+	}
+
+	return and, len(and) > 0
 }
 
 // TOML renders w as one inline table, or as an array of them.

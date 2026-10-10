@@ -400,3 +400,81 @@ func TestB575WhenHostLimitsAnEntryToOneMachine(t *testing.T) {
 		t.Fatalf("a manifest with match.host should be refused, got %v", err)
 	}
 }
+
+func TestB576WhenOnAnIncludeScopesEveryEntryOfTheList(t *testing.T) {
+	m := newMachine(t)
+	t.Setenv("OKU_HOST", "home")
+
+	git := m.namedManifest(t, "git", "git", "git")
+	work := m.namedManifest(t, "work", "work", "work")
+	nested := m.namedManifest(t, "nested", "nested", "nested")
+	here := m.namedManifest(t, "here", "here", "here")
+	note := filepath.Join(os.Getenv("HOME"), "work-note.txt")
+
+	write := func(name, body string) {
+		must(t, os.WriteFile(filepath.Join(m.config, name), []byte(body), 0o644))
+	}
+
+	m.writeOwnList(t, fmt.Sprintf(
+		"include = [\n  { ref = \"./work.toml\", when = { host = \"work\" } },\n"+
+			"  { ref = \"./home.toml\", when = { host = \"home\" } },\n]\n\n[lock]\nplatforms = [%q]\n",
+		platform.Host().String(),
+	))
+	// Both lists name git, which then applies on either machine. A list that
+	// work.toml includes takes its when too.
+	write("work.toml", fmt.Sprintf(
+		"include = [\"./tools.toml\"]\n\n[packages]\ngit = %q\nwork = %q\n\n"+
+			"[files]\n\"{{home}}/work-note.txt\" = { text = \"at work\" }\n", git, work,
+	))
+	write("tools.toml", fmt.Sprintf("[packages]\nnested = %q\n", nested))
+	write("home.toml", fmt.Sprintf("[packages]\ngit = %q\nhere = %q\n", git, here))
+
+	out, err := m.run(t, "", "sync")
+	if err != nil {
+		t.Fatalf("sync: %v\n%s", err, out)
+	}
+
+	if !exists(m.profile("bin", "git")) || !exists(m.profile("bin", "here")) ||
+		exists(m.profile("bin", "work")) || exists(m.profile("bin", "nested")) || exists(note) {
+		t.Fatalf("sync on home should install git and here alone:\n%s", out)
+	}
+
+	// The lock pins what work.toml names for this platform, for the machine
+	// called work.
+	lock, err := os.ReadFile(filepath.Join(m.config, "oku.lock"))
+	must(t, err)
+
+	for _, name := range []string{"work", "nested"} {
+		if !strings.Contains(string(lock), fmt.Sprintf("name = '%s'", name)) {
+			t.Fatalf("the lock should pin %s:\n%s", name, lock)
+		}
+	}
+
+	t.Setenv("OKU_HOST", "work")
+
+	if out, err := m.run(t, "", "sync"); err != nil || !exists(m.profile("bin", "git")) ||
+		!exists(m.profile("bin", "work")) || !exists(m.profile("bin", "nested")) ||
+		exists(m.profile("bin", "here")) || !exists(note) {
+		t.Fatalf("sync on work should install git, work and nested and write its file: %v\n%s", err, out)
+	}
+
+	// Lists included under another when must agree on a package they share.
+	write("home.toml", fmt.Sprintf("[packages]\ngit = { ref = %q, service = true }\n", git))
+
+	if _, err := m.run(t, "", "sync"); err == nil || !strings.Contains(err.Error(), "packages.git differs") {
+		t.Fatalf("a package that differs between scoped lists should be refused, got %v", err)
+	}
+
+	// A runtime would make the lock depend on the machine.
+	write("home.toml", fmt.Sprintf("[runtimes]\nnode = %q\n", git))
+
+	if _, err := m.run(t, "", "sync"); err == nil || !strings.Contains(err.Error(), "may not set them") {
+		t.Fatalf("[runtimes] in a scoped list should be refused, got %v", err)
+	}
+
+	m.writeOwnList(t, "include = [{ when = { host = \"work\" } }]\n")
+
+	if _, err := m.run(t, "", "sync"); err == nil || !strings.Contains(err.Error(), "an item is a ref") {
+		t.Fatalf("an include table without ref should be refused, got %v", err)
+	}
+}
