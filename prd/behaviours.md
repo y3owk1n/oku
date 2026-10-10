@@ -151,16 +151,20 @@ order step in `prd/product.md`.
 - B6 [1] A failed install leaves the previous profile active and unchanged.
 - B7 [1] `man` and `completions` entries appear under the profile `share`.
 - B214 [1] `completions = { generate = "..." }` on an artifact runs the command
-  once per shell in fish, zsh, bash with `{{shell}}` substituted, after
-  unpacking and before linking, with the package's `bin` first on PATH, and
-  writes each stdout under the profile `share/completions` as `<bin>.fish`,
-  `_<bin>` and `<bin>.bash`. It needs the same approval as a build, and
+  once per shell in fish, zsh, bash, powershell with `{{shell}}` substituted,
+  after unpacking and before linking, with the package's `bin` first on PATH,
+  and writes each stdout under the profile `share/completions` as
+  `<bin>.fish`, `_<bin>`, `<bin>.bash` and `_<bin>.ps1`. It needs the same approval as a build, and
   `oku.lock` records `commands = true` for the platform.
 - B215 [1] A generate command that exits non-zero or prints nothing fails the
   install, and the error holds the expanded command and its stderr. Nothing
-  enters the store.
-- B216 [1] `completions = "<dir>/"` names the three conventional files under
+  enters the store. For powershell it leaves PowerShell out instead.
+- B216 [1] `completions = "<dir>/"` names the four conventional files under
   that directory, links the ones that exist, and fails when none do.
+- B580 [1] A package delivers PowerShell completions: a table takes `pwsh` or
+  `powershell`, a directory finds `_<bin>.ps1`, and generate runs with
+  `powershell`. They land under the profile `share/completions/pwsh`, and the
+  PowerShell hook dot-sources each one.
 - B206 [1] A man page that a build installs under `{{prefix}}/man` appears
   under the profile `share/man`, the same as one under `{{prefix}}/share/man`.
 - B8 [1] oku never requires root outside system scope, and writes only under
