@@ -324,3 +324,23 @@ func TestB566ShellCompletionsNameWhatOkuHasLocally(t *testing.T) {
 		}
 	}
 }
+
+func TestB567VBeforeACommandIsThatCommandsVerbose(t *testing.T) {
+	m := newMachine(t)
+	archive, _ := m.archive(t, strings.TrimSuffix(hostAssetName(), ".tar.gz"), map[string]string{
+		"tool-1.4.0/tool": "#!/bin/sh\necho inferred\n",
+	})
+	inferServer(t, &m, map[string]string{hostAssetName(): archive})
+
+	// --verbose prints the manifest oku inferred.
+	out, err := m.run(t, "", "-v", "add", "github:owner/tool")
+	if err != nil || strings.Contains(out, "oku version") || !strings.Contains(out, "[package]") {
+		t.Fatalf("oku -v add should add with --verbose: %v\n%s", err, out)
+	}
+
+	for _, args := range [][]string{{"-v"}, {"--version"}} {
+		if out := m.stdout(t, args...); strings.TrimSpace(out) != "oku version test" {
+			t.Fatalf("oku %v printed %q", args, out)
+		}
+	}
+}

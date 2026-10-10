@@ -1608,10 +1608,12 @@ oku <command> --help
 oku completion <bash|zsh|fish|powershell>
 ```
 
-`oku --version`, or `-v`, prints `oku version <version>`, such as
-`oku version 0.6.1` or `oku version nightly-20260921101500-a1b2c3d`. `--help`
-works on every command and sorts the commands into sections. `completion`
-prints a completion script. The hook loads the completions of `oku` already.
+`oku --version`, or `oku -v` on its own, prints `oku version <version>`, such as
+`oku version 0.6.1` or `oku version nightly-20260921101500-a1b2c3d`. Before a
+command, `-v` is that command's `--verbose`, so `oku -v sync` is `oku sync -v`.
+`--help` works on every command and sorts the commands into sections.
+`completion` prints a completion script. The hook loads the completions of
+`oku` already.
 
 The completions read only files on this machine, so a tab press never waits on
 the network:

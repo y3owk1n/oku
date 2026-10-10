@@ -133,6 +133,22 @@ func NewRootCmd(opts Options) *cobra.Command {
 	root.PersistentFlags().Bool(
 		jsonFlag, false, "print data as JSON, on the commands that print data",
 	)
+	// cobra gives --version the shorthand -v, which every command that installs
+	// uses for --verbose, so "oku -v sync" printed the version and synced nothing.
+	// The root knows -v as a flag of its own, so "oku -v sync" is "oku sync -v",
+	// and "oku -v" alone still prints the version.
+	root.Flags().Bool("version", false, "print the version of oku")
+	root.Flags().BoolP("verbose", "v", false, "")
+	_ = root.Flags().MarkHidden("verbose")
+	root.RunE = func(cmd *cobra.Command, _ []string) error {
+		if verbose, _ := cmd.Flags().GetBool("verbose"); verbose {
+			fmt.Fprintf(cmd.OutOrStdout(), "oku version %s\n", opts.Version)
+
+			return nil
+		}
+
+		return cmd.Help()
+	}
 
 	// An unknown flag points at the help of the command.
 	root.SetFlagErrorFunc(func(cmd *cobra.Command, err error) error {
