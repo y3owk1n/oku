@@ -64,8 +64,9 @@ func NewFetcher(cacheDir string, net netpolicy.Policy, transport http.RoundTripp
 	return &Fetcher{
 		HTTP: &http.Client{Transport: transport, CheckRedirect: forge.CheckRedirect},
 		Hosts: forge.Hosts{
-			HTTP: forge.Revalidating(filepath.Join(cacheDir, "api"), transport),
-			Net:  net,
+			HTTP:    forge.Revalidating(filepath.Join(cacheDir, "api"), transport),
+			Answers: filepath.Join(cacheDir, "api"),
+			Net:     net,
 		},
 		GitCache: filepath.Join(cacheDir, "git"),
 		// gc ages these records with the answers.

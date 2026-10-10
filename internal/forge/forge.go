@@ -251,6 +251,9 @@ type Commit struct {
 // set, which tests do.
 type Hosts struct {
 	HTTP *http.Client
+	// Answers is the directory of kept answers, where GitHubAttestations keeps
+	// the attestations it found. Empty keeps none.
+	Answers string
 	// Net is where oku may connect. Git calls check it before they run.
 	Net       netpolicy.Policy
 	GitHubAPI string

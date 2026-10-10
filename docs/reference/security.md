@@ -539,6 +539,11 @@ issued, oku reads GitHub's trust root the same way from `tuf-repo.github.com`.
 It then requires a timestamp of GitHub's timestamp authority in place of both
 logs, as `gh attestation verify` does.
 
+oku keeps the GitHub attestations it found for a file in its cache, so a later
+`update` or `sync` of the same version reads them from there. It verifies each
+bundle every time it uses one. When none of the kept attestations is the signer
+workflow's, oku asks GitHub again before it refuses the file.
+
 `oku.lock` pins `signer_workflow` at the first install. When the manifest
 later names another workflow, or none, `oku update` stops:
 

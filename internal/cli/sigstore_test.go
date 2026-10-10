@@ -812,3 +812,59 @@ func TestB359InferenceAndTheInstallReadTheAttestationsOnce(t *testing.T) {
 		t.Fatalf("add asked for the attestations %d times, want 1", got)
 	}
 }
+
+func TestB560TheAttestationsFoundForAFileAreNotAskedForAgain(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		attest bool
+		again  bool
+	}{
+		{"attested", true, false},
+		{"none", false, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m := newMachine(t)
+			f := newFakeSigstore(t, &m)
+
+			var attest func(string) [][]byte
+			if tc.attest {
+				attest = func(digest string) [][]byte {
+					return [][]byte{f.attest(t, run{workflow + "@refs/heads/main", "owner/tool", "refs/heads/main"}, digest)}
+				}
+			}
+
+			inferRelease(t, &m, func([]byte, []byte) map[string][]byte { return nil }, attest)
+
+			upstream, err := url.Parse(m.opts.GitHubAPI)
+			must(t, err)
+
+			var asked atomic.Int32
+
+			api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if strings.Contains(r.URL.Path, "/attestations/") {
+					asked.Add(1)
+				}
+
+				r.URL.Path = upstream.Path + r.URL.Path
+				httputil.NewSingleHostReverseProxy(&url.URL{Scheme: upstream.Scheme, Host: upstream.Host}).ServeHTTP(w, r)
+			}))
+			t.Cleanup(api.Close)
+
+			m.opts.GitHubAPI = api.URL
+
+			_, err = m.run(t, "", "add", "github:owner/tool")
+			must(t, err)
+
+			asked.Store(0)
+
+			out, err := m.run(t, "", "update")
+			if err != nil {
+				t.Fatalf("update: %v\n%s", err, out)
+			}
+
+			if again := asked.Load() > 0; again != tc.again {
+				t.Fatalf("update asked for the attestations %d times, want again %t", asked.Load(), tc.again)
+			}
+		})
+	}
+}

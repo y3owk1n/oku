@@ -2,10 +2,13 @@ package forge
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -359,6 +362,19 @@ func (h Hosts) GitHubAsset(ctx context.Context, rawURL string) (string, string, 
 	return "", "", fmt.Errorf("release %s of %s has no asset %s", tag, repo, name)
 }
 
+type freshKey struct{}
+
+// Fresh marks ctx so that GitHubAttestations asks GitHub rather than give the
+// attestations it kept, which may predate the one a caller needs.
+func Fresh(ctx context.Context) context.Context {
+	return context.WithValue(ctx, freshKey{}, true)
+}
+
+// IsFresh reports whether Fresh marked ctx.
+func IsFresh(ctx context.Context) bool {
+	return ctx.Value(freshKey{}) != nil
+}
+
 // GitHubAttestations returns the Sigstore bundles of the artifact attestations
 // that repo, on github.com, holds for the file whose sha256 is digest. GitHub
 // may keep a bundle apart at its bundle_url, compressed with snappy.
@@ -366,6 +382,23 @@ func (h Hosts) GitHubAttestations(ctx context.Context, repo, digest string) ([][
 	g := h.github("")
 	if g.http == nil {
 		g.http = h.Net.Client(CheckRedirect)
+	}
+
+	// The caller verifies each bundle it uses, so oku keeps the attestations it
+	// found for a digest. It asks again for a file that had none, and under
+	// Fresh.
+	var path string
+
+	if h.Answers != "" {
+		sum := sha256.Sum256([]byte("attestations\n" + g.api + "/" + repo + "\n" + digest))
+		path = filepath.Join(h.Answers, hex.EncodeToString(sum[:]))
+
+		var bundles [][]byte
+		if old, ok := read(path); ok && !IsFresh(ctx) && json.Unmarshal(old.Body, &bundles) == nil {
+			used(path)
+
+			return bundles, nil
+		}
 	}
 
 	var found struct {
@@ -405,6 +438,10 @@ func (h Hosts) GitHubAttestations(ctx context.Context, repo, digest string) ([][
 		}
 
 		bundles = append(bundles, data)
+	}
+
+	if body, err := json.Marshal(bundles); path != "" && err == nil {
+		keep(path, kept{Type: "application/json", Bytes: len(body), Body: body})
 	}
 
 	return bundles, nil

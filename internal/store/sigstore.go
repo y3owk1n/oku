@@ -9,6 +9,7 @@ import (
 	"path"
 	"strings"
 
+	"github.com/y3owk1n/oku/internal/forge"
 	"github.com/y3owk1n/oku/internal/limit"
 	"github.com/y3owk1n/oku/internal/manifest"
 	"github.com/y3owk1n/oku/internal/sigstore"
@@ -60,6 +61,18 @@ func (s *Store) verifySigstore(ctx context.Context, m *manifest.Manifest, a mani
 		return nil
 	}
 
+	return s.verifyAttestations(ctx, m, a, sum, digest)
+}
+
+// verifyAttestations checks that one of the GitHub attestations of the download
+// of a, whose sha256 is sum, shows that the signer workflow built it.
+func (s *Store) verifyAttestations(
+	ctx context.Context,
+	m *manifest.Manifest,
+	a manifest.Artifact,
+	sum []byte,
+	digest string,
+) error {
 	repo := sourceRepo(m)
 
 	bundles, err := s.Attestations(ctx, repo, digest)
@@ -79,6 +92,11 @@ func (s *Store) verifySigstore(ctx context.Context, m *manifest.Manifest, a mani
 		}
 
 		errs = append(errs, err)
+	}
+
+	// The attestations oku kept may predate the one the workflow made.
+	if !forge.IsFresh(ctx) {
+		return s.verifyAttestations(forge.Fresh(ctx), m, a, sum, digest)
 	}
 
 	return fmt.Errorf("%w: no attestation in %s shows that %s built %s: %w",

@@ -601,7 +601,8 @@ func (e env) store() *store.Store {
 	// The revalidating client answers from what the command already read, so the
 	// install does not ask again for the attestations that inference read.
 	api := e.hosts
-	api.HTTP = forge.Revalidating(filepath.Join(e.cache, "api"), e.transport)
+	api.Answers = filepath.Join(e.cache, "api")
+	api.HTTP = forge.Revalidating(api.Answers, e.transport)
 	s.Sigstore, s.Attestations = e.sigstore, api.GitHubAttestations
 	s.OSV = &e.osvClient
 
