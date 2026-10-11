@@ -140,6 +140,7 @@ you, with your normal rights, and only while you are logged on.
 | Turned on | The task has a trigger for your logon, and oku starts it right away. |
 | Installed, not turned on | The task has no trigger. `oku service start <name>` runs it. |
 | A job, with a `schedule` | The task has a trigger that repeats every so many minutes, or one at the time and weekdays it names. A run that the machine missed starts once it is on. oku does not start a job when it installs it, and `restart` does not apply. |
+| Priority | Below normal, the Task Scheduler default. Normal for a service with [`interactive = true`](../reference/manifest.md#service). |
 | Definition | `%LOCALAPPDATA%\oku\services\<name>.json` |
 | Output | `%LOCALAPPDATA%\oku\logs\<name>.log` |
 

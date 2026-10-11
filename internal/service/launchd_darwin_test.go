@@ -33,3 +33,16 @@ func TestB581AJobPlistRunsOnItsScheduleAndNotAtLoad(t *testing.T) {
 		t.Fatalf("a job at a time of day should name each weekday:\n%s", got)
 	}
 }
+
+func TestB582AInteractivePlistNamesItsProcessType(t *testing.T) {
+	d := Definition{Name: "pointer", Program: "/p"}
+
+	if got := string(plist(d)); strings.Contains(got, "ProcessType") {
+		t.Fatalf("a service that is not interactive names a process type:\n%s", got)
+	}
+
+	d.Interactive = true
+	if got := string(plist(d)); !strings.Contains(got, "<key>ProcessType</key>\n\t<string>Interactive</string>") {
+		t.Fatalf("an interactive service should be ProcessType Interactive:\n%s", got)
+	}
+}

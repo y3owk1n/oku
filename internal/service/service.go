@@ -25,6 +25,9 @@ type Definition struct {
 	Env     map[string]string
 	// Restart is "never", "on-failure" or "always".
 	Restart string
+	// Interactive gives the service the scheduling of an app, where the OS
+	// otherwise throttles a background program.
+	Interactive bool `json:",omitempty"`
 	// LogFile is where the service's output goes on systems without a journal.
 	LogFile string
 	// User is the account a system service runs as. Empty runs it as root, or

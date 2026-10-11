@@ -118,6 +118,12 @@ oku records each of these files in its [ledger](../how-oku-works.md#ledger).
 `oku remove` stops the service and deletes its file, and `oku self uninstall`
 does that for every service.
 
+launchd throttles the CPU and I/O of a background service. Task Scheduler runs
+one below normal priority. A program that draws on screen can stutter under
+either. A package whose program draws UI or handles input sets
+[`interactive = true`](../reference/manifest.md#service), and oku asks the OS
+to schedule it like an app.
+
 A service manager starts a program with a bare `PATH`. On macOS and Linux oku
 puts your global profile's `bin` in front of it, so a service can call your
 other installed programs by name.

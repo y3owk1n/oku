@@ -303,6 +303,11 @@ func plist(d Definition) []byte {
 		fmt.Fprintf(&b, "\t<key>UserName</key>\n\t<string>%s</string>\n", esc(d.User))
 	}
 
+	// launchd throttles the CPU and I/O of a job that names no ProcessType.
+	if d.Interactive {
+		b.WriteString("\t<key>ProcessType</key>\n\t<string>Interactive</string>\n")
+	}
+
 	switch d.Restart {
 	case "always":
 		b.WriteString("\t<key>KeepAlive</key>\n\t<true/>\n")
