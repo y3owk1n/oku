@@ -610,3 +610,75 @@ func TestB414ATargetCannotLeaveItsLocation(t *testing.T) {
 		})
 	}
 }
+
+func TestB587AnEntryWithAlsoPlacesTheSameFileAtEachTarget(t *testing.T) {
+	m := newMachine(t)
+
+	source := filepath.Join(m.config, "skills", "review", "SKILL.md")
+	must(t, os.MkdirAll(filepath.Dir(source), 0o755))
+	must(t, os.WriteFile(source, []byte("review"), 0o644))
+
+	m.writeFilesList(t, "[files]\n"+
+		"\"{{home}}/.claude/skills/review\" = { link = \"./skills/review\", "+
+		"also = [\"{{home}}/.agents/skills/review\", \"{{config}}/opencode/skills/review\"] }\n"+
+		"\"{{home}}/.key\" = { text = \"key\", mode = \"0600\", also = [\"{{home}}/.key2\"] }\n")
+
+	_, err := m.run(t, "", "sync")
+	must(t, err)
+
+	opencode := filepath.Join(filepath.Dir(m.config), "opencode", "skills", "review", "SKILL.md")
+	for _, path := range []string{home(".claude", "skills", "review", "SKILL.md"), home(".agents", "skills", "review", "SKILL.md"), opencode} {
+		if body, _ := os.ReadFile(path); string(body) != "review" {
+			t.Fatalf("%s holds %q", path, body)
+		}
+	}
+
+	for _, path := range []string{home(".key"), home(".key2")} {
+		info, err := os.Stat(path)
+		if body, _ := os.ReadFile(path); err != nil || string(body) != "key" || info.Mode().Perm() != 0o600 {
+			t.Fatalf("%s should hold the text with mode 0600, got %q, %v", path, body, err)
+		}
+	}
+
+	// Each target is a file of its own, which the next sync removes alone.
+	m.writeFilesList(t, "[files]\n"+
+		"\"{{home}}/.claude/skills/review\" = { link = \"./skills/review\", also = [\"{{home}}/.agents/skills/review\"] }\n")
+
+	_, err = m.run(t, "", "sync")
+	must(t, err)
+
+	if exists(opencode) || exists(home(".key2")) || !exists(home(".agents", "skills", "review", "SKILL.md")) {
+		t.Fatal("the sync should remove the targets that left the list and keep the rest")
+	}
+}
+
+func TestB587AListNamesEachTargetOnce(t *testing.T) {
+	for name, tc := range map[string]struct{ entries, want string }{
+		"another key": {
+			"\"{{home}}/.a\" = { text = \"a\", also = [\"{{home}}/.b\"] }\n\"{{home}}/.b\" = { text = \"b\" }\n",
+			`files."{{home}}/.b" names {{home}}/.b, which files."{{home}}/.a" names too`,
+		},
+		"itself": {
+			"\"{{home}}/.a\" = { text = \"a\", also = [\"{{home}}/.a\"] }\n",
+			`files."{{home}}/.a" names {{home}}/.a twice`,
+		},
+		"empty": {
+			"\"{{home}}/.a\" = { text = \"a\", also = [] }\n",
+			"also wants a list of one or more targets",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			m := newMachine(t)
+			m.writeFilesList(t, "[files]\n"+tc.entries)
+
+			_, err := m.run(t, "", "sync")
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("want an error with %q, got %v", tc.want, err)
+			}
+
+			if exists(home(".a")) || exists(home(".b")) {
+				t.Fatal("a refused list placed a file")
+			}
+		})
+	}
+}
