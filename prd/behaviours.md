@@ -431,6 +431,12 @@ order step in `prd/product.md`.
   file, the error ends with a line that names its `github:` ref. oku does not
   try that ref itself. `oku which` points at `oku search` only when there are
   sources.
+- B583 [2] oku reads the URL of a repo on github.com, gitlab.com or
+  codeberg.org as its `github:`, `gitlab:` or `codeberg:` ref. The forms are
+  `https://host/owner/repo`, the same with `.git`, `git@host:owner/repo.git`
+  and `ssh://git@host/owner/repo.git`. `add` stores the ref, and `@version`
+  works on the URL. Any other URL on those hosts, such as that of a file or a
+  release page, stays a URL.
 - B19 [2] A relative file ref in a list resolves against that list's
   directory. A list from a URL or a repo that names an absolute path is an
   error.

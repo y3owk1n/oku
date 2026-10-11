@@ -110,7 +110,7 @@ func (inf *Inferrer) FromURL(
 // pageHint says what to give oku in place of the web page at u. The page of a
 // repo on a forge has a ref of its own.
 func pageHint(u *url.URL) string {
-	parts := strings.Split(strings.Trim(u.Path, "/"), "/")
+	parts := strings.Split(strings.TrimSuffix(strings.Trim(u.Path, "/"), ".git"), "/")
 	if len(parts) != 2 || u.RawQuery != "" {
 		return "Give the URL of the file to download"
 	}

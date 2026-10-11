@@ -274,6 +274,35 @@ func TestB564ARepoWithoutASchemeGetsItsGitHubRef(t *testing.T) {
 	}
 }
 
+func TestB583ARepoURLIsItsForgeRef(t *testing.T) {
+	m := newMachine(t)
+	archive, _ := m.archive(t, strings.TrimSuffix(hostAssetName(), ".tar.gz"), map[string]string{
+		"tool-1.4.0/tool": "#!/bin/sh\necho inferred\n",
+	})
+	inferServer(t, &m, map[string]string{hostAssetName(): archive})
+
+	for _, url := range []string{
+		"https://github.com/owner/tool",
+		"https://github.com/owner/tool.git",
+		"git@github.com:owner/tool.git",
+		"ssh://git@github.com/owner/tool.git",
+		"https://github.com/owner/tool@1.4.0",
+	} {
+		out, err := m.run(t, "", "add", url)
+		if err != nil {
+			t.Fatalf("add %s: %v\n%s", url, err, out)
+		}
+
+		list, _ := os.ReadFile(filepath.Join(m.config, "oku.toml"))
+		if !strings.Contains(string(list), `"github:owner/tool"`) || strings.Contains(string(list), "github.com") {
+			t.Fatalf("add %s did not store the github: ref:\n%s", url, list)
+		}
+
+		_, err = m.run(t, "", "remove", "tool")
+		must(t, err)
+	}
+}
+
 func TestB566ShellCompletionsNameWhatOkuHasLocally(t *testing.T) {
 	m := newMachine(t)
 

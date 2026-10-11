@@ -10,6 +10,7 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/y3owk1n/oku/internal/crates"
@@ -133,9 +134,12 @@ func ParseIn(dir, s string) (Ref, error) {
 		body, r.Version = splitVersion(s)
 	}
 
-	// In a URL, "@version" follows a file name with an extension, so the "@" of
+	// The URL of a repo on a forge is that forge's ref. In any other URL,
+	// "@version" follows a file name with an extension, so the "@" of
 	// tool@2.toml is part of the file name.
-	if hasAnyPrefix(s, []string{"https://", "http://"}) && !strings.Contains(path.Base(body), ".") {
+	if forge, ok := repoURL(body); ok {
+		body = forge
+	} else if hasAnyPrefix(s, []string{"https://", "http://"}) && !strings.Contains(path.Base(body), ".") {
 		body, r.Version = s, ""
 	}
 
@@ -379,6 +383,59 @@ func Beside(r Ref, got Fetched, rel string) (Ref, error) {
 	default:
 		return Ref{}, fmt.Errorf("%s: %s is not beside a file in a repo or at a URL", r, rel)
 	}
+}
+
+// forgeHosts maps a forge oku knows by its host to the scheme of its refs.
+var forgeHosts = map[string]string{"github.com": "github", "gitlab.com": "gitlab", "codeberg.org": "codeberg"}
+
+// gitlabRoutes are path segments that GitLab reserves for the pages of a
+// project, such as /-/releases or the older /raw/main/file, so no project
+// path has them.
+var gitlabRoutes = []string{"-", "raw", "blob", "tree"}
+
+// repoURL returns the forge ref of the repo at s, a URL as a browser shows it
+// or a clone button copies it, such as https://github.com/owner/repo,
+// https://github.com/owner/repo.git or git@github.com:owner/repo.git. Any
+// other URL, such as that of a file in the repo, is no repo.
+func repoURL(s string) (string, bool) {
+	var host, p string
+
+	switch {
+	case strings.HasPrefix(s, "https://"), strings.HasPrefix(s, "ssh://"):
+		u, err := url.Parse(s)
+		if err != nil || u.RawQuery != "" || u.Fragment != "" || u.Port() != "" ||
+			u.User != nil && (u.Scheme == "https" || u.User.String() != "git") {
+			return "", false
+		}
+
+		host, p = u.Host, u.Path
+	case strings.HasPrefix(s, "git@"):
+		host, p, _ = strings.Cut(strings.TrimPrefix(s, "git@"), ":")
+	default:
+		return "", false
+	}
+
+	scheme, ok := forgeHosts[strings.ToLower(host)]
+	if !ok {
+		return "", false
+	}
+
+	repo := strings.TrimSuffix(strings.Trim(p, "/"), ".git")
+	parts := strings.Split(repo, "/")
+
+	switch {
+	case len(parts) < 2, scheme != "gitlab" && len(parts) != 2:
+		return "", false
+	case scheme == "gitlab" && slices.ContainsFunc(parts[1:], func(part string) bool {
+		return slices.Contains(gitlabRoutes, part)
+	}):
+		return "", false
+	case scheme == "gitlab" && strings.Contains(parts[0], "."):
+		// A first part with a dot would read as the host, so write it out.
+		repo = "gitlab.com/" + repo
+	}
+
+	return scheme + ":" + repo, true
 }
 
 // schemeRe matches a ref that starts with a scheme, such as gihub:owner/repo.
