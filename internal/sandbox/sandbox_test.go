@@ -64,7 +64,7 @@ func TestMain(m *testing.M) {
 		dir := os.Getenv("OKU_SANDBOX_TEST_DIR")
 		// The child writes a counter while it runs. In a pid namespace its pid is
 		// not a pid of the host, so the test watches the counter.
-		out, err := run(dir, `(i=0; while :; do i=$((i+1)); echo $i > beat; sleep 0.05; done) & touch started; wait`)
+		out, err := run(dir, `(i=0; while :; do i=$((i+1)); echo $i > beat; sleep 0.05; done) & wait`)
 		if err != nil {
 			fmt.Print(out, err)
 			os.Exit(1)
@@ -125,7 +125,9 @@ func TestB405InterruptStopsTheBuildWithItsChildren(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	for deadline := time.Now().Add(10 * time.Second); !exists(filepath.Join(dir, "started")); {
+	// A beat shows that the child runs. The test sends the interrupt only then,
+	// because it reads the beat afterwards.
+	for deadline := time.Now().Add(10 * time.Second); !exists(filepath.Join(dir, "beat")); {
 		if time.Now().After(deadline) {
 			_ = cmd.Process.Kill()
 			_ = cmd.Wait()
