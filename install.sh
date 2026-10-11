@@ -116,6 +116,9 @@ main() {
 	version="$("$dir/oku" --version 2>/dev/null | head -n 1)"
 	echo "installed ${version:-oku} at $dir/oku"
 
+	# man finds the pages of a program on PATH in the share/man beside its bin.
+	"$dir/oku" self man || echo "install oku: could not write the man pages" >&2
+
 	# The line uses $HOME when the binary is under it, so it also works in a
 	# dotfiles repo that several machines share.
 	case "$dir" in

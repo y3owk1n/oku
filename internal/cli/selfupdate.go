@@ -350,6 +350,13 @@ func runSelfUpdate(cmd *cobra.Command, opts Options, check, exitCode, nightly, r
 	}
 
 	finished(out, "updated oku from %s to %s", opts.Version, newest)
+
+	// Windows has no man.
+	if runtime.GOOS != "windows" {
+		if err := refreshManPages(cmd.Context(), opts.Executable); err != nil {
+			warn(out, "could not write the man pages of oku %s: %v", newest, err)
+		}
+	}
 	fmt.Fprintf(out, "what changed: https://github.com/%s/releases/tag/%s\n", repo, found.Tag)
 
 	return nil

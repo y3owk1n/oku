@@ -22,8 +22,9 @@ irm https://raw.githubusercontent.com/y3owk1n/oku/main/install.ps1 | iex
 
 The script downloads oku for your OS and CPU, checks its sha256, and checks
 its minisign signature when `minisign` is installed. It puts it in
-`~/.local/bin`, or `%LOCALAPPDATA%\oku\bin` on Windows. It changes none of
-your files. At the end it prints one line for your shell, which you add in the
+`~/.local/bin`, or `%LOCALAPPDATA%\oku\bin` on Windows. On macOS and Linux
+oku then writes its man pages to `~/.local/share/man`, so `man oku` works. It
+changes none of your files. At the end it prints one line for your shell, which you add in the
 next step.
 
 ## 2. Set up your shell

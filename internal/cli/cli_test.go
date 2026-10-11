@@ -195,11 +195,13 @@ func newMachine(t *testing.T) machine {
 	// The store's packages are read-only, which the test's cleanup cannot delete.
 	t.Cleanup(func() { _ = writable(root) })
 
+	// The binary is in a bin directory, so that its man pages, in ../share/man,
+	// stay in root.
 	m := machine{
 		config:   filepath.Join(root, "config", "oku"),
 		data:     filepath.Join(root, "data", "oku"),
 		cache:    filepath.Join(root, "cache", "oku"),
-		exe:      filepath.Join(root, "oku-binary"),
+		exe:      filepath.Join(root, "bin", "oku-binary"),
 		fixtures: filepath.Join(root, "fixtures"),
 	}
 
@@ -242,6 +244,7 @@ func newMachine(t *testing.T) machine {
 	}
 
 	must(t, os.MkdirAll(m.fixtures, 0o755))
+	must(t, os.MkdirAll(filepath.Dir(m.exe), 0o755))
 	must(t, os.WriteFile(m.exe, []byte("binary"), 0o755))
 
 	return m
@@ -8503,7 +8506,7 @@ func TestB93InstallScriptPutsOneBinaryInPlaceAndEditsNothing(t *testing.T) {
 	must(t, os.WriteFile(filepath.Join(home, ".zshrc"), []byte("# mine\n"), 0o644))
 
 	name := "oku-" + runtime.GOOS + "-" + runtime.GOARCH
-	body := []byte("#!/bin/sh\necho oku\n")
+	body := []byte("#!/bin/sh\ncase \"$*\" in \"self man\") echo wrote the man pages ;; *) echo oku ;; esac\n")
 	must(t, os.WriteFile(filepath.Join(download, name), body, 0o644))
 
 	digest := sha256.Sum256(body)
@@ -8546,6 +8549,10 @@ func TestB93InstallScriptPutsOneBinaryInPlaceAndEditsNothing(t *testing.T) {
 
 	if !strings.Contains(out, "installed oku at") || !strings.Contains(out, "oku doctor") {
 		t.Fatalf("install.sh did not print the version and the next steps:\n%s", out)
+	}
+
+	if !strings.Contains(out, "wrote the man pages") {
+		t.Fatalf("install.sh did not have oku write its man pages:\n%s", out)
 	}
 
 	// A second install finds the hook line and does not ask for it again.

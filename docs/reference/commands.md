@@ -11,7 +11,7 @@ behind the commands, see the [guides](../README.md).
 | [Projects](#projects) | [`allow`, `deny`](#oku-allow-oku-deny), [`hook`](#oku-hook), [`env`](#oku-env), [`exec`](#oku-exec) |
 | [Manifests](#manifests) | [`manifest init`](#oku-manifest-init), [`lint`](#oku-manifest-lint), [`test`](#oku-manifest-test), [`bump`](#oku-manifest-bump), [`hash`](#oku-manifest-hash) |
 | [Sources, caches and keys](#sources-caches-and-keys) | [`source`](#oku-source), [`search`](#oku-search), [`cache`](#oku-cache), [`key`](#oku-key) |
-| [Self and diagnostics](#self-and-diagnostics) | [`doctor`](#oku-doctor), [`verify`](#oku-verify), [`self update`](#oku-self-update), [`self uninstall`](#oku-self-uninstall), [`--version`, `--help`, `completion`](#oku---version-oku---help-oku-completion) |
+| [Self and diagnostics](#self-and-diagnostics) | [`doctor`](#oku-doctor), [`verify`](#oku-verify), [`self update`](#oku-self-update), [`self man`](#oku-self-man), [`self uninstall`](#oku-self-uninstall), [`--version`, `--help`, `completion`](#oku---version-oku---help-oku-completion) |
 | Reading the output | [Global flags](#global-flags), [Exit codes](#exit-codes), [JSON output](#json-output), [Error messages](#error-messages), [Output](#output) |
 
 ## Global flags
@@ -1663,8 +1663,38 @@ what changed: https://github.com/y3owk1n/oku/releases/tag/v0.5.0
   `oku nightly <commit> is the newest nightly build`.
 - A binary you built from source has the release key too, so `self update`
   replaces it with the newest release.
+- On macOS and Linux the new binary then writes its man pages, as
+  [`oku self man`](#oku-self-man) does, so they describe the version you have.
+  When it cannot, the update still replaces oku and says why.
 - On Windows oku first renames the running `oku.exe` aside, because Windows
   does not let anything replace a program while it runs.
+
+### oku self man
+
+```
+oku self man [--dir <directory>]
+```
+
+Writes a man page for each command into `share/man/man1` beside the `bin`
+directory that holds `oku`. For `~/.local/bin/oku` that is
+`~/.local/share/man/man1`. `man` looks there for the pages of every program on
+`PATH`, so `man oku` and `man oku-add` work without `MANPATH`. The install
+script and `oku self update` run it for you.
+
+| Flag | Effect |
+|---|---|
+| `--dir <directory>` | Writes the pages into `man1` under this directory instead. |
+
+```
+$ oku self man
+✓ wrote 62 man pages to ~/.local/share/man/man1
+```
+
+- A page holds what `--help` prints for that command: the description, its
+  commands, its flags and the pages to see next.
+- It first removes the pages it wrote before, so no page stays for a command
+  that oku no longer has. A page of another program stays, even one whose name
+  starts with `oku-`.
 
 ### oku self uninstall
 
@@ -1690,7 +1720,7 @@ It removes:
 - the cache directory
 - `oku.toml`, `oku.lock`, `config.toml` and `signing.key` in the config
   directory
-- the `oku` binary
+- the `oku` binary, and the man pages of [`oku self man`](#oku-self-man)
 
 It refuses, before it removes anything, while a system-scope app has its macOS
 system extension on. Turn the extension off from the app first.

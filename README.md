@@ -92,7 +92,7 @@ curl -fsSL https://raw.githubusercontent.com/y3owk1n/oku/main/install.sh | sh
 irm https://raw.githubusercontent.com/y3owk1n/oku/main/install.ps1 | iex
 ```
 
-The script puts one static binary in `~/.local/bin`, or `%LOCALAPPDATA%\oku\bin`, after checking its sha256, and its minisign signature when `minisign` is installed. It edits none of your files and ends by printing the one line your shell needs. `oku self update` replaces the binary later, after checking its [minisign](https://jedisct1.github.io/minisign/) signature.
+The script puts one static binary in `~/.local/bin`, or `%LOCALAPPDATA%\oku\bin`, after checking its sha256, and its minisign signature when `minisign` is installed. On macOS and Linux it has oku write its man pages to `~/.local/share/man`, so `man oku` works. It edits none of your files and ends by printing the one line your shell needs. `oku self update` replaces the binary later, after checking its [minisign](https://jedisct1.github.io/minisign/) signature.
 
 <details>
 <summary>From source</summary>
