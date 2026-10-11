@@ -239,35 +239,42 @@ func parentMode(f profile.File) fs.FileMode {
 	return 0o755
 }
 
-// resolveFiles turns the [files] of the merged list into the files of a
-// generation that holds pkgs. It changes nothing.
-func (e env) resolveFiles(
-	listed []listedFile,
-	listVars map[string]string,
-	secrets map[string]listedSecret,
-	pkgs []profile.Package,
-) ([]profile.File, error) {
-	locations, err := e.locations()
+// templateVars returns the locations of this OS, and the names that a target,
+// a template or a setting may fill in, which are the locations and the list's
+// [vars].
+func (e env) templateVars(listVars map[string]string) (locations, vars map[string]string, err error) {
+	locations, err = e.locations()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	// A template may name a location too, such as {{data}} for a path into oku's
 	// profile.
-	vars := maps.Clone(locations)
+	vars = maps.Clone(locations)
 
 	for name, value := range listVars {
 		if _, taken := locations[name]; taken {
-			return nil, fmt.Errorf("vars.%s has the name of a location, pick another name", name)
+			return nil, nil, fmt.Errorf("vars.%s has the name of a location, pick another name", name)
 		}
 
 		if reservedVar(name) {
-			return nil, fmt.Errorf("vars.%s starts like {{pkg.<name>}} or {{secret.<name>}}, pick another name", name)
+			return nil, nil, fmt.Errorf("vars.%s starts like {{pkg.<name>}} or {{secret.<name>}}, pick another name", name)
 		}
 
 		vars[name] = value
 	}
 
+	return locations, vars, nil
+}
+
+// resolveFiles turns the [files] of the merged list into the files of a
+// generation that holds pkgs. It changes nothing.
+func (e env) resolveFiles(
+	listed []listedFile,
+	locations, vars map[string]string,
+	secrets map[string]listedSecret,
+	pkgs []profile.Package,
+) ([]profile.File, error) {
 	owners := map[string]string{}
 
 	var files []profile.File

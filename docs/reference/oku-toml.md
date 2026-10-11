@@ -458,7 +458,8 @@ path = ".env.mine"
 ### [vars]
 
 `[vars]` holds values that you name yourself, for `[files]` paths, `text`
-entries and templates. Each one is available as `{{name}}`.
+entries, templates and the strings of [settings tables](#settings-tables).
+Each one is available as `{{name}}`.
 
 ```toml
 [vars]
@@ -602,6 +603,14 @@ color-scheme = "prefer-dark"
 - A `[defaults]` domain is a name such as `com.apple.dock`. A path, with `/`,
   `\` or a leading `~`, is an error, so a list cannot edit a plist that oku
   did not place, such as another app's launch agent.
+- A string, also inside an array or a table, may name a location such as
+  `{{home}}` and the names of [`[vars]`](#vars), as a `text` entry does.
+  `NewWindowTargetPath = "file://{{home}}/Downloads"` works for any user.
+  `{{pkg.<name>}}` and `{{secret.<name>}}` are errors, because a generation
+  stores a setting's value in plain text. `\{{` writes the two braces themselves,
+  and a lone `{{` is an error that names the setting.
+- oku fills a value only on the OS of its table, so `{{appdata}}` in a
+  `[registry]` string is no error on a Mac.
 - Write a registry key in single quotes, so TOML keeps its backslashes.
 - On Linux oku skips `[dconf]` when the `dconf` tool is not installed, and
   prints `[dconf] is skipped, because the dconf tool is not in /usr/bin or /bin`.

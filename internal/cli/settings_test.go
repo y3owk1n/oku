@@ -2,6 +2,7 @@ package cli_test
 
 import (
 	"fmt"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -234,6 +235,56 @@ func TestB416ADefaultsDomainIsADomainAndNotAPath(t *testing.T) {
 		want := fmt.Sprintf("defaults.%q must be a domain such as com.apple.dock, not a path", domain)
 		if _, err := m.run(t, "", "sync"); err == nil || !strings.Contains(err.Error(), want) {
 			t.Fatalf("want the domain %s refused, got %v", domain, err)
+		}
+	}
+}
+
+func TestB588ASettingStringFillsTheLocationsAndTheVarsOfTheList(t *testing.T) {
+	m, store := settingsMachine(t)
+
+	m.writeFilesList(t, "[vars]\nshell = \"/bin/sh\"\n"+
+		"[defaults.\"com.example\"]\n"+
+		"path = \"file://{{home}}/Downloads\"\n"+
+		"shells = [\"{{shell}}\", \"{{ shell }} -l\"]\n"+
+		"braces = \"\\\\{{home}}\"\n"+
+		"count = 3\n"+
+		"[defaults.\"com.example\".nested]\nconfig = \"{{config}}/x\"\n"+
+		// oku skips a table of another OS before it fills anything in it, so a
+		// location of that OS is no error here.
+		"[registry.'HKCU\\Software\\Example']\npath = \"{{appdata}}\\\\x\"\n")
+
+	_, err := m.run(t, "", "sync")
+	must(t, err)
+
+	for key, want := range map[string]string{
+		"com.example path":   "<string>file://" + home("Downloads") + "</string>",
+		"com.example shells": "<array><string>/bin/sh</string><string>/bin/sh -l</string></array>",
+		"com.example braces": "<string>{{home}}</string>",
+		"com.example count":  "<integer>3</integer>",
+		"com.example nested": "<dict><key>config</key><string>" + filepath.Dir(m.config) + "/x</string></dict>",
+	} {
+		if got := store.values[key]; got != want {
+			t.Fatalf("%s is %s, want %s", key, got, want)
+		}
+	}
+}
+
+func TestB588ASettingTakesNoPackageAndNoSecret(t *testing.T) {
+	for value, want := range map[string]string{
+		"{{pkg.tool}}/bin":  "a setting takes locations and [vars], and pkg.tool is neither",
+		"{{secret.token}}":  "a setting takes locations and [vars], and secret.token is neither",
+		"{{missing}}/where": "missing is not set in [vars]",
+	} {
+		m, store := settingsMachine(t)
+		m.writeFilesList(t, "[defaults.\"com.example\"]\nother = 1\nkey = \""+value+"\"\n")
+
+		_, err := m.run(t, "", "sync")
+		if err == nil || !strings.Contains(err.Error(), `defaults."com.example".key:1: `+want) {
+			t.Fatalf("%s: want an error with %q, got %v", value, want, err)
+		}
+
+		if len(store.values) > 0 {
+			t.Fatalf("%s: a refused list wrote %v", value, store.values)
 		}
 	}
 }

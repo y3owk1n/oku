@@ -144,12 +144,17 @@ func reconcile(
 		return err
 	}
 
-	files, err := e.resolveFiles(all.files, all.vars, all.secrets, pkgs)
+	locations, vars, err := e.templateVars(all.vars)
 	if err != nil {
 		return err
 	}
 
-	wantedSettings, err := resolveSettings(opts, all.settings, cmd.ErrOrStderr())
+	files, err := e.resolveFiles(all.files, locations, vars, all.secrets, pkgs)
+	if err != nil {
+		return err
+	}
+
+	wantedSettings, err := resolveSettings(opts, all.settings, vars, cmd.ErrOrStderr())
 	if err != nil {
 		return err
 	}
