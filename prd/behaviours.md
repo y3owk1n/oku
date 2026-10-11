@@ -1420,6 +1420,11 @@ order step in `prd/product.md`.
   its end as a failure, and a changed schedule reaches the OS with the next
   update. A schedule with both `every` and `at`, with a `restart`, or with a
   value outside its form fails `manifest lint` and the install.
+- B582 [8] A `[[service]]` with `interactive = true` gets the scheduling of an
+  app. Its launchd plist has `ProcessType` `Interactive`, its Task Scheduler
+  task runs at normal priority, and its systemd unit is unchanged. Without it
+  the service keeps the manager's default. `interactive` with a `schedule`
+  fails `manifest lint` and the install.
 - B74 [8] `oku service start|stop|restart|status|logs` behave the same on all
   three OSes.
   `start` of a name that no package ships says so, and says when no package

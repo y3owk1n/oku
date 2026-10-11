@@ -2141,3 +2141,19 @@ between runs. Why: these two forms are what all three managers express, and
 Task Scheduler, the narrowest, has no cron syntax, so a richer grammar would
 work on two OSes only. On macOS a job whose schedule is off loads its schedule
 for the session when started, because launchd runs a job only by loading it.
+
+## D131. `interactive` asks for the scheduling of an app, and only that
+
+`[[service]]` takes `interactive = true`, which writes `ProcessType`
+`Interactive` into the launchd plist and `<Priority>4</Priority>`, normal, into
+the task. It writes nothing for systemd and no `Nice` anywhere. A job with a
+`schedule` refuses it. Why: launchd throttles the CPU and I/O of a job that
+names no `ProcessType`, which made neru's overlay stutter as an oku service.
+With `ProcessType` alone the stutter was gone, and launchd.plist(5) prefers
+`ProcessType` to `Nice`. Task Scheduler runs a task below normal priority
+unless it names one, so a Windows task gets normal, the priority of an app. A
+negative nice would put the service above every app rather than level with
+them, and a user systemd unit cannot set one. systemd does not throttle a
+service against an app, so Linux has nothing to undo. A boolean covers the one
+case seen, and can become an enum if `Background` or `Adaptive` ever has a
+user. A job refuses it because it runs with no one waiting on it.
