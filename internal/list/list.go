@@ -320,15 +320,37 @@ func Parse(data []byte, origin string) (*List, error) {
 		)
 	})
 
-	for _, target := range slices.Sorted(maps.Keys(raw.Files)) {
-		file, err := toFile(raw.Files[target])
+	// An entry with also stands for one entry per target. TOML lets a key appear
+	// once per table, so a target belongs to one entry of a list, and also keeps
+	// that rule.
+	placedBy := map[string]string{}
+
+	for _, key := range slices.Sorted(maps.Keys(raw.Files)) {
+		file, err := toFile(raw.Files[key])
 		if err != nil {
-			return nil, fmt.Errorf("%s: files.%q: %w", origin, target, err)
+			return nil, fmt.Errorf("%s: files.%q: %w", origin, key, err)
 		}
 
-		file.Target = target
-		l.Files = append(l.Files, file)
+		also, err := alsoTargets(raw.Files[key])
+		if err != nil {
+			return nil, fmt.Errorf("%s: files.%q: %w", origin, key, err)
+		}
+
+		for _, target := range append([]string{key}, also...) {
+			switch by, taken := placedBy[target]; {
+			case taken && by == key:
+				return nil, fmt.Errorf("%s: files.%q names %s twice", origin, key, target)
+			case taken:
+				return nil, fmt.Errorf("%s: files.%q names %s, which files.%q names too", origin, key, target, by)
+			}
+
+			placedBy[target] = key
+			file.Target = target
+			l.Files = append(l.Files, file)
+		}
 	}
+
+	slices.SortFunc(l.Files, func(a, b File) int { return strings.Compare(a.Target, b.Target) })
 
 	return l, nil
 }
@@ -515,7 +537,7 @@ func toFile(value any) (File, error) {
 			}
 
 			f.Mode = fs.FileMode(mode)
-		case "when":
+		case "when", "also":
 			continue
 		case "vars":
 			f.Vars = map[string]string{}
@@ -537,7 +559,7 @@ func toFile(value any) (File, error) {
 			continue
 		default:
 			return f, fmt.Errorf(
-				"%s is not a key of a file, use link, text, render, secret, key, mode, when or vars",
+				"%s is not a key of a file, use link, text, render, secret, key, mode, when, vars or also",
 				key,
 			)
 		}
@@ -573,6 +595,33 @@ func toFile(value any) (File, error) {
 	f.When, err = platform.ParseListWhen(table["when"])
 
 	return f, err
+}
+
+// alsoTargets returns the extra targets that the also of a [files] entry names.
+// toFile has checked the rest of the entry.
+func alsoTargets(value any) ([]string, error) {
+	raw, set := value.(map[string]any)["also"]
+	if !set {
+		return nil, nil
+	}
+
+	list, isList := raw.([]any)
+	if !isList || len(list) == 0 {
+		return nil, errors.New("also wants a list of one or more targets")
+	}
+
+	targets := make([]string, 0, len(list))
+
+	for _, item := range list {
+		target, isText := item.(string)
+		if !isText {
+			return nil, errors.New("also wants a list of one or more targets")
+		}
+
+		targets = append(targets, target)
+	}
+
+	return targets, nil
 }
 
 // toEntry accepts the short form "ref" and the table form { ref, version, when, ... }.

@@ -517,10 +517,12 @@ Each value is a table with exactly one of `link`, `text`, `render` and
 | `mode` | string | The permission of a `text`, `render` or `secret` file, such as `"0600"`, or `"0755"` for a script, up to `"0777"`. Without it the file is read-only, and a secret is `0600`. An error on a `link`. |
 | `vars` | table of strings | Overrides `[vars]` for this `text` or `render` entry, such as `vars = { font-size = "13" }`. An error on `link` and `secret`. |
 | `when` | table or array | As for [packages](#when). |
+| `also` | array of strings | More paths that get the same file, each starting with a location. Every other key of the entry applies to each of them. |
 
 ```toml
 [files]
 "{{home}}/.config/nvim" = { link = "./files/nvim" }
+"{{home}}/.claude/skills/review" = { link = "./skills/review", also = ["{{home}}/.agents/skills/review"] }
 "{{home}}/.config/ghostty/config" = { render = "./files/ghostty.tmpl" }
 "{{home}}/.claude/skills/deslop" = { link = "{{pkg.cursor-plugins}}/skills/deslop" }
 "{{home}}/.ssh/id_ed25519" = { secret = "./secrets/secrets.yaml", key = "ssh/id_ed25519" }
@@ -530,6 +532,8 @@ Rules:
 
 - oku refuses a path that exists and that it did not write. It names the
   path and changes nothing.
+- A list names each path once, as a key or in an `also`. It is an error when
+  two entries of one list name the same path.
 - A path must stay inside its location. `"{{home}}/../../usr/local/bin/git"`
   is an error, and so is a `[vars]` value with `..` that leads out of it.
 - A `{{pkg.<name>}}/...` link must stay inside that package.

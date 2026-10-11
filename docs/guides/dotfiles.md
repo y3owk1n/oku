@@ -262,7 +262,7 @@ data = true
 my-skills = "./packages/my-skills.toml"
 
 [files]
-"{{home}}/.claude/skills/deslop" = { link = "{{pkg.my-skills}}/skills/deslop" }
+"{{home}}/.claude/skills/deslop" = { link = "{{pkg.my-skills}}/skills/deslop", also = ["{{home}}/.agents/skills/deslop"] }
 ```
 
 - `{{pkg.<name>}}` works at the start of a `link` source, and anywhere in a
@@ -273,6 +273,8 @@ my-skills = "./packages/my-skills.toml"
   file that uses it again. `oku rollback` brings back the files of the
   version before.
 - The lock pins the package like any other.
+- `also` puts the same link at more paths, here for a second agent that reads
+  `~/.agents/skills`.
 - A package that is not in the list on this machine, for example because its
   `when` does not match, is an error.
 
