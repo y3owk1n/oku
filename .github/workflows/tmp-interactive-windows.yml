@@ -1,0 +1,67 @@
+name: tmp-interactive-windows
+
+# Temporary live test for interactive services on Windows. Removed before merge.
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  live:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        with:
+          version: nightly
+      - name: an interactive service runs at normal priority
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $w = Join-Path $env:RUNNER_TEMP live
+          New-Item -ItemType Directory -Force "$w\pkg" | Out-Null
+          go build -o "$w\oku.exe" ./cmd/oku
+          Copy-Item C:\Windows\System32\PING.EXE "$w\pkg\okulive.exe"
+          Compress-Archive "$w\pkg\okulive.exe" "$w\okulive.zip"
+          $sum = (Get-FileHash "$w\okulive.zip" -Algorithm SHA256).Hash.ToLower()
+          $url = 'file:///' + ("$w\okulive.zip" -replace '\\', '/')
+          $manifest = @"
+          [package]
+          name = "okulive"
+          [version]
+          value = "1.0.0"
+          [[artifact]]
+          url = "$url"
+          sha256 = "$sum"
+          bin = ["okulive.exe"]
+          [[service]]
+          name = "okulive"
+          command = "bin/okulive.exe"
+          args = ["-t", "127.0.0.1"]
+          restart = "always"
+          interactive = true
+          "@
+          Set-Content "$w\okulive.toml" ($manifest -replace '(?m)^\s+', '')
+          Set-Location $w
+
+          function Priority {
+            Start-Sleep 5
+            schtasks /Query /TN oku-okulive /XML | Select-String Priority
+            $class = (Get-Process okulive).PriorityClass
+            Write-Output "okulive runs at $class"
+            return "$class"
+          }
+
+          & "$w\oku.exe" add "$w\okulive.toml" --service --yes
+          if ($LASTEXITCODE -ne 0) { throw "add failed" }
+          if ((Priority)[-1] -ne 'Normal') { throw 'an interactive service should run at Normal' }
+
+          (Get-Content "$w\okulive.toml") | Where-Object { $_ -notmatch '^interactive' } | Set-Content "$w\okulive.toml"
+          & "$w\oku.exe" update okulive --yes
+          if ($LASTEXITCODE -ne 0) { throw "update failed" }
+          if ((Priority)[-1] -ne 'BelowNormal') { throw 'a service that is not interactive should run at BelowNormal' }
+
+          & "$w\oku.exe" remove okulive --yes
