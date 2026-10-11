@@ -47,7 +47,7 @@ func newSelfCmd(opts Options) *cobra.Command {
 	uninstall.Flags().
 		BoolVar(&system, "system", false, "with --yes, also remove what needs administrator rights")
 
-	self.AddCommand(uninstall, newSelfUpdateCmd(opts))
+	self.AddCommand(uninstall, newSelfUpdateCmd(opts), newSelfManCmd(opts))
 
 	return self
 }
@@ -72,6 +72,7 @@ func runUninstall(
 	out := cmd.OutOrStdout()
 	s := ui.For(out)
 	binDir := e.globalProfile().BinDir()
+	manPath := manDir(executable)
 
 	var kept []string
 
@@ -88,6 +89,15 @@ func runUninstall(
 	fmt.Fprintf(out, "  cache               %s\n", s.Home(e.cache))
 	fmt.Fprintf(out, "  config              oku's own files in %s\n", s.Home(e.config))
 	fmt.Fprintf(out, "  binary              %s\n", s.Home(executable))
+
+	pages, err := manPages(manPath)
+	if err != nil {
+		return err
+	}
+
+	if len(pages) > 0 {
+		fmt.Fprintf(out, "  man pages           oku's pages in %s\n", s.Home(filepath.Join(manPath, "man1")))
+	}
 
 	if e.root != e.data {
 		fmt.Fprintf(out, "  shared store root   %s%s\n", s.Home(e.root), s.Warn(" (needs administrator rights)"))
@@ -175,6 +185,10 @@ func runUninstall(
 
 	if err := removeBinary(executable); err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return fmt.Errorf("remove %s: %w", executable, err)
+	}
+
+	if err := removeManPages(manPath); err != nil {
+		return fmt.Errorf("remove the man pages: %w", err)
 	}
 
 	var aside []string

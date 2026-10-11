@@ -186,6 +186,13 @@ it had before.
 no longer has, and `oku self uninstall` removes everything in the ledger. oku
 never overwrites a file that is not in its ledger.
 
+The `oku` binary and its man pages are outside these directories too, and the
+ledger does not record them. [`oku self man`](commands.md#oku-self-man) writes
+the pages into `share/man/man1` beside the `bin` that holds `oku`, which is
+`~/.local/share/man/man1` for `~/.local/bin/oku`. `man` looks there for the
+pages of every program on `PATH`. `oku self uninstall` removes the binary and
+the pages.
+
 oku does not edit shell startup files, the system `PATH`, or anything else
 outside these places.
 
