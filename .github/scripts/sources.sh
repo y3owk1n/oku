@@ -58,18 +58,18 @@ check() {
   } >>"$report"
 }
 
-# A plan reads the versions and the files of a release, and changes nothing.
-check "GitHub releases" add github:BurntSushi/ripgrep --plan
-check "GitLab releases" add gitlab:gitlab-org/cli --plan
-check "Gitea releases" add gitea:gitea.com/gitea/tea --plan
-check "the aqua registry" add aqua:cli/cli --plan
-check "a cask with a JSON feed" add cask:obsidian --plan
-check "a cask with a Sparkle feed" add cask:iina --plan
-check "a cask with a redirect" add cask:slack --plan
-check "the npm registry" add npm:prettier --plan
-check "PyPI" add pypi:ruff --plan
-check "crates.io" add cargo:ripgrep --plan
-check "the Go module proxy" add go:golang.org/x/tools/gopls --plan
+# A dry run reads the versions and the files of a release, and changes nothing.
+check "GitHub releases" add github:BurntSushi/ripgrep --dry-run
+check "GitLab releases" add gitlab:gitlab-org/cli --dry-run
+check "Gitea releases" add gitea:gitea.com/gitea/tea --dry-run
+check "the aqua registry" add aqua:cli/cli --dry-run
+check "a cask with a JSON feed" add cask:obsidian --dry-run
+check "a cask with a Sparkle feed" add cask:iina --dry-run
+check "a cask with a redirect" add cask:slack --dry-run
+check "the npm registry" add npm:prettier --dry-run
+check "PyPI" add pypi:ruff --dry-run
+check "crates.io" add cargo:ripgrep --dry-run
+check "the Go module proxy" add go:golang.org/x/tools/gopls --dry-run
 
 # Scoop and winget packages are for Windows, so oku only translates them.
 check "Scoop" manifest init --from scoop:ripgrep -o -
