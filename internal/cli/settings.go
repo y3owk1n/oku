@@ -10,6 +10,7 @@ import (
 	"github.com/y3owk1n/oku/internal/expose"
 	"github.com/y3owk1n/oku/internal/list"
 	"github.com/y3owk1n/oku/internal/profile"
+	"github.com/y3owk1n/oku/internal/render"
 	"github.com/y3owk1n/oku/internal/settings"
 )
 
@@ -29,6 +30,7 @@ func settingsStore(opts Options) (settings.Store, string) {
 func resolveSettings(
 	opts Options,
 	listed []list.Setting,
+	vars map[string]string,
 	notice io.Writer,
 ) ([]profile.Setting, error) {
 	store, backend := settingsStore(opts)
@@ -51,15 +53,72 @@ func resolveSettings(
 			continue
 		}
 
-		value, err := store.Encode(s.Value)
+		origin := fmt.Sprintf("%s.%q.%s", s.Backend, s.Domain, s.Key)
+
+		filled, err := fillSetting(s.Value, vars, origin)
 		if err != nil {
-			return nil, fmt.Errorf("%s.%q.%s: %w", s.Backend, s.Domain, s.Key, err)
+			return nil, err
+		}
+
+		value, err := store.Encode(filled)
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", origin, err)
 		}
 
 		wanted = append(wanted, profile.Setting{Domain: s.Domain, Key: s.Key, Value: value})
 	}
 
 	return wanted, nil
+}
+
+// fillSetting fills the locations and [vars] in vars into every string of a
+// setting's value, in its arrays and tables too. A generation stores a
+// setting's value in plain text, so the value may not name a secret or a
+// package.
+func fillSetting(value any, vars map[string]string, origin string) (any, error) {
+	switch v := value.(type) {
+	case string:
+		return render.Fill(v, origin, func(name string) (string, error) {
+			if reservedVar(name) {
+				return "", fmt.Errorf("a setting takes locations and [vars], and %s is neither", name)
+			}
+
+			value, set := vars[name]
+			if !set {
+				return "", fmt.Errorf("%s is not set in [vars]", name)
+			}
+
+			return value, nil
+		})
+	case []any:
+		filled := make([]any, len(v))
+
+		for i, item := range v {
+			one, err := fillSetting(item, vars, origin)
+			if err != nil {
+				return nil, err
+			}
+
+			filled[i] = one
+		}
+
+		return filled, nil
+	case map[string]any:
+		filled := make(map[string]any, len(v))
+
+		for key, item := range v {
+			one, err := fillSetting(item, vars, origin)
+			if err != nil {
+				return nil, err
+			}
+
+			filled[key] = one
+		}
+
+		return filled, nil
+	}
+
+	return value, nil
 }
 
 // settingHandler writes a setting and puts back the value it had before.
