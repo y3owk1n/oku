@@ -40,3 +40,16 @@ func TestB581AJobTaskHasItsScheduleAsTheTrigger(t *testing.T) {
 		t.Fatalf("a job that is not enabled has no trigger:\n%s", got)
 	}
 }
+
+func TestB582AInteractiveTaskRunsAtNormalPriority(t *testing.T) {
+	d := Definition{Name: "pointer"}
+
+	if got := taskXML(d, `C:\oku.exe`, `C:\pointer.json`, `HOST\kyle`, true, false); strings.Contains(got, "<Priority>") {
+		t.Fatalf("a task that is not interactive names a priority:\n%s", got)
+	}
+
+	d.Interactive = true
+	if got := taskXML(d, `C:\oku.exe`, `C:\pointer.json`, `HOST\kyle`, true, false); !strings.Contains(got, "<Priority>4</Priority>") {
+		t.Fatalf("an interactive task should run at normal priority:\n%s", got)
+	}
+}

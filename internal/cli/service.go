@@ -49,11 +49,12 @@ func systemServices(opts Options) service.Manager {
 // {{prefix}} resolve inside the package's store path.
 func (e env) definition(pkg profile.Package, svc manifest.Service) (service.Definition, error) {
 	d := service.Definition{
-		Name:    svc.Name,
-		Program: filepath.Join(pkg.StorePath, filepath.FromSlash(svc.Command)),
-		Restart: svc.Restart,
-		Env:     map[string]string{},
-		LogFile: filepath.Join(e.data, "logs", svc.Name+".log"),
+		Name:        svc.Name,
+		Program:     filepath.Join(pkg.StorePath, filepath.FromSlash(svc.Command)),
+		Restart:     svc.Restart,
+		Interactive: svc.Interactive,
+		Env:         map[string]string{},
+		LogFile:     filepath.Join(e.data, "logs", svc.Name+".log"),
 	}
 
 	// The store belongs to the user, so a system service runs as the user

@@ -281,6 +281,13 @@ func taskXML(d Definition, self, stored, account string, enabled, system bool) s
 		restart = "<RestartOnFailure><Interval>PT1M</Interval><Count>999</Count></RestartOnFailure>"
 	}
 
+	// A task without a priority runs below normal, and Windows passes that on
+	// to the program that oku starts. Priority 4 is normal.
+	priority := ""
+	if d.Interactive {
+		priority = "<Priority>4</Priority>"
+	}
+
 	// A job has its schedule as the trigger, and runs a run it missed once the
 	// machine is on again.
 	if d.Schedule != nil {
@@ -305,6 +312,7 @@ func taskXML(d Definition, self, stored, account string, enabled, system bool) s
     <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>
     <ExecutionTimeLimit>PT0S</ExecutionTimeLimit>
     ` + restart + `
+    ` + priority + `
   </Settings>
   <Actions Context="Author"><Exec>
     <Command>` + esc(self) + `</Command>

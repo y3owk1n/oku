@@ -263,6 +263,9 @@ type Service struct {
 	Args    []string          `toml:"args"`
 	Env     map[string]string `toml:"env"`
 	Restart string            `toml:"restart"`
+	// Interactive asks the OS to schedule the service like an app, for a
+	// program that draws UI or handles input.
+	Interactive bool `toml:"interactive,omitempty"`
 	// Schedule makes the service a job that runs at set times. It is nil for a
 	// program that runs until it is stopped.
 	Schedule *Schedule `toml:"schedule,omitempty"`
@@ -524,6 +527,10 @@ func (m *Manifest) validate() error {
 		case svc.Schedule != nil && svc.Restart != "" && svc.Restart != "never":
 			errs = append(errs, fmt.Errorf(
 				"service[%d]: a service with a schedule runs and ends, so it takes no restart", i,
+			))
+		case svc.Schedule != nil && svc.Interactive:
+			errs = append(errs, fmt.Errorf(
+				"service[%d]: a service with a schedule runs with no one waiting on it, so it takes no interactive", i,
 			))
 		case svc.Schedule != nil:
 			if err := svc.Schedule.Parse(); err != nil {
