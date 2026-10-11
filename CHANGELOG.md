@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.17.0](https://github.com/y3owk1n/oku/compare/v0.16.0...v0.17.0) (2026-10-11)
+
+
+### Features
+
+* **files:** one [files] entry may place the same file at several targets ([#478](https://github.com/y3owk1n/oku/issues/478)) ([55ecad3](https://github.com/y3owk1n/oku/commit/55ecad3748b7a9760a083ce700149ebab50be25f))
+* **ref:** read a pasted repo URL as its github:, gitlab: or codeberg: ref ([#476](https://github.com/y3owk1n/oku/issues/476)) ([d8dc4ce](https://github.com/y3owk1n/oku/commit/d8dc4cedfed801a943941218929cfae58f71e29b))
+* **self:** add `man` pages ([#477](https://github.com/y3owk1n/oku/issues/477)) ([898e989](https://github.com/y3owk1n/oku/commit/898e989e24d24893fda728c1b5902205e7234683))
+* **service:** interactive services get the scheduling of an app ([#472](https://github.com/y3owk1n/oku/issues/472)) ([f2fc657](https://github.com/y3owk1n/oku/commit/f2fc657dc2f4aac87c4e746c609439df69c7d451))
+* **settings:** fill {{home}} and [vars] into settings strings ([#479](https://github.com/y3owk1n/oku/issues/479)) ([2d6e0f8](https://github.com/y3owk1n/oku/commit/2d6e0f811e4fd1fc65e00ca1482305492b79ec18))
+
 ## [0.16.0](https://github.com/y3owk1n/oku/compare/v0.15.0...v0.16.0) (2026-10-10)
 
 
