@@ -374,8 +374,10 @@ See [A lock with merge conflicts](reference/commands.md#a-lock-with-merge-confli
 ## The download is a web page, not a program
 
 A URL, or the `url` of a manifest, gave oku an HTML page where it wanted a
-file to install. Often the URL is the page of a repo, and the error names the
-ref to use, such as `github:owner/repo` or `gitea:host/owner/repo`. A
+file to install. Often the URL is the page of a repo on a self-hosted Gitea,
+Forgejo or GitLab server. The error then names the ref to use, such as
+`gitea:host/owner/repo`. oku reads the page of a repo on github.com, gitlab.com
+or codeberg.org as its ref, see [Refs](reference/refs.md). A
 download link that now leads to a login or an error page gives the same
 error. Find the file's current URL.
 

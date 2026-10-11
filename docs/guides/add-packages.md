@@ -119,6 +119,14 @@ or `github:ghe.example.com/owner/repo` for GitHub Enterprise Server. oku reads
 a first part with a dot as a host, so a gitlab.com group with a dot in its name
 needs the host written out, as in `gitlab:gitlab.com/my.group/project`.
 
+A repo URL copied from the browser or a clone button works too. oku stores the
+repo's forge ref in its place:
+
+```sh
+oku add https://github.com/sharkdp/fd           # stored as github:sharkdp/fd
+oku add git@gitlab.com:gitlab-org/cli.git       # stored as gitlab:gitlab-org/cli
+```
+
 None of these need git installed. oku reads each forge's API.
 
 ## Add a manifest from a repo

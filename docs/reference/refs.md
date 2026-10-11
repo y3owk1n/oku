@@ -32,6 +32,14 @@ refs to lists.
 | `scoop:name`, `scoop:bucket/name`, `scoop:owner/repo/name` | A Scoop manifest, which oku translates into a manifest. oku looks up a bare name in the `main` bucket, then `extras`. `owner/repo` names a bucket on GitHub. |
 | `core/ripgrep` | The package `ripgrep` in your source `core`, see [Sources and aliases](#sources-and-aliases). |
 
+oku reads the URL of a repo on github.com, gitlab.com or codeberg.org as the
+repo's forge ref. `https://github.com/owner/repo`,
+`https://github.com/owner/repo.git`, `git@github.com:owner/repo.git` and
+`ssh://git@github.com/owner/repo.git` all read as `github:owner/repo`, and
+`oku.toml` stores `github:owner/repo`. `@version` works on it,
+as in `https://github.com/owner/repo@1.2.0`. Any other URL on those hosts, such
+as that of a file in the repo, stays a URL.
+
 A ref that starts with a scheme oku does not know, such as `gihub:`, fails and
 lists the schemes, unless a file has that name. A `#` with nothing after it
 fails too.
