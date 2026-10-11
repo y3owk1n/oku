@@ -1895,6 +1895,11 @@ order step in `prd/product.md`.
 - B150 [15] A key that leaves the list gets back the value it had before oku
   first wrote it, or is deleted when it had none. `rollback` does the same.
 - B151 [15] oku skips the settings tables of another OS without an error.
+- B588 [15] oku fills the locations and the names of `[vars]` into every
+  string of a setting's value, also inside an array or a table, as it does
+  for a `text` entry. `{{pkg.<name>}}`, `{{secret.<name>}}` and a name that is
+  not set are errors that name the setting, and `sync` changes nothing. oku
+  skips a table of another OS before it fills anything in it.
 - B152 [15] A `[registry]` key outside `HKCU` is an error.
 - B153 [15] `[registry]` on Windows and `[dconf]` on Linux behave as B149 and
   B150 describe.
