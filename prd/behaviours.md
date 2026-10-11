@@ -1675,6 +1675,14 @@ order step in `prd/product.md`.
   release. `--to <tag>` takes that release, older or newer, after the same
   signature check, and says so when the running binary is that release. After
   a replacement oku prints the link to the release's notes.
+- B584 [11] `oku self man` writes a man page for each command into
+  `share/man/man1` beside the `bin` that holds the oku binary, or into `man1`
+  under `--dir`. A page holds what `--help` prints, with the whole synopsis.
+  It first removes the pages it wrote before, and leaves a page of another
+  program.
+- B585 [11] On macOS and Linux, `oku self update` runs the new binary's
+  `self man`, after removing the old binary's pages. When that fails, the
+  update still replaces oku and prints why.
 - B232 [11] While oku asks the user something, such as a build approval or
   the password for `sudo`, the rows and build logs of the packages that
   install in parallel wait, and appear below the answer once the user gives it. Two
@@ -1726,8 +1734,9 @@ order step in `prd/product.md`.
   it for each request and each wait: when it started, how long it took, the
   package, what it was, and for a request the answer. A URL's query and user
   part stay out.
-- B93 [11] The install script puts one static binary in place and prints the
-  hook line for the user's shell. It needs no root and edits no existing file.
+- B93 [11] The install script puts one static binary in place, has it write
+  its man pages, and prints the hook line for the user's shell. It needs no
+  root and edits no existing file.
 - B220 [11] The install script prints the installed version, and ends with the
   next commands: `oku doctor`, a first `oku add`, `oku self update`. When a
   startup file loads the hook already, it says so instead of printing the line
@@ -1957,6 +1966,9 @@ order step in `prd/product.md`.
   error.
 - B102 [1] When the global profile `bin` is on PATH, uninstall ends by
   printing that PATH entry for the user to remove.
+- B586 [1] Uninstall lists the man pages of `oku self man` and removes them,
+  and their `man1` and `man` directories when that empties them. A page of
+  another program stays.
 - B368 [9] On Windows, uninstall finishes while a program that oku installed
   runs. It moves the program's files into `oku-uninstalled` beside the data
   directory or the shared root, says so, and deletes them once the program
