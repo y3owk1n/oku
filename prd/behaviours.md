@@ -1832,6 +1832,11 @@ order step in `prd/product.md`.
   that overrides `[vars]` for that entry. Two entries may share a target when
   their `when` clauses differ. `vars` on a `link` or a `secret` entry is an
   error.
+- B587 [13] A `[files]` entry with `also` places the same file at each target
+  of `also` too, with every other key of the entry. Each target is a file of
+  its own, which a later sync removes alone. A list names each target once. It
+  is an error when two of its entries name the same target, when one entry
+  names it twice, or when `also` is empty.
 - B204 [13] A directory that oku creates above a `text`, `render` or `secret`
   target is `0700` when the entry is a `secret` or has a `mode` that gives
   group and others nothing, and `0755` otherwise. An existing directory keeps
