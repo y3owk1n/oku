@@ -315,8 +315,12 @@ func restrictSockets(network bool) error {
 		attr.Scoped = unix.LANDLOCK_SCOPE_ABSTRACT_UNIX_SOCKET
 	}
 
+	// Under a ruleset that handles any file access, Landlock refuses to move or
+	// link a file into another directory unless a rule allows it. The build then
+	// gets EXDEV, as rustc does when it moves each output out of a temporary
+	// directory.
 	if abi >= 9 {
-		attr.Access_fs = landlockResolveUnix
+		attr.Access_fs = landlockResolveUnix | unix.LANDLOCK_ACCESS_FS_REFER
 	}
 
 	if attr == (unix.LandlockRulesetAttr{}) {
@@ -332,8 +336,12 @@ func restrictSockets(network bool) error {
 	defer func() { _ = unix.Close(int(fd)) }()
 
 	if attr.Access_fs != 0 {
+		if err := allow(int(fd), "/", unix.LANDLOCK_ACCESS_FS_REFER); err != nil {
+			return err
+		}
+
 		for _, dir := range resolverSockets {
-			if err := allowSockets(int(fd), dir); err != nil {
+			if err := allow(int(fd), dir, landlockResolveUnix); err != nil {
 				return err
 			}
 		}
@@ -350,22 +358,21 @@ func restrictSockets(network bool) error {
 	return nil
 }
 
-// allowSockets lets the build connect to the sockets under dir. A dir that
-// does not exist needs no rule.
-func allowSockets(ruleset int, dir string) error {
+// allow grants access under dir. A dir that does not exist needs no rule.
+func allow(ruleset int, dir string, access uint64) error {
 	fd, err := unix.Open(dir, unix.O_PATH|unix.O_DIRECTORY|unix.O_CLOEXEC, 0)
 	if err != nil {
 		return nil //nolint:nilerr
 	}
 	defer func() { _ = unix.Close(fd) }()
 
-	rule := unix.LandlockPathBeneathAttr{Allowed_access: landlockResolveUnix, Parent_fd: int32(fd)}
+	rule := unix.LandlockPathBeneathAttr{Allowed_access: access, Parent_fd: int32(fd)}
 
 	if _, _, errno := unix.Syscall6(
 		unix.SYS_LANDLOCK_ADD_RULE, uintptr(ruleset), unix.LANDLOCK_RULE_PATH_BENEATH,
 		uintptr(unsafe.Pointer(&rule)), 0, 0, 0,
 	); errno != 0 {
-		return fmt.Errorf("allow the sockets under %s: %w", dir, errno)
+		return fmt.Errorf("allow access under %s: %w", dir, errno)
 	}
 
 	return nil

@@ -159,6 +159,18 @@ func TestB405InterruptStopsTheBuildWithItsChildren(t *testing.T) {
 	}
 }
 
+func TestB589BuildCommandMovesFilesBetweenDirectories(t *testing.T) {
+	out, err := run(t.TempDir(), `set -e
+mkdir -p a/sub b
+echo hi > a/f
+mv a/f b/f
+mv a/sub b/sub
+ln b/f a/link`)
+	if err != nil {
+		t.Fatalf("a build command could not move a file to another directory: %v\n%s", err, out)
+	}
+}
+
 func exists(path string) bool {
 	_, err := os.Stat(path)
 
