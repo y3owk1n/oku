@@ -1522,6 +1522,12 @@ order step in `prd/product.md`.
   ref that oku checks more weakly than the lock recorded, and name the
   platform and both checks. `--accept-weaker-check` takes it. A checksum file
   and a published digest rank the same.
+- B590 [10] When only its source publishes the digest of a build's source
+  archive, the lock records `published` for that archive on every platform it
+  pins, never `manifest`.
+- B591 [10] When several platforms of the lock pin the same file, `update` and
+  `add` compare the new download against the weakest check any of them
+  records.
 - B498 [10] `add --dry-run` shows the check, with `verified` in `--json`, and
   `info` shows the check the lock recorded for the machine.
 - B499 [10] With `[lock]` `unverified = "refuse"`, `add`, `update`, `sync`,

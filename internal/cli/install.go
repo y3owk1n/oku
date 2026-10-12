@@ -859,22 +859,15 @@ func (e env) buildHere(
 		return store.Realized{}, lock.Platform{}, nil, err
 	}
 
-	// crates.io and GitHub publish the digest of each version's source, which
-	// the manifest cannot state for every version.
-	if src := &m.Build.Source; src.URL != "" && src.SHA256 == "" && src.SHA256URL == "" {
-		vars := map[string]string{"version": m.Version.Value, "tag": m.Tag}
-		if at, err := manifest.Expand(src.URL, vars); err == nil {
-			src.SHA256 = h.release.Digests[at]
-		}
-	}
-
 	// A failed build names what the host lacks.
 	missing, err := hostSystem(opts).Check(hostHere(m.Host))
 	if err != nil {
 		return store.Realized{}, lock.Platform{}, nil, err
 	}
 
-	realized, err := e.store().Build(ctx, m, host, store.BuildOptions{
+	built := publishedSource(m, h.release, host)
+
+	realized, err := e.store().Build(ctx, built, host, store.BuildOptions{
 		Deps: deps.prefixes, Log: req.log, PinnedVendor: h.pinnedVendor, Progress: req.progress,
 		NPMRegistry: opts.NPMRegistry, PyPIIndex: opts.PyPIIndex, GoProxy: opts.GoProxy,
 		PinnedSource: h.pinnedSource, Rebuild: req.rebuild,
@@ -918,7 +911,7 @@ func (e env) buildHere(
 
 	// A build from before oku recorded the source archive has no pin for it.
 	if entry.SHA256 == "" {
-		pin, err := e.store().PinBuild(ctx, m, host, store.BuildPin{})
+		pin, err := e.store().PinBuild(ctx, built, host, store.BuildPin{})
 		if err != nil {
 			return store.Realized{}, lock.Platform{}, nil, fmt.Errorf("%s: %w", m.Package.Name, err)
 		}
@@ -1556,7 +1549,7 @@ func pinFor(
 	case fromSource && !m.BuildsOn(p):
 		return lock.Platform{}, false, cannotBuild(m, p)
 	case (fromSource || !ok) && m.BuildsOn(p):
-		pin, err := s.PinBuild(ctx, m, p, store.BuildPin{SourceURL: at.URL, SHA256: at.SHA256})
+		pin, err := s.PinBuild(ctx, publishedSource(m, release, p), p, store.BuildPin{SourceURL: at.URL, SHA256: at.SHA256})
 		if err != nil {
 			return lock.Platform{}, false, fmt.Errorf("%s for %s: %w", m.Package.Name, p, err)
 		}
