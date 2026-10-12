@@ -10,6 +10,8 @@ import (
 	"strings"
 	"sync"
 	"testing"
+
+	"github.com/y3owk1n/oku/internal/platform"
 )
 
 // digestReleases fakes GitHub for owner/tool. Each tag of releases serves the
@@ -268,5 +270,81 @@ func TestB500WarnAsksOncePerVersionAndAllowTrusts(t *testing.T) {
 
 	if !strings.Contains(out, "trusted this download") {
 		t.Fatalf("want the default to trust the download and say so:\n%s", out)
+	}
+}
+
+// builtReleases is digestReleases for a manifest that builds from the release's
+// file, with oku.lock pinning another platform too.
+func builtReleases(t *testing.T, m *machine, releases map[string]bool) (string, func(map[string]bool)) {
+	t.Helper()
+
+	path, publish := digestReleases(t, m, releases)
+
+	data, err := os.ReadFile(path)
+	must(t, err)
+
+	built := strings.NewReplacer(
+		"[[artifact]]\nurl = ", "[build]\nsource = { url = ",
+		"tool.tar.gz\"\nbin = [\"tool\"]\n", "tool.tar.gz\" }\n[[build.step]]\ninstall = { bin = [\"tool\"] }\n",
+	).Replace(string(data))
+	must(t, os.WriteFile(path, []byte(built), 0o644))
+
+	m.writeOwnList(t, fmt.Sprintf("[lock]\nplatforms = [%q]\n\n[packages]\n", otherPlatform()))
+
+	return path, publish
+}
+
+func TestB590TheSourceOfABuildIsCheckedAgainstItsPublishedDigestOnEveryPlatform(t *testing.T) {
+	m := newMachine(t)
+	tool, _ := builtReleases(t, &m, map[string]bool{"v1.0.0": true})
+
+	_, err := m.run(t, "", "add", "--yes", tool)
+	must(t, err)
+
+	text, err := os.ReadFile(filepath.Join(m.config, "oku.lock"))
+	must(t, err)
+
+	if strings.Count(string(text), "verified = 'published'") != 2 || strings.Contains(string(text), "'manifest'") {
+		t.Fatalf("want both platforms checked against the digest GitHub reports, and none against the manifest:\n%s", text)
+	}
+}
+
+func TestB591AnotherPlatformThatPinsTheSameFileSetsTheCheckToCompare(t *testing.T) {
+	m := newMachine(t)
+	tool, publish := builtReleases(t, &m, map[string]bool{"v1.0.0": true})
+	lockPath := filepath.Join(m.config, "oku.lock")
+
+	_, err := m.run(t, "", "add", "--yes", tool)
+	must(t, err)
+
+	// An older oku labelled the source of a build this way, on the host only.
+	text, err := os.ReadFile(lockPath)
+	must(t, err)
+
+	at := strings.Index(string(text), "platform."+platform.Host().String()+"]")
+	mislabelled := string(text[:at]) +
+		strings.Replace(string(text[at:]), "verified = 'published'", "verified = 'manifest'", 1)
+	must(t, os.WriteFile(lockPath, []byte(mislabelled), 0o644))
+
+	publish(map[string]bool{"v1.0.0": true, "v1.1.0": true})
+
+	_, err = m.run(t, "", "update", "--yes")
+	must(t, err)
+
+	text, err = os.ReadFile(lockPath)
+	must(t, err)
+
+	if !strings.Contains(string(text), "version = '1.1.0'") || strings.Contains(string(text), "'manifest'") {
+		t.Fatalf("want the update taken and checked against the digest GitHub reports:\n%s", text)
+	}
+
+	// With no platform that pins the file more weakly, update compares against
+	// the label.
+	must(t, os.WriteFile(lockPath, []byte(strings.ReplaceAll(string(text), "'published'", "'manifest'")), 0o644))
+
+	publish(map[string]bool{"v1.0.0": true, "v1.1.0": true, "v1.2.0": true})
+
+	if _, err := m.run(t, "", "update", "--yes"); err == nil || !strings.Contains(err.Error(), "--accept-weaker-check") {
+		t.Fatalf("want update stopped for a weaker check, got %v", err)
 	}
 }

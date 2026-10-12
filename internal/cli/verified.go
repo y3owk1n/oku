@@ -98,6 +98,33 @@ func sourceVerified(
 	return pinVerified(verifiedBy("", src.SHA256, src.SHA256URL, release.Digests[url]), pinned, at)
 }
 
+// publishedSource returns a copy of m whose build source states the digest that
+// release publishes for it on p, when m states none. crates.io and GitHub
+// publish the digest of each version's source, which the manifest cannot state
+// for every version. oku.lock records the check from m itself.
+func publishedSource(m *manifest.Manifest, release resolve.Release, p platform.Platform) *manifest.Manifest {
+	src := m.Build.Source
+	if src.URL == "" || src.SHA256 != "" || src.SHA256URL != "" {
+		return m
+	}
+
+	// The same variables the build expands in its source.
+	url, err := manifest.Expand(src.URL, map[string]string{
+		"version": m.Version.Value, "tag": m.Tag, "os": p.OS, "arch": p.Arch, "libc": p.Libc,
+	})
+	if err != nil || release.Digests[url] == "" {
+		return m
+	}
+
+	build := *m.Build
+	build.Source.SHA256 = release.Digests[url]
+
+	published := *m
+	published.Build = &build
+
+	return &published
+}
+
 // verifiedText says in words what oku checked a download against.
 func verifiedText(verified string) string {
 	switch verified {
@@ -125,7 +152,7 @@ func verifiedText(verified string) string {
 // oku does not compare a package whose ref changed, since the user chose the
 // new source.
 func (req request) checkVerified(p platform.Platform, now string) error {
-	was := req.previous.Platforms[p.String()].Verified
+	was := req.lockedCheck(p)
 	if req.acceptWeaker || req.previous.Ref != req.ref.String() || !lock.Weaker(now, was) {
 		return nil
 	}
@@ -140,6 +167,28 @@ func (req request) checkVerified(p platform.Platform, now string) error {
 			"if the developer announced this change, run the command again with --accept-weaker-check",
 		p, verifiedText(was), how,
 	)
+}
+
+// lockedCheck returns the check that oku.lock recorded for the download of p.
+// When another platform pins the same file with a weaker check, that check
+// counts, since one file has one digest. An older oku labelled the source of a
+// build on the other platforms as checked against the manifest. Only the
+// source had published its digest.
+func (req request) lockedCheck(p platform.Platform) string {
+	at := req.previous.Platforms[p.String()]
+	if at.SHA256 == "" {
+		return at.Verified
+	}
+
+	was := at.Verified
+
+	for _, other := range req.previous.Platforms {
+		if other.URL == at.URL && other.SHA256 == at.SHA256 && lock.Weaker(other.Verified, was) {
+			was = other.Verified
+		}
+	}
+
+	return was
 }
 
 // signedAfter returns the time of the minisign signature that oku.lock holds

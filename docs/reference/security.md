@@ -203,6 +203,8 @@ a release would remove them too, so check before you pass
   source publishes, which rank the same, then nothing.
 - oku compares the check for each platform it pins, your own and those of
   `[lock]`.
+- When several platforms of `oku.lock` pin the same file, oku compares against
+  the weakest check any of them records, since one file has one digest.
 - `oku sync` installs the pins of `oku.lock`, so it never stops for this.
 - oku does not compare a package whose ref you changed, since you chose the
   new source.
