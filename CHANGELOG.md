@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.17.1](https://github.com/y3owk1n/oku/compare/v0.17.0...v0.17.1) (2026-10-12)
+
+
+### Bug Fixes
+
+* **lock:** record a published source digest as published on every platform ([#485](https://github.com/y3owk1n/oku/issues/485)) ([40db18d](https://github.com/y3owk1n/oku/commit/40db18dbb5af1699f7beafb2c0d5ecbb9d134bc9))
+* **sandbox:** let a build move files between directories on Linux 7.1+ ([#483](https://github.com/y3owk1n/oku/issues/483)) ([f1038fe](https://github.com/y3owk1n/oku/commit/f1038fe40e643d0065f7acc6652ca3f62114e4f1))
+
 ## [0.17.0](https://github.com/y3owk1n/oku/compare/v0.16.0...v0.17.0) (2026-10-11)
 
 
