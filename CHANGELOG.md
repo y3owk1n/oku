@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.18.0](https://github.com/y3owk1n/oku/compare/v0.17.1...v0.18.0) (2026-10-14)
+
+
+### Features
+
+* **service:** start an interactive Linux service with the graphical session ([#490](https://github.com/y3owk1n/oku/issues/490)) ([a9871e8](https://github.com/y3owk1n/oku/commit/a9871e81778f4d5ba40c4eb98ca879fab5c4ce69))
+
+
+### Bug Fixes
+
+* **lock:** label the check of every lock platform on update ([#494](https://github.com/y3owk1n/oku/issues/494)) ([7cd0791](https://github.com/y3owk1n/oku/commit/7cd079143c6cd9d467b8b1b41824aa21655e6415))
+* **lock:** pin build deps for the platforms that build, from any host ([#488](https://github.com/y3owk1n/oku/issues/488)) ([7077652](https://github.com/y3owk1n/oku/commit/70776522ad1c81c6aac1fdf403068f921b86e1e0))
+
 ## [0.17.1](https://github.com/y3owk1n/oku/compare/v0.17.0...v0.17.1) (2026-10-12)
 
 
