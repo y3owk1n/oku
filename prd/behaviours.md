@@ -287,6 +287,10 @@ order step in `prd/product.md`.
   --locked` accepts the lock. An entry that neither the machine nor
   `[lock]` matches keeps what another machine pinned for it. Two entries of
   one dep that both match a platform are refused.
+- B592 [5] oku pins the build deps of a package for the platforms that build
+  it, and only those, whichever machine syncs. A machine that downloads
+  the package still pins them for a `[lock]` platform that builds it, so
+  every machine writes the same lock and `sync --locked` accepts it.
 - B334 [5] A dep inferred from a repo without a manifest, with a version
   range, is inferred from the release that the range picks, so an older
   release that names its files another way installs, and a release with
