@@ -70,6 +70,10 @@ func (e env) definition(pkg profile.Package, svc manifest.Service) (service.Defi
 		if pkg.RunAs == "root" {
 			d.User, d.LogFile = "", filepath.Join(service.SystemLogDir(), svc.Name+".log")
 		}
+
+		if err := service.CheckSystem(d); err != nil {
+			return d, err
+		}
 	}
 
 	if svc.Schedule != nil {
@@ -352,6 +356,7 @@ type serviceRow struct {
 	Installed bool   `json:"installed"`
 	Enabled   bool   `json:"enabled"`
 	Running   bool   `json:"running"`
+	Waiting   bool   `json:"waiting,omitempty"`
 	System    bool   `json:"system"`
 	Detail    string `json:"detail,omitempty"`
 	// Schedule says when a job runs, such as "every 15m".
@@ -361,7 +366,7 @@ type serviceRow struct {
 func newServiceRow(item expose.Item, d service.Definition, status service.Status) serviceRow {
 	row := serviceRow{
 		item.Name, item.Package, status.Installed, status.Enabled, status.Running,
-		item.System, status.Detail, "",
+		status.Waiting, item.System, status.Detail, "",
 	}
 
 	if d.Schedule != nil {
@@ -397,6 +402,8 @@ func describeStatus(status service.Status, d service.Definition, system bool) st
 		parts = append(parts, "runs "+d.Schedule.String())
 	case status.Enabled && system:
 		parts = append(parts, "starts at boot")
+	case status.Waiting:
+		parts = append(parts, "starts with the graphical session")
 	case status.Enabled:
 		parts = append(parts, "starts at login")
 	}

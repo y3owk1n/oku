@@ -28,3 +28,25 @@ func TestB582AInteractiveServiceReachesTheManager(t *testing.T) {
 		t.Fatalf("lint of an interactive job should fail: %v\n%s", err, out)
 	}
 }
+
+func TestB593AnInteractiveServiceSaysItWaitsForTheGraphicalSession(t *testing.T) {
+	m := newMachine(t)
+	m.services.noSession = true
+
+	ref := m.manifest(t, "pointer", map[string]string{"pointer": script},
+		"bin = [\"pointer\"]\n[[service]]\nname = \"pointer\"\ncommand = \"bin/pointer\"\ninteractive = true\n")
+
+	out, err := m.run(t, "", "add", ref, "--service")
+	if err != nil {
+		t.Fatalf("add: %v\n%s", err, out)
+	}
+
+	if !strings.Contains(out, "service pointer starts with the graphical session, which has not started") {
+		t.Fatalf("add did not say that pointer waits for the graphical session:\n%s", out)
+	}
+
+	if out, err := m.run(t, "", "service", "status", "pointer"); err != nil ||
+		!strings.Contains(out, "pointer: stopped, starts with the graphical session") {
+		t.Fatalf("status should say pointer starts with the graphical session: %v\n%s", err, out)
+	}
+}

@@ -2146,7 +2146,8 @@ for the session when started, because launchd runs a job only by loading it.
 
 `[[service]]` takes `interactive = true`, which writes `ProcessType`
 `Interactive` into the launchd plist and `<Priority>4</Priority>`, normal, into
-the task. It writes nothing for systemd and no `Nice` anywhere. A job with a
+the task. For systemd it writes only the session binding of D132, and it
+writes no `Nice` anywhere. A job with a
 `schedule` refuses it. Why: launchd throttles the CPU and I/O of a job that
 names no `ProcessType`, which made neru's overlay stutter as an oku service.
 With `ProcessType` alone the stutter was gone, and launchd.plist(5) prefers
@@ -2157,3 +2158,19 @@ them, and a user systemd unit cannot set one. systemd does not throttle a
 service against an app, so Linux has nothing to undo. A boolean covers the one
 case seen, and can become an enum if `Background` or `Adaptive` ever has a
 user. A job refuses it because it runs with no one waiting on it.
+
+## D132. On Linux `interactive` also waits for the graphical session
+
+An `interactive` user unit on Linux binds to `graphical-session.target` with
+`PartOf`, `After` and `WantedBy`, as systemd.special(7) describes for session
+services, and without the `Requisite` that #487 proposed. The target has
+`StopWhenUnneeded=yes`, and `Requisite` counts as a need. With a fake session
+unit on systemd 257, the target and the service stayed up after the session
+ended with `Requisite`, and both stopped without it. `Requisite` only guards
+a start with no session, and `oku service start` refuses that itself. Why: a
+program that draws UI or handles input needs `WAYLAND_DISPLAY` or `DISPLAY`,
+which exist only once the compositor starts the session. A unit under
+`default.target` started before them and failed (#487). Reusing
+`interactive` keeps one key for one kind of program, where a separate
+`session` key would make such a manifest set both. oku refuses it for a
+system service, because the system manager has no graphical session.

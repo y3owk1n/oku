@@ -1514,7 +1514,7 @@ restart = "on-failure"
 | `args` | no | Arguments. They expand `{{prefix}}`, `{{version}}`, `{{home}}`, `{{config}}` and `{{data}}`, and `{{appdata}}` and `{{localappdata}}` on Windows, so a service can name its config file, as in `["--config", "{{config}}/tool/rc"]`. |
 | `env` | no | Variables for the service. Values expand the same variables as `args`. |
 | `restart` | no | `never`, `on-failure` or `always`. Default `never`. |
-| `interactive` | no | `true` for a program that draws UI or handles input, such as a pointer or keyboard tool. The OS then schedules it like an app instead of throttling it. On macOS the plist gets `ProcessType` `Interactive`, and on Windows the task runs at normal priority. systemd does not throttle a service, so Linux is unchanged. A job with a `schedule` cannot set it. Default `false`. |
+| `interactive` | no | `true` for a program that draws UI or handles input, such as a pointer or keyboard tool. The OS then schedules it like an app instead of throttling it. On macOS the plist gets `ProcessType` `Interactive`, and on Windows the task runs at normal priority. On Linux the user unit starts with your graphical session and stops when it ends, so the program finds `WAYLAND_DISPLAY` or `DISPLAY`. A Linux service in system scope cannot set it. A job with a `schedule` cannot set it. Default `false`. |
 | `schedule` | no | Makes the service a job that runs at set times and ends on its own, see [Scheduled jobs](#scheduled-jobs). |
 | `when` | no | Limits the service to matching machines, see [Match and when](#match-and-when). oku installs no service on a machine that `when` leaves out. |
 

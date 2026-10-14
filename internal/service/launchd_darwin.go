@@ -39,6 +39,9 @@ func New(home, dataDir string) Manager {
 // SystemLogDir is where a system service's output goes.
 func SystemLogDir() string { return "/Library/Logs/oku" }
 
+// CheckSystem accepts every service in system scope.
+func CheckSystem(Definition) error { return nil }
+
 // NewSystem returns the manager for services that run as root for the whole
 // machine. Everything but Status and Logs needs root.
 func NewSystem() Manager {

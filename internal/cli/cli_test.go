@@ -66,6 +66,9 @@ type fakeServices struct {
 	// exitAfterStart names the services that stop again on the status call
 	// after Start, like a program that finds a stale socket.
 	exitAfterStart map[string]bool
+	// noSession is a login without a graphical session, where an interactive
+	// service waits for one, as on Linux.
+	noSession bool
 }
 
 func (f *fakeServices) Unavailable() string { return f.unavailable }
@@ -85,7 +88,9 @@ func (f *fakeServices) Install(_ context.Context, d service.Definition, enabled 
 	}
 
 	// A job waits for its schedule.
-	f.state[d.Name] = &fakeService{def: d, enabled: enabled, running: enabled && d.Schedule == nil}
+	f.state[d.Name] = &fakeService{
+		def: d, enabled: enabled, running: enabled && d.Schedule == nil && !f.waits(d),
+	}
 
 	return nil
 }
@@ -114,13 +119,18 @@ func (f *fakeServices) Status(_ context.Context, d service.Definition) (service.
 		return service.Status{}, nil
 	}
 
-	status := service.Status{Installed: true, Enabled: s.enabled, Running: s.running}
+	status := service.Status{
+		Installed: true, Enabled: s.enabled, Running: s.running,
+		Waiting: s.enabled && !s.running && f.waits(d),
+	}
 	if f.exitAfterStart[d.Name] {
 		s.running = false
 	}
 
 	return status, nil
 }
+
+func (f *fakeServices) waits(d service.Definition) bool { return f.noSession && d.Interactive }
 
 func (f *fakeServices) Logs(context.Context, service.Definition, int) (string, error) {
 	return "listening on 8080", nil

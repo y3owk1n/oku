@@ -29,6 +29,9 @@ func systemDir() string { return filepath.Join(dirs.ProgramData(), "oku") }
 // SystemLogDir is where a system service's output goes.
 func SystemLogDir() string { return filepath.Join(systemDir(), "logs") }
 
+// CheckSystem accepts every service in system scope.
+func CheckSystem(Definition) error { return nil }
+
 // taskScheduler runs a service as a scheduled task of the current user. An
 // enabled service has a logon trigger. One that is only installed has no
 // trigger, so it runs when "oku service start" asks for it.
