@@ -960,9 +960,9 @@ Oku add https://github.com/jqlang/jq/releases/download/jq-1.8.1/jq-windows-amd64
 $jq = & "$bin\jq.exe" --version
 Check 'a URL of a single .exe installs as a program' { $jq -match '^jq-1\.8\.1' }
 
-$page = (& $oku add https://github.com/BurntSushi/ripgrep 2>&1) -join "`n"
-Check 'a URL of a repo page is refused and names the github: ref' {
-    ($LASTEXITCODE -ne 0) -and ($page -match 'web page') -and ($page -match 'github:BurntSushi/ripgrep')
+$page = (& $oku add https://gitea.com/gitea/tea 2>&1) -join "`n"
+Check 'a URL of a repo page is refused and names the gitea: ref' {
+    ($LASTEXITCODE -ne 0) -and ($page -match 'web page') -and ($page -match 'gitea:gitea.com/gitea/tea')
 }
 
 # A bin table: a program that runs a dep with arguments in front of the user's.
