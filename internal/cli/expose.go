@@ -234,15 +234,39 @@ func (e env) placeExposed(cmd *cobra.Command, opts Options, plan exposePlan) err
 	}
 
 	tellSettings(opts, before, ledger.Items)
-	tellExposed(notice, before, ledger.Items, plan.rewritten)
+	tellExposed(notice, before, ledger.Items, plan.rewritten, e.waiting(cmd.Context(), opts, plan, before))
 
 	return nil
+}
+
+// waiting returns the names of the services that this sync enabled and that
+// wait for the graphical session to start them.
+func (e env) waiting(ctx context.Context, opts Options, plan exposePlan, before []expose.Item) []string {
+	manager, err := e.services(opts)
+	if err != nil {
+		return nil
+	}
+
+	var names []string
+
+	for _, item := range plan.wanted {
+		if item.Kind != "service" || !item.Enabled || item.System || slices.Contains(before, item) ||
+			!plan.defs[item.Name].Interactive {
+			continue
+		}
+
+		if status, err := manager.Status(ctx, plan.defs[item.Name]); err == nil && status.Waiting {
+			names = append(names, item.Name)
+		}
+	}
+
+	return names
 }
 
 // tellExposed prints one line for each item that the change placed, changed
 // or removed. An item of the same kind and target on both sides with another
 // source, such as a setting with a new value, is a change.
-func tellExposed(notice io.Writer, before, after []expose.Item, rewritten []string) {
+func tellExposed(notice io.Writer, before, after []expose.Item, rewritten, waiting []string) {
 	s := ui.For(notice)
 	done := func(format string, args ...any) {
 		fmt.Fprintln(notice, s.Done(fmt.Sprintf(format, args...)))
@@ -309,6 +333,8 @@ func tellExposed(notice io.Writer, before, after []expose.Item, rewritten []stri
 			done("service %s is running as root and starts at boot", item.Name)
 		case item.Enabled && item.System:
 			done("service %s is running as %s and starts at boot", item.Name, item.User)
+		case item.Enabled && slices.Contains(waiting, item.Name):
+			done("service %s starts with the graphical session, which has not started", item.Name)
 		case item.Enabled:
 			done("service %s is running and starts at login", item.Name)
 		default:

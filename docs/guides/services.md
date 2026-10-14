@@ -124,6 +124,13 @@ either. A package whose program draws UI or handles input sets
 [`interactive = true`](../reference/manifest.md#service), and oku asks the OS
 to schedule it like an app.
 
+On Linux such a program also needs the display of your desktop session. With
+`interactive = true` its unit waits for `graphical-session.target`. It starts
+when your desktop session starts and stops when the session ends. Over SSH,
+or before you log in to the desktop, `oku sync` enables it and says
+`service <name> starts with the graphical session, which has not started`.
+`oku service status` says `starts with the graphical session`.
+
 A service manager starts a program with a bare `PATH`. On macOS and Linux oku
 puts your global profile's `bin` in front of it, so a service can call your
 other installed programs by name.
@@ -141,6 +148,11 @@ See [Undo a change](undo-and-clean-up.md).
 - On Linux a user service runs only while you are logged in, unless lingering
   is on for your account (`loginctl enable-linger`). That is a systemd setting,
   and oku does not change it.
+- An interactive Linux service starts only in a session that reaches
+  `graphical-session.target`. GNOME and KDE Plasma do. A compositor that you
+  start yourself may not, and then the service never starts. A system service
+  cannot be interactive on Linux, because the system has no graphical
+  session.
 - A Linux machine that systemd does not run, such as a container or a distro
   with another init, has no service manager oku knows. oku installs the
   packages, writes no unit, and prints

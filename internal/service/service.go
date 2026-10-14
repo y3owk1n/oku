@@ -81,6 +81,9 @@ type Status struct {
 	// Enabled reports that it starts at login.
 	Enabled bool
 	Running bool
+	// Waiting reports an enabled service that starts with the graphical
+	// session, which has not started.
+	Waiting bool
 	// Detail is the manager's own one-line description, such as a pid.
 	Detail string
 }

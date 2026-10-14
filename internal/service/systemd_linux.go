@@ -34,6 +34,20 @@ func New(home, _ string) Manager {
 // SystemLogDir is empty because the journal holds a system service's output.
 func SystemLogDir() string { return "" }
 
+// CheckSystem refuses an interactive service in system scope, since the system
+// manager has no graphical session to wait for.
+func CheckSystem(d Definition) error {
+	if d.Interactive {
+		return fmt.Errorf(
+			"service %s is interactive, so it runs in a graphical session, and a system service has none\n"+
+				"leave system off for its package in oku.toml",
+			d.Name,
+		)
+	}
+
+	return nil
+}
+
 // NewSystem returns the manager for services that run as root for the whole
 // machine. Everything but Status and Logs needs root.
 func NewSystem() Manager {
@@ -54,6 +68,9 @@ func (s *systemd) Unavailable() string {
 
 	return ""
 }
+
+// graphical is the target that a desktop session reaches once its display is up.
+const graphical = "graphical-session.target"
 
 func (s *systemd) unit(d Definition) string { return "oku-" + d.Name + ".service" }
 
@@ -95,7 +112,24 @@ func (s *systemd) Install(ctx context.Context, d Definition, enabled bool) error
 		return s.ctl(ctx, "disable", "--now", s.enabler(d))
 	}
 
-	return s.ctl(ctx, "enable", "--now", s.enabler(d))
+	// reenable drops the links of an older [Install], such as default.target's
+	// for a service that now waits for the graphical session.
+	if err := s.ctl(ctx, "reenable", s.enabler(d)); err != nil {
+		return err
+	}
+
+	// The graphical session starts its services when it starts.
+	if s.waits(ctx, d) {
+		return nil
+	}
+
+	return s.ctl(ctx, "start", s.enabler(d))
+}
+
+// waits reports whether d is an interactive service and the graphical session
+// of this login has not started.
+func (s *systemd) waits(ctx context.Context, d Definition) bool {
+	return d.Interactive && exec.CommandContext(ctx, "systemctl", s.scope, "is-active", "--quiet", graphical).Run() != nil
 }
 
 // Remove takes away the service and, for a job, its timer. Remove gets only
@@ -120,6 +154,10 @@ func (s *systemd) Remove(ctx context.Context, d Definition) error {
 // Start runs the program. A job runs once now, and oku does not wait for it to
 // end.
 func (s *systemd) Start(ctx context.Context, d Definition) error {
+	if s.waits(ctx, d) {
+		return fmt.Errorf("service %s waits for the graphical session, which has not started", d.Name)
+	}
+
 	if d.Schedule != nil {
 		return s.ctl(ctx, "start", "--no-block", s.unit(d))
 	}
@@ -146,6 +184,8 @@ func (s *systemd) Status(ctx context.Context, d Definition) (Status, error) {
 		status.Running = true
 		status.Detail = "pid " + strconv.Itoa(n)
 	}
+
+	status.Waiting = status.Enabled && !status.Running && s.waits(ctx, d)
 
 	return status, nil
 }
@@ -188,7 +228,16 @@ func (s *systemd) ctl(ctx context.Context, args ...string) error {
 func (s *systemd) unitFile(d Definition) []byte {
 	var b strings.Builder
 
-	fmt.Fprintf(&b, "[Unit]\nDescription=%s, installed by oku\n\n[Service]\n", d.Name)
+	fmt.Fprintf(&b, "[Unit]\nDescription=%s, installed by oku\n", d.Name)
+
+	// An interactive service needs the display of the graphical session. It
+	// starts when the session starts, and stops when it ends. With Requisite the
+	// session's target would count as needed and stay up after the session ends.
+	if d.Interactive {
+		fmt.Fprintf(&b, "PartOf=%s\nAfter=%s\n", graphical, graphical)
+	}
+
+	b.WriteString("\n[Service]\n")
 
 	// systemd expands $NAME in ExecStart, and $$ is a plain dollar there.
 	command := []string{strings.ReplaceAll(quoteUnit(d.Program), "$", "$$")}
@@ -237,8 +286,12 @@ func (s *systemd) unitFile(d Definition) []byte {
 	}
 
 	target := "default.target"
-	if s.scope == "--system" {
+
+	switch {
+	case s.scope == "--system":
 		target = "multi-user.target"
+	case d.Interactive:
+		target = graphical
 	}
 
 	fmt.Fprintf(&b, "\n[Install]\nWantedBy=%s\n", target)

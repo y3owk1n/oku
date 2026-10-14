@@ -8,5 +8,8 @@ func New(_, _ string) Manager { return unsupported{} }
 // SystemLogDir is unused on this OS.
 func SystemLogDir() string { return "" }
 
+// CheckSystem accepts every service in system scope.
+func CheckSystem(Definition) error { return nil }
+
 // NewSystem returns the manager for services that run for the whole machine.
 func NewSystem() Manager { return unsupported{} }
