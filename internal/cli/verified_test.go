@@ -348,3 +348,68 @@ func TestB591AnotherPlatformThatPinsTheSameFileSetsTheCheckToCompare(t *testing.
 		t.Fatalf("want update stopped for a weaker check, got %v", err)
 	}
 }
+
+func TestB594UpdateLabelsTheCheckOfEveryLockPlatform(t *testing.T) {
+	other := otherPlatform().String()
+
+	// relabel rewrites the label of other in the lock, runs update twice, and
+	// returns the lock after each.
+	relabel := func(t *testing.T, m machine, from, to string) (string, string) {
+		t.Helper()
+
+		lockPath := filepath.Join(m.config, "oku.lock")
+		text, err := os.ReadFile(lockPath)
+		must(t, err)
+
+		at := strings.Index(string(text), "platform."+other+"]")
+		must(t, os.WriteFile(lockPath, []byte(string(text[:at])+strings.Replace(string(text[at:]), from, to, 1)), 0o644))
+
+		var after [2]string
+
+		for i := range after {
+			_, err := m.run(t, "", "update", "--yes")
+			must(t, err)
+
+			text, err := os.ReadFile(lockPath)
+			must(t, err)
+			after[i] = string(text)
+		}
+
+		return after[0], after[1]
+	}
+
+	// The source of a build that an older oku labelled as checked against the
+	// manifest on another platform.
+	built := newMachine(t)
+	tool, _ := builtReleases(t, &built, map[string]bool{"v1.0.0": true})
+
+	_, err := built.run(t, "", "add", "--yes", tool)
+	must(t, err)
+
+	first, second := relabel(t, built, "verified = 'published'", "verified = 'manifest'")
+	if strings.Count(first, "verified = 'published'") != 2 || strings.Contains(first, "'manifest'") || second != first {
+		t.Fatalf("want update to label both platforms published, and again the same:\n%s\nthen\n%s", first, second)
+	}
+
+	// A download of another platform that an older oku pinned without a label.
+	m := newMachine(t)
+	archive, sum := m.archive(t, "tool", map[string]string{"tool": script})
+	sums := filepath.Join(m.fixtures, "sums.txt")
+	must(t, os.WriteFile(sums, []byte(sum+"  tool.tar.gz\n"), 0o644))
+
+	m.writeOwnList(t, fmt.Sprintf("[lock]\nplatforms = [%q]\n\n[packages]\n", other))
+
+	_, err = m.run(t, "", "add", m.rawManifest(t, "tool", fmt.Sprintf(
+		"[[artifact]]\nurl = \"file://%s\"\nsha256_url = \"file://%s\"\nbin = [\"tool\"]\n", archive, sums,
+	)))
+	must(t, err)
+
+	first, second = relabel(t, m, "verified = 'checksum-file'\n", "")
+	if strings.Count(first, "verified = 'checksum-file'") != 2 || second != first {
+		t.Fatalf("want update to label both platforms checksum-file, and again the same:\n%s\nthen\n%s", first, second)
+	}
+
+	if _, err := m.run(t, "", "sync", "--locked"); err != nil {
+		t.Fatalf("sync --locked after update: %v", err)
+	}
+}

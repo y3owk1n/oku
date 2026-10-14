@@ -1509,13 +1509,20 @@ func (e env) lockOthers(
 	for _, p := range req.platforms {
 		// An artifact that is pinned is complete. A build may still lack a pin that
 		// an older oku did not write, and pinFor adds only what is missing.
-		at, ok := platforms[p.String()]
-		if ok && at.Strategy != strategyBuild {
-			if !req.fromSource {
+		at, kept := platforms[p.String()]
+
+		// update labels the check of each kept entry again, as it does on this
+		// machine, so the label does not depend on which machine ran it. A
+		// download is pinned again only where something states its digest.
+		relabel := kept && req.acceptDigest && p != platform.Host()
+
+		if kept && at.Strategy != strategyBuild {
+			switch {
+			case req.fromSource:
+				at = lock.Platform{}
+			case !relabel || !statesDigest(m, release, p):
 				continue
 			}
-
-			at = lock.Platform{}
 		}
 
 		// Progress names the version of p, not the host's.
@@ -1527,7 +1534,8 @@ func (e env) lockOthers(
 		version := cmp.Or(m.Versions[p.String()], m.Version.Value)
 
 		entry, trusted, err := pinFor(
-			scoped, e.store().As(auth).SignedAfter(req.signedAfter(p, version)), m, release, p, host, at, req.fromSource,
+			scoped, e.store().As(auth).SignedAfter(req.signedAfter(p, version)), m, release, p, host, at,
+			req.fromSource, relabel,
 		)
 		if err != nil && (req.strictPlatforms || req.fromSource) {
 			return nil, err
@@ -1537,7 +1545,9 @@ func (e env) lockOthers(
 			continue
 		}
 
-		if err := req.checkVerified(p, entry.Verified); err != nil {
+		// A relabelled entry has the same manifest, version and file, so its new
+		// label weakens nothing.
+		if err := req.checkVerified(p, entry.Verified); err != nil && !relabel {
 			return nil, err
 		}
 
@@ -1569,7 +1579,8 @@ type hostBuild struct {
 // pinFor returns the lock entry of m for platform p, and whether oku trusted a
 // download for it. host is the install on this machine, and at is the entry
 // that oku.lock holds for p, whose pins stay. fromSource pins a build even
-// where an artifact fits.
+// where an artifact fits. relabel takes the check from what states the digest
+// now, not from at.
 func pinFor(
 	ctx context.Context,
 	s *store.Store,
@@ -1578,7 +1589,7 @@ func pinFor(
 	p platform.Platform,
 	host hostBuild,
 	at lock.Platform,
-	fromSource bool,
+	fromSource, relabel bool,
 ) (lock.Platform, bool, error) {
 	artifact, ok, err := m.Select(p)
 
@@ -1593,7 +1604,7 @@ func pinFor(
 			return lock.Platform{}, false, fmt.Errorf("%s for %s: %w", m.Package.Name, p, err)
 		}
 
-		pinned := at.SHA256 != "" && at.URL == pin.SourceURL
+		pinned := at.SHA256 != "" && at.URL == pin.SourceURL && !relabel
 		entry := lock.Platform{
 			Strategy: strategyBuild, Impure: pin.Impure, URL: pin.SourceURL, SHA256: pin.SHA256,
 			Verified: sourceVerified(m, release, p, pinned, at), VendorSHA256: at.VendorSHA256,
@@ -1641,6 +1652,14 @@ func pinFor(
 		Commands: artifact.Completions.Generate != "", Version: m.Versions[p.String()],
 		Tag: m.Tags[p.String()], SignedAt: pin.SignedAt,
 	}, pin.FirstUse, nil
+}
+
+// statesDigest reports whether something states the digest of the artifact of
+// m for p, so oku can check it again without a download.
+func statesDigest(m *manifest.Manifest, release resolve.Release, p platform.Platform) bool {
+	artifact, ok, err := m.Select(p)
+
+	return err == nil && ok && artifactVerified(m, artifact, release) != ""
 }
 
 // target returns the platform that an inferred manifest must fit. That is the

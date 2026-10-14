@@ -116,6 +116,12 @@ file. A build records how it checked its source archive. A
 build from git has no `verified`, since its commit pins the source.
 
 `oku sync` keeps the `verified` of a pin it reuses, so it writes the same lock.
+`oku update` writes `verified` again for every platform in the lock, from what
+states the digest now, so the label does not depend on which machine ran it.
+For a download it reads the digest from the manifest, the checksum file or the
+release, and downloads nothing. A download that nothing states a digest for
+keeps its label. The source of a build that nothing states a digest for gets
+`first-use`.
 A lock written before oku recorded it has none, and `oku update` adds it when
 it resolves the package again.
 
