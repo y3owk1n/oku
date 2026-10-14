@@ -137,6 +137,9 @@ from any machine.
   package with `from_source = true`, gets `strategy = 'build'`,
   the source archive with its `sha256`, and `impure` when a `run` step for
   that platform uses the network. oku builds nothing for it.
+- oku pins build deps for the platforms that build the package, and only
+  those. A machine that downloads the package still pins them for a platform
+  that builds it, so every machine writes the same lock.
 - oku pins a package whose `when` leaves out your machine, with its deps,
   for the platforms that `when` matches. Without `[lock]` the first machine
   that `when` matches pins it.
