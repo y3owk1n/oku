@@ -1532,6 +1532,12 @@ order step in `prd/product.md`.
 - B591 [10] When several platforms of the lock pin the same file, `update` and
   `add` compare the new download against the weakest check any of them
   records.
+- B594 [10] `update` writes the `verified` of every `[lock]` platform again
+  from what states the digest now, also where the version did not change.
+  The lock then does not depend on which machine ran it, and a second
+  `update` writes the same lock. It downloads nothing for it. A download that
+  nothing states a digest for keeps its label. Such a build source gets
+  `first-use`.
 - B498 [10] `add --dry-run` shows the check, with `verified` in `--json`, and
   `info` shows the check the lock recorded for the machine.
 - B499 [10] With `[lock]` `unverified = "refuse"`, `add`, `update`, `sync`,
