@@ -1434,9 +1434,16 @@ order step in `prd/product.md`.
   value outside its form fails `manifest lint` and the install.
 - B582 [8] A `[[service]]` with `interactive = true` gets the scheduling of an
   app. Its launchd plist has `ProcessType` `Interactive`, its Task Scheduler
-  task runs at normal priority, and its systemd unit is unchanged. Without it
+  task runs at normal priority, and its systemd unit waits for the graphical
+  session (B593). Without it
   the service keeps the manager's default. `interactive` with a `schedule`
   fails `manifest lint` and the install.
+- B593 [8] On Linux an `interactive` user service has a unit with `PartOf`
+  and `After` on `graphical-session.target`, no `Requisite`, and
+  `WantedBy=graphical-session.target` in place of `default.target`. Without a
+  graphical session `sync` enables it and starts nothing. `sync` and `service
+  status` then say that it starts with the graphical session. An
+  `interactive` service in system scope fails on Linux.
 - B74 [8] `oku service start|stop|restart|status|logs` behave the same on all
   three OSes.
   `start` of a name that no package ships says so, and says when no package
