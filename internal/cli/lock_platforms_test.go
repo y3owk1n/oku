@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -13,6 +14,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/y3owk1n/oku/internal/lock"
 	"github.com/y3owk1n/oku/internal/platform"
 )
 
@@ -749,5 +751,58 @@ install = { bin = ["user"] }
 
 	if got := m.output(t, "user"); got != "1.3.0" {
 		t.Fatalf("user was built with tool %q, want 1.3.0", got)
+	}
+}
+
+func TestB592BuildDepsArePinnedForThePlatformsThatBuild(t *testing.T) {
+	host, other := platform.Host(), otherPlatform()
+
+	for _, tc := range []struct{ name, artifactOS, buildOS string }{
+		{"the host downloads", host.OS, other.OS},
+		{"the host builds", other.OS, host.OS},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m := newMachine(t)
+			archive, sum := m.archive(t, "tool", map[string]string{"tool": script})
+			artifact := fmt.Sprintf("url = \"file://%s\"\nsha256 = %q\nbin = [\"tool\"]\n", archive, sum)
+
+			m.rawManifest(t, "kit", fmt.Sprintf(
+				"[[artifact]]\nmatch = { os = %q }\n%s[[artifact]]\nmatch = { os = %q }\n%s",
+				host.OS, artifact, other.OS, artifact,
+			))
+			tool := m.rawManifest(t, "tool", fmt.Sprintf(
+				"[[artifact]]\nmatch = { os = %q }\n%s"+
+					"[build]\nwhen = { os = %q }\nsource = { url = \"file://%s\" }\ndeps = [\"./kit.toml\"]\n"+
+					"[[build.step]]\ninstall = { bin = [\"tool\"] }\n",
+				tc.artifactOS, artifact, tc.buildOS, archive,
+			))
+
+			must(t, os.MkdirAll(m.config, 0o755))
+			must(t, os.WriteFile(filepath.Join(m.config, "oku.toml"), []byte(fmt.Sprintf(
+				"[lock]\nplatforms = [%q]\n\n[packages]\ntool = %q\n", other.String(), tool,
+			)), 0o644))
+
+			if out, err := m.run(t, "", "sync", "--yes"); err != nil {
+				t.Fatalf("sync: %v\n%s", err, out)
+			}
+
+			locked, err := lock.Read(filepath.Join(m.config, "oku.lock"))
+			must(t, err)
+
+			// oku pins the dep for the platform that builds, whichever one syncs.
+			builder := host
+			if tc.buildOS == other.OS {
+				builder = other
+			}
+
+			deps := locked.Packages[0].Deps
+			if len(deps) != 1 || !slices.Equal(slices.Collect(maps.Keys(deps[0].Platforms)), []string{builder.String()}) {
+				t.Fatalf("want kit pinned for %s alone, got %+v", builder, deps)
+			}
+
+			if out, err := m.run(t, "", "sync", "--locked"); err != nil {
+				t.Fatalf("sync --locked: %v\n%s", err, out)
+			}
+		})
 	}
 }

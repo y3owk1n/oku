@@ -639,14 +639,21 @@ func (e env) installHere(
 	// oku installs deps first. A build links against its build deps, and every dep
 	// stays in the closure so that gc keeps it. A dep whose when leaves out this
 	// machine is only pinned, so it counts for neither.
-	wanted, buildDeps := m.Runtime.Deps, 0
-	if build {
-		wanted = append(slices.Clone(m.Build.Deps), wanted...)
+	platforms := keptPlatforms(previous, m, r)
 
-		for _, dep := range m.Build.Deps {
-			if dep.When.Matches(host) {
-				buildDeps++
-			}
+	byHost := maps.Clone(platforms)
+	byHost[host.String()] = lock.Platform{}
+
+	if build {
+		byHost[host.String()] = lock.Platform{Strategy: strategyBuild}
+	}
+
+	forBuild := buildDepsOf(m, byHost, req.fromSource)
+
+	wanted, buildDeps := append(forBuild, m.Runtime.Deps...), 0
+	for _, dep := range forBuild {
+		if dep.When.Matches(host) {
+			buildDeps++
 		}
 	}
 
@@ -755,7 +762,6 @@ func (e env) installHere(
 		env[name] = expanded
 	}
 
-	platforms := keptPlatforms(previous, m, r)
 	platforms[host.String()] = entry
 
 	firstUseOthers, err := e.lockOthers(ctx, opts, req, m, h.release, platforms, hostBuild{
@@ -1179,6 +1185,47 @@ func hostStrategy(
 	return artifact, build, nil
 }
 
+// builds reports whether p builds m from source: when --from-source asks, when
+// at, the entry of p in oku.lock at this version, is a build, or when no
+// artifact fits p.
+func builds(m *manifest.Manifest, p platform.Platform, at lock.Platform, fromSource bool) bool {
+	_, ok, _ := m.Select(p)
+
+	return (fromSource || at.Strategy == strategyBuild || !ok) && m.BuildsOn(p)
+}
+
+// buildDepsOf returns the build deps of m, each with its when narrowed to the
+// platforms that build m, so any machine pins them for the same platforms.
+// platforms holds the entry of each platform in oku.lock.
+func buildDepsOf(
+	m *manifest.Manifest,
+	platforms map[string]lock.Platform,
+	fromSource bool,
+) []manifest.Dep {
+	builders := slices.DeleteFunc(platform.All(), func(p platform.Platform) bool {
+		return !builds(m, p, platforms[p.String()], fromSource)
+	})
+
+	// An empty When matches every platform.
+	if len(builders) == 0 {
+		return nil
+	}
+
+	var (
+		deps  []manifest.Dep
+		cover = platform.Cover(builders)
+	)
+
+	for _, dep := range m.Build.Deps {
+		if when, ok := dep.When.And(cover); ok {
+			dep.When = when
+			deps = append(deps, dep)
+		}
+	}
+
+	return deps
+}
+
 // cannotBuild reports why oku cannot build m from source on p.
 func cannotBuild(m *manifest.Manifest, p platform.Platform) error {
 	if m.HasBuild() {
@@ -1419,15 +1466,7 @@ func (e env) resolveOnly(
 	}
 
 	// A platform that builds needs the build deps too.
-	wanted := m.Runtime.Deps
-
-	for _, at := range platforms {
-		if at.Strategy == strategyBuild {
-			wanted = append(slices.Clone(m.Build.Deps), wanted...)
-
-			break
-		}
-	}
+	wanted := append(buildDepsOf(m, platforms, req.fromSource), m.Runtime.Deps...)
 
 	deps, err := e.installDeps(ctx, opts, req, fetched, wanted)
 	if err != nil {
@@ -1548,7 +1587,7 @@ func pinFor(
 		return lock.Platform{}, false, err
 	case fromSource && !m.BuildsOn(p):
 		return lock.Platform{}, false, cannotBuild(m, p)
-	case (fromSource || !ok) && m.BuildsOn(p):
+	case builds(m, p, at, fromSource):
 		pin, err := s.PinBuild(ctx, publishedSource(m, release, p), p, store.BuildPin{SourceURL: at.URL, SHA256: at.SHA256})
 		if err != nil {
 			return lock.Platform{}, false, fmt.Errorf("%s for %s: %w", m.Package.Name, p, err)
