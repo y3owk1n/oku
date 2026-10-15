@@ -4,6 +4,8 @@ You end up with the config files of your home directory declared in
 `oku.toml`, placed by `oku sync`, and undone by `oku rollback` together with
 your packages.
 
+![oku sync links a vimrc and renders a ghostty config from [vars], then writes it again when a variable changes](../demos/06-dotfiles.gif)
+
 ## Place your first files
 
 Put your configs in a `files/` directory beside `oku.toml`, then add a

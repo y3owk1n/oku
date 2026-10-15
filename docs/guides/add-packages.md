@@ -9,6 +9,8 @@ that pins what oku installed. Inside a directory that has its own
 `oku.toml`, the same commands act on that [project](../how-oku-works.md#project)
 instead, and `--global` (`-g`) sends them to your own list.
 
+![oku add installs ripgrep and fd from GitHub repos that have no manifest, and writes both to oku.toml](../demos/01-install.gif)
+
 ## Add a package from GitHub
 
 Point `oku add` at the repo:
@@ -234,6 +236,8 @@ These need a toolchain named in `[runtimes]`. See
 [npm, PyPI, Go and Cargo packages](npm-pypi-go-cargo.md).
 
 ## Add a package from Homebrew, Scoop, winget or aqua
+
+![oku add installs jq from the aqua registry and the Stats app from its Homebrew cask](../demos/02-recipes.gif)
 
 Many apps have no release that oku can infer from, but have a Homebrew cask, a
 Scoop manifest or a winget manifest. oku can read those recipes:

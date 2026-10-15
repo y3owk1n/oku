@@ -8,6 +8,8 @@ A directory with its own `oku.toml` is a [project](../how-oku-works.md#project).
 Inside it, oku installs into a [profile](../how-oku-works.md#profile) that
 belongs to that project.
 
+![Inside ~/api, after oku allow and oku sync, the project's just and DATABASE_URL apply, and both are gone after cd ~](../demos/10-projects.gif)
+
 ## Start a project
 
 Create an empty list at the root of the repo, then add packages from anywhere
@@ -279,6 +281,8 @@ project's profile must match its `oku.lock`, or `exec` fails and names
 `oku sync`. `--global` leaves the project out.
 
 ## Try a package without adding it
+
+![oku shell and oku run use ripgrep and hyperfine without installing them](../demos/04-try.gif)
 
 `oku shell` puts packages in the store and starts `$SHELL` with their programs
 first on `PATH`. It changes no `oku.toml`, no `oku.lock` and no profile:

@@ -18,3 +18,7 @@ lint:
 fmt:
     gofumpt -w .
     golines -w .
+
+# One tape at a time, since VHS drops frames when several record together.
+demos:
+    for tape in demos/[0-9]*.tape; do vhs "$tape"; done

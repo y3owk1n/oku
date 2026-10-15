@@ -15,6 +15,8 @@ None of these packages has an oku manifest. oku always writes one from the
 registry, an [inferred manifest](../how-oku-works.md#inferred-manifest), and
 pins it in `oku.lock` like any other.
 
+![oku sync installs prettier from npm and ruff from PyPI, on the node and python that [runtimes] names, after one approval](../demos/03-registries.gif)
+
 ## Name the toolchains in [runtimes]
 
 Each kind of package needs a toolchain. An npm program runs on node, a PyPI

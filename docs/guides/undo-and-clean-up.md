@@ -4,6 +4,8 @@ This guide puts your machine back the way it was before a change, frees the
 disk space that old versions hold, and removes oku itself when you are done
 with it.
 
+![oku update moves ripgrep from 14.1.1 to 15.2.0, and oku rollback puts 14.1.1 back](../demos/11-history.gif)
+
 ## See the history
 
 Every `add`, `remove`, `sync` and `update` that changes something writes a

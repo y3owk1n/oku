@@ -9,6 +9,7 @@ ten minutes.
 |---|---|
 | [Getting started](getting-started.md) | Install oku, install a package, change its version, undo it |
 | [How oku works](how-oku-works.md) | The list, the lock, the store and generations, and a glossary |
+| [Demos](demos/README.md) | A short recording of each task the guides cover |
 
 ## Guides
 

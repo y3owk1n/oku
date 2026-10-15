@@ -8,6 +8,8 @@ encrypted files with [sops](https://github.com/getsops/sops) and
 This guide starts from a machine with oku and a global list at
 `~/.config/oku/oku.toml`, and no key yet.
 
+![oku sync decrypts a token from a sops file into a gh config](../demos/07-secrets.gif)
+
 ## Install age and sops
 
 Neither project publishes an oku manifest, so oku infers one from each
