@@ -358,26 +358,34 @@ func (e env) projectActive() (bool, string) {
 		)
 	}
 
-	if !e.projectSynced() {
-		return false, "this project's profile is behind its oku.lock, run `oku sync`"
+	if why := e.projectUnsynced(); why != "" {
+		return false, why
 	}
 
 	return true, ""
 }
 
-// projectSynced reports whether the profile of the project in e matches its
-// oku.lock. A project that lists no packages has no lock and needs none.
-func (e env) projectSynced() bool {
+// projectUnsynced says how the profile of the project in e differs from its
+// oku.lock, and is empty when they match. A project that lists no packages has
+// no lock and needs none.
+func (e env) projectUnsynced() string {
 	snapshot := e.profile().LockSnapshotOfCurrent()
-
 	locked, err := os.ReadFile(e.lockPath())
-	if errors.Is(err, fs.ErrNotExist) && snapshot == nil {
-		l, err := list.Read(e.listPath())
 
-		return err == nil && len(l.Packages) == 0 && len(l.Include) == 0
+	switch {
+	case err == nil && bytes.Equal(locked, snapshot):
+		return ""
+	case snapshot != nil:
+		return "this project's profile is behind its oku.lock, run `oku sync`"
 	}
 
-	return err == nil && bytes.Equal(locked, snapshot)
+	if errors.Is(err, fs.ErrNotExist) {
+		if l, err := list.Read(e.listPath()); err == nil && len(l.Packages) == 0 && len(l.Include) == 0 {
+			return ""
+		}
+	}
+
+	return "this project's packages are not installed yet, run `oku sync`"
 }
 
 func newAllowCmd(opts Options) *cobra.Command {

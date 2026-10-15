@@ -6009,6 +6009,48 @@ func TestB64ProfileBehindItsLockChangesNothingAndHints(t *testing.T) {
 	}
 }
 
+func TestB596ProjectNeverSyncedSaysItsPackagesAreNotInstalled(t *testing.T) {
+	m := newMachine(t)
+	t.Setenv("PATH", "/usr/bin:/bin")
+
+	synced := m.hookProject(t)
+
+	// A clone of the project holds its oku.toml and oku.lock, and a new project
+	// lists a package and has no lock yet. Neither was ever synced.
+	clone := filepath.Join(m.fixtures, "clone")
+	fresh := filepath.Join(m.fixtures, "fresh")
+
+	list, err := os.ReadFile(filepath.Join(synced, "oku.toml"))
+	must(t, err)
+
+	for _, dir := range []string{clone, fresh} {
+		must(t, os.MkdirAll(dir, 0o755))
+		must(t, os.WriteFile(filepath.Join(dir, "oku.toml"), list, 0o644))
+	}
+
+	locked, err := os.ReadFile(filepath.Join(synced, "oku.lock"))
+	must(t, err)
+	must(t, os.WriteFile(filepath.Join(clone, "oku.lock"), locked, 0o644))
+
+	for _, dir := range []string{clone, fresh} {
+		m.opts.WorkDir = dir
+
+		_, err := m.run(t, "", "allow")
+		must(t, err)
+
+		out := m.apply(t)
+		if !strings.Contains(out, "packages are not installed yet, run `oku sync`") ||
+			strings.Contains(out, "behind") || os.Getenv("PATH") != "/usr/bin:/bin" {
+			t.Fatalf("%s was never synced, PATH=%s:\n%s", dir, os.Getenv("PATH"), out)
+		}
+
+		if _, err := m.run(t, "", "exec", "true"); err == nil ||
+			!strings.Contains(err.Error(), "not installed yet") {
+			t.Fatalf("exec in %s, never synced: %v", dir, err)
+		}
+	}
+}
+
 func TestB65HookUsesNoNetworkAndRunsNoManifestCode(t *testing.T) {
 	m := newMachine(t)
 	hits := 0

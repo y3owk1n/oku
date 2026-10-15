@@ -244,6 +244,8 @@ The hook prints one line, once per directory, and changes nothing when:
 
 - the project is not allowed, or its `oku.toml` changed since you allowed it.
   Run `oku allow`.
+- the project's packages are not installed yet, as in a fresh clone. Run
+  `oku sync`.
 - the project's profile is behind its `oku.lock`, for example after a
   teammate's commit. Run `oku sync`.
 

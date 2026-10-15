@@ -46,7 +46,8 @@ project is allowed and synced. Look for the one-line hint it printed when you en
 
 - `` run `oku allow` ``: the project is not allowed, or its `oku.toml` changed
   since, and editing `[env]` changes it too.
-- `` run `oku sync` ``: the project's profile is behind its `oku.lock`.
+- `` run `oku sync` ``: the project's packages are not installed yet, or its
+  profile is behind its `oku.lock`.
 - `<NAME> is not set, <hint>`: the list requires `<NAME>`. Set it in your
   shell.
 - `oku.toml: env.<NAME>: ...`: the `[env]` does not parse, and the error says
