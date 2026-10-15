@@ -19,7 +19,6 @@ import (
 	"github.com/y3owk1n/oku/internal/service"
 	"github.com/y3owk1n/oku/internal/store"
 	"github.com/y3owk1n/oku/internal/tempdir"
-	"github.com/y3owk1n/oku/internal/ui"
 )
 
 const (
@@ -267,13 +266,8 @@ func (e env) waiting(ctx context.Context, opts Options, plan exposePlan, before 
 // or removed. An item of the same kind and target on both sides with another
 // source, such as a setting with a new value, is a change.
 func tellExposed(notice io.Writer, before, after []expose.Item, rewritten, waiting []string) {
-	s := ui.For(notice)
-	done := func(format string, args ...any) {
-		fmt.Fprintln(notice, s.Done(fmt.Sprintf(format, args...)))
-	}
-	gone := func(format string, args ...any) {
-		fmt.Fprintln(notice, s.Gone(fmt.Sprintf(format, args...)))
-	}
+	done := func(format string, args ...any) { finished(notice, format, args...) }
+	gone := func(format string, args ...any) { removed(notice, format, args...) }
 
 	same := func(items []expose.Item, item expose.Item) bool {
 		return slices.ContainsFunc(items, func(other expose.Item) bool {
