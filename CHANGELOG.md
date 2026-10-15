@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.18.1](https://github.com/y3owk1n/oku/compare/v0.18.0...v0.18.1) (2026-10-15)
+
+
+### Bug Fixes
+
+* **hook:** say a project that was never synced has its packages not installed yet ([#497](https://github.com/y3owk1n/oku/issues/497)) ([9f60b60](https://github.com/y3owk1n/oku/commit/9f60b60f5ef643e99b5fab7973ec3c2c182dc522))
+* **ui:** print home paths from ~ in sync notices and through a linked home ([#495](https://github.com/y3owk1n/oku/issues/495)) ([4ad0ad2](https://github.com/y3owk1n/oku/commit/4ad0ad20a49bbf67b593511009398385717b54f3))
+
+
+### Documentation
+
+* add demo clips for every guide ([#498](https://github.com/y3owk1n/oku/issues/498)) ([7224854](https://github.com/y3owk1n/oku/commit/72248541f37c7d82f0a53ac4f8407a08a2f83fb0))
+
 ## [0.18.0](https://github.com/y3owk1n/oku/compare/v0.17.1...v0.18.0) (2026-10-14)
 
 
