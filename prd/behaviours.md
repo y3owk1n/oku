@@ -1272,6 +1272,10 @@ order step in `prd/product.md`.
   runs again.
 - B64 [7] Entering an allowed project whose profile is behind its lock changes
   nothing and prints a hint to run `oku sync`.
+- B596 [7] Entering an allowed project that was never synced changes nothing.
+  The hook says the project's packages are not installed yet and names
+  `oku sync`. This holds for a clone with its lock and for a new list with no
+  lock. `oku exec` refuses with the same words.
 - B65 [7] The hook performs no network access and runs no manifest code.
 - B66 [7] `oku env` prints the exports the hook would apply, for bash, zsh and
   fish.
