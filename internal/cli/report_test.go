@@ -227,7 +227,7 @@ func TestB231EveryFinishedItemAndTheClosingLineCarryACheck(t *testing.T) {
 
 	m, store := settingsMachine(t)
 	store.values["com.apple.dock tilesize"] = "<integer>64</integer>"
-	target := home(".config", "tool", "config")
+	target := filepath.Join("~", ".config", "tool", "config")
 
 	managedList(t, m, "one", "48")
 	out, err := m.run(t, "", "sync")
@@ -748,5 +748,42 @@ func TestB442AnErrorNamesTheNextStep(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "there is no repo at ") ||
 		strings.Contains(err.Error(), "no release to infer") {
 		t.Fatalf("add should say the repo is not there: %v", err)
+	}
+}
+
+func TestB595ATerminalShowsAPathUnderTheHomeFromTilde(t *testing.T) {
+	t.Setenv("NO_COLOR", "")
+	t.Setenv("FORCE_COLOR", "1")
+
+	m := newMachine(t)
+	tool := m.manifest(t, "tool", map[string]string{"tool": script}, `bin = ["tool"]`)
+
+	// HOME is a link to the folder that holds the store. oku which resolves the
+	// program's path, so that path starts with the folder and not with HOME.
+	link := filepath.Join(t.TempDir(), "home")
+	if err := os.Symlink(filepath.Dir(filepath.Dir(m.data)), link); err != nil {
+		t.Skip("this user cannot create a symlink: ", err)
+	}
+
+	t.Setenv("HOME", link)
+
+	m.writeFilesList(t, "[files]\n\"{{home}}/.config/tool/config\" = { text = \"one\" }\n")
+	out, err := m.run(t, "", "sync")
+	must(t, err)
+
+	if want := "wrote " + filepath.Join("~", ".config", "tool", "config"); !strings.Contains(out, want) {
+		t.Fatalf("sync should say %q:\n%s", want, out)
+	}
+
+	_, err = m.run(t, "", "add", tool)
+	must(t, err)
+
+	t.Setenv("PATH", filepath.Dir(m.profile("bin", "tool")))
+
+	out, err = m.run(t, "", "which", "tool")
+	must(t, err)
+
+	if want := filepath.Join("~", "data", "oku", "store", "tool-1.2.3-"); !strings.Contains(out, want) {
+		t.Fatalf("which should show the program's path from %q:\n%s", want, out)
 	}
 }

@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"unicode"
@@ -244,27 +245,53 @@ func (s Style) Arrow() string  { return s.Pick("→", "->") }
 // Home shortens the user's home directory to "~" on a styled terminal, where a
 // path is read and not copied.
 func (s Style) Home(path string) string {
-	home, err := os.UserHomeDir()
-	if !s.on || err != nil || home == "" || !strings.HasPrefix(path, home) {
+	if !s.on {
 		return path
 	}
 
-	rest := path[len(home):]
-	if rest != "" && rest[0] != os.PathSeparator {
-		return path
+	for _, home := range homeDirs() {
+		rest, ok := strings.CutPrefix(path, home)
+		if ok && (rest == "" || rest[0] == os.PathSeparator) {
+			return "~" + rest
+		}
 	}
 
-	return "~" + rest
+	return path
 }
 
 // Homes is Home for every path inside text.
 func (s Style) Homes(text string) string {
-	home, err := os.UserHomeDir()
-	if !s.on || err != nil || home == "" {
+	if !s.on {
 		return text
 	}
 
-	return strings.ReplaceAll(text, home+string(os.PathSeparator), "~"+string(os.PathSeparator))
+	for _, home := range homeDirs() {
+		text = strings.ReplaceAll(text, home+string(os.PathSeparator), "~"+string(os.PathSeparator))
+	}
+
+	return text
+}
+
+// homeDirs returns the home directory, and also the path it resolves to when
+// it is a link. On macOS /tmp/you resolves to /private/tmp/you, and a path that
+// oku resolved starts with that form. The longer path comes first, so Homes
+// does not replace the shorter one inside it.
+func homeDirs() []string {
+	home, err := os.UserHomeDir()
+	if err != nil || home == "" {
+		return nil
+	}
+
+	resolved, err := filepath.EvalSymlinks(home)
+	if err != nil || resolved == home {
+		return []string{home}
+	}
+
+	if len(resolved) < len(home) {
+		return []string{home, resolved}
+	}
+
+	return []string{resolved, home}
 }
 
 // Table lays out rows in aligned columns. A styled terminal gets a dim header
