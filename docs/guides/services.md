@@ -9,6 +9,8 @@ A package that ships a service declares it in its manifest, see
 [`[[service]]`](../reference/manifest.md#service). When you install the
 package, oku writes the service's definition and leaves it stopped.
 
+![oku sync --dry-run shows the launchd service it would write for atuin](../demos/09-services.gif)
+
 ## Turn a service on
 
 Add the package with `--service`:

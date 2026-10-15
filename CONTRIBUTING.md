@@ -148,6 +148,19 @@ gh workflow run sources.yml
 .github/scripts/sources.sh
 ```
 
+## Demos
+
+`demos/` holds a [VHS](https://github.com/charmbracelet/vhs) tape for each
+clip in [docs/demos](docs/demos/README.md). Record them again after a change
+to what a clip shows:
+
+```sh
+GITHUB_TOKEN=$(gh auth token) just demos
+```
+
+[demos/README.md](demos/README.md) says what each tape needs and what it
+leaves on the machine.
+
 ## Releasing
 
 This section is for the maintainer.

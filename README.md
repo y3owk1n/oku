@@ -63,6 +63,10 @@ oku sync --dry-run             # what would change, and nothing on the machine c
 oku rollback                   # the machine as it was before the last change
 ```
 
+![A new machine clones its machines repo to ~/.config/oku, and oku sync installs four packages and a dotfile](docs/demos/05-new-machine.gif)
+
+More clips, one for each row of [What it does](#what-it-does), are in [Demos](docs/demos/README.md).
+
 ## Why oku
 
 Tools like Nix with home-manager and nix-darwin can describe a whole machine in a file and roll it back. They ask you to learn a language, take over `/nix`, and draw from one central package set. Dotfile managers cover the home directory and nothing else. oku keeps the store, the lock and rollback, and leaves out the language, the package set and root.
@@ -204,7 +208,7 @@ oku fits if you want a machine you can rebuild and roll back without learning Ni
 
 ## Documentation
 
-[Getting started](docs/getting-started.md) · [How oku works](docs/how-oku-works.md) · [All guides](docs/README.md#guides) · [Commands](docs/reference/commands.md) · [Troubleshooting](docs/troubleshooting.md) · [Coming from another tool](docs/guides/coming-from.md)
+[Getting started](docs/getting-started.md) · [Demos](docs/demos/README.md) · [How oku works](docs/how-oku-works.md) · [All guides](docs/README.md#guides) · [Commands](docs/reference/commands.md) · [Troubleshooting](docs/troubleshooting.md) · [Coming from another tool](docs/guides/coming-from.md)
 
 ## Contributing
 

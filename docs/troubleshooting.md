@@ -15,6 +15,8 @@ unfinished change, and names the fix for each problem:
 oku doctor
 ```
 
+![oku doctor, oku which, oku outdated, oku verify and oku du](demos/13-diagnose.gif)
+
 ## A program does not run after oku add
 
 The shell cannot find the programs oku installed until the profile's `bin` is

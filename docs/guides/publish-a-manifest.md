@@ -8,6 +8,8 @@ This guide uses `sharkdp/fd` as the tool. Put your own repo wherever it says
 describes one package. Every key is in the
 [manifest reference](../reference/manifest.md).
 
+![oku manifest init writes a manifest for hyperfine from its releases, and lint and test check it](../demos/12-publish.gif)
+
 ## Check whether oku already installs your tool
 
 oku can install a GitHub repo with no manifest. It reads the newest release,

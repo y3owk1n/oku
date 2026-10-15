@@ -16,6 +16,8 @@ another:
 
 oku skips the tables of another OS, so one list works on every machine.
 
+![oku sync writes two macOS defaults, and oku rollback removes them](../demos/08-os-settings.gif)
+
 ## Set macOS defaults
 
 Name the domain in quotes and list its keys:

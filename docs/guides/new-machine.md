@@ -4,6 +4,8 @@ You end up with one git repo that describes every machine you use. It lives at
 `~/.config/oku` on each of them, and a new machine is a clone and one
 `oku sync`.
 
+![A new machine clones its machines repo to ~/.config/oku, and oku sync installs four packages and a dotfile](../demos/05-new-machine.gif)
+
 ## Create the machines repo
 
 oku reads its [list](../how-oku-works.md#list) and
