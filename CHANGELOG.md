@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.18.3](https://github.com/y3owk1n/oku/compare/v0.18.2...v0.18.3) (2026-10-19)
+
+
+### Bug Fixes
+
+* **store:** run a build dep's program from its real file on Windows ([#507](https://github.com/y3owk1n/oku/issues/507)) ([de74842](https://github.com/y3owk1n/oku/commit/de74842d3a2ed753cd6be468228ebca5bcad9a91))
+* **store:** run go, npm and pip vendor steps through PowerShell on Windows ([#504](https://github.com/y3owk1n/oku/issues/504)) ([ef3f3a0](https://github.com/y3owk1n/oku/commit/ef3f3a044afc569c4b0d9473449d290da83cb61c))
+
 ## [0.18.2](https://github.com/y3owk1n/oku/compare/v0.18.1...v0.18.2) (2026-10-19)
 
 
