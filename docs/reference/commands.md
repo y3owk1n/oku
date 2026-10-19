@@ -632,7 +632,9 @@ or after a change on the machine that a build depends on, such as a new
 compiler.
 
 `sync` and `update` install 16 packages at once.
-[`OKU_PARALLEL`](paths.md#environment-variables) sets another number. Builds from source run one at a time. A package that the
+[`OKU_PARALLEL`](paths.md#environment-variables) sets another number. Builds from source run one at a time. Packages that need the same
+file, such as `go` as a package and as the runtime of a `go:` package, share
+one download of it. A package that the
 store holds at the locked version needs no request to its server, so a sync
 with nothing to do works offline.
 
