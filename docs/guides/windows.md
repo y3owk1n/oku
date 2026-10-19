@@ -196,6 +196,13 @@ steps for `npm:`, `pypi:`, `go:` and `cargo:` refs need no PowerShell 7. oku
 looks for the shell on the build's `PATH` and not on yours, so the `sh` of Git
 for Windows does not run a step.
 
+A step runs a build dep's program from its real file in the dep's download, as
+a shim does, and not from the link in the dep's `bin`. oku puts the folder of
+each such file ahead of the dep's `bin` on the build's `PATH`. A program that
+runs the files beside it, such as the `gcc.exe` of llvm-mingw that cgo calls,
+then finds them. The other programs in that folder of the download are on the
+build's `PATH` too.
+
 ## Uninstall
 
 Windows refuses to delete a running program. So `oku self uninstall` renames

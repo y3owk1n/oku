@@ -1309,6 +1309,66 @@ $made = Get-ChildItem -Recurse -Filter made.txt -ErrorAction SilentlyContinue `
 Check 'B81: a build step runs a program of a dep that loads a DLL beside it' { $made -eq 'made by python' }
 Oku remove by-python
 
+# A build step runs a program of a dep that reads a file beside the path it
+# started from, as the gcc.exe of llvm-mingw runs the clang beside it. Only the
+# program is in the dep's bin, and the file is beside it in the download.
+$besideSrc = Join-Path $fixtures 'beside-src'
+$besideKit = Join-Path $fixtures 'beside-kit'
+New-Item -ItemType Directory -Force $besideSrc, (Join-Path $besideKit 'kit') | Out-Null
+Set-Content (Join-Path $besideSrc 'go.mod') 'module beside'
+Set-Content (Join-Path $besideSrc 'main.go') @'
+package main
+
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+)
+
+func main() {
+	self, _ := os.Executable()
+	text, err := os.ReadFile(filepath.Join(filepath.Dir(self), "beside.txt"))
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	fmt.Print(string(text))
+}
+'@
+go build -C $besideSrc -o (Join-Path $besideKit 'kit\beside.exe') .
+Set-Content (Join-Path $besideKit 'kit\beside.txt') 'read beside the program'
+$besideZip = Join-Path $fixtures 'beside-kit.zip'
+Compress-Archive -Force -Path (Join-Path $besideKit '*') -DestinationPath $besideZip
+Set-Content (Join-Path $fixtures 'beside-kit.toml') @"
+[package]
+name = "beside-kit"
+[version]
+value = "1.0.0"
+[[artifact]]
+url = "file:///$($besideZip -replace '\\', '/')"
+bin = ["kit/beside.exe"]
+"@
+$byBeside = Join-Path $fixtures 'by-beside.toml'
+Set-Content $byBeside @"
+[package]
+name = "by-beside"
+[version]
+value = "1.0.0"
+[build]
+deps = [{ ref = "$((Join-Path $fixtures 'beside-kit.toml') -replace '\\', '/')" }]
+[[build.step]]
+run = "beside > read.txt"
+shell = "cmd"
+[[build.step]]
+install = { share = ["read.txt"] }
+"@
+Oku add $byBeside --yes
+$read = Get-ChildItem -Recurse -Filter read.txt -ErrorAction SilentlyContinue `
+    (Join-Path $env:XDG_DATA_HOME 'oku'), (Join-Path $env:ProgramData 'oku') |
+    Select-Object -First 1 | Get-Content
+Check 'B599: a build step runs a program of a dep that reads a file beside it' { $read -eq 'read beside the program' }
+Oku remove by-beside
+
 # A vendor step of each kind, with no sh among the build's tools, although the
 # runner has Git's sh on PATH (B598). Each build then uses what it vendored.
 $vgo = Join-Path $fixtures 'vgo'
