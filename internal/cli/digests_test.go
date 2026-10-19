@@ -7,7 +7,9 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 )
 
 // digestServer fakes GitHub for owner/tool, whose one release v1.0.0 lists its
@@ -266,5 +268,61 @@ func TestB556OneCommandReadsAChecksumFileOnce(t *testing.T) {
 
 	if got := strings.Count(out, "reading the checksums at"); got != 1 {
 		t.Fatalf("add read checksums.txt %d times, want once:\n%s", got, out)
+	}
+}
+
+func TestB597OneSyncDownloadsAFileOnceForEveryPackageThatNeedsIt(t *testing.T) {
+	m := newMachine(t)
+	archive, sum := m.archive(t, "tools", map[string]string{"one": script, "two": script})
+
+	// The first request waits for a second, so that two downloads at once would
+	// both reach the server.
+	var requests atomic.Int32
+
+	second := make(chan struct{})
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch requests.Add(1) {
+		case 1:
+			select {
+			case <-second:
+			case <-time.After(time.Second):
+			}
+		case 2:
+			close(second)
+		}
+
+		http.ServeFile(w, r, archive)
+	}))
+	t.Cleanup(server.Close)
+
+	list := "[packages]\n"
+	for _, name := range []string{"one", "two"} {
+		list += fmt.Sprintf("%s = %q\n", name, m.rawManifest(t, name, fmt.Sprintf(
+			"[[artifact]]\nurl = \"%s/tools.tar.gz\"\nsha256 = \"%s\"\nbin = [\"%s\"]\n",
+			server.URL,
+			sum,
+			name,
+		)))
+	}
+
+	m.writeFilesList(t, list)
+
+	out, err := m.run(t, "", "sync", "--yes")
+	if err != nil {
+		t.Fatalf("sync: %v\n%s", err, out)
+	}
+
+	if got := requests.Load(); got != 1 {
+		t.Fatalf("sync downloaded tools.tar.gz %d times, want once:\n%s", got, out)
+	}
+
+	if got := strings.Count(out, "downloading "+server.URL); got != 1 {
+		t.Fatalf("sync showed %d download lines, want one:\n%s", got, out)
+	}
+
+	for _, name := range []string{"one", "two"} {
+		if _, err := os.Stat(m.profile("bin", name)); err != nil {
+			t.Fatalf("%s is not installed: %v\n%s", name, err, out)
+		}
 	}
 }

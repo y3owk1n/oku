@@ -16,9 +16,12 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	"golang.org/x/sync/singleflight"
 
 	"github.com/y3owk1n/oku/internal/forge"
 	"github.com/y3owk1n/oku/internal/limit"
@@ -37,9 +40,37 @@ func (s *Store) fetch(ctx context.Context, url, wantSHA string) (string, string,
 	return s.download(ctx, url, wantSHA, true)
 }
 
+// downloads holds the downloads that are running. Two packages of one sync may
+// need the same file, such as go as a package and as the runtime of a go:
+// package.
+var downloads singleflight.Group
+
+// downloaded is the file a download wrote and its digest.
+type downloaded struct{ path, sha string }
+
 // download does the work of fetch. With reuseRecent false it ignores the digest
 // that an earlier download of url gave, which a url whose bytes change needs.
+// Calls with the same arguments at once share one download.
 func (s *Store) download(
+	ctx context.Context,
+	url, wantSHA string,
+	reuseRecent bool,
+) (string, string, error) {
+	// A login can make a private file readable, so the login is part of the key.
+	key := strings.Join([]string{s.cache, url, wantSHA, strconv.FormatBool(reuseRecent), s.auth.For(url)}, "\n")
+
+	got, err, _ := downloads.Do(key, func() (any, error) {
+		path, sha, err := s.downloadOnce(ctx, url, wantSHA, reuseRecent)
+
+		return downloaded{path, sha}, err
+	})
+	file := got.(downloaded)
+
+	return file.path, file.sha, err
+}
+
+// downloadOnce finds url in the cache or downloads it there.
+func (s *Store) downloadOnce(
 	ctx context.Context,
 	url, wantSHA string,
 	reuseRecent bool,
@@ -65,8 +96,7 @@ func (s *Store) download(
 		if got, err := fileSHA256(dest); err == nil && got == cached {
 			// The age of the file says when an install last used it, which is what
 			// gc goes by.
-			now := time.Now()
-			_ = os.Chtimes(dest, now, now)
+			_ = touch(dest)
 
 			return dest, cached, nil
 		}
@@ -105,11 +135,14 @@ func (s *Store) download(
 		)
 	}
 
-	// Two packages of one sync may download the same file at once. Windows
-	// refuses to replace the file while the other package unpacks it. The
-	// file's name is its digest, so it holds the same bytes and oku uses it.
+	// Two urls may serve the same file, and another package may be unpacking it.
+	// On Windows an open of a file fails while a rename onto it runs, and the
+	// rename fails while the file is open. The file's name is its digest, so a
+	// file there that verifies holds the same bytes, and oku uses it.
 	dest := filepath.Join(dir, got)
-	if err := os.Rename(tmp.Name(), dest); err != nil {
+	if have, err := fileSHA256(dest); err == nil && have == got {
+		_ = touch(dest)
+	} else if err := os.Rename(tmp.Name(), dest); err != nil {
 		if have, shaErr := fileSHA256(dest); shaErr != nil || have != got {
 			return "", "", fmt.Errorf("download %s: %w", url, err)
 		}
