@@ -534,6 +534,9 @@ order step in `prd/product.md`.
 - B556 [3] One command downloads each checksum file once and shows one wait
   line for it. Inference checks a shared file such as `checksums.txt` against
   every asset of a release, and the install after it reads the same file.
+- B597 [3] When several packages of one sync need the same url at once, oku
+  downloads the file once and shows one downloading line for it. An example is
+  `go` as a package and as the runtime of a `go:` package.
 - B251 [3] When GitHub answers 429, or 403 with `Retry-After`, oku stops and
   says how many seconds to wait.
 - B262 [3] `oku outdated` lists each package of `oku.lock` whose newest
