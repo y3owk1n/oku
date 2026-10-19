@@ -33,8 +33,8 @@ type vendorKind struct {
 	// in the digest. Empty for most kinds.
 	after string
 	// pwsh and pwshAfter are script and after for Windows, where "$tool" is the
-	// variable $tool. Without them Windows runs the sh scripts. pwshTools
-	// replaces tools for them when it is set.
+	// variable $tool. A Windows build has no sh. pwshTools replaces tools for
+	// them when it is set.
 	pwsh, pwshAfter string
 	pwshTools       []string
 	// env is added to the step's environment.
@@ -70,6 +70,7 @@ var vendorKinds = map[string]vendorKind{
 	"go": {
 		tools:  []string{"go"},
 		script: `"$tool" mod vendor`,
+		pwsh:   "& $tool mod vendor\nif ($LASTEXITCODE -ne 0) { exit 1 }",
 		output: "vendor",
 		// A toolchain download would be a second, unhashed download.
 		env:      []string{"GOTOOLCHAIN=local", "GOFLAGS=-mod=mod"},
@@ -97,7 +98,10 @@ var vendorKinds = map[string]vendorKind{
 	"npm": {
 		tools:  []string{"npm"},
 		script: `"$tool" ci --ignore-scripts --no-audit --no-fund`,
-		output: "node_modules",
+		// Windows runs npm's own script with node, as npmPackageKind does.
+		pwshTools: []string{"node"},
+		pwsh:      npmCLI + "& $tool $npm ci --ignore-scripts --no-audit --no-fund\nif ($LASTEXITCODE -ne 0) { exit 1 }",
+		output:    "node_modules",
 	},
 	// npmPackageKind is an npm step with "package". It installs one package with
 	// its dependencies and runs none of their scripts. Once the install is
@@ -128,6 +132,12 @@ if ($LASTEXITCODE -ne 0) { exit 1 }`,
 	"pip": {
 		tools:  []string{"pip", "pip3"},
 		script: `"$tool" download --disable-pip-version-check -q -r requirements.txt -d vendor/pip`,
+		// A python package on Windows has no pip program beside python.exe, so
+		// Windows runs pip as a module of the build's python.
+		pwshTools: []string{"python3", "python"},
+		pwsh: pwshPython + `
+& $python -m pip download --disable-pip-version-check -q -r requirements.txt -d vendor/pip
+if ($LASTEXITCODE -ne 0) { exit 1 }`,
 		output: "vendor/pip",
 	},
 	// goPackageKind is a go step with "package", the path of the package to

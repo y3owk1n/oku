@@ -1350,6 +1350,9 @@ install = { bin = ["hey"] }
 | `"pip"` | `pip download -r requirements.txt -d vendor/pip` | `vendor/pip/` | `pip install --no-index --find-links vendor/pip` |
 
 - The tool must be in `needs`, or come from a dep.
+- On Windows a vendor step runs through PowerShell and needs no `sh`. There
+  `npm` runs npm's own `npm-cli.js` with `node`, so it needs `node`. `pip` runs
+  `python -m pip`, so it needs `python` or `python3`.
 - `cargo` and `npm` need the project's lockfile, and `pip` needs
   `requirements.txt`. `pip` uses `pip3` when there is no `pip`.
 - The user's `oku.lock` pins one digest for what the vendor steps downloaded.

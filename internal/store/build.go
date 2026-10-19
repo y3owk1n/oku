@@ -1177,7 +1177,7 @@ func runVendor(
 	env = append(slices.Clone(env), vendor.env...)
 
 	script, after, shell := vendor.script, vendor.after, "sh"
-	if runtime.GOOS == "windows" && vendor.pwsh != "" {
+	if runtime.GOOS == "windows" {
 		script, after, shell = vendor.pwsh, vendor.pwshAfter, "pwsh"
 	}
 
