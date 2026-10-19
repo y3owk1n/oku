@@ -1299,6 +1299,11 @@ Each platform needs something extra:
   and cmake and libtool both do. Such a build must name the dep's `lib` itself,
   for example with `-DCMAKE_INSTALL_RPATH={{dep.foo.prefix}}/lib` for cmake, or
   `LDFLAGS="-Wl,-rpath,{{dep.foo.prefix}}/lib"` for a libtool configure.
+- On Windows a step runs a dep's program from its real file in the dep's
+  download. oku puts the folder of that file ahead of the dep's `bin` on
+  `PATH`. A program that runs the files beside it, such as the `gcc.exe` of
+  llvm-mingw, then finds them. See
+  [Build from source](../guides/windows.md#build-from-source).
 
 A build dep is only there for the build. A program that loads a build dep's
 shared library at runtime needs that dep in `runtime.deps` too. Otherwise

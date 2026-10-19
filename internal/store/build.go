@@ -219,7 +219,7 @@ func (s *Store) Build(
 	systemPC := writeSystemPkgConfig(filepath.Join(work, "pkgconfig"))
 
 	env := append(append(linkEnv(deps, systemPC), hostVars...), []string{
-		"PATH=" + joinPaths(append(append(append(depDirs(deps, "bin"), dllDirs(deps)...), toolBin...), systemDirs...)),
+		"PATH=" + joinPaths(append(append(append(depPath(deps), dllDirs(deps)...), toolBin...), systemDirs...)),
 		"OKU_PREFIX=" + prefix, "OKU_SRC=" + src, "OKU_JOBS=" + vars["jobs"],
 	}...)
 
@@ -1325,11 +1325,47 @@ func linkEnv(deps []Dep, systemPC string) []string {
 	}
 }
 
+// depPath returns the directories where a build step finds the programs of
+// deps. On Windows the directory of each program's real file comes before the
+// dep's bin. A program in bin is a link to that file, or a copy of it when the
+// user may not create symlinks. Some programs, such as the gcc.exe of
+// llvm-mingw, run the files beside the path they started from. Each dep's
+// directories come before the next dep's, so the first dep wins.
+func depPath(deps []Dep) []string {
+	var dirs []string
+
+	for _, dep := range deps {
+		bin := filepath.Join(dep.Prefix, "bin")
+
+		if runtime.GOOS == "windows" {
+			entries, _ := os.ReadDir(bin)
+
+			for _, entry := range entries {
+				if !strings.EqualFold(filepath.Ext(entry.Name()), ".exe") {
+					continue
+				}
+
+				spec, err := shim.Read(filepath.Join(bin, entry.Name()))
+				if err != nil {
+					continue
+				}
+
+				if dir := filepath.Dir(spec.Target); !slices.Contains(dirs, dir) {
+					dirs = append(dirs, dir)
+				}
+			}
+		}
+
+		dirs = append(dirs, bin)
+	}
+
+	return dirs
+}
+
 // dllDirs returns the directories that hold the DLLs of the deps on Windows,
 // and nothing elsewhere. Windows looks for a program's DLLs beside the file it
-// started and then on PATH. A build step runs the link in a dep's bin, which is
-// a copy of the program when the user may not create symlinks. So PATH takes the
-// download and the directory of each real file in it.
+// started and then on PATH. These are the download of each dep and the directory
+// of each real file in it.
 func dllDirs(deps []Dep) []string {
 	if runtime.GOOS != "windows" {
 		return nil
