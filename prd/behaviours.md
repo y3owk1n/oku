@@ -1495,6 +1495,9 @@ order step in `prd/product.md`.
 - B598 [9] On Windows, a `vendor` step of every kind runs through PowerShell
   and needs no `sh` among the build's tools. `npm` runs npm's own script with
   `node`, and `pip` runs `python -m pip`.
+- B599 [9] On Windows a build step runs a dep's program from its real file in
+  the dep's download. A program that runs or reads the files beside it, such as
+  the `gcc.exe` of llvm-mingw, then finds them.
 - B429 [9] Outside Windows, and for oku itself under its own name, a `.shim`
   file beside the binary runs nothing.
 - B432 [9] On Windows `oku run` counts the programs of a package without the
