@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.18.2](https://github.com/y3owk1n/oku/compare/v0.18.1...v0.18.2) (2026-10-19)
+
+
+### Bug Fixes
+
+* **store:** share one download between packages that need the same file ([#501](https://github.com/y3owk1n/oku/issues/501)) ([9a52ba0](https://github.com/y3owk1n/oku/commit/9a52ba0cbd72d367dc83979cd016e2e261cadddd))
+
 ## [0.18.1](https://github.com/y3owk1n/oku/compare/v0.18.0...v0.18.1) (2026-10-15)
 
 
