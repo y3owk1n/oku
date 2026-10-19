@@ -1309,6 +1309,68 @@ $made = Get-ChildItem -Recurse -Filter made.txt -ErrorAction SilentlyContinue `
 Check 'B81: a build step runs a program of a dep that loads a DLL beside it' { $made -eq 'made by python' }
 Oku remove by-python
 
+# A vendor step of each kind, with no sh among the build's tools, although the
+# runner has Git's sh on PATH (B598). Each build then uses what it vendored.
+$vgo = Join-Path $fixtures 'vgo'
+$vgreet = Join-Path $fixtures 'vgreet'
+New-Item -ItemType Directory -Force $vgo | Out-Null
+New-Item -ItemType Directory -Force $vgreet | Out-Null
+Set-Content (Join-Path $vgreet 'go.mod') "module example.com/greet`n`ngo 1.21"
+Set-Content (Join-Path $vgreet 'greet.go') "package greet`n`nfunc Text() string { return `"vendored by go`" }"
+Set-Content (Join-Path $vgo 'go.mod') "module vgo`n`ngo 1.21`n`nrequire example.com/greet v0.0.0`n`nreplace example.com/greet => $($vgreet -replace '\\', '/')"
+Set-Content (Join-Path $vgo 'main.go') "package main`n`nimport (`n`t`"os`"`n`n`t`"example.com/greet`"`n)`n`nfunc main() { os.WriteFile(`"made.txt`", []byte(greet.Text()), 0o644) }"
+
+$vnpm = Join-Path $fixtures 'vnpm'
+New-Item -ItemType Directory -Force $vnpm | Out-Null
+Set-Content (Join-Path $vnpm 'package.json') '{ "name": "vnpm", "version": "1.0.0", "dependencies": { "ms": "2.1.3" } }'
+Push-Location $vnpm
+npm install --package-lock-only --ignore-scripts --no-audit --no-fund | Out-Null
+if ($LASTEXITCODE -ne 0) { throw 'npm could not write the lockfile' }
+Pop-Location
+
+$vpip = Join-Path $fixtures 'vpip'
+New-Item -ItemType Directory -Force $vpip | Out-Null
+Set-Content (Join-Path $vpip 'requirements.txt') 'six==1.16.0'
+
+$vendorBuild = @'
+[package]
+name = "vendor-{0}"
+[version]
+value = "1.0.0"
+[build]
+{1}
+[[build.step]]
+run = "Copy-Item '{2}/*' ."
+shell = "pwsh"
+[[build.step]]
+vendor = "{0}"
+[[build.step]]
+run = '''{3}'''
+shell = "pwsh"
+{4}
+[[build.step]]
+install = {{ share = ["made.txt"] }}
+'@
+$vendorCases = @(
+    @('go', 'needs = ["go"]', $vgo, 'go build -mod=vendor -o vgo.exe .; ./vgo.exe', 'env = { GOTOOLCHAIN = "local", GOFLAGS = "-buildvcs=false" }', 'vendored by go'),
+    @('npm', "deps = [{ ref = `"$((Join-Path $fixtures 'node.toml') -replace '\\', '/')`" }]", $vnpm,
+        "node -e `"require('fs').writeFileSync('made.txt', require('ms')(60000))`"", '', '1m'),
+    @('pip', "deps = [{ ref = `"$($pythonToml -replace '\\', '/')`" }]", $vpip,
+        "python -m pip install -q --no-index --find-links vendor/pip --target lib six; python -c `"import sys; sys.path.insert(0, 'lib'); import six; open('made.txt', 'w').write(six.__version__)`"",
+        '', '1.16.0')
+)
+foreach ($case in $vendorCases) {
+    $kind = $case[0]
+    $manifest = Join-Path $fixtures "vendor-$kind.toml"
+    Set-Content $manifest ($vendorBuild -f $kind, $case[1], ($case[2] -replace '\\', '/'), $case[3], $case[4])
+    Oku add $manifest --yes
+    $made = Get-ChildItem -Recurse -Filter made.txt -ErrorAction SilentlyContinue `
+        (Join-Path $env:XDG_DATA_HOME 'oku'), (Join-Path $env:ProgramData 'oku') |
+        Where-Object { $_.FullName -match "\\vendor-$kind-" } | Select-Object -First 1 | Get-Content
+    Check "B598: a vendor = `"$kind`" build runs on Windows without sh" { $made -eq $case[5] }
+    Oku remove "vendor-$kind"
+}
+
 # A program whose dep ships a DLL gets a link to that DLL beside it. Windows
 # looks in the program's directory first, and in the working directory before
 # PATH, so a DLL of the same name where the user runs it does not load instead.

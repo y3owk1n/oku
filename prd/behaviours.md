@@ -1492,6 +1492,9 @@ order step in `prd/product.md`.
   `PATH` and the Windows PowerShell 5.1 that Windows ships otherwise. The
   Windows live test builds a `go:` and a `pypi:` ref with PowerShell 7 off
   `PATH`.
+- B598 [9] On Windows, a `vendor` step of every kind runs through PowerShell
+  and needs no `sh` among the build's tools. `npm` runs npm's own script with
+  `node`, and `pip` runs `python -m pip`.
 - B429 [9] Outside Windows, and for oku itself under its own name, a `.shim`
   file beside the binary runs nothing.
 - B432 [9] On Windows `oku run` counts the programs of a package without the
