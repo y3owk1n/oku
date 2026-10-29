@@ -22,6 +22,7 @@ import (
 
 	"github.com/klauspost/compress/gzip"
 
+	"github.com/y3owk1n/oku/internal/busy"
 	"github.com/y3owk1n/oku/internal/forge"
 	"github.com/y3owk1n/oku/internal/gitcmd"
 	"github.com/y3owk1n/oku/internal/limit"
@@ -254,6 +255,39 @@ func (f *Fetcher) get(ctx context.Context, url string) ([]byte, error) {
 // clones holds a lock for each clone in the cache, by the location of its ref.
 var clones sync.Map
 
+// lockClone waits until no other fetch, in this or another oku process, uses
+// the clone of r, and returns the function that releases it. Two refs into one
+// repository share a clone, and each checks out its commit.
+func (f *Fetcher) lockClone(ctx context.Context, r Ref) (func(), error) {
+	mu, _ := clones.LoadOrStore(r.Location, &sync.Mutex{})
+	mu.(*sync.Mutex).Lock()
+
+	// The lock is beside the clone, so it stays when checkout removes the clone.
+	stop := func() {}
+	release, err := busy.LockFile(ctx, f.cloneDir(r)+".busy", func(int) {
+		stop = status.Start(ctx, "waiting for another oku process to fetch %s", r.Location)
+	})
+	stop()
+
+	if err != nil {
+		mu.(*sync.Mutex).Unlock()
+
+		return nil, err
+	}
+
+	return func() {
+		release()
+		mu.(*sync.Mutex).Unlock()
+	}, nil
+}
+
+// cloneDir is where the cache keeps the clone of r.
+func (f *Fetcher) cloneDir(r Ref) string {
+	sum := sha256.Sum256([]byte(r.Location))
+
+	return filepath.Join(f.GitCache, hex.EncodeToString(sum[:])[:16])
+}
+
 // fetchGit reads the file from a shallow clone kept in the cache. It needs
 // the git binary, because git hosts share no HTTP API.
 func (f *Fetcher) fetchGit(
@@ -262,10 +296,11 @@ func (f *Fetcher) fetchGit(
 	commit string,
 	t Target,
 ) (Fetched, error) {
-	// Two refs into one repository share a clone, and each checks out its commit.
-	mu, _ := clones.LoadOrStore(r.Location, &sync.Mutex{})
-	mu.(*sync.Mutex).Lock()
-	defer mu.(*sync.Mutex).Unlock()
+	release, err := f.lockClone(ctx, r)
+	if err != nil {
+		return Fetched{}, err
+	}
+	defer release()
 
 	dir, head, err := f.checkout(ctx, r, commit)
 	if err != nil {
@@ -370,9 +405,11 @@ func (f *Fetcher) Archive(ctx context.Context, r Ref, commit string) ([]byte, in
 		// A forge puts the files under one directory named after the repo.
 		return data, 1, nil
 	case Git:
-		mu, _ := clones.LoadOrStore(r.Location, &sync.Mutex{})
-		mu.(*sync.Mutex).Lock()
-		defer mu.(*sync.Mutex).Unlock()
+		release, err := f.lockClone(ctx, r)
+		if err != nil {
+			return nil, 0, err
+		}
+		defer release()
 
 		dir, _, err := f.checkout(ctx, r, commit)
 		if err != nil {
@@ -393,7 +430,7 @@ func (f *Fetcher) Archive(ctx context.Context, r Ref, commit string) ([]byte, in
 }
 
 // checkout fetches one commit of a git ref into the cache and returns the
-// directory and the commit.
+// directory and the commit. The caller holds the clone with lockClone.
 func (f *Fetcher) checkout(ctx context.Context, r Ref, commit string) (string, string, error) {
 	if _, err := exec.LookPath("git"); err != nil {
 		return "", "", fmt.Errorf("%s: git+ refs need git on PATH", r)
@@ -403,16 +440,36 @@ func (f *Fetcher) checkout(ctx context.Context, r Ref, commit string) (string, s
 		return "", "", fmt.Errorf("fetch %s: %w", r, err)
 	}
 
-	sum := sha256.Sum256([]byte(r.Location))
-	dir := filepath.Join(f.GitCache, hex.EncodeToString(sum[:])[:16])
+	dir := f.cloneDir(r)
 
-	if _, err := os.Stat(filepath.Join(dir, ".git")); errors.Is(err, fs.ErrNotExist) {
-		if err := os.MkdirAll(dir, 0o755); err != nil {
+	head, err := fetchInto(ctx, dir, r, commit)
+
+	// One oku process at a time holds the clone, so a lock file in it is from a
+	// killed git. The clone is only a cache, so oku fetches it again.
+	if err != nil && strings.Contains(err.Error(), "Another git process seems to be running") {
+		if err := os.RemoveAll(dir); err != nil {
 			return "", "", err
 		}
 
+		head, err = fetchInto(ctx, dir, r, commit)
+	}
+
+	if err != nil {
+		return "", "", err
+	}
+
+	return dir, head, nil
+}
+
+// fetchInto fetches commit of r into the clone at dir and returns the commit.
+func fetchInto(ctx context.Context, dir string, r Ref, commit string) (string, error) {
+	if _, err := os.Stat(filepath.Join(dir, ".git")); errors.Is(err, fs.ErrNotExist) {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			return "", err
+		}
+
 		if err := git(ctx, dir, "init", "--quiet"); err != nil {
-			return "", "", err
+			return "", err
 		}
 	}
 
@@ -427,7 +484,7 @@ func (f *Fetcher) checkout(ctx context.Context, r Ref, commit string) (string, s
 	if forge.FullSHA(commit) {
 		if git(ctx, dir, "cat-file", "-e", commit+"^{commit}") == nil &&
 			git(ctx, dir, "checkout", "--quiet", "--force", commit) == nil {
-			return dir, commit, nil
+			return commit, nil
 		}
 	}
 
@@ -447,22 +504,22 @@ func (f *Fetcher) checkout(ctx context.Context, r Ref, commit string) (string, s
 		if msg := err.Error(); strings.Contains(msg, "could not read Username") ||
 			strings.Contains(msg, "Repository not found") ||
 			strings.Contains(msg, "does not appear to be a git repository") {
-			return "", "", fmt.Errorf("fetch %s: no such repo, or git cannot read it without a login: %w", r, err)
+			return "", fmt.Errorf("fetch %s: no such repo, or git cannot read it without a login: %w", r, err)
 		}
 
-		return "", "", fmt.Errorf("fetch %s: %w", r, err)
+		return "", fmt.Errorf("fetch %s: %w", r, err)
 	}
 
 	if err := git(ctx, dir, "checkout", "--quiet", "--force", "FETCH_HEAD"); err != nil {
-		return "", "", fmt.Errorf("fetch %s: %w", r, err)
+		return "", fmt.Errorf("fetch %s: %w", r, err)
 	}
 
 	head, err := gitOutput(ctx, dir, "rev-parse", "HEAD")
 	if err != nil {
-		return "", "", fmt.Errorf("fetch %s: %w", r, err)
+		return "", fmt.Errorf("fetch %s: %w", r, err)
 	}
 
-	return dir, head, nil
+	return head, nil
 }
 
 // ListManifests returns the manifest files of the collection at r, keyed by

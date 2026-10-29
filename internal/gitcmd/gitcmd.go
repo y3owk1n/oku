@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 // Command returns git with args, set so that neither git nor ssh asks a
@@ -22,8 +23,23 @@ func Command(ctx context.Context, args ...string) *exec.Cmd {
 		cmd.Env = append(cmd.Env, "GIT_SSH_COMMAND="+ssh)
 	}
 
+	// A killed git leaves its lock files, such as shallow.lock, and every later
+	// git in that repo fails on them. An interrupt lets git remove them first.
+	// Windows has no interrupt to send, so oku kills git there.
+	cmd.Cancel = func() error {
+		if err := cmd.Process.Signal(os.Interrupt); err != nil {
+			return cmd.Process.Kill()
+		}
+
+		return nil
+	}
+	cmd.WaitDelay = waitDelay
+
 	return cmd
 }
+
+// waitDelay is how long an interrupted git has to exit before oku kills it.
+const waitDelay = 5 * time.Second
 
 // batchSSH returns the ssh command git would run, with BatchMode added. It
 // returns "" when GIT_SSH names the program, or when the command is not

@@ -170,3 +170,40 @@ func TestB557ALockedManifestOnALaterPathIsReadWithoutTryingTheFirst(t *testing.T
 		t.Fatalf("tool printed %q", got)
 	}
 }
+
+func TestB600AGitLockLeftInTheCachedCloneDoesNotStopTheNextFetch(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git is not on PATH")
+	}
+
+	m := newMachine(t)
+	repo := filepath.Join(m.fixtures, "repo")
+
+	m.opts.Interactive = yes()
+
+	_, err := m.run(t, "y\n", "add", m.commitManifest(t, repo, "1.0.0"))
+	must(t, err)
+
+	clones, err := filepath.Glob(filepath.Join(m.cache, "git", "*", ".git"))
+	must(t, err)
+
+	if len(clones) != 1 {
+		t.Fatalf("the git cache holds %d clones, want 1", len(clones))
+	}
+
+	// A git killed during a fetch or a checkout leaves these.
+	for _, name := range []string{"shallow.lock", "index.lock"} {
+		must(t, os.WriteFile(filepath.Join(clones[0], name), nil, 0o644))
+	}
+
+	m.commitManifest(t, repo, "1.1.0")
+
+	out, err := m.run(t, "y\n", "update")
+	if err != nil {
+		t.Fatalf("update failed on the stale locks: %v\n%s", err, out)
+	}
+
+	if got := m.toolOutput(t); got != "built 1.1.0" {
+		t.Fatalf("tool printed %q", got)
+	}
+}
