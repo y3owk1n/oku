@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.18.4](https://github.com/y3owk1n/oku/compare/v0.18.3...v0.18.4) (2026-10-29)
+
+
+### Bug Fixes
+
+* **ref:** fetch a git+ clone again when a killed git left a lock in it ([#510](https://github.com/y3owk1n/oku/issues/510)) ([ba5dc87](https://github.com/y3owk1n/oku/commit/ba5dc87214f40006c32302c0899ef34e6a5060f1))
+
 ## [0.18.3](https://github.com/y3owk1n/oku/compare/v0.18.2...v0.18.3) (2026-10-19)
 
 
