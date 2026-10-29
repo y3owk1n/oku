@@ -26,11 +26,14 @@ const poll = 100 * time.Millisecond
 // waiting once, with the pid of the holder, before the first wait. The OS
 // releases the lock when the process exits, so a killed process leaves none.
 func Lock(ctx context.Context, dir string, waiting func(pid int)) (release func(), err error) {
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	return LockFile(ctx, filepath.Join(dir, fileName), waiting)
+}
+
+// LockFile is Lock on the file at path.
+func LockFile(ctx context.Context, path string, waiting func(pid int)) (release func(), err error) {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return nil, err
 	}
-
-	path := filepath.Join(dir, fileName)
 
 	f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0o644)
 	if err != nil {

@@ -161,7 +161,9 @@ The commit goes into `oku.lock`, and `oku sync` reads that same commit again.
 A file at a full commit SHA never changes, so oku reads it from its cache and
 asks the host nothing. For a `git+` ref, oku reads the commit from the clone in
 its cache when the clone already holds it. `oku update jq` reads the manifests
-of the other packages this way too. When a `#name` manifest is at
+of the other packages this way too. A git killed in the middle of a fetch can
+leave a lock file, such as `shallow.lock`, in the clone. The next fetch then
+deletes the clone and fetches it again. When a `#name` manifest is at
 `packages/name.toml`, oku records that path for the commit, so it does not ask
 for `name.toml` at the root again.
 
