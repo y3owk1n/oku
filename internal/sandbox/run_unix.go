@@ -49,7 +49,7 @@ func Run(cmd *exec.Cmd) error {
 		return err
 	case sig := <-signals:
 		_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
-		<-done
+		<-done //nolint:errcheck
 
 		return errors.New("stopped by " + sig.String())
 	}

@@ -106,7 +106,7 @@ git clone https://github.com/y3owk1n/oku && cd oku
 CGO_ENABLED=0 go build -o oku ./cmd/oku
 ```
 
-You need Go 1.26.4 or newer.
+You need Go 1.27.0 or newer.
 
 </details>
 
