@@ -634,7 +634,7 @@ func runUnpacker(cmd *exec.Cmd, dir string) ([]byte, error) {
 		case <-tick.C:
 			if unpackedSize(dir) > maxUnpacked {
 				_ = cmd.Process.Kill()
-				<-done
+				<-done //nolint:errcheck
 
 				return out.Bytes(), errUnpackedTooLarge
 			}

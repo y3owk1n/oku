@@ -6,32 +6,32 @@ include = []
 name = 'go'
 ref = './.oku/go.toml'
 manifest_sha256 = '2022b9ea9d9e33afb9ca6a565a6ec9b4655f57311f5c8db4f0a5d6fe81b191ae'
-version = '1.26.9'
-tag = 'go1.26.9'
+version = '1.27.3'
+tag = 'go1.27.3'
 
 [package.platform]
 [package.platform.darwin-arm64]
 strategy = 'artifact'
-url = 'https://dl.google.com/go/go1.26.9.darwin-arm64.tar.gz'
-sha256 = 'f9bb7c0a02506c5d9bf0d1eb1f7ee6c7684f844ae49558308a0427b830e022cc'
+url = 'https://dl.google.com/go/go1.27.3.darwin-arm64.tar.gz'
+sha256 = 'dd3908cf20959d798c1e06ebe5b72213f0505ce01373b40ce3110975a6cd99c2'
 verified = 'checksum-file'
 
 [package.platform.linux-amd64-glibc]
 strategy = 'artifact'
-url = 'https://dl.google.com/go/go1.26.9.linux-amd64.tar.gz'
-sha256 = '42d158b4d8f7b61ac0a830567c940a86098fb7aac52e467a5ebec03ef5cc2f8d'
+url = 'https://dl.google.com/go/go1.27.3.linux-amd64.tar.gz'
+sha256 = '65efbc80fdc1fa2cd2631cad5b481777a68e8725f34e89f50fc6ac714e379b40'
 verified = 'checksum-file'
 
 [package.platform.windows-amd64]
 strategy = 'artifact'
-url = 'https://dl.google.com/go/go1.26.9.windows-amd64.zip'
-sha256 = 'd722201a9c0c086d1610e111c48203009af690892ed708072bd5ae20160e7a59'
+url = 'https://dl.google.com/go/go1.27.3.windows-amd64.zip'
+sha256 = 'f26081f438319757f8a1b46d7d0b2c5ec7583d4038e485e0aa725cfde7885fff'
 verified = 'checksum-file'
 
 [[package]]
 name = 'gofumpt'
 ref = 'github:mvdan/gofumpt'
-commit = '27de560bdc4c57a89f1c0f72c5e5fdd88d144438'
+commit = '361d571111e81218c1fdf3419c9a60c918a66a7f'
 manifest_sha256 = 'd59a925191cd2b5c4b62e0ad97d0eaec628a2f9c1f19edeb79225c47d8037ac2'
 version = '0.10.0'
 tag = 'v0.10.0'
@@ -43,86 +43,96 @@ manifest = "[package]\nname = \"gofumpt\"\nhomepage = \"https://github.com/mvdan
 strategy = 'artifact'
 url = 'https://github.com/mvdan/gofumpt/releases/download/v0.10.0/gofumpt_v0.10.0_darwin_arm64'
 sha256 = 'ba4b348e729cba915d5c7dc515774e2f2c7cc5c5ad011de20d34be10e5a2f906'
+verified = 'published'
 
 [package.platform.linux-amd64-glibc]
 strategy = 'artifact'
 url = 'https://github.com/mvdan/gofumpt/releases/download/v0.10.0/gofumpt_v0.10.0_linux_amd64'
 sha256 = '48ee398ec72afdaca6accb70f5ed741349d5dcccb52c5bb4c4469d698980b186'
+verified = 'published'
 
 [package.platform.windows-amd64]
 strategy = 'artifact'
 url = 'https://github.com/mvdan/gofumpt/releases/download/v0.10.0/gofumpt_v0.10.0_windows_amd64.exe'
 sha256 = '20872b464435512b74678b1155b75bd75220de5737ad8c075b9151c846543697'
+verified = 'published'
 
 [[package]]
 name = 'goimports'
 ref = 'go:golang.org/x/tools/cmd/goimports'
-manifest_sha256 = '637dac91881c4cc81f8d0ff9bfdfa0486c54082fc0ce0c8816d830c0faa3f1ab'
-version = '0.50.0'
+manifest_sha256 = '7da2e53838e13f12d00f680f57e45b2e923f68183bb981df3d1106d3ac2593b9'
+version = '0.52.0'
 inferred = true
-manifest = "[package]\nname = \"goimports\"\nhomepage = \"https://pkg.go.dev/golang.org/x/tools/cmd/goimports\"\n\n[version]\nfrom = \"go\"\nrepo = \"golang.org/x/tools\"\n\n[build]\ndeps = [{ ref = \"./.oku/go.toml\", version = \"1.26\" }]\n\n[[build.step]]\nvendor = \"go\"\npackage = \"golang.org/x/tools/cmd/goimports\"\n"
+manifest = "[package]\nname = \"goimports\"\nhomepage = \"https://pkg.go.dev/golang.org/x/tools/cmd/goimports\"\n\n[version]\nfrom = \"go\"\nrepo = \"golang.org/x/tools\"\n\n[build]\ndeps = [{ ref = \"./.oku/go.toml\", version = \"1.27\" }]\n\n[[build.step]]\nvendor = \"go\"\npackage = \"golang.org/x/tools/cmd/goimports\"\n"
 
 [package.platform]
 [package.platform.darwin-arm64]
 strategy = 'build'
-vendor_sha256 = 'df5e2a52ab1ae051bdec4cc0368cc9f0fab83b9043b424719e8b5d368462f111'
+vendor_sha256 = 'acafd9119405d9f197318efdf44f2e59b4398a711ad5722108cf1a0a49d7b8f6'
 
 [package.platform.linux-amd64-glibc]
 strategy = 'build'
-vendor_sha256 = 'df5e2a52ab1ae051bdec4cc0368cc9f0fab83b9043b424719e8b5d368462f111'
+vendor_sha256 = 'acafd9119405d9f197318efdf44f2e59b4398a711ad5722108cf1a0a49d7b8f6'
 
 [package.platform.windows-amd64]
 strategy = 'build'
-vendor_sha256 = 'df5e2a52ab1ae051bdec4cc0368cc9f0fab83b9043b424719e8b5d368462f111'
+vendor_sha256 = 'acafd9119405d9f197318efdf44f2e59b4398a711ad5722108cf1a0a49d7b8f6'
 
 [[package.dep]]
 name = 'go'
 ref = './.oku/go.toml'
 manifest_sha256 = '2022b9ea9d9e33afb9ca6a565a6ec9b4655f57311f5c8db4f0a5d6fe81b191ae'
-version = '1.26.8'
-tag = 'go1.26.8'
+version = '1.27.3'
+tag = 'go1.27.3'
 
 [package.dep.platform]
 [package.dep.platform.darwin-arm64]
 strategy = 'artifact'
-url = 'https://dl.google.com/go/go1.26.8.darwin-arm64.tar.gz'
-sha256 = 'a012b25b571bd0138a03dcd25375ceba866fe5ca822f426d2c66a4de56fd3f4b'
+url = 'https://dl.google.com/go/go1.27.3.darwin-arm64.tar.gz'
+sha256 = 'dd3908cf20959d798c1e06ebe5b72213f0505ce01373b40ce3110975a6cd99c2'
+verified = 'checksum-file'
 
 [package.dep.platform.linux-amd64-glibc]
 strategy = 'artifact'
-url = 'https://dl.google.com/go/go1.26.8.linux-amd64.tar.gz'
-sha256 = 'd0f743b33e8d8945e6b1f432edd15785c70507121d6e2a723b21285eddf8b57b'
+url = 'https://dl.google.com/go/go1.27.3.linux-amd64.tar.gz'
+sha256 = '65efbc80fdc1fa2cd2631cad5b481777a68e8725f34e89f50fc6ac714e379b40'
+verified = 'checksum-file'
 
 [package.dep.platform.windows-amd64]
 strategy = 'artifact'
-url = 'https://dl.google.com/go/go1.26.8.windows-amd64.zip'
-sha256 = 'b92c3b2adae85a11ba71fe7216daf0d84e82af4c8ab6c5625807f28622043a59'
+url = 'https://dl.google.com/go/go1.27.3.windows-amd64.zip'
+sha256 = 'f26081f438319757f8a1b46d7d0b2c5ec7583d4038e485e0aa725cfde7885fff'
+verified = 'checksum-file'
 
 [[package]]
 name = 'golangci-lint'
 ref = 'github:golangci/golangci-lint'
-commit = 'a1002350762bd9faf272101a4eb32aabfcba8ca2'
-manifest_sha256 = 'dd47c50fce23d60b43a5996f07be2f7f71a81efc49fcb49aaad3bbf9aace8ef8'
-version = '2.13.2'
-tag = 'v2.13.2'
+commit = '39821a0ac5ea3097d571fc8e723df80890be9603'
+manifest_sha256 = '9fffc0cf00c588fdc734048a7119ff9d3f469c94da731fab33e72ce7d3255133'
+version = '2.15.0'
+signer_workflow = 'golangci/golangci-lint/.github/workflows/release.yml'
+tag = 'v2.15.0'
 inferred = true
-manifest = "[package]\nname = \"golangci-lint\"\nhomepage = \"https://github.com/golangci/golangci-lint\"\n\n[version]\nfrom = \"github-releases\"\nrepo = \"golangci/golangci-lint\"\nstrip_prefix = \"v\"\n\n[[artifact]]\nmatch = { os = \"linux\", arch = \"amd64\" }\nurl = \"https://github.com/golangci/golangci-lint/releases/download/{{tag}}/golangci-lint-{{version}}-linux-amd64.tar.gz\"\nsha256_url = \"https://github.com/golangci/golangci-lint/releases/download/{{tag}}/golangci-lint-{{version}}-checksums.txt\"\nstrip = 1\nbin = [\"golangci-lint\"]\n\n[[artifact]]\nmatch = { os = \"darwin\", arch = \"amd64\" }\nurl = \"https://github.com/golangci/golangci-lint/releases/download/{{tag}}/golangci-lint-{{version}}-darwin-amd64.tar.gz\"\nsha256_url = \"https://github.com/golangci/golangci-lint/releases/download/{{tag}}/golangci-lint-{{version}}-checksums.txt\"\nstrip = 1\nbin = [\"golangci-lint\"]\n\n[[artifact]]\nmatch = { os = \"windows\", arch = \"amd64\" }\nurl = \"https://github.com/golangci/golangci-lint/releases/download/{{tag}}/golangci-lint-{{version}}-windows-amd64.zip\"\nsha256_url = \"https://github.com/golangci/golangci-lint/releases/download/{{tag}}/golangci-lint-{{version}}-checksums.txt\"\nstrip = 1\nbin = [\"golangci-lint.exe\"]\n\n[[artifact]]\nmatch = { os = \"linux\", arch = \"arm64\" }\nurl = \"https://github.com/golangci/golangci-lint/releases/download/{{tag}}/golangci-lint-{{version}}-linux-arm64.tar.gz\"\nsha256_url = \"https://github.com/golangci/golangci-lint/releases/download/{{tag}}/golangci-lint-{{version}}-checksums.txt\"\nstrip = 1\nbin = [\"golangci-lint\"]\n\n[[artifact]]\nmatch = { os = \"darwin\", arch = \"arm64\" }\nurl = \"https://github.com/golangci/golangci-lint/releases/download/{{tag}}/golangci-lint-{{version}}-darwin-arm64.tar.gz\"\nsha256_url = \"https://github.com/golangci/golangci-lint/releases/download/{{tag}}/golangci-lint-{{version}}-checksums.txt\"\nstrip = 1\nbin = [\"golangci-lint\"]\n\n[[artifact]]\nmatch = { os = \"windows\", arch = \"arm64\" }\nurl = \"https://github.com/golangci/golangci-lint/releases/download/{{tag}}/golangci-lint-{{version}}-windows-arm64.zip\"\nsha256_url = \"https://github.com/golangci/golangci-lint/releases/download/{{tag}}/golangci-lint-{{version}}-checksums.txt\"\nstrip = 1\nbin = [\"golangci-lint.exe\"]\n\n[[artifact]]\nmatch = { os = \"linux\", arch = \"386\" }\nurl = \"https://github.com/golangci/golangci-lint/releases/download/{{tag}}/golangci-lint-{{version}}-linux-386.tar.gz\"\nsha256_url = \"https://github.com/golangci/golangci-lint/releases/download/{{tag}}/golangci-lint-{{version}}-checksums.txt\"\nstrip = 1\nbin = [\"golangci-lint\"]\n\n[[artifact]]\nmatch = { os = \"windows\", arch = \"386\" }\nurl = \"https://github.com/golangci/golangci-lint/releases/download/{{tag}}/golangci-lint-{{version}}-windows-386.zip\"\nsha256_url = \"https://github.com/golangci/golangci-lint/releases/download/{{tag}}/golangci-lint-{{version}}-checksums.txt\"\nstrip = 1\nbin = [\"golangci-lint.exe\"]\n\n[[artifact]]\nmatch = { os = \"linux\", arch = \"arm\" }\nurl = \"https://github.com/golangci/golangci-lint/releases/download/{{tag}}/golangci-lint-{{version}}-linux-armv7.tar.gz\"\nsha256_url = \"https://github.com/golangci/golangci-lint/releases/download/{{tag}}/golangci-lint-{{version}}-checksums.txt\"\nstrip = 1\nbin = [\"golangci-lint\"]\n\n[[artifact]]\nmatch = { os = \"linux\", arch = \"riscv64\" }\nurl = \"https://github.com/golangci/golangci-lint/releases/download/{{tag}}/golangci-lint-{{version}}-linux-riscv64.tar.gz\"\nsha256_url = \"https://github.com/golangci/golangci-lint/releases/download/{{tag}}/golangci-lint-{{version}}-checksums.txt\"\nstrip = 1\nbin = [\"golangci-lint\"]\n"
+manifest = "[package]\nname = \"golangci-lint\"\nhomepage = \"https://github.com/golangci/golangci-lint\"\nsigner_workflow = \"golangci/golangci-lint/.github/workflows/release.yml\"\nattestations = true\n\n[version]\nfrom = \"github-releases\"\nrepo = \"golangci/golangci-lint\"\nstrip_prefix = \"v\"\n\n[[artifact]]\nmatch = { os = \"linux\", arch = \"amd64\" }\nurl = \"https://github.com/golangci/golangci-lint/releases/download/{{tag}}/golangci-lint-{{version}}-linux-amd64.tar.gz\"\nsha256_url = \"https://github.com/golangci/golangci-lint/releases/download/{{tag}}/golangci-lint-{{version}}-checksums.txt\"\nstrip = 1\nbin = [\"golangci-lint\"]\n\n[[artifact]]\nmatch = { os = \"darwin\", arch = \"amd64\" }\nurl = \"https://github.com/golangci/golangci-lint/releases/download/{{tag}}/golangci-lint-{{version}}-darwin-amd64.tar.gz\"\nsha256_url = \"https://github.com/golangci/golangci-lint/releases/download/{{tag}}/golangci-lint-{{version}}-checksums.txt\"\nstrip = 1\nbin = [\"golangci-lint\"]\n\n[[artifact]]\nmatch = { os = \"windows\", arch = \"amd64\" }\nurl = \"https://github.com/golangci/golangci-lint/releases/download/{{tag}}/golangci-lint-{{version}}-windows-amd64.zip\"\nsha256_url = \"https://github.com/golangci/golangci-lint/releases/download/{{tag}}/golangci-lint-{{version}}-checksums.txt\"\nstrip = 1\nbin = [\"golangci-lint.exe\"]\n\n[[artifact]]\nmatch = { os = \"linux\", arch = \"arm64\" }\nurl = \"https://github.com/golangci/golangci-lint/releases/download/{{tag}}/golangci-lint-{{version}}-linux-arm64.tar.gz\"\nsha256_url = \"https://github.com/golangci/golangci-lint/releases/download/{{tag}}/golangci-lint-{{version}}-checksums.txt\"\nstrip = 1\nbin = [\"golangci-lint\"]\n\n[[artifact]]\nmatch = { os = \"darwin\", arch = \"arm64\" }\nurl = \"https://github.com/golangci/golangci-lint/releases/download/{{tag}}/golangci-lint-{{version}}-darwin-arm64.tar.gz\"\nsha256_url = \"https://github.com/golangci/golangci-lint/releases/download/{{tag}}/golangci-lint-{{version}}-checksums.txt\"\nstrip = 1\nbin = [\"golangci-lint\"]\n\n[[artifact]]\nmatch = { os = \"windows\", arch = \"arm64\" }\nurl = \"https://github.com/golangci/golangci-lint/releases/download/{{tag}}/golangci-lint-{{version}}-windows-arm64.zip\"\nsha256_url = \"https://github.com/golangci/golangci-lint/releases/download/{{tag}}/golangci-lint-{{version}}-checksums.txt\"\nstrip = 1\nbin = [\"golangci-lint.exe\"]\n\n[[artifact]]\nmatch = { os = \"linux\", arch = \"386\" }\nurl = \"https://github.com/golangci/golangci-lint/releases/download/{{tag}}/golangci-lint-{{version}}-linux-386.tar.gz\"\nsha256_url = \"https://github.com/golangci/golangci-lint/releases/download/{{tag}}/golangci-lint-{{version}}-checksums.txt\"\nstrip = 1\nbin = [\"golangci-lint\"]\n\n[[artifact]]\nmatch = { os = \"windows\", arch = \"386\" }\nurl = \"https://github.com/golangci/golangci-lint/releases/download/{{tag}}/golangci-lint-{{version}}-windows-386.zip\"\nsha256_url = \"https://github.com/golangci/golangci-lint/releases/download/{{tag}}/golangci-lint-{{version}}-checksums.txt\"\nstrip = 1\nbin = [\"golangci-lint.exe\"]\n\n[[artifact]]\nmatch = { os = \"linux\", arch = \"arm\" }\nurl = \"https://github.com/golangci/golangci-lint/releases/download/{{tag}}/golangci-lint-{{version}}-linux-armv7.tar.gz\"\nsha256_url = \"https://github.com/golangci/golangci-lint/releases/download/{{tag}}/golangci-lint-{{version}}-checksums.txt\"\nstrip = 1\nbin = [\"golangci-lint\"]\n\n[[artifact]]\nmatch = { os = \"linux\", arch = \"riscv64\" }\nurl = \"https://github.com/golangci/golangci-lint/releases/download/{{tag}}/golangci-lint-{{version}}-linux-riscv64.tar.gz\"\nsha256_url = \"https://github.com/golangci/golangci-lint/releases/download/{{tag}}/golangci-lint-{{version}}-checksums.txt\"\nstrip = 1\nbin = [\"golangci-lint\"]\n"
 
 [package.platform]
 [package.platform.darwin-arm64]
 strategy = 'artifact'
-url = 'https://github.com/golangci/golangci-lint/releases/download/v2.13.2/golangci-lint-2.13.2-darwin-arm64.tar.gz'
-sha256 = 'f4bf83f0b64f055c42b28fc9a38861839f69c096e61c788e72dfaae412011789'
+url = 'https://github.com/golangci/golangci-lint/releases/download/v2.15.0/golangci-lint-2.15.0-darwin-arm64.tar.gz'
+sha256 = 'd1e409481a8ca846c4bc97e781eb5cb1bd5c23353a0b3977a1cbda1b1b6447d5'
+verified = 'sigstore'
 
 [package.platform.linux-amd64-glibc]
 strategy = 'artifact'
-url = 'https://github.com/golangci/golangci-lint/releases/download/v2.13.2/golangci-lint-2.13.2-linux-amd64.tar.gz'
-sha256 = '2277d43b98ec0054280f2ac26b53268bae97682444678a59a657dd565da021d6'
+url = 'https://github.com/golangci/golangci-lint/releases/download/v2.15.0/golangci-lint-2.15.0-linux-amd64.tar.gz'
+sha256 = '9b7fe6a6bf6334b98decf8d86b11415ea7889afdabdd1959fdce23af2a9ebcea'
+verified = 'sigstore'
 
 [package.platform.windows-amd64]
 strategy = 'artifact'
-url = 'https://github.com/golangci/golangci-lint/releases/download/v2.13.2/golangci-lint-2.13.2-windows-amd64.zip'
-sha256 = '4735fdc8e84a0cfb7a15a1c364a650942f88215e0d36c674ebc4024f7b554524'
+url = 'https://github.com/golangci/golangci-lint/releases/download/v2.15.0/golangci-lint-2.15.0-windows-amd64.zip'
+sha256 = 'cd7ea6063c95de245e17e5246e42bdc14bb221792c429dbd239ab3a6ade6ca6a'
+verified = 'sigstore'
 
 [[package]]
 name = 'golangci-lint-langserver'
@@ -139,21 +149,24 @@ manifest = "[package]\nname = \"golangci-lint-langserver\"\nhomepage = \"https:/
 strategy = 'artifact'
 url = 'https://github.com/nametake/golangci-lint-langserver/releases/download/v0.0.12/golangci-lint-langserver_Darwin_arm64.tar.gz'
 sha256 = 'e630712320bcc1c75a1584f2b46a5c7ee7b15e603bb180b8b42c2932302d2a95'
+verified = 'checksum-file'
 
 [package.platform.linux-amd64-glibc]
 strategy = 'artifact'
 url = 'https://github.com/nametake/golangci-lint-langserver/releases/download/v0.0.12/golangci-lint-langserver_Linux_x86_64.tar.gz'
 sha256 = '7c4a200f34af3de4188a792ba676994ce5fdb181dd4731e10cd3cc501e722b28'
+verified = 'checksum-file'
 
 [package.platform.windows-amd64]
 strategy = 'artifact'
 url = 'https://github.com/nametake/golangci-lint-langserver/releases/download/v0.0.12/golangci-lint-langserver_Windows_x86_64.zip'
 sha256 = '39b900b6b18bdc0328a9a58539af2bfc0bdaad9c2f217c1afa7921717d11e4d6'
+verified = 'checksum-file'
 
 [[package]]
 name = 'golines'
 ref = 'github:golangci/golines'
-commit = '127b1d8969e11cb3f25c81514849e01635e6f1bd'
+commit = 'ef567f80ef87f4f265120089382e95a519986c7c'
 manifest_sha256 = '27cd63738d9cb9fc9c9d922e81a14cf9c194d90efdf7e93fdb5da2db39a1122d'
 version = '0.15.0'
 tag = 'v0.15.0'
@@ -165,107 +178,119 @@ manifest = "[package]\nname = \"golines\"\nhomepage = \"https://github.com/golan
 strategy = 'artifact'
 url = 'https://github.com/golangci/golines/releases/download/v0.15.0/golines-0.15.0-darwin-all.tar.gz'
 sha256 = 'ec0d1b2298552695eeac87cbcbe1dd9d533a4a986a5af791a7486b0ddb65e525'
+verified = 'checksum-file'
 
 [package.platform.linux-amd64-glibc]
 strategy = 'artifact'
 url = 'https://github.com/golangci/golines/releases/download/v0.15.0/golines-0.15.0-linux-amd64.tar.gz'
 sha256 = 'c350dbe819d68415039cbbd8c24d4e99367dad36c916fe57c12077030517f8fa'
+verified = 'checksum-file'
 
 [package.platform.windows-amd64]
 strategy = 'artifact'
 url = 'https://github.com/golangci/golines/releases/download/v0.15.0/golines-0.15.0-windows-amd64.zip'
 sha256 = '9885510d26a7f75dcae204e12d28f3162dd80a3084fa2a47e818b43a7adc1018'
+verified = 'checksum-file'
 
 [[package]]
 name = 'gopls'
 ref = 'go:golang.org/x/tools/gopls'
-manifest_sha256 = '64da4a32ff3626518f8e583531d8afb14aa951248de12f3e9db365f8bd2d0080'
-version = '0.23.0'
+manifest_sha256 = 'e7f00a3b4d9aedb853553a6a36d0a2539ba5d2a273d38cf23e8b32d4da328a5e'
+version = '0.24.0'
 inferred = true
-manifest = "[package]\nname = \"gopls\"\nhomepage = \"https://pkg.go.dev/golang.org/x/tools/gopls\"\n\n[version]\nfrom = \"go\"\nrepo = \"golang.org/x/tools/gopls\"\n\n[build]\ndeps = [{ ref = \"./.oku/go.toml\", version = \"1.26\" }]\n\n[[build.step]]\nvendor = \"go\"\npackage = \"golang.org/x/tools/gopls\"\n"
+manifest = "[package]\nname = \"gopls\"\nhomepage = \"https://pkg.go.dev/golang.org/x/tools/gopls\"\n\n[version]\nfrom = \"go\"\nrepo = \"golang.org/x/tools/gopls\"\n\n[build]\ndeps = [{ ref = \"./.oku/go.toml\", version = \"1.27\" }]\n\n[[build.step]]\nvendor = \"go\"\npackage = \"golang.org/x/tools/gopls\"\n"
 
 [package.platform]
 [package.platform.darwin-arm64]
 strategy = 'build'
-vendor_sha256 = 'cec9e3e78c4b11b621f763aac7daa96a995552ff6158b0be5b360a3efd63bcee'
+vendor_sha256 = '94a0c91a3e5e3aef7fc87ee2cab559a9bb1c1305a3ec5eaa537bb2080dae94c7'
 
 [package.platform.linux-amd64-glibc]
 strategy = 'build'
-vendor_sha256 = 'cec9e3e78c4b11b621f763aac7daa96a995552ff6158b0be5b360a3efd63bcee'
+vendor_sha256 = '94a0c91a3e5e3aef7fc87ee2cab559a9bb1c1305a3ec5eaa537bb2080dae94c7'
 
 [package.platform.windows-amd64]
 strategy = 'build'
-vendor_sha256 = 'cec9e3e78c4b11b621f763aac7daa96a995552ff6158b0be5b360a3efd63bcee'
+vendor_sha256 = '94a0c91a3e5e3aef7fc87ee2cab559a9bb1c1305a3ec5eaa537bb2080dae94c7'
 
 [[package.dep]]
 name = 'go'
 ref = './.oku/go.toml'
 manifest_sha256 = '2022b9ea9d9e33afb9ca6a565a6ec9b4655f57311f5c8db4f0a5d6fe81b191ae'
-version = '1.26.8'
-tag = 'go1.26.8'
+version = '1.27.3'
+tag = 'go1.27.3'
 
 [package.dep.platform]
 [package.dep.platform.darwin-arm64]
 strategy = 'artifact'
-url = 'https://dl.google.com/go/go1.26.8.darwin-arm64.tar.gz'
-sha256 = 'a012b25b571bd0138a03dcd25375ceba866fe5ca822f426d2c66a4de56fd3f4b'
+url = 'https://dl.google.com/go/go1.27.3.darwin-arm64.tar.gz'
+sha256 = 'dd3908cf20959d798c1e06ebe5b72213f0505ce01373b40ce3110975a6cd99c2'
+verified = 'checksum-file'
 
 [package.dep.platform.linux-amd64-glibc]
 strategy = 'artifact'
-url = 'https://dl.google.com/go/go1.26.8.linux-amd64.tar.gz'
-sha256 = 'd0f743b33e8d8945e6b1f432edd15785c70507121d6e2a723b21285eddf8b57b'
+url = 'https://dl.google.com/go/go1.27.3.linux-amd64.tar.gz'
+sha256 = '65efbc80fdc1fa2cd2631cad5b481777a68e8725f34e89f50fc6ac714e379b40'
+verified = 'checksum-file'
 
 [package.dep.platform.windows-amd64]
 strategy = 'artifact'
-url = 'https://dl.google.com/go/go1.26.8.windows-amd64.zip'
-sha256 = 'b92c3b2adae85a11ba71fe7216daf0d84e82af4c8ab6c5625807f28622043a59'
+url = 'https://dl.google.com/go/go1.27.3.windows-amd64.zip'
+sha256 = 'f26081f438319757f8a1b46d7d0b2c5ec7583d4038e485e0aa725cfde7885fff'
+verified = 'checksum-file'
 
 [[package]]
 name = 'just'
 ref = 'github:casey/just'
-commit = '6119e6aff518b6550d9030955f905b01051b5772'
+commit = 'c7317c85c21ebd83ea4bb8de26f8afec44c7e597'
 manifest_sha256 = '3d331400ff918705e431d02243fe848b7e313db95a8dc117434c60c974102a1b'
-version = '1.58.0'
+version = '1.59.0'
 inferred = true
 manifest = "[package]\nname = \"just\"\nhomepage = \"https://github.com/casey/just\"\n\n[version]\nfrom = \"github-releases\"\nrepo = \"casey/just\"\n\n[[artifact]]\nmatch = { os = \"linux\", arch = \"amd64\" }\nurl = \"https://github.com/casey/just/releases/download/{{tag}}/just-{{tag}}-x86_64-unknown-linux-musl.tar.gz\"\nsha256_url = \"https://github.com/casey/just/releases/download/{{tag}}/SHA256SUMS\"\nbin = [\"just\"]\nman = [\"just.1\"]\n\n[[artifact]]\nmatch = { os = \"darwin\", arch = \"amd64\" }\nurl = \"https://github.com/casey/just/releases/download/{{tag}}/just-{{tag}}-x86_64-apple-darwin.tar.gz\"\nsha256_url = \"https://github.com/casey/just/releases/download/{{tag}}/SHA256SUMS\"\nbin = [\"just\"]\nman = [\"just.1\"]\n\n[[artifact]]\nmatch = { os = \"windows\", arch = \"amd64\" }\nurl = \"https://github.com/casey/just/releases/download/{{tag}}/just-{{tag}}-x86_64-pc-windows-msvc.zip\"\nsha256_url = \"https://github.com/casey/just/releases/download/{{tag}}/SHA256SUMS\"\nbin = [\"just.exe\"]\nman = [\"just.1\"]\n\n[[artifact]]\nmatch = { os = \"linux\", arch = \"arm64\" }\nurl = \"https://github.com/casey/just/releases/download/{{tag}}/just-{{tag}}-aarch64-unknown-linux-musl.tar.gz\"\nsha256_url = \"https://github.com/casey/just/releases/download/{{tag}}/SHA256SUMS\"\nbin = [\"just\"]\nman = [\"just.1\"]\n\n[[artifact]]\nmatch = { os = \"darwin\", arch = \"arm64\" }\nurl = \"https://github.com/casey/just/releases/download/{{tag}}/just-{{tag}}-aarch64-apple-darwin.tar.gz\"\nsha256_url = \"https://github.com/casey/just/releases/download/{{tag}}/SHA256SUMS\"\nbin = [\"just\"]\nman = [\"just.1\"]\n\n[[artifact]]\nmatch = { os = \"windows\", arch = \"arm64\" }\nurl = \"https://github.com/casey/just/releases/download/{{tag}}/just-{{tag}}-aarch64-pc-windows-msvc.zip\"\nsha256_url = \"https://github.com/casey/just/releases/download/{{tag}}/SHA256SUMS\"\nbin = [\"just.exe\"]\nman = [\"just.1\"]\n\n[[artifact]]\nmatch = { os = \"linux\", arch = \"arm\" }\nurl = \"https://github.com/casey/just/releases/download/{{tag}}/just-{{tag}}-armv7-unknown-linux-musleabihf.tar.gz\"\nsha256_url = \"https://github.com/casey/just/releases/download/{{tag}}/SHA256SUMS\"\nbin = [\"just\"]\nman = [\"just.1\"]\n"
 
 [package.platform]
 [package.platform.darwin-arm64]
 strategy = 'artifact'
-url = 'https://github.com/casey/just/releases/download/1.58.0/just-1.58.0-aarch64-apple-darwin.tar.gz'
-sha256 = '50ae3e996c974a0bf32ea7d10f495070df33f1b43e0616b2769e3d4821ed8f48'
+url = 'https://github.com/casey/just/releases/download/1.59.0/just-1.59.0-aarch64-apple-darwin.tar.gz'
+sha256 = '6574cea774ed4cae12e24b6aa11857de33e80dab4667cf628fd5840df96a2a9d'
+verified = 'checksum-file'
 
 [package.platform.linux-amd64-glibc]
 strategy = 'artifact'
-url = 'https://github.com/casey/just/releases/download/1.58.0/just-1.58.0-x86_64-unknown-linux-musl.tar.gz'
-sha256 = '4a5cc2f53e6f0f8c59092a6cc38291eb729d46a7dd95d3ae582008881b84931d'
+url = 'https://github.com/casey/just/releases/download/1.59.0/just-1.59.0-x86_64-unknown-linux-musl.tar.gz'
+sha256 = '409044617b6f06517c1035e55ca38c8c856ff8b650e41bc2aa1ef82d5903a23e'
+verified = 'checksum-file'
 
 [package.platform.windows-amd64]
 strategy = 'artifact'
-url = 'https://github.com/casey/just/releases/download/1.58.0/just-1.58.0-x86_64-pc-windows-msvc.zip'
-sha256 = '759f16fb7aa17c5c8b9594b6d4a8c1a6630dfd042cf2b3ff84841454d3d188dc'
+url = 'https://github.com/casey/just/releases/download/1.59.0/just-1.59.0-x86_64-pc-windows-msvc.zip'
+sha256 = '9c5463e2d0974e31bee71346aa5cbf19167de1585a4abc1bae7b3b04604ea9c0'
+verified = 'checksum-file'
 
 [[package]]
 name = 'just-lsp'
 ref = 'github:terror/just-lsp'
-commit = '6ed78e5ad49a098f80a34dac4f8d2d70e1aa4dbf'
-manifest_sha256 = '60883aef1bc9def6b9fcf4b9b50f4744a0655bd9f7e6b8625a54286e966c27bd'
-version = '0.9.0'
+commit = '3f0b178540d39742ed7c200cdacf89bedd9dcdf3'
+manifest_sha256 = '96ee9cc68f1cbcc068e52893ebccf6bf9cda8dd623203d1f374526eec901a844'
+version = '0.10.0'
 inferred = true
-manifest = "[package]\nname = \"just-lsp\"\nhomepage = \"https://github.com/terror/just-lsp\"\n\n[version]\nfrom = \"github-releases\"\nrepo = \"terror/just-lsp\"\n\n[[artifact]]\nmatch = { os = \"linux\", arch = \"amd64\", libc = \"glibc\" }\nurl = \"https://github.com/terror/just-lsp/releases/download/{{tag}}/just-lsp-{{tag}}-x86_64-unknown-linux-gnu.tar.gz\"\nsha256_url = \"https://github.com/terror/just-lsp/releases/download/{{tag}}/SHA256SUMS\"\nbin = [\"just-lsp\"]\n\n[[artifact]]\nmatch = { os = \"linux\", arch = \"amd64\" }\nurl = \"https://github.com/terror/just-lsp/releases/download/{{tag}}/just-lsp-{{tag}}-x86_64-unknown-linux-musl.tar.gz\"\nsha256_url = \"https://github.com/terror/just-lsp/releases/download/{{tag}}/SHA256SUMS\"\nbin = [\"just-lsp\"]\n\n[[artifact]]\nmatch = { os = \"darwin\", arch = \"amd64\" }\nurl = \"https://github.com/terror/just-lsp/releases/download/{{tag}}/just-lsp-{{tag}}-x86_64-apple-darwin.tar.gz\"\nsha256_url = \"https://github.com/terror/just-lsp/releases/download/{{tag}}/SHA256SUMS\"\nbin = [\"just-lsp\"]\n\n[[artifact]]\nmatch = { os = \"windows\", arch = \"amd64\" }\nurl = \"https://github.com/terror/just-lsp/releases/download/{{tag}}/just-lsp-{{tag}}-x86_64-pc-windows-msvc.zip\"\nsha256_url = \"https://github.com/terror/just-lsp/releases/download/{{tag}}/SHA256SUMS\"\nbin = [\"just-lsp.exe\"]\n\n[[artifact]]\nmatch = { os = \"linux\", arch = \"arm64\", libc = \"glibc\" }\nurl = \"https://github.com/terror/just-lsp/releases/download/{{tag}}/just-lsp-{{tag}}-aarch64-unknown-linux-gnu.tar.gz\"\nsha256_url = \"https://github.com/terror/just-lsp/releases/download/{{tag}}/SHA256SUMS\"\nbin = [\"just-lsp\"]\n\n[[artifact]]\nmatch = { os = \"linux\", arch = \"arm64\" }\nurl = \"https://github.com/terror/just-lsp/releases/download/{{tag}}/just-lsp-{{tag}}-aarch64-unknown-linux-musl.tar.gz\"\nsha256_url = \"https://github.com/terror/just-lsp/releases/download/{{tag}}/SHA256SUMS\"\nbin = [\"just-lsp\"]\n\n[[artifact]]\nmatch = { os = \"darwin\", arch = \"arm64\" }\nurl = \"https://github.com/terror/just-lsp/releases/download/{{tag}}/just-lsp-{{tag}}-aarch64-apple-darwin.tar.gz\"\nsha256_url = \"https://github.com/terror/just-lsp/releases/download/{{tag}}/SHA256SUMS\"\nbin = [\"just-lsp\"]\n\n[[artifact]]\nmatch = { os = \"windows\", arch = \"arm64\" }\nurl = \"https://github.com/terror/just-lsp/releases/download/{{tag}}/just-lsp-{{tag}}-aarch64-pc-windows-msvc.zip\"\nsha256_url = \"https://github.com/terror/just-lsp/releases/download/{{tag}}/SHA256SUMS\"\nbin = [\"just-lsp.exe\"]\n\n[[artifact]]\nmatch = { os = \"linux\", arch = \"arm\" }\nurl = \"https://github.com/terror/just-lsp/releases/download/{{tag}}/just-lsp-{{tag}}-armv7-unknown-linux-musleabihf.tar.gz\"\nsha256_url = \"https://github.com/terror/just-lsp/releases/download/{{tag}}/SHA256SUMS\"\nbin = [\"just-lsp\"]\n"
+manifest = "[package]\nname = \"just-lsp\"\nhomepage = \"https://github.com/terror/just-lsp\"\n\n[version]\nfrom = \"github-releases\"\nrepo = \"terror/just-lsp\"\n\n[[artifact]]\nmatch = { os = \"linux\", arch = \"amd64\", libc = \"glibc\" }\nurl = \"https://github.com/terror/just-lsp/releases/download/{{tag}}/just-lsp-{{tag}}-x86_64-unknown-linux-gnu.tar.gz\"\nsha256_url = \"https://github.com/terror/just-lsp/releases/download/{{tag}}/SHA256SUMS\"\nbin = [\"just-lsp\"]\n\n[[artifact]]\nmatch = { os = \"linux\", arch = \"amd64\" }\nurl = \"https://github.com/terror/just-lsp/releases/download/{{tag}}/just-lsp-{{tag}}-x86_64-unknown-linux-musl.tar.gz\"\nsha256_url = \"https://github.com/terror/just-lsp/releases/download/{{tag}}/SHA256SUMS\"\nbin = [\"just-lsp\"]\n\n[[artifact]]\nmatch = { os = \"darwin\", arch = \"amd64\" }\nurl = \"https://github.com/terror/just-lsp/releases/download/{{tag}}/just-lsp-{{tag}}-x86_64-apple-darwin.tar.gz\"\nsha256_url = \"https://github.com/terror/just-lsp/releases/download/{{tag}}/SHA256SUMS\"\nbin = [\"just-lsp\"]\n\n[[artifact]]\nmatch = { os = \"windows\", arch = \"amd64\" }\nurl = \"https://github.com/terror/just-lsp/releases/download/{{tag}}/just-lsp-{{tag}}-x86_64-pc-windows-msvc.zip\"\nsha256_url = \"https://github.com/terror/just-lsp/releases/download/{{tag}}/SHA256SUMS\"\nbin = [\"just-lsp.exe\"]\n\n[[artifact]]\nmatch = { os = \"linux\", arch = \"arm64\", libc = \"glibc\" }\nurl = \"https://github.com/terror/just-lsp/releases/download/{{tag}}/just-lsp-{{tag}}-aarch64-unknown-linux-gnu.tar.gz\"\nsha256_url = \"https://github.com/terror/just-lsp/releases/download/{{tag}}/SHA256SUMS\"\nbin = [\"just-lsp\"]\n\n[[artifact]]\nmatch = { os = \"linux\", arch = \"arm64\" }\nurl = \"https://github.com/terror/just-lsp/releases/download/{{tag}}/just-lsp-{{tag}}-aarch64-unknown-linux-musl.tar.gz\"\nsha256_url = \"https://github.com/terror/just-lsp/releases/download/{{tag}}/SHA256SUMS\"\nbin = [\"just-lsp\"]\n\n[[artifact]]\nmatch = { os = \"darwin\", arch = \"arm64\" }\nurl = \"https://github.com/terror/just-lsp/releases/download/{{tag}}/just-lsp-{{tag}}-aarch64-apple-darwin.tar.gz\"\nsha256_url = \"https://github.com/terror/just-lsp/releases/download/{{tag}}/SHA256SUMS\"\nbin = [\"just-lsp\"]\n\n[[artifact]]\nmatch = { os = \"windows\", arch = \"arm64\" }\nurl = \"https://github.com/terror/just-lsp/releases/download/{{tag}}/just-lsp-{{tag}}-aarch64-pc-windows-msvc.zip\"\nsha256_url = \"https://github.com/terror/just-lsp/releases/download/{{tag}}/SHA256SUMS\"\nbin = [\"just-lsp.exe\"]\n\n[[artifact]]\nmatch = { os = \"linux\", arch = \"arm\", libc = \"glibc\" }\nurl = \"https://github.com/terror/just-lsp/releases/download/{{tag}}/just-lsp-{{tag}}-armv7-unknown-linux-gnueabihf.tar.gz\"\nsha256_url = \"https://github.com/terror/just-lsp/releases/download/{{tag}}/SHA256SUMS\"\nbin = [\"just-lsp\"]\n\n[[artifact]]\nmatch = { os = \"linux\", arch = \"arm\" }\nurl = \"https://github.com/terror/just-lsp/releases/download/{{tag}}/just-lsp-{{tag}}-armv7-unknown-linux-musleabihf.tar.gz\"\nsha256_url = \"https://github.com/terror/just-lsp/releases/download/{{tag}}/SHA256SUMS\"\nbin = [\"just-lsp\"]\n"
 
 [package.platform]
 [package.platform.darwin-arm64]
 strategy = 'artifact'
-url = 'https://github.com/terror/just-lsp/releases/download/0.9.0/just-lsp-0.9.0-aarch64-apple-darwin.tar.gz'
-sha256 = '64476a3d6a1e4adbea6f7980c455b07d517b341fada4040305fabd4d50b0b3da'
+url = 'https://github.com/terror/just-lsp/releases/download/0.10.0/just-lsp-0.10.0-aarch64-apple-darwin.tar.gz'
+sha256 = 'eeca52c7da21b5b04f059a5e23b99575f77ab9b448bdb84911f6b185d386e9c4'
+verified = 'checksum-file'
 
 [package.platform.linux-amd64-glibc]
 strategy = 'artifact'
-url = 'https://github.com/terror/just-lsp/releases/download/0.9.0/just-lsp-0.9.0-x86_64-unknown-linux-gnu.tar.gz'
-sha256 = '64e1557166bce29571751fda5ab637613b791ddcafd4fa12f24dd39fd003a121'
+url = 'https://github.com/terror/just-lsp/releases/download/0.10.0/just-lsp-0.10.0-x86_64-unknown-linux-gnu.tar.gz'
+sha256 = '9a801d9dd90a2ac06500903b5a8038881f07f1b0e856590d6f91191a305bc305'
+verified = 'checksum-file'
 
 [package.platform.windows-amd64]
 strategy = 'artifact'
-url = 'https://github.com/terror/just-lsp/releases/download/0.9.0/just-lsp-0.9.0-x86_64-pc-windows-msvc.zip'
-sha256 = '8cbe8eae0bba3a378671ec13ea62c6aa01f4d4632856e0b66f9696234d290562'
+url = 'https://github.com/terror/just-lsp/releases/download/0.10.0/just-lsp-0.10.0-x86_64-pc-windows-msvc.zip'
+sha256 = '4465270a43bc71e9ed917320b780a80b53ce632fac83aeafadb689ab8f056f1d'
+verified = 'checksum-file'

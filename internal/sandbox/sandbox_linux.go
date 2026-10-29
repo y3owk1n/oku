@@ -320,7 +320,7 @@ func restrictSockets(network bool) error {
 	// gets EXDEV, as rustc does when it moves each output out of a temporary
 	// directory.
 	if abi >= 9 {
-		attr.Access_fs = landlockResolveUnix | unix.LANDLOCK_ACCESS_FS_REFER
+		attr.Handled_access_fs = landlockResolveUnix | unix.LANDLOCK_ACCESS_FS_REFER
 	}
 
 	if attr == (unix.LandlockRulesetAttr{}) {
@@ -335,7 +335,7 @@ func restrictSockets(network bool) error {
 	}
 	defer func() { _ = unix.Close(int(fd)) }()
 
-	if attr.Access_fs != 0 {
+	if attr.Handled_access_fs != 0 {
 		if err := allow(int(fd), "/", unix.LANDLOCK_ACCESS_FS_REFER); err != nil {
 			return err
 		}

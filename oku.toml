@@ -6,13 +6,13 @@ platforms = ["darwin-arm64", "linux-amd64-glibc", "windows-amd64"]
 # go: packages build with this go, on the same go line as the go package below,
 # not with a go on PATH.
 [runtimes]
-go = { ref = "./.oku/go.toml", version = "1.26" }
+go = { ref = "./.oku/go.toml", version = "1.27" }
 
 # A version names the line to follow, and oku.lock pins the exact build. The
 # linter and the formatters decide what CI accepts, so a new major or minor
 # version of them is a change to review. The editor tools follow the newest.
 [packages]
-go = { ref = "./.oku/go.toml", version = "1.26" }
+go = { ref = "./.oku/go.toml", version = "1.27" }
 golangci-lint = { ref = "github:golangci/golangci-lint", version = "^2" }
 gofumpt = { ref = "github:mvdan/gofumpt", version = "~0.10" }
 golines = { ref = "github:golangci/golines", version = "~0.15" }

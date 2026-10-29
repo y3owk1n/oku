@@ -5,7 +5,7 @@ with the scripts in [Getting started](docs/getting-started.md).
 
 ## Build from source
 
-oku needs Go 1.26.4 or newer, as `go.mod` says. The repo's own `oku.toml`
+oku needs Go 1.27.0 or newer, as `go.mod` says. The repo's own `oku.toml`
 pins the tools of the project: go, golangci-lint, gofumpt, golines, just and
 the editor tools. With oku installed, get them from the lock:
 
