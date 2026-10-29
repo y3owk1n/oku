@@ -502,6 +502,10 @@ order step in `prd/product.md`.
   reads a `git+` manifest from the clone in its cache when the clone holds that
   commit. So `oku update jq` and `oku sync` ask no host for the manifests of
   the packages they keep.
+- B600 [3] A git killed in the middle of a fetch or a checkout can
+  leave a lock file, such as `shallow.lock` or `index.lock`, in the clone of a
+  `git+` ref in oku's cache. The next fetch of that ref deletes the clone and
+  fetches it again.
 - B557 [3] A forge ref's `#name` manifest may be on a later path, such as
   `packages/name.toml` after `name.toml`. oku then records which path held it
   at that full commit SHA. A later read at that commit asks the forge for that
