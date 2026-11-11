@@ -14,8 +14,8 @@ go = { ref = "./.oku/go.toml", version = "1.27" }
 [packages]
 go = { ref = "./.oku/go.toml", version = "1.27" }
 golangci-lint = { ref = "github:golangci/golangci-lint", version = "^2" }
-gofumpt = { ref = "github:mvdan/gofumpt", version = "~0.10" }
-golines = { ref = "github:golangci/golines", version = "~0.15" }
+gofumpt = { ref = "github:mvdan/gofumpt", version = "~0.12" }
+golines = { ref = "github:golangci/golines", version = "~0.16" }
 just = { ref = "github:casey/just", version = "^1" }
 gopls = "go:golang.org/x/tools/gopls"
 goimports = "go:golang.org/x/tools/cmd/goimports"
