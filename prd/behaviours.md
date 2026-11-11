@@ -1788,6 +1788,19 @@ order step in `prd/product.md`.
   next commands: `oku doctor`, a first `oku add`, `oku self update`. When a
   startup file loads the hook already, it says so instead of printing the line
   again. On Windows that is any of the four files `$PROFILE` names.
+- B601 [11] When Group Policy sets PowerShell's execution policy to
+  `Restricted` or `AllSigned`, the Windows install script prints no profile
+  line. It prints one command that puts the global profile's `bin` and oku's
+  directory in front of the user `PATH` in `HKCU\Environment`, keeps that value
+  `REG_EXPAND_SZ` and its other entries, and changes nothing when run again.
+  Once the user `PATH` has both, the script says so. When the policy is
+  `Restricted` without Group Policy, the profile command starts with
+  `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`.
+- B602 [11] On Windows, when Group Policy blocks PowerShell profiles as in
+  B601, `oku add` and `oku doctor` give the B601 command in place of the hook
+  line, and `oku doctor` counts the global `bin` on `PATH` as set up, without
+  completions or project environments. `oku self uninstall` then names both
+  folders to remove from the user `PATH`.
 - B403 [11] With `minisign` on `PATH`, the install script checks the release
   signature and its signed comment: `oku <OKU_VERSION>` when a release is
   named, else an `oku v` release. `OKU_REQUIRE_SIGNATURE=1` refuses when

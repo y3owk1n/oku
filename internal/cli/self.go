@@ -263,7 +263,12 @@ func runUninstall(
 	}
 
 	if slices.Contains(filepath.SplitList(os.Getenv("PATH")), binDir) {
-		warn(out, "remove %s from PATH in your shell config", binDir)
+		if blockingScriptPolicy() != "" {
+			warn(out, "remove %s and %s from your user PATH, under Edit environment variables for your account",
+				binDir, filepath.Dir(opts.Executable))
+		} else {
+			warn(out, "remove %s from PATH in your shell config", binDir)
+		}
 	}
 
 	return nil

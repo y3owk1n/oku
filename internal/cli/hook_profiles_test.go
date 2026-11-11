@@ -62,6 +62,17 @@ func TestB220InstallScriptMatchesTheHookLineTheSameWayAsDoctor(t *testing.T) {
 	}
 }
 
+// The installer cannot import Go, so it repeats the command that puts oku on
+// the user's PATH. This test checks that the two are the same.
+func TestB601InstallScriptPrintsTheSameUserPathCommandAsOku(t *testing.T) {
+	script, err := os.ReadFile(filepath.Join("..", "..", "install.ps1"))
+	must(t, err)
+
+	if !strings.Contains(strings.ReplaceAll(string(script), "\r\n", "\n"), "@'\n"+shellhook.UserPath+"\n'@") {
+		t.Fatalf("install.ps1 does not repeat shellhook.UserPath:\n%s", shellhook.UserPath)
+	}
+}
+
 // writeProfile puts body in a startup file under the test's home directory.
 func writeProfile(t *testing.T, name, body string) string {
 	t.Helper()

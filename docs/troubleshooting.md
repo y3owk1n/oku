@@ -41,6 +41,30 @@ Inside a [project](how-oku-works.md#project), a package goes to the project's
 profile. oku prints `this project's programs are in <dir>`, and the hook puts
 them on `PATH` once you run `oku allow`, see [Projects](guides/projects.md).
 
+## Group Policy blocks PowerShell profiles
+
+On a managed Windows computer, Group Policy can set PowerShell's execution
+policy to `Restricted` or `AllSigned`, and you cannot change it. PowerShell
+then loads no profile, so the hook line never runs. The install script,
+`oku add` and `oku doctor` read the policy and print a command that puts oku
+and the global profile's `bin` in front of your user `PATH`:
+
+```
+note  Group Policy sets PowerShell's execution policy to AllSigned, so no profile loads the hook. To set oku up without it, paste this command, which puts oku and its programs on your user PATH, then open a new terminal:
+  & { $dirs = @('C:\Users\you\AppData\Local\oku\profiles\global\current\bin', 'C:\Users\you\AppData\Local\oku\bin'); ... }
+```
+
+Paste the command into PowerShell. It changes only your own `PATH`, needs no
+administrator rights and runs no script file. Running it again changes nothing.
+After you run it, `oku doctor` says:
+
+```
+ok  Group Policy sets PowerShell's execution policy to AllSigned, so no profile loads the hook. oku's programs run from PATH, without completions or project environments
+```
+
+Without the hook, the shell does not apply a [project's](guides/projects.md)
+programs and `[env]` as you enter it.
+
 ## A project's variables are not set
 
 The hook sets a project's [`[env]`](reference/oku-toml.md#env) only while the

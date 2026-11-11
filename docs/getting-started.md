@@ -51,6 +51,18 @@ new terminal:
 PowerShell reads several profiles, one per scope and host. The line works in
 any of them, and `oku doctor` finds it wherever you put it.
 
+PowerShell loads a profile only when its execution policy lets it run local
+scripts. Windows PowerShell starts with the policy `Restricted`, which does
+not. In that case the install script's command starts with
+`Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`.
+
+On a work computer, Group Policy may set the policy, and you cannot change it.
+The install script then prints a command that puts oku and the programs it
+installs on your user `PATH` instead. The command needs no administrator rights
+and runs no script file. oku and its programs then work in every terminal.
+Completions and project environments need the hook, so they stay off. See
+[Group Policy blocks PowerShell profiles](troubleshooting.md#group-policy-blocks-powershell-profiles).
+
 The line does nothing on a machine without oku, so it is safe in a dotfiles
 repo you share between machines. oku never edits your startup files itself.
 

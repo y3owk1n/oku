@@ -97,6 +97,42 @@ function Write-NextSteps {
 
 Write-Host ''
 
+# Group Policy can set PowerShell's execution policy to one that loads no
+# unsigned profile, and the user cannot change it. oku then runs from the
+# user's PATH without the hook. $userPath repeats shellhook.UserPath, and a test
+# checks that the two are the same.
+$userPath = @'
+$key = 'HKCU:\Environment'; $old = @((Get-Item $key).GetValue('Path', '', 'DoNotExpandEnvironmentNames') -split ';' | Where-Object { $_ -and $_ -notin $dirs }); New-ItemProperty -Path $key -Name Path -PropertyType ExpandString -Value (($dirs + $old) -join ';') -Force | Out-Null; [Environment]::SetEnvironmentVariable('OKU_NOTIFY', $null, 'User'); $env:PATH = (@($dirs) + @($env:PATH -split ';' | Where-Object { $_ -and $_ -notin $dirs })) -join ';'
+'@
+$locked = @('MachinePolicy', 'UserPolicy') | ForEach-Object { Get-ExecutionPolicy -Scope $_ } |
+    Where-Object { $_ -ne 'Undefined' } | Select-Object -First 1
+if ($locked -in 'Restricted', 'AllSigned') {
+    $data = if ($env:XDG_DATA_HOME) { Join-Path $env:XDG_DATA_HOME 'oku' } else { Join-Path $env:LOCALAPPDATA 'oku' }
+    $dirs = @((Join-Path $data 'profiles\global\current\bin'), $dir)
+    $have = (Get-Item HKCU:\Environment).GetValue('Path', '', 'DoNotExpandEnvironmentNames') -split ';'
+    if (-not ($dirs | Where-Object { $have -notcontains $_ })) {
+        Write-Host 'Your user PATH has oku and its programs already. Open a new terminal.'
+        Write-NextSteps
+        return
+    }
+
+    $quoted = ($dirs | ForEach-Object { "'" + ($_ -replace "'", "''") + "'" }) -join ', '
+    Write-Host "Group Policy sets PowerShell's execution policy to $locked, so PowerShell loads no profile and the"
+    Write-Host 'hook line cannot run. This command puts oku and the programs it installs on your user PATH instead.'
+    Write-Host 'It needs no administrator rights:'
+    Write-Host ''
+    Write-Host "  & { `$dirs = @($quoted); $userPath }"
+    Write-Host ''
+    Write-Host 'Completions and project environments need the hook, so they stay off.'
+    Write-NextSteps
+    return
+}
+
+# Windows PowerShell starts with the policy Restricted, which loads no profile.
+# Without Group Policy the user can allow local scripts for themselves.
+$allow = ''
+if ((Get-ExecutionPolicy) -eq 'Restricted') { $allow = 'Set-ExecutionPolicy -Scope CurrentUser RemoteSigned -Force' }
+
 # A profile that loads the hook already, from an earlier install, needs no
 # second line. PowerShell reads four profiles, one per scope and host, and the
 # line works in any of them. The pattern is the one "oku doctor" uses.
@@ -104,6 +140,15 @@ $loaded = @(
     $PROFILE.AllUsersAllHosts, $PROFILE.AllUsersCurrentHost,
     $PROFILE.CurrentUserAllHosts, $PROFILE.CurrentUserCurrentHost
 ) | Where-Object { $_ -and (Test-Path $_) -and (Select-String -Path $_ -Pattern 'oku(\.exe)?" hook|oku hook' -Quiet) }
+
+if ($loaded -and $allow) {
+    Write-Host "$($loaded[0]) loads oku, but PowerShell's execution policy is Restricted, so it loads no profile."
+    Write-Host 'This command lets PowerShell run local scripts for you. Then open a new terminal:'
+    Write-Host ''
+    Write-Host "  $allow"
+    Write-NextSteps
+    return
+}
 
 if ($loaded) {
     Write-Host "$($loaded[0]) already loads oku. Open a new terminal, or run:  . `$PROFILE"
@@ -115,7 +160,14 @@ Write-Host 'There is one step left. Add this line to the file that $PROFILE name
 Write-Host ''
 Write-Host "  $line"
 Write-Host ''
-Write-Host 'It puts oku and the programs it installs on PATH, and loads its completions. This command adds it for you:'
+Write-Host 'It puts oku and the programs it installs on PATH, and loads its completions.'
+$add = "if (-not (Test-Path `$PROFILE)) { New-Item -Force -ItemType File `$PROFILE | Out-Null }; Add-Content `$PROFILE '$line'; . `$PROFILE"
+if ($allow) {
+    Write-Host "PowerShell's execution policy is Restricted, which loads no profile. So the command below first"
+    Write-Host 'lets PowerShell run local scripts for you.'
+    $add = "$allow; $add"
+}
+Write-Host 'This command adds the line for you:'
 Write-Host ''
-Write-Host "  if (-not (Test-Path `$PROFILE)) { New-Item -Force -ItemType File `$PROFILE | Out-Null }; Add-Content `$PROFILE '$line'; . `$PROFILE"
+Write-Host "  $add"
 Write-NextSteps
