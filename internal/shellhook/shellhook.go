@@ -328,6 +328,35 @@ func Line(shell, oku string) string {
 	return fmt.Sprintf(`[ -x "%[1]s" ] && eval "$("%[1]s" hook %[2]s)"`, oku, shell)
 }
 
+// UserPath is the PowerShell code that puts $dirs in front of the user's PATH,
+// in the registry and in the current session. It is for a machine where Group
+// Policy keeps PowerShell from loading the hook. It reads the user's own value
+// unexpanded and writes it back as REG_EXPAND_SZ, so %VAR% entries keep
+// working. Running it again changes nothing. SetEnvironmentVariable broadcasts
+// WM_SETTINGCHANGE even when it clears a variable that does not exist, so
+// Explorer, and a terminal it starts, sees the new PATH. install.ps1 repeats
+// this code, and a test checks that the two are the same.
+const UserPath = `$key = 'HKCU:\Environment'; ` +
+	`$old = @((Get-Item $key).GetValue('Path', '', 'DoNotExpandEnvironmentNames') -split ';' | ` +
+	`Where-Object { $_ -and $_ -notin $dirs }); ` +
+	`New-ItemProperty -Path $key -Name Path -PropertyType ExpandString ` +
+	`-Value (($dirs + $old) -join ';') -Force | Out-Null; ` +
+	`[Environment]::SetEnvironmentVariable('OKU_NOTIFY', $null, 'User'); ` +
+	`$env:PATH = (@($dirs) + @($env:PATH -split ';' | Where-Object { $_ -and $_ -notin $dirs })) -join ';'`
+
+// UserPathLine returns the PowerShell command that runs UserPath for dirs, the
+// first one in front. A script block keeps its variables out of the session.
+func UserPathLine(dirs []string) string {
+	quote := quoter("pwsh")
+
+	quoted := make([]string, len(dirs))
+	for i, dir := range dirs {
+		quoted[i] = quote(dir)
+	}
+
+	return "& { $dirs = @(" + strings.Join(quoted, ", ") + "); " + UserPath + " }"
+}
+
 // StartupFile names the file that Line goes into, as a user would type it.
 func StartupFile(shell string) string {
 	switch shell {

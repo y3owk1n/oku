@@ -504,10 +504,22 @@ func displayPath(path string) string {
 }
 
 // setupHint says which line to add to which file, for the user's shell. It is
-// empty when oku does not know the shell.
-func setupHint(opts Options) string {
+// empty when oku does not know the shell. Where Group Policy keeps PowerShell
+// from loading a profile, it gives the command that puts oku and the global
+// profile's programs on the user's PATH instead.
+func setupHint(opts Options, e env) string {
 	shell := filepath.Base(os.Getenv("SHELL"))
 	if runtime.GOOS == "windows" {
+		if policy := blockingScriptPolicy(); policy != "" {
+			dirs := []string{e.globalProfile().BinDir()}
+			if opts.Executable != "" {
+				dirs = append(dirs, filepath.Dir(opts.Executable))
+			}
+
+			return "paste this command, which puts oku and its programs on your user PATH, " +
+				"then open a new terminal:\n  " + shellhook.UserPathLine(dirs)
+		}
+
 		shell = "pwsh"
 	}
 

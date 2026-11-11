@@ -68,7 +68,7 @@ func runDoctor(cmd *cobra.Command, opts Options) error {
 
 	checkStore(r, e)
 	checkSandbox(r)
-	checkHook(r, opts)
+	checkHook(r, opts, e)
 	checkPath(r, e)
 	checkPending(r, e)
 	checkSecrets(r, e)
@@ -251,14 +251,28 @@ func checkSandbox(r *report) {
 	}
 }
 
-func checkHook(r *report, opts Options) {
+func checkHook(r *report, opts Options, e env) {
+	if policy := blockingScriptPolicy(); policy != "" {
+		if slices.Contains(filepath.SplitList(os.Getenv("PATH")), e.globalProfile().BinDir()) {
+			r.ok("Group Policy sets PowerShell's execution policy to %s, so no profile loads the hook. "+
+				"oku's programs run from PATH, without completions or project environments", policy)
+
+			return
+		}
+
+		r.note("Group Policy sets PowerShell's execution policy to %s, so no profile loads the hook. To set "+
+			"oku up without it, %s", policy, setupHint(opts, e))
+
+		return
+	}
+
 	if lines := hookLines(); len(lines) > 0 {
 		r.ok("the shell hook line is in %s", strings.Join(lines, ", "))
 
 		return
 	}
 
-	hint := setupHint(opts)
+	hint := setupHint(opts, e)
 	if hint == "" {
 		hint = "see `oku hook --help`"
 	}
@@ -275,10 +289,12 @@ func checkPath(r *report, e env) {
 
 	at := slices.Index(dirs, bin)
 	if at < 0 {
-		r.problem(
-			"%s is not on PATH, so installed programs do not run by name. The hook line puts it there",
-			bin,
-		)
+		fix := "The hook line puts it there"
+		if blockingScriptPolicy() != "" {
+			fix = "The command above puts it there"
+		}
+
+		r.problem("%s is not on PATH, so installed programs do not run by name. %s", bin, fix)
 
 		return
 	}

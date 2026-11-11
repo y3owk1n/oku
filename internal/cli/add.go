@@ -444,7 +444,7 @@ func reportPath(cmd *cobra.Command, opts Options, e env, packages int) {
 		warn(cmd.ErrOrStderr(), "this project's programs are in %s", prof.BinDir())
 	default:
 		// One hook line puts oku and its programs on PATH, see "oku hook --help".
-		if hint := setupHint(opts); hint != "" {
+		if hint := setupHint(opts, e); hint != "" {
 			// The shell line stays unwrapped, so that it copies as one line.
 			note, line, _ := strings.Cut(hint, "\n")
 			warn(cmd.ErrOrStderr(), "to run %s, %s", them, note)

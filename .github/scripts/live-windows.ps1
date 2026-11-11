@@ -875,6 +875,71 @@ try {
         if ($null -eq $keptAllHosts) { Remove-Item -Force $allHosts } else { Set-Content $allHosts $keptAllHosts }
     }
 
+    # Without Group Policy, the policy Restricted loads no profile, so the
+    # profile command starts with Set-ExecutionPolicy for the user.
+    $installCode = "& ([scriptblock]::Create((Get-Content -Raw '$(Join-Path $repoRoot 'install.ps1')')))"
+    $restricted = (powershell -NoProfile -ExecutionPolicy Restricted -Command $installCode) -join "`n"
+    Check 'B601: under Restricted without Group Policy the profile command first allows local scripts' {
+        $restricted -match 'Set-ExecutionPolicy -Scope CurrentUser RemoteSigned -Force; if \(-not \(Test-Path'
+    }
+
+    # When Group Policy sets the execution policy to AllSigned, no profile loads
+    # the hook. The policy also refuses install.ps1 as a file, so the installer
+    # runs from a script block, as "irm | iex" runs it. PowerShell may cache
+    # Group Policy in a process, so the installer runs in a new one.
+    $policyKeys = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\PowerShell', 'HKLM:\SOFTWARE\Policies\Microsoft\PowerShellCore'
+    $hadKeys = $policyKeys | Where-Object { Test-Path $_ }
+    $environment = Get-Item HKCU:\Environment
+    $keptUserPath = $environment.GetValue('Path', $null, 'DoNotExpandEnvironmentNames')
+    $keptKind = if ($null -ne $keptUserPath) { $environment.GetValueKind('Path') }
+    $keptPath = $env:PATH
+    try {
+        foreach ($key in $policyKeys) {
+            New-Item -Force $key | Out-Null
+            New-ItemProperty -Force $key -Name EnableScripts -PropertyType DWord -Value 1 | Out-Null
+            New-ItemProperty -Force $key -Name ExecutionPolicy -PropertyType String -Value AllSigned | Out-Null
+        }
+        New-ItemProperty -Force HKCU:\Environment -Name Path -PropertyType ExpandString -Value '%USERPROFILE%\oku-keep' | Out-Null
+
+        $locked = (powershell -NoProfile -Command $installCode) -join "`n"
+        $command = ($locked -split "`n" | Where-Object { $_ -match '^\s+& \{ \$dirs' } | Select-Object -First 1).Trim()
+        Check 'B601: under a Group Policy execution policy install.ps1 prints the user PATH command, not the profile line' {
+            ($locked -match 'Group Policy sets PowerShell''s execution policy to AllSigned') -and $command -and
+            ($locked -notmatch 'one step left')
+        }
+
+        Invoke-Expression $command
+        Invoke-Expression $command
+        $installed = $env:OKU_INSTALL_DIR
+        $userPath = (Get-Item HKCU:\Environment).GetValue('Path', $null, 'DoNotExpandEnvironmentNames')
+        Check 'B601: the command puts the global bin and oku in front of the user PATH once, and keeps it REG_EXPAND_SZ' {
+            ($userPath -eq "$bin;$installed;%USERPROFILE%\oku-keep") -and
+            ((Get-Item HKCU:\Environment).GetValueKind('Path') -eq 'ExpandString') -and
+            ((Get-Command oku.exe -CommandType Application | Select-Object -First 1).Source -eq (Join-Path $installed 'oku.exe'))
+        }
+
+        $again = (powershell -NoProfile -Command $installCode) -join "`n"
+        Check 'B601: install.ps1 sees oku on the user PATH and prints no command again' {
+            ($again -match 'Your user PATH has oku') -and ($again -notmatch '& \{ \$dirs')
+        }
+
+        $doctor = (& (Join-Path $installed 'oku.exe') doctor 2>&1) -join "`n"
+        Check 'B602: doctor counts the global bin on PATH as set up under a Group Policy execution policy' {
+            ($doctor -match 'execution policy to AllSigned') -and ($doctor -match 'run from PATH') -and
+            ($doctor -notmatch 'no shell hook line found')
+        }
+    }
+    finally {
+        $env:PATH = $keptPath
+        $policyKeys | Where-Object { $_ -notin $hadKeys } | ForEach-Object { Remove-Item -Recurse -Force $_ }
+        if ($null -eq $keptUserPath) {
+            Remove-ItemProperty HKCU:\Environment -Name Path
+        }
+        else {
+            New-ItemProperty -Force HKCU:\Environment -Name Path -PropertyType $keptKind -Value $keptUserPath | Out-Null
+        }
+    }
+
     Add-Content (Join-Path $download 'oku-windows-amd64.exe') 'x'
     $env:OKU_INSTALL_DIR = Join-Path $env:RUNNER_TEMP 'oku-tampered'
     $refused = $false
