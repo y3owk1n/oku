@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.18.5](https://github.com/y3owk1n/oku/compare/v0.18.4...v0.18.5) (2026-11-11)
+
+
+### Bug Fixes
+
+* **install:** set oku up through the user PATH when Group Policy blocks PowerShell profiles ([#514](https://github.com/y3owk1n/oku/issues/514)) ([c3880b3](https://github.com/y3owk1n/oku/commit/c3880b3203e7d34ff42c3d0dedf668f92d6c05ee))
+
 ## [0.18.4](https://github.com/y3owk1n/oku/compare/v0.18.3...v0.18.4) (2026-10-29)
 
 
